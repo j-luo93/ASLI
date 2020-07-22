@@ -1,14 +1,27 @@
 import pandas as pd
 import csv
 
-# code to filter the ielex data to only include Old Norse and descendants and build a custom dataset
+# code to parse the ielex data and build a dataset from an ancestral language and its descendants
 
-dataset_path = 'data/ielex.tsv' # hardcoded — we want to get the above Old Norse family languages
+dataset_path = 'data/ielex.tsv'
+
+old_norse_iso_code = 'non'
+# non: Old Norse, isl: Icelandic, fao: Faroese, swe: Swedish, dan: Danish, nor: Norwegian
+nordic_iso_codes = {'isl', 'fao', 'swe', 'dan', 'nor'}
+
+latin_iso_code = 'lat'
+# lat: Latin, spa: Spanish, por: Portuguese, fra: French, ita: Italian
+romance_iso_codes = {'spa', 'por', 'fra', 'ita'}
 
 with open(dataset_path) as f:
     reader = csv.reader(f, delimiter='\t') # the file is a tsv (tab separated values)
     next(reader) # burn the header row
 
+    # I assume that any given language, parent or daughter, only has one word per particular cognate class. Running code on ielex.tsv, at least, it seems this assumption is correct.
+    parent_dict = {} # cognates in the parent lang. {global_id: {cognate class: line}}
+    daughter_dict = {} # cognates in the daughter langs. {global_id: {cognate class: {lang_iso_code: line}}}
+
+    # go through the file once and populate the above dicts
     for line in reader:
         # these are all the different entires a line could have
         language = line[0]
@@ -19,4 +32,46 @@ with open(dataset_path) as f:
         transcription = line[5]
         cognate_class = line[6]
         tokens = line[7]
-        notes = line[8]
+        # notes = line[8]
+
+        if iso_code == latin_iso_code:
+            if global_id not in parent_dict:
+                parent_dict[global_id] = {}
+            if cognate_class not in parent_dict[global_id]:
+                parent_dict[global_id][cognate_class] = line
+        elif iso_code in romance_iso_codes:
+            if global_id not in daughter_dict:
+                daughter_dict[global_id] = {}
+            if cognate_class not in daughter_dict[global_id]:
+                daughter_dict[global_id][cognate_class] = {}
+            daughter_dict[global_id][cognate_class][iso_code] = line
+
+print('identified', len(parent_dict), 'parent cognates')
+print('identified', len(daughter_dict), 'daughter cognates')
+
+cognate_pair_dicts = {iso_code: {} for iso_code in romance_iso_codes} # map a language to a dictionary with particular cognates {lang_iso_code: {global_id: (parent_line, daughter_line)}}
+
+# identify cognates where they exist both in the parent lang and at least one daughter lang
+for global_id in parent_dict:
+    if global_id in daughter_dict:
+        for cognate_class in parent_dict[global_id]:
+            if cognate_class in daughter_dict[global_id]:
+                parent_line = parent_dict[global_id][cognate_class]
+
+                for lang_iso_code in daughter_dict[global_id][cognate_class]:
+                    daughter_line = daughter_dict[global_id][cognate_class][lang_iso_code]
+                    cognate_pair_dicts[lang_iso_code][global_id] = (parent_line, daughter_line)
+    else:
+        print('the straggler is', global_id)
+
+# for each daughter lang, count the number of attested cognates. We'll pick the top two, training the model on parent -> daughter_1 and benchmark performance on parent -> daughter_2
+for lang in cognate_pair_dicts:
+    print(lang, ':', len(cognate_pair_dicts[lang]))
+
+# sample some data to examine
+for k in list(cognate_pair_dicts['ita'])[:10]:
+    print(cognate_pair_dicts['ita'][k])
+
+# TODO write new prepared data to file
+
+
