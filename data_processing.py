@@ -71,14 +71,8 @@ def filter_subfamily(parent_lang_iso, daughter_iso_codes):
                     for lang_iso_code in daughter_dict[global_id][cognate_class]:
                         daughter_line = daughter_dict[global_id][cognate_class][lang_iso_code]
                         cognate_pair_dicts[lang_iso_code][global_id] = (parent_line, daughter_line)
-        else:
-            # the number of attested cognates in the parent and child aren't equal, suggesting
-            # there are cognates lost in all daughters, or cognates in the daughters not inherited
-            # from the parent
-            print('the straggler is', global_id)
     
     return cognate_pair_dicts
-
 
 romance_cognate_pair_dicts = filter_subfamily(latin_iso_code, romance_iso_codes)
 
@@ -87,44 +81,48 @@ for lang in romance_cognate_pair_dicts:
     print(lang, ':', len(romance_cognate_pair_dicts[lang]))
 
 
-# sample some data to examine
-for k in list(romance_cognate_pair_dicts['ita'])[:10]:
-    print(romance_cognate_pair_dicts['ita'][k])
+# # sample some data to examine
+# for k in list(romance_cognate_pair_dicts['ita'])[:10]:
+#     print(romance_cognate_pair_dicts['ita'][k])
 
 # save the custom datasets to their own files. For each daughter lang, we split its cognate pair dict into two files: one for the parent lang, one for the daughter lang.
-def save_dataset(daughter_iso, parent_iso, cognate_pair_dicts, output_dir):
+def save_dataset(cognate_pair_dict, output_dir=None):
     '''
     Saves a cognate pair dict for a particular daughter language as two .tsv files, \
         one containing the parent lang's cognates, the other the daughter's.
 
-    daughter_iso: str, the iso code of the daughter language whose dict will be saved
-    parent_iso: str, the iso code of the parent language
-    cognate_pair_dicts: the dict of cognate pair dictionaries, as is outputted by filter_subfamily()
-    output_dir: directory the files will be saved in, under /data/
+    cognate_pair_dict: the cognate pair dictionary for the daughter language, formatted like one of the dictionaries in the output of filter_subfamily()
+    output_dir: directory the files will be saved in, under /data/. Default folder name is 'ParentLang-DaughterLang Cognates'
     '''
-    # TODO(Derek): you can actually just extract the relevant iso codes from the second line of each file, and change the function signature to just accept a cognate pair dict (instead of a dict of cognate pair dicts). This might be easier to work with, it halves the number of arguments.
 
+    # we extract an arbitrary line from the dictionary to obtain the parent and daughter iso codes
+    parent_line, daughter_line = next(iter(cognate_pair_dict.values())) # popping from an iterator is best way of doing this: it uses the least space since it doesn't load the whole dictionary
+
+    if output_dir is None: # generate default directory name
+        parent_language, daughter_language = parent_line[0], daughter_line[0]
+        output_dir = parent_language + '-' + daughter_language + ' Cognates'
+        output_dir = output_dir.title() # format to make the folder easier to read
+    
     output_dir = os.path.join('data', output_dir)
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
-
-    daughter_file_path = os.path.join(output_dir, daughter_iso + '.tsv')
+    
+    parent_iso, daughter_iso = parent_line[1], daughter_line[1]
     parent_file_path = os.path.join(output_dir, parent_iso + '.tsv')
+    daughter_file_path = os.path.join(output_dir, daughter_iso + '.tsv')
 
-
-    with open(daughter_file_path, 'w') as f_d, open(parent_file_path, 'w') as f_p:
-        writer_d = csv.writer(f_d, delimiter='\t')
+    with open(parent_file_path, 'w') as f_p, open(daughter_file_path, 'w') as f_d:
         writer_p = csv.writer(f_p, delimiter='\t')
+        writer_d = csv.writer(f_d, delimiter='\t')
 
         header = ['language', 'iso_code', 'gloss', 'global_id', 
             'local_id', 'transcription', 'cognate_class', 'tokens', 'notes']
-        writer_d.writerow(header)
         writer_p.writerow(header)
+        writer_d.writerow(header)
 
-        daughter_cognate_dict = cognate_pair_dicts[daughter_iso]
-        for k in daughter_cognate_dict.keys():
-            parent_line, daughter_line = daughter_cognate_dict[k]
-            writer_d.writerow(daughter_line)
+        for k in cognate_pair_dict.keys():
+            parent_line, daughter_line = cognate_pair_dict[k]
             writer_p.writerow(parent_line)
+            writer_d.writerow(daughter_line)
     
-save_dataset('ita', 'lat', romance_cognate_pair_dicts, 'Latin-Italian Cognates')
+save_dataset(romance_cognate_pair_dicts['ita'], 'Latin-Italian Cognates')
