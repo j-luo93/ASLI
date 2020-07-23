@@ -125,4 +125,4 @@ def save_dataset(cognate_pair_dict, output_dir=None):
             writer_p.writerow(parent_line)
             writer_d.writerow(daughter_line)
     
-save_dataset(romance_cognate_pair_dicts['ita'], 'Latin-Italian Cognates')
+save_dataset(romance_cognate_pair_dicts['fra'])
