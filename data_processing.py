@@ -1,5 +1,5 @@
-import pandas as pd
 import csv
+import os
 
 # code to parse the ielex data and build a dataset from an ancestral language and its descendants
 
@@ -72,6 +72,9 @@ def filter_subfamily(parent_lang_iso, daughter_iso_codes):
                         daughter_line = daughter_dict[global_id][cognate_class][lang_iso_code]
                         cognate_pair_dicts[lang_iso_code][global_id] = (parent_line, daughter_line)
         else:
+            # the number of attested cognates in the parent and child aren't equal, suggesting
+            # there are cognates lost in all daughters, or cognates in the daughters not inherited
+            # from the parent
             print('the straggler is', global_id)
     
     return cognate_pair_dicts
@@ -88,6 +91,40 @@ for lang in romance_cognate_pair_dicts:
 for k in list(romance_cognate_pair_dicts['ita'])[:10]:
     print(romance_cognate_pair_dicts['ita'][k])
 
-# TODO write new prepared data to file
+# save the custom datasets to their own files. For each daughter lang, we split its cognate pair dict into two files: one for the parent lang, one for the daughter lang.
+def save_dataset(daughter_iso, parent_iso, cognate_pair_dicts, output_dir):
+    '''
+    Saves a cognate pair dict for a particular daughter language as two .tsv files, \
+        one containing the parent lang's cognates, the other the daughter's.
+
+    daughter_iso: str, the iso code of the daughter language whose dict will be saved
+    parent_iso: str, the iso code of the parent language
+    cognate_pair_dicts: the dict of cognate pair dictionaries, as is outputted by filter_subfamily()
+    output_dir: directory the files will be saved in, under /data/
+    '''
+    # TODO(Derek): you can actually just extract the relevant iso codes from the second line of each file, and change the function signature to just accept a cognate pair dict (instead of a dict of cognate pair dicts). This might be easier to work with, it halves the number of arguments.
+
+    output_dir = os.path.join('data', output_dir)
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+
+    daughter_file_path = os.path.join(output_dir, daughter_iso + '.tsv')
+    parent_file_path = os.path.join(output_dir, parent_iso + '.tsv')
 
 
+    with open(daughter_file_path, 'w') as f_d, open(parent_file_path, 'w') as f_p:
+        writer_d = csv.writer(f_d, delimiter='\t')
+        writer_p = csv.writer(f_p, delimiter='\t')
+
+        header = ['language', 'iso_code', 'gloss', 'global_id', 
+            'local_id', 'transcription', 'cognate_class', 'tokens', 'notes']
+        writer_d.writerow(header)
+        writer_p.writerow(header)
+
+        daughter_cognate_dict = cognate_pair_dicts[daughter_iso]
+        for k in daughter_cognate_dict.keys():
+            parent_line, daughter_line = daughter_cognate_dict[k]
+            writer_d.writerow(daughter_line)
+            writer_p.writerow(parent_line)
+    
+save_dataset('ita', 'lat', romance_cognate_pair_dicts, 'Latin-Italian Cognates')
