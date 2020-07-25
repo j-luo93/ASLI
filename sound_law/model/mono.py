@@ -4,7 +4,7 @@ This file contains monolingual models.
 import torch
 import torch.nn as nn
 
-from dev_misc import add_argument, g, get_zeros
+from dev_misc import FT, add_argument, g, get_zeros
 from sound_law.data.data_loader import MonoBatch
 
 from .module import LstmDecoder, LstmEncoder
@@ -33,6 +33,7 @@ class MonoModel(nn.Module):
 
     def forward(self, batch: MonoBatch) -> FT:
         output, state = self.encoder(batch.src_seq)
-        log_probs = self.decoder(batch.tgt_seq, state)
+        states_by_layers = state.to_layers()
+        log_probs = self.decoder(batch.tgt_seq, states_by_layers)
         loss = log_probs.sum()  # FIXME(j_luo) fill in this: gather
         return loss
