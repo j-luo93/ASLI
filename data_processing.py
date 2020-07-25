@@ -3,7 +3,7 @@ import os
 
 # code to parse the ielex data and build a dataset from an ancestral language and its descendants
 
-dataset_path = 'data/ielex.tsv'
+default_dataset_path = 'data/ielex.tsv' # Indo-European dataset
 
 old_norse_iso_code = 'non'
 # non: Old Norse, isl: Icelandic, fao: Faroese, swe: Swedish, dan: Danish, nor: Norwegian
@@ -13,10 +13,11 @@ latin_iso_code = 'lat'
 # lat: Latin, spa: Spanish, por: Portuguese, fra: French, ita: Italian
 romance_iso_codes = {'spa', 'por', 'fra', 'ita'}
 
-def filter_subfamily(parent_lang_iso, daughter_iso_codes):
+def filter_subfamily(parent_iso_code, daughter_iso_codes, dataset_path=default_dataset_path):
     '''
-    parent_lang_iso: str, the iso code of the common ancestral language
+    parent_iso_code: str, the iso code of the common ancestral language
     daughter_iso_codes: a set of str, the iso codes of the daughter languages of that parent
+    dataset_path: str, the path to the .tsv dataset to be read from. Default written above.
 
     returns a dictionary of the form {lang_iso_code: {global_id: (parent_line, daughter_line)}}, \
         which maps a daughter lang's iso code to a dict containing all cognate pairs in the dataset
@@ -44,7 +45,7 @@ def filter_subfamily(parent_lang_iso, daughter_iso_codes):
             tokens = line[7]
             # notes = line[8]
 
-            if iso_code == parent_lang_iso:
+            if iso_code == parent_iso_code:
                 if global_id not in parent_dict:
                     parent_dict[global_id] = {}
                 if cognate_class not in parent_dict[global_id]:
@@ -74,6 +75,22 @@ def filter_subfamily(parent_lang_iso, daughter_iso_codes):
     
     return cognate_pair_dicts
 
+
+def filter_daughter(parent_iso_code, daughter_iso_code, dataset_path=default_dataset_path):
+    '''
+    Filters a dataset to return a cognate dictionary only containing cognates that exist \
+        in both the parent and the daughter language.
+        Implemented as a subcase of filter_subfamily().
+
+    parent_iso_code: str, the iso code of the parent language
+    daughter_iso_code: str, the iso code of the daughter language
+    dataset_path: str, the path to the .tsv file data will be read from. Default set above.
+
+    returns: {global_id: (parent_line, daughter_line)}
+    '''
+    return filter_subfamily(parent_iso_code, {daughter_iso_code}, dataset_path)[daughter_iso_code]
+
+# testing filter_subfamily
 romance_cognate_pair_dicts = filter_subfamily(latin_iso_code, romance_iso_codes)
 
 # for each daughter lang, count the number of attested cognates. We'll pick the top two, training the model on parent -> daughter_1 and benchmark performance on parent -> daughter_2
@@ -102,6 +119,7 @@ def save_dataset(cognate_pair_dict, output_dir=None):
         parent_language, daughter_language = parent_line[0], daughter_line[0]
         output_dir = parent_language + '-' + daughter_language + ' Cognates'
         output_dir = output_dir.title() # format to make the folder easier to read
+    # note (Derek): it occurs to me that the above method of extracting the language names can potentially cause an undesirable bug. Since multiple distinct doculects could be under the same iso code but have a different listed language name, it is theoretically possible that the same cognate dictionary could be saved to a different directory on different runs, if the line that is popped from the iterator changes. If it is true that Python dictionaries have an internal order in python 3, however, then the line popped from the iterator is deterministic (for a given dataset) and this is not a problem.
     
     output_dir = os.path.join('data', output_dir)
     if not os.path.exists(output_dir):
@@ -126,3 +144,5 @@ def save_dataset(cognate_pair_dict, output_dir=None):
             writer_d.writerow(daughter_line)
     
 save_dataset(romance_cognate_pair_dicts['fra'])
+
+save_dataset(filter_daughter('lat', 'por'))
