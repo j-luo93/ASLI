@@ -1,14 +1,14 @@
-from dev_misc import get_zeros
 from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
 from torch.nn.functional import normalize
 
-from dev_misc import BT, FT, LT
-from sound_law.model.lstm_state import LstmState, StateTuples
+from dev_misc import BT, FT, LT, get_zeros
+from sound_law.model.lstm_state import LstmStatesByLayers, LstmStateTuple
 
-LstmOutput = Tuple[FT, LstmState]
+LstmOutputsByLayers = Tuple[FT, LstmStatesByLayers]
+LstmOutputTuple = Tuple[FT, LstmStateTuple]
 
 
 class SharedEmbedding(nn.Embedding):
@@ -38,18 +38,17 @@ class MultiLayerLSTMCell(nn.Module):
             cells.append(nn.LSTMCell(hidden_size, hidden_size))
         self.cells = nn.ModuleList(cells)
 
-    def forward(self, input_: FT, states: StateTuples) -> LstmOutput:
-        assert len(states) == self.num_layers
-        states = LstmState(states)
+    def forward(self, input_: FT, state: LstmStatesByLayers) -> LstmOutputsByLayers:
+        assert state.num_layers == self.num_layers
 
         new_states = list()
         for i in range(self.num_layers):
             # Note that the last layer doesn't use dropout.
             input_ = self.drop(input_)
-            new_state = self.cells[i](input_, states.get(i))
+            new_state = self.cells[i](input_, state.get_layer(i))
             new_states.append(new_state)
             input_ = new_state[0]
-        return input_, LstmState(new_states)
+        return input_, LstmStatesByLayers(new_states)
 
     def extra_repr(self):
         return '%d, %d, num_layers=%d' % (self.input_size, self.hidden_size, self.num_layers)
@@ -74,11 +73,14 @@ class LstmCellWithEmbedding(nn.Module):
     def embed(self, input_: LT) -> FT:
         return self.embedding(input_)
 
-    def forward(self, input_: LT) -> LstmOutput:
+    def forward(self, input_: LT, init_state: Optional[LstmStatesByLayers] = None) -> LstmOutputsByLayers:
         emb = self.embed(input_)
         emb = self.dropout(emb)
 
-        init_state = LstmState.zero_state(self.lstm.num_layers, input_.shape)
+        batch_size = input_.size('batch')
+        init_state = init_state or LstmStateTuple.zero_state(self.lstm.num_layers,
+                                                             batch_size,
+                                                             self.lstm.hidden_size)
         output, state = self.lstm(emb, init_state)
         return output, state
 
@@ -88,9 +90,9 @@ class LstmDecoder(LstmCellWithEmbedding):
 
     def forward(self,
                 input_: LT,
-                state: LstmState,
+                init_state: LstmStatesByLayers,
                 max_length: Optional[int] = None,
-                target: Optional[LT] = None) -> LstmOutput:
+                target: Optional[LT] = None) -> FT:
         if self.training:
             assert target is not None
             assert target.names[0] == 'batch'
@@ -98,9 +100,10 @@ class LstmDecoder(LstmCellWithEmbedding):
         if max_length is None:
             max_length = target.size("length")
 
+        state = init_state
         log_probs = list()
         for l in range(max_length):
-            output, = super().forward(input_)
+            output, state = super().forward(input_, state)
             logit = self.embedding.project(output)
             log_prob = logit.log_softmax(dim=-1)
             log_probs.append(log_prob)
@@ -129,15 +132,14 @@ class LstmEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, bidirectional=bidirectional, dropout=dropout)
 
-    def forward(self, input_: LT) -> LstmOutput:
-        l, bs = input_.shape
-        dim0 = self.lstm.num_layers * (1 + self.lstm.bidirectional)
-        shape = (dim0, bs, self.lstm.hidden_size)
-        h0 = get_zeros(*shape)
-        c0 = get_zeros(*shape)
+    def forward(self, input_: LT) -> LstmOutputTuple:
+        batch_size = input_.size('batch')
+        init_state = LstmStateTuple.zero_state(self.lstm.num_layers,
+                                               batch_size,
+                                               self.lstm.hidden_size)
         emb = self.embedding(input_)
-        output, state = super().forward(emb, (h0, c0))
-        return output, LstmState.from_pytorch(state)
+        output, state = self.lstm(emb, init_state)
+        return output, LstmStateTuple(state)
 
 
 # class GlobalAttention(nn.Module):
