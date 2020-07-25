@@ -102,6 +102,56 @@ for lang in romance_cognate_pair_dicts:
 # for k in list(romance_cognate_pair_dicts['ita'])[:10]:
 #     print(romance_cognate_pair_dicts['ita'][k])
 
+
+def process_dataset(cognate_pair_dict):
+    '''
+    Processes a cognate pair dictionary, adding the new properties that we will be using \
+        in performing our analysis and returning the new dictionary. Any new properties
+        we add must also be named above in header as new columns.
+    '''
+
+    # add the parsed tokens column
+
+    # add the dataset split column
+
+# an affricate map maps the stop part of an affricate to the fricative part
+general_affricate_map = {'t': 'ʃ', 'd': 'ʒ'} # for broad cross-linguistic purposes
+
+affricate_maps = {'general': general_affricate_map} # maps an iso code to that language's affricate map
+
+def parse_tokens(word, language='general'):
+    '''
+    Processes a tokenized word to incorporate language-specific phonemic groupings.
+    Specifically, the ielex data appears to have been tokenized in a way that \
+        affricates are split into a separate stop-fricative pair, and we believe
+        the model would be more accurate if it treated the fricative as a single segment.
+    
+    word: str, a tokenized word as presented in the ielex data. Tokens are space-separated.
+    language: str, the iso code of the language that the word comes from, which affects \
+        how affricates will be recognized. Default is a very generic cross-linguistic
+        affricate detector. 
+
+    returns: str, the retokenized word, tokens are space-separated
+    '''
+    affricate_map = affricate_maps[language]
+
+    tokens = word.split(' ')
+    new_tokens = []
+    
+    prev_token = None
+    for token in tokens:
+        if prev_token in affricate_map and affricate_map[prev_token] == token:
+            # rewrite the last entry in new_tokens
+            new_tokens[-1] = prev_token + token
+        else:
+            new_tokens.append(token)
+        prev_token = token
+    
+    return str.join(' ', new_tokens)
+
+# test the token parsing method
+# print(parse_tokens('d ʒ a t ʃ e r e'))
+
 # save the custom datasets to their own files. For each daughter lang, we split its cognate pair dict into two files: one for the parent lang, one for the daughter lang.
 def save_dataset(cognate_pair_dict, output_dir=None):
     '''
