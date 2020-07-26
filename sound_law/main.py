@@ -1,8 +1,8 @@
-from sound_law.train.manager import MonoManager
+from sound_law.train.manager import OnePairManager
 
 
 def run():
-    manager = MonoManager()
+    manager = OnePairManager()
     manager.run()
 
 

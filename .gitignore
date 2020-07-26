@@ -104,7 +104,7 @@ ENV/
 .vscode/settings.json
 .DS_Store
 .vscode
-data
+./data
 log/
 notebooks/
 *.prof

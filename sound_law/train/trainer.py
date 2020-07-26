@@ -1,10 +1,26 @@
+from torch.nn.utils import clip_grad_norm_
+
+from dev_misc.trainlib import Metric, Metrics
 from dev_misc.trainlib.base_trainer import BaseTrainer
+from sound_law.data.data_loader import OnePairDataLoader
 
 
-class MonoTrainer(BaseTrainer):
+class OnePairTrainer(BaseTrainer):
 
+    def add_trackables(self):
+        pass
 
-    def __init__(self, model, tasks, task_weights, main_tname, stage_tnames=None, evaluator=None, check_tname='check', check_interval=None, eval_tname='eval', eval_interval=None, save_tname='save', save_interval=None):
+    def save(self, eval_metrics: Metrics):
+        pass
 
-        super().__init__(model, tasks, task_weights, main_tname, stage_tnames=stage_tnames, evaluator=evaluator, check_tname=check_tname,
-                         check_interval=check_interval, eval_tname=eval_tname, eval_interval=eval_interval, save_tname=save_tname, save_interval=save_interval)
+    def train_one_step(self, dl: OnePairDataLoader) -> Metrics:
+        batch = dl.get_next_batch()
+
+        self.model.train()
+        self.optimizer.zero_grad()
+        loss = self.model(batch)
+        loss = Metric('loss', loss, len(batch))
+        loss.mean.backward()
+        grad_norm = clip_grad_norm_(self.model.parameters(), 5.0)
+        grad_norm = Metric('grad_norm', grad_norm, len(batch))
+        self.optimizer.step()

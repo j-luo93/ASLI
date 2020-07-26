@@ -5,25 +5,26 @@ from typing import ClassVar
 
 from dev_misc.trainlib import Task
 from sound_law.data.data_loader import DataLoaderRegistry
-from .trainer import MonoTrainer
-from sound_law.model.mono import MonoModel
+from sound_law.model.one_pair import OnePairModel
+
+from .trainer import OnePairTrainer
 
 
-class MonoTask(Task):
-    name: ClassVar[str] = 'mono'
+class OnePairTask(Task):
+    name: ClassVar[str] = 'one_pair'
 
 
-class MonoManager:
-    """A manager for monolingual sound law induction."""
+class OnePairManager:
+    """A manager for sound law induction on one src-tgt pair."""
 
     def __init__(self):
-        dl_reg = DataLoaderRegistry()
-        mono_task = MonoTask()
-        mono_dl = dl_reg.register_data_loader(mono_task)
-        num_src_chars = ...  # FIXME(j_luo) fill in this
-        num_tgt_chars = ...  # FIXME(j_luo) fill in this
-        model = MonoModel(num_src_chars, num_tgt_chars)
-        trainer = MonoTrainer(model, [mono_task], [1.0], 'step')  # FIXME(j_luo) fill in this
+        self.dl_reg = DataLoaderRegistry()
+        one_pair_task = OnePairTask()
+        one_pair_dl = self.dl_reg.register_data_loader(one_pair_task)
+        num_src_chars = len(one_pair_dl.dataset.src_abc)
+        num_tgt_chars = len(one_pair_dl.dataset.tgt_abc)
+        self.model = OnePairModel(num_src_chars, num_tgt_chars)
+        self.trainer = OnePairTrainer(self.model, [one_pair_task], [1.0], 'step')
 
     def run(self):
-        trainer.run()
+        self.trainer.train(self.dl_reg)
