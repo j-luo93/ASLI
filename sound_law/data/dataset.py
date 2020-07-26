@@ -4,6 +4,9 @@ from typing import List, overload
 import pandas as pd
 from torch.utils.data import Dataset
 
+SOT = '<SOT>'
+SOT_ID = 0
+
 
 class Alphabet:
     """A class to represent the alphabet of any dataset."""
@@ -12,7 +15,7 @@ class Alphabet:
         data = set()
         for content in contents:
             data.update(content)
-        self._id2unit = sorted(data)
+        self._id2unit = [SOT] + sorted(data)
         self._unit2id = {c: i for i, c in enumerate(self._id2unit)}
 
     @overload
@@ -28,6 +31,9 @@ class Alphabet:
             return self._unit2id[index_or_unit]
         else:
             raise TypeError(f'Unsupported type for "{index_or_unit}".')
+
+    def __len__(self):
+        return len(self._unit2id)
 
 
 class OnePairDataset(Dataset):
@@ -53,3 +59,6 @@ class OnePairDataset(Dataset):
             'src_id_seq': self.src_id_seqs[index],
             'tgt_id_seq': self.tgt_id_seqs[index]
         }
+
+    def __len__(self):
+        return len(self.src_id_seqs)

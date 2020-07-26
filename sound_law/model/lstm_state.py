@@ -54,6 +54,9 @@ class LstmStateTuple(LstmState):
             backward_states = None
         return LstmStatesByLayers(forward_states, backward_states)
 
+    def to_hc_tuple(self) -> _StateTuple:
+        return self._h, self._c
+
 
 _StatesByLayers = List[_StateTuple]
 
@@ -91,3 +94,11 @@ class LstmStatesByLayers(LstmState):
             hs = self._f_hs
             cs = self._f_cs
         return hs[layer_id], cs[layer_id]
+
+    @property
+    def batch_size(self) -> int:
+        return self._f_hs[0].size(0)
+
+    @property
+    def device(self) -> torch.device:
+        return self._f_hs[0].device
