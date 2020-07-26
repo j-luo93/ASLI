@@ -1,16 +1,16 @@
 """
-This file contains monolingual models.
+This file contains models for one pair of src-tgt languags.
 """
-import torch
+
 import torch.nn as nn
 
 from dev_misc import FT, add_argument, g, get_zeros
-from sound_law.data.data_loader import MonoBatch
+from sound_law.data.data_loader import OnePairBatch
 
 from .module import LstmDecoder, LstmEncoder
 
 
-class MonoModel(nn.Module):
+class OnePairModel(nn.Module):
 
     add_argument('char_emb_size', default=256, dtype=int, msg='Embedding size for characters (as input).')
     add_argument('hidden_size', default=256, dtype=int, msg='Hidden size for LSTM states.')
@@ -31,9 +31,9 @@ class MonoModel(nn.Module):
                                    g.num_layers,
                                    dropout=g.dropout)
 
-    def forward(self, batch: MonoBatch) -> FT:
-        output, state = self.encoder(batch.src_seq)
+    def forward(self, batch: OnePairBatch) -> FT:
+        output, state = self.encoder(batch.src_id_seqs)
         states_by_layers = state.to_layers()
-        log_probs = self.decoder(batch.tgt_seq, states_by_layers)
+        log_probs = self.decoder(batch.tgt_id_seqs, states_by_layers)
         loss = log_probs.sum()  # FIXME(j_luo) fill in this: gather
         return loss
