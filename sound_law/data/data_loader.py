@@ -15,14 +15,19 @@ from sound_law.data.dataset import OnePairDataset
 class OnePairBatch(BaseBatch):
     src_id_seqs: LT
     tgt_id_seqs: LT
+    # FIXME(j_luo) fill in this: add padding
+
+    def __post_init__(self):
+        self.src_id_seqs.rename_('src_pos', 'batch')
+        self.tgt_id_seqs.rename_('tgt_pos', 'batch')
 
     def __len__(self):
         return self.src_id_seqs.size('batch')
 
 
 def one_pair_collate_fn(batches: List[Dict]) -> OnePairBatch:
-    src_id_seqs = pad_to_dense([batch['src_id_seq'] for batch in batches])
-    tgt_id_seqs = pad_to_dense([batch['tgt_id_seq'] for batch in batches])
+    src_id_seqs = pad_to_dense([batch['src_id_seq'] for batch in batches], dtype='l')
+    tgt_id_seqs = pad_to_dense([batch['tgt_id_seq'] for batch in batches], dtype='l')
 
     src_id_seqs = torch.from_numpy(src_id_seqs.T)
     tgt_id_seqs = torch.from_numpy(tgt_id_seqs.T)
@@ -32,11 +37,13 @@ def one_pair_collate_fn(batches: List[Dict]) -> OnePairBatch:
 
 class OnePairDataLoader(BaseDataLoader):
 
+    add_argument('batch_size', default=32, dtype=int, msg='Batch size.')
+
     collate_fn = one_pair_collate_fn
 
     def __init__(self, task: Task, data_path: Path, src_lang: str, tgt_lang: str):
         dataset = OnePairDataset(data_path, src_lang, tgt_lang)
-        super().__init__(dataset, task)
+        super().__init__(dataset, task, batch_size=g.batch_size)
 
     # IDEA(j_luo) Move this to core?
     def __iter__(self) -> Iterator[OnePairBatch]:

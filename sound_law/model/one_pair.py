@@ -6,6 +6,7 @@ import torch.nn as nn
 
 from dev_misc import FT, add_argument, g, get_zeros
 from sound_law.data.data_loader import OnePairBatch
+from sound_law.data.dataset import SOT_ID
 
 from .module import LstmDecoder, LstmEncoder
 
@@ -34,6 +35,6 @@ class OnePairModel(nn.Module):
     def forward(self, batch: OnePairBatch) -> FT:
         output, state = self.encoder(batch.src_id_seqs)
         states_by_layers = state.to_layers()
-        log_probs = self.decoder(batch.tgt_id_seqs, states_by_layers)
-        loss = log_probs.sum()  # FIXME(j_luo) fill in this: gather
+        log_probs = self.decoder(SOT_ID, states_by_layers, target=batch.tgt_id_seqs)
+        loss = -log_probs.gather('tgt_unit', batch.tgt_id_seqs)
         return loss
