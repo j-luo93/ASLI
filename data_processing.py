@@ -223,7 +223,7 @@ def save_dataset(cognate_pair_dict, output_dir=None):
 
     if output_dir is None: # generate default directory name
         parent_language, daughter_language = parent_line[0], daughter_line[0]
-        output_dir = parent_language + '-' + daughter_language + ' Cognates'
+        output_dir = parent_language + '-' + daughter_language
         output_dir = output_dir.title() # format to make the folder easier to read
     # note (Derek): it occurs to me that the above method of extracting the language names can potentially cause an undesirable bug. Since multiple distinct doculects could be under the same iso code but have a different listed language name, it is theoretically possible that the same cognate dictionary could be saved to a different directory on different runs, if the line that is popped from the iterator changes. If it is true that Python dictionaries have an internal order in python 3, however, then the line popped from the iterator is deterministic (for a given dataset) and this is not a problem. We are shuffling the dataset for the splits, though, so this is potentially a problem again...
     
