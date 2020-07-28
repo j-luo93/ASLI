@@ -65,9 +65,6 @@ def filter_subfamily(parent_iso_code, daughter_iso_codes, dataset_path=default_d
                     daughter_dict[global_id][cognate_class] = {}
                 daughter_dict[global_id][cognate_class][iso_code] = line
 
-    print('identified', len(parent_dict), 'parent cognates')
-    print('identified', len(daughter_dict), 'daughter cognates')
-
     cognate_pair_dicts = {iso_code: {} for iso_code in daughter_iso_codes} # map a language to a dictionary with particular cognates {lang_iso_code: {global_id: (parent_line, daughter_line)}}
 
     # identify cognates where they exist both in the parent lang and at least one daughter lang
@@ -97,18 +94,6 @@ def filter_daughter(parent_iso_code, daughter_iso_code, dataset_path=default_dat
     returns: {global_id: (parent_line, daughter_line)}
     '''
     return filter_subfamily(parent_iso_code, {daughter_iso_code}, dataset_path)[daughter_iso_code]
-
-# testing filter_subfamily
-romance_cognate_pair_dicts = filter_subfamily(latin_iso_code, romance_iso_codes)
-
-# for each daughter lang, count the number of attested cognates. We'll pick the top two, training the model on parent -> daughter_1 and benchmark performance on parent -> daughter_2
-for lang in romance_cognate_pair_dicts:
-    print(lang, ':', len(romance_cognate_pair_dicts[lang]))
-
-
-# # sample some data to examine
-# for k in list(romance_cognate_pair_dicts['ita'])[:10]:
-#     print(romance_cognate_pair_dicts['ita'][k])
 
 
 def process_dataset(cognate_pair_dict):
@@ -140,7 +125,6 @@ def process_dataset(cognate_pair_dict):
     random.shuffle(cognate_ids)
 
     split_factor = int(round(n_lines * (4/25)))
-    print('split_factor', split_factor)
 
     # create five splits of 4/25ths of the data each
     for i in range(0, 5):
@@ -198,8 +182,6 @@ def parse_tokens(word, language='general'):
     
     return str.join(' ', new_tokens)
 
-# test the token parsing method
-# print(parse_tokens('d ʒ a t ʃ e r e'))
 
 # save the custom datasets to their own files. For each daughter lang, we split its cognate pair dict into two files: one for the parent lang, one for the daughter lang.
 def save_dataset(cognate_pair_dict, output_dir=None):
@@ -247,9 +229,8 @@ def save_dataset(cognate_pair_dict, output_dir=None):
             # the columns are padded with blank entries if they are missing any data
             writer_p.writerow(parent_line + pad)
             writer_d.writerow(daughter_line + pad)
-    
 
-# def save_processed_dataset(cognate_pair_dict, output_dir=None):
+
 
 
 # save_dataset(romance_cognate_pair_dicts['fra'])
