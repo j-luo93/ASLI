@@ -194,6 +194,9 @@ def save_dataset(cognate_pair_dict, output_dir=None):
     output_dir: directory the files will be saved in, under /data/. Default folder name is 'ParentLang-DaughterLang Cognates'
     '''
 
+    if len(cognate_pair_dict) == 0: # must have something to save
+        return
+
     # we extract an arbitrary line from the dictionary to obtain the parent and daughter iso codes
     parent_line, daughter_line = next(iter(cognate_pair_dict.values())) # popping from an iterator is best way of doing this: it uses the least space since it doesn't load the whole dictionary
 
