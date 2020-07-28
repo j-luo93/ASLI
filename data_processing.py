@@ -1,5 +1,6 @@
 import csv
 import os
+import argparse
 
 import random
 random.seed(42) # fix seed for testing purposes
@@ -236,17 +237,37 @@ def save_dataset(cognate_pair_dict, output_dir=None):
 
 
 
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="process .tsv cognate datasets")
 
-# save_dataset(romance_cognate_pair_dicts['fra'])
+    parser.add_argument('-par_iso', required=True, help="iso code of the parent language")
+    parser.add_argument('-dau_iso', required=True, nargs='+', help="iso code(s) of the daughter language(s)")
+    parser.add_argument('-data_path', default='data/ielex.tsv', help="path to .tsv dataset")
+    parser.add_argument('--preserve_data', action="store_true", help="include to prevent data processing")
+    parser.add_argument('-v', '--verbose', action="store_true", help="increase output verbosity")
 
-test_dict = process_dataset(filter_daughter('lat', 'ita'))
-split_counts = {}
+    args = parser.parse_args()
 
-for parent, daughter in test_dict.values():
-    if parent[10] not in split_counts:
-        split_counts[parent[10]] = 0
-    split_counts[parent[10]] += 1
+    args.dau_iso = set(args.dau_iso)
 
-print(split_counts)
-
-save_dataset(test_dict)
+    cognate_dicts = filter_subfamily(args.par_iso, args.dau_iso, args.data_path)
+    
+    if args.verbose:
+        print("reading", args.data_path, 'for', args.par_iso, 'and', str.join(', ', args.dau_iso))
+        print('# of identified cognate pairs per language:')
+        for iso, cog_dict in cognate_dicts.items():
+            print('    ', iso, ':', len(cog_dict))
+    
+    if not args.preserve_data:
+        for iso, cog_dict in cognate_dicts.items():
+            cognate_dicts[iso] = process_dataset(cog_dict)
+        if args.verbose:
+            print("retokenized cognates and added dataset splits")
+    else:
+        if args.verbose:
+            print("preserving data, no edits applied")
+    
+    for cog_dict in cognate_dicts.values():
+        save_dataset(cog_dict)
+    if args.verbose:
+        print("saved dataset(s) under data/")
