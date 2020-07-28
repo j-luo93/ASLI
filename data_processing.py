@@ -76,7 +76,8 @@ def filter_subfamily(parent_iso_code, daughter_iso_codes, dataset_path=default_d
 
                     for lang_iso_code in daughter_dict[global_id][cognate_class]:
                         daughter_line = daughter_dict[global_id][cognate_class][lang_iso_code]
-                        cognate_pair_dicts[lang_iso_code][global_id] = (parent_line, daughter_line)
+                        # make full copies of the parent and daughter lines instead of just setting a pointer to the same line. If all the separate daughter datasets share the same object for each parent line, then it's impossible to perform dataset-specific modifications of the parent lines, such as creating dataset splits.
+                        cognate_pair_dicts[lang_iso_code][global_id] = (parent_line[:], daughter_line[:])
     
     return cognate_pair_dicts
 
