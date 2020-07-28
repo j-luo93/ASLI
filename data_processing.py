@@ -36,21 +36,21 @@ def filter_subfamily(parent_iso_code, daughter_iso_codes, dataset_path=default_d
         reader = csv.reader(f, delimiter='\t') # the file is a tsv (tab separated values)
         next(reader) # burn the header row
 
-        # I assume that any given language, parent or daughter, only has one word per particular cognate class. Running code on ielex.tsv, at least, it seems this assumption is correct.
+        # I make the assumption that a given language only has one word per particular cognate class. Running tests suggests that, at least for ielex.tsv, this assumption is valid.
         parent_dict = {} # cognates in the parent lang. {global_id: {cognate class: line}}
         daughter_dict = {} # cognates in the daughter langs. {global_id: {cognate class: {lang_iso_code: line}}}
 
         # go through the file once and populate the above dicts
         for line in reader:
             # these are all the different entires a line could have
-            language = line[0]
+            # language = line[0]
             iso_code = line[1]
-            gloss = line[2]
+            # gloss = line[2]
             global_id = line[3]
-            local_id = line[4]
-            transcription = line[5]
+            # local_id = line[4]
+            # transcription = line[5]
             cognate_class = line[6]
-            tokens = line[7]
+            # tokens = line[7]
             # notes = line[8]
 
             if iso_code == parent_iso_code:
