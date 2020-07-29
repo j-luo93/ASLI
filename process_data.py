@@ -236,6 +236,49 @@ def save_dataset(cognate_pair_dict, output_dir=None):
             writer_d.writerow(daughter_line + pad)
 
 
+def read_saved_dataset(parent_file, daughter_file):
+    '''
+    Reads two paired .tsv datasets, like those created by save_dataset, \
+        and recreates their cognate dictionary
+    
+    TODO(Derek): the current usage is a little inconvenient since you have to type out \
+        two long paths, and they're in the same directory. Maybe there's a better way.
+        The files aren't marked for parenthood/daughterhood so that ordering can't be done automatically.
+    '''
+    cog_dict = {}
+
+    with open(parent_file) as f_p, open(daughter_file) as f_d:
+        reader_p = csv.reader(f_p, delimiter='\t')
+        reader_d = csv.reader(f_d, delimiter='\t')
+
+        next(reader_p) # burn the header rows
+        next(reader_d)
+
+        for line_tuple in zip(reader_p, reader_d):
+            cognate_id = line_tuple[0][3] # parent and daughter lines should have identical cognate_ids
+            cog_dict[cognate_id] = line_tuple
+
+    return cog_dict
+
+
+def cog_dict_to_splits(cognate_dict):
+    '''
+    Converts a cognate dictionary to a dictionary of the separate data splits and shuffles the splits.
+    '''
+    split_dict = {} # will map a name of a given split to a list of cognate tuples, which are paired cognate lines in the parent and daughter languages
+
+    for line_tuple in cognate_dict.values():
+        split = line_tuple[0][10] # the parent and daughter belong to the same split
+        if split not in split_dict:
+            split_dict[split] = []
+        split_dict[split].append(line_tuple)
+    
+    for split_list in split_dict.values():
+        random.shuffle(split_list)
+
+    return split_dict
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="process .tsv cognate datasets")
