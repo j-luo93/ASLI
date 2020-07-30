@@ -100,7 +100,7 @@ class LstmDecoder(LstmCellWithEmbedding):
             assert target.names[1] == 'batch'
             assert len(target.shape) == 2
         if max_length is None:
-            max_length = target.size("tgt_pos")
+            max_length = target.size("pos")
 
         state = init_state
         batch_size = init_state.batch_size
@@ -118,7 +118,7 @@ class LstmDecoder(LstmCellWithEmbedding):
                 input_ = log_prob.max(dim=-1)[1]
 
         with NoName(*log_probs):
-            log_probs = torch.stack(log_probs, dim=0).refine_names('tgt_pos', 'batch', 'tgt_unit')
+            log_probs = torch.stack(log_probs, dim=0).refine_names('pos', 'batch', 'unit')
         return log_probs
 
 
@@ -138,6 +138,7 @@ class LstmEncoder(nn.Module):
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, bidirectional=bidirectional, dropout=dropout)
 
     def forward(self, input_: LT) -> LstmOutputTuple:
+        # FIXME(j_luo) what happened to paddings?
         batch_size = input_.size('batch')
         emb = self.embedding(input_)
         with NoName(emb):

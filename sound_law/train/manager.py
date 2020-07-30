@@ -9,6 +9,7 @@ from dev_misc import g
 from dev_misc.trainlib import Task
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.model.one_pair import OnePairModel
+from sound_law.evaluate.evaluator import OnePairEvaluator
 
 from .trainer import OnePairTrainer
 
@@ -27,9 +28,15 @@ class OnePairManager:
         num_src_chars = len(one_pair_dl.dataset.src_abc)
         num_tgt_chars = len(one_pair_dl.dataset.tgt_abc)
         self.model = OnePairModel(num_src_chars, num_tgt_chars)
-        if g.gpus is not None:  # FIXME(j_luo) Probably need some other variable
+        if g.gpus is not None:  # HACK(j_luo)
             self.model.cuda()
-        self.trainer = OnePairTrainer(self.model, [one_pair_task], [1.0], 'step', check_interval=100)
+
+        self.evaluator = OnePairEvaluator(self.model, one_pair_dl)
+        self.trainer = OnePairTrainer(self.model, [one_pair_task],
+                                      [1.0], 'step',
+                                      check_interval=100,
+                                      evaluator=self.evaluator,
+                                      eval_interval=10)
         self.trainer.set_optimizer(Adam, lr=0.002)
 
     def run(self):

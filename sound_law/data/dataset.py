@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import List, overload
 
+from dev_misc.devlib.helper import get_array
 import pandas as pd
 from torch.utils.data import Dataset
 
@@ -45,8 +46,8 @@ class OnePairDataset(Dataset):
         src_df = pd.read_csv(str(src_path), sep='\t')
         tgt_df = pd.read_csv(str(tgt_path), sep='\t')
 
-        self.src_unit_seqs = src_df['tokens'].str.split().to_list()
-        self.tgt_unit_seqs = tgt_df['tokens'].str.split().to_list()
+        self.src_unit_seqs = get_array(src_df['tokens'].str.split().to_list())
+        self.tgt_unit_seqs = get_array(tgt_df['tokens'].str.split().to_list())
 
         self.src_abc = Alphabet(self.src_unit_seqs)
         self.tgt_abc = Alphabet(self.tgt_unit_seqs)
@@ -57,7 +58,10 @@ class OnePairDataset(Dataset):
     def __getitem__(self, index: int):
         return {
             'src_id_seq': self.src_id_seqs[index],
-            'tgt_id_seq': self.tgt_id_seqs[index]
+            'src_unit_seq': self.src_unit_seqs[index],
+            'tgt_id_seq': self.tgt_id_seqs[index],
+            'tgt_unit_seq': self.tgt_unit_seqs[index],
+            'index': index
         }
 
     def __len__(self):
