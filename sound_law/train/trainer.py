@@ -22,7 +22,7 @@ class OnePairTrainer(BaseTrainer):
         self.model.train()
         self.optimizer.zero_grad()
         loss = self.model(batch)
-        loss = Metric('loss', loss.sum(), len(batch))  # FIXME(j_luo) fill in this: fix the padding
+        loss = Metric('loss', loss.sum(), batch.num_tgt_units)
         loss.mean.backward()
         grad_norm = clip_grad_norm_(self.model.parameters(), 5.0)
         grad_norm = Metric('grad_norm', grad_norm, len(batch))

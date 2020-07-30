@@ -2,9 +2,11 @@
 This file contains models for one pair of src-tgt languags.
 """
 
+from dev_misc.devlib.named_tensor import Rename
+from sound_law.data.data_loader import PaddedUnitSeqs
 import torch.nn as nn
 
-from dev_misc import FT, add_argument, g, get_zeros
+from dev_misc import FT, LT, add_argument, g, get_zeros
 from sound_law.data.data_loader import OnePairBatch
 from sound_law.data.dataset import SOT_ID
 
@@ -32,9 +34,26 @@ class OnePairModel(nn.Module):
                                    g.num_layers,
                                    dropout=g.dropout)
 
-    def forward(self, batch: OnePairBatch) -> FT:
-        output, state = self.encoder(batch.src_id_seqs)
+    def _get_log_probs(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> FT:
+        output, state = self.encoder(batch.src_seqs.ids)
         states_by_layers = state.to_layers()
-        log_probs = self.decoder(SOT_ID, states_by_layers, target=batch.tgt_id_seqs)
-        loss = -log_probs.gather('tgt_unit', batch.tgt_id_seqs)
+        target = batch.tgt_seqs.ids if use_target else None
+        log_probs = self.decoder(SOT_ID, states_by_layers, target=batch.tgt_seqs.ids, max_length=max_length)
+        return log_probs
+
+    def forward(self, batch: OnePairBatch) -> FT:
+        log_probs = self._get_log_probs(batch)
+        loss = -log_probs.gather('unit', batch.tgt_seqs.ids)
+        loss = loss * batch.tgt_seqs.paddings.float()
         return loss
+
+    def get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs) -> FT:
+        """Given a batch and a list of target tokens (provided as id sequences), return scores produced by the model."""
+        assert not self.training
+        max_length = tgt_vocab_seqs.ids.size('pos')
+        log_probs = self._get_log_probs(batch, use_target=False, max_length=max_length)
+        with Rename(tgt_vocab_seqs.ids, batch='tgt_vocab'), Rename(tgt_vocab_seqs.paddings, batch='tgt_vocab'):
+            unit_scores = log_probs.gather('unit', tgt_vocab_seqs.ids)
+            unit_scores = unit_scores * tgt_vocab_seqs.paddings.float().align_as(unit_scores)
+        scores = unit_scores.sum('pos')
+        return scores

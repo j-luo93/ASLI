@@ -1,10 +1,13 @@
+import numpy as np
+from dev_misc.utils import cached_property
 from pathlib import Path
-from typing import Dict, Iterator, List
+from typing import Dict, Iterator, List, Tuple
 
 import torch
 
-from dev_misc import LT, add_argument, g
+from dev_misc import BT, LT, NDA, add_argument, g
 from dev_misc.devlib import BaseBatch, batch_class, pad_to_dense
+from dev_misc.devlib.helper import get_array, get_tensor
 from dev_misc.trainlib import Task
 from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
                                                 BaseDataLoaderRegistry)
@@ -12,27 +15,76 @@ from sound_law.data.dataset import OnePairDataset
 
 
 @batch_class
-class OnePairBatch(BaseBatch):
-    src_id_seqs: LT
-    tgt_id_seqs: LT
-    # FIXME(j_luo) fill in this: add padding
+class PaddedUnitSeqs(BaseBatch):
+    """`unit_seqs` should not be transposed, but the others are."""
+    units: NDA
+    ids: LT
+    paddings: BT  # If a position is a padding, we mark it as False. Otherwise True.
 
     def __post_init__(self):
-        self.src_id_seqs.rename_('src_pos', 'batch')
-        self.tgt_id_seqs.rename_('tgt_pos', 'batch')
+        self.ids.rename_('pos', 'batch')
+        self.paddings.rename_('pos', 'batch')
 
     def __len__(self):
-        return self.src_id_seqs.size('batch')
+        return self.ids.size('batch')
+
+    @property
+    def num_units(self) -> int:
+        return self.paddings.sum()
+
+
+@batch_class
+class OnePairBatch(BaseBatch):
+    src_seqs: PaddedUnitSeqs
+    tgt_seqs: PaddedUnitSeqs  # FIXME(j_luo) add the last </S> unit.
+    indices: LT  # This records the original indices in the dataset, i.e., in what order these tokens appear.
+
+    def __post_init__(self):
+        self.indices.rename_('batch')
+        assert len(self.src_seqs) == len(self.tgt_seqs)
+
+    def __len__(self):
+        return len(self.src_seqs)
+
+    @property
+    def num_tgt_units(self) -> int:
+        return self.tgt_seqs.num_units
+
+    def cuda(self):
+        super().cuda()
+        self.src_seqs.cuda()
+        self.tgt_seqs.cuda()
+        return self
+
+
+def _gather_from_batches(batches: List[Dict], item_name: str, is_seq: bool = True, is_tensor: bool = True):
+    orig_lst = [batch[item_name] for batch in batches]
+
+    if not is_tensor:
+        return get_array(orig_lst)
+
+    if not is_seq:
+        ids = torch.from_numpy(np.asarray(orig_lst))
+        return ids
+
+    ids, paddings = pad_to_dense(orig_lst, dtype='l')
+    ids = torch.from_numpy(ids.T)
+    paddings = torch.from_numpy(paddings.T)
+    return ids, paddings
 
 
 def one_pair_collate_fn(batches: List[Dict]) -> OnePairBatch:
-    src_id_seqs = pad_to_dense([batch['src_id_seq'] for batch in batches], dtype='l')
-    tgt_id_seqs = pad_to_dense([batch['tgt_id_seq'] for batch in batches], dtype='l')
 
-    src_id_seqs = torch.from_numpy(src_id_seqs.T)
-    tgt_id_seqs = torch.from_numpy(tgt_id_seqs.T)
+    src_ids, src_paddings = _gather_from_batches(batches, 'src_id_seq')
+    tgt_ids, tgt_paddings = _gather_from_batches(batches, 'tgt_id_seq')
+    src_units = _gather_from_batches(batches, 'src_unit_seq', is_tensor=False)
+    tgt_units = _gather_from_batches(batches, 'tgt_unit_seq', is_tensor=False)
+    indices = _gather_from_batches(batches, 'index', is_seq=False)
 
-    return OnePairBatch(src_id_seqs, tgt_id_seqs)
+    src_seqs = PaddedUnitSeqs(src_units, src_ids, src_paddings)
+    tgt_seqs = PaddedUnitSeqs(tgt_units, tgt_ids, tgt_paddings)
+
+    return OnePairBatch(src_seqs, tgt_seqs, indices)
 
 
 class OnePairDataLoader(BaseDataLoader):
@@ -48,7 +100,22 @@ class OnePairDataLoader(BaseDataLoader):
     # IDEA(j_luo) Move this to core?
     def __iter__(self) -> Iterator[OnePairBatch]:
         for batch in super().__iter__():
-            yield batch.cuda()
+            if g.gpus is not None:  # HACK(j_luo)
+                yield batch.cuda()
+            else:
+                yield batch
+
+    @cached_property
+    def tgt_seqs(self) -> PaddedUnitSeqs:
+        items = list()
+        for i in range(len(self.dataset)):
+            items.append(self.dataset[i])
+        ids, paddings = (_gather_from_batches(items, 'tgt_id_seq'))
+        units = _gather_from_batches(items, 'tgt_unit_seq', is_tensor=False)
+        ret = PaddedUnitSeqs(units, ids, paddings)
+        if g.gpus is not None:  # HACK(j_luo)
+            ret.cuda()
+        return ret
 
 
 class DataLoaderRegistry(BaseDataLoaderRegistry):
