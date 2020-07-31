@@ -82,8 +82,14 @@ class LstmStatesByLayers(LstmState):
         if self.bidirectional:
             self._b_hs, self._b_cs = get_hs_and_cs(backward_states)
 
-    def get_layer(self, layer_id: int, direction: str = 'forward') -> _StateTuple:
-        assert direction == 'forward' or (direction == 'backward' and self.bidirectional)
+    def get_layer(self, layer_id: int, direction: Optional[str] = None) -> _StateTuple:
+        if self.bidirectional:
+            assert direction in ['forward', 'backward', 'sum']
+        else:
+            assert direction is None
+
+        if direction == 'sum':
+            return self._f_hs[layer_id] + self._b_hs[layer_id], self._f_cs[layer_id] + self._b_cs[layer_id]
 
         if self.bidirectional and direction == 'backward':
             hs = self._b_hs

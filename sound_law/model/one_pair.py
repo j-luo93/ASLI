@@ -37,7 +37,8 @@ class OnePairModel(nn.Module):
         output, state = self.encoder(batch.src_seqs.ids)
         states_by_layers = state.to_layers()
         target = batch.tgt_seqs.ids if use_target else None
-        log_probs = self.decoder(SOT_ID, states_by_layers, target=batch.tgt_seqs.ids, max_length=max_length)
+        log_probs = self.decoder(SOT_ID, states_by_layers, target=batch.tgt_seqs.ids,
+                                 max_length=max_length, init_state_direction='sum')
         return log_probs
 
     def forward(self, batch: OnePairBatch) -> FT:
