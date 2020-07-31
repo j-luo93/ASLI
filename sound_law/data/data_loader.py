@@ -1,16 +1,16 @@
-import numpy as np
-from dev_misc.utils import cached_property
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple
 
+import numpy as np
 import torch
 
 from dev_misc import BT, LT, NDA, add_argument, g
 from dev_misc.devlib import BaseBatch, batch_class, pad_to_dense
-from dev_misc.devlib.helper import get_array, get_tensor
+from dev_misc.devlib.helper import get_array, get_tensor, has_gpus
 from dev_misc.trainlib import Task
 from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
                                                 BaseDataLoaderRegistry)
+from dev_misc.utils import cached_property
 from sound_law.data.dataset import OnePairDataset
 
 
@@ -100,7 +100,7 @@ class OnePairDataLoader(BaseDataLoader):
     # IDEA(j_luo) Move this to core?
     def __iter__(self) -> Iterator[OnePairBatch]:
         for batch in super().__iter__():
-            if g.gpus is not None:  # HACK(j_luo)
+            if has_gpus():
                 yield batch.cuda()
             else:
                 yield batch
@@ -113,7 +113,7 @@ class OnePairDataLoader(BaseDataLoader):
         ids, paddings = (_gather_from_batches(items, 'tgt_id_seq'))
         units = _gather_from_batches(items, 'tgt_unit_seq', is_tensor=False)
         ret = PaddedUnitSeqs(units, ids, paddings)
-        if g.gpus is not None:  # HACK(j_luo)
+        if has_gpus():
             ret.cuda()
         return ret
 

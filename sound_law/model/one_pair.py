@@ -2,12 +2,11 @@
 This file contains models for one pair of src-tgt languags.
 """
 
-from dev_misc.devlib.named_tensor import Rename
-from sound_law.data.data_loader import PaddedUnitSeqs
 import torch.nn as nn
 
 from dev_misc import FT, LT, add_argument, g, get_zeros
-from sound_law.data.data_loader import OnePairBatch
+from dev_misc.devlib.named_tensor import Rename
+from sound_law.data.data_loader import OnePairBatch, PaddedUnitSeqs
 from sound_law.data.dataset import SOT_ID
 
 from .module import LstmDecoder, LstmEncoder

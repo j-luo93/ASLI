@@ -6,10 +6,11 @@ from typing import ClassVar
 from torch.optim import Adam
 
 from dev_misc import g
+from dev_misc.devlib.helper import has_gpus
 from dev_misc.trainlib import Task
 from sound_law.data.data_loader import DataLoaderRegistry
-from sound_law.model.one_pair import OnePairModel
 from sound_law.evaluate.evaluator import OnePairEvaluator
+from sound_law.model.one_pair import OnePairModel
 
 from .trainer import OnePairTrainer
 
@@ -28,7 +29,7 @@ class OnePairManager:
         num_src_chars = len(one_pair_dl.dataset.src_abc)
         num_tgt_chars = len(one_pair_dl.dataset.tgt_abc)
         self.model = OnePairModel(num_src_chars, num_tgt_chars)
-        if g.gpus is not None:  # HACK(j_luo)
+        if has_gpus():
             self.model.cuda()
 
         self.evaluator = OnePairEvaluator(self.model, one_pair_dl)
