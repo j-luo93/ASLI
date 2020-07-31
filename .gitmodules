@@ -1,4 +1,4 @@
 [submodule "dev_misc"]
 	path = dev_misc
-	url = git@github.com:j-luo93/dev_misc.git
+    url = https://github.com/j-luo93/dev_misc.git
 	branch = sound_law
