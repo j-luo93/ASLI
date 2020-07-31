@@ -64,9 +64,7 @@ _StatesByLayers = List[_StateTuple]
 class LstmStatesByLayers(LstmState):
     """A class to represent a typical LSTM state tuple (h, c).
 
-    Both h and c are stored following PyTorch's original format:
-    `num_layers * num_directions, batch, hidden_size`. But some methods are provided
-    to access the representation for a specific layer or direction.
+    h and c are stored layer by layer.
     """
 
     def __init__(self,
