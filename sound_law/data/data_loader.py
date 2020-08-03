@@ -14,6 +14,8 @@ from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
 from dev_misc.utils import cached_property
 from sound_law.data.dataset import OnePairDataset
 
+from .dataset import Split
+
 
 @batch_class
 class PaddedUnitSeqs(BaseBatch):
@@ -96,8 +98,8 @@ class OnePairDataLoader(BaseDataLoader):
 
     collate_fn = one_pair_collate_fn
 
-    def __init__(self, task: Task, data_path: Path, src_lang: str, tgt_lang: str):
-        dataset = OnePairDataset(data_path, src_lang, tgt_lang)
+    def __init__(self, task: Task, split: Split, data_path: Path, src_lang: str, tgt_lang: str):
+        dataset = OnePairDataset(data_path, split, src_lang, tgt_lang)
         super().__init__(dataset, task, batch_size=g.batch_size)
 
     # IDEA(j_luo) Move this to core?
@@ -133,9 +135,9 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
     add_argument('src_lang', dtype=str, msg='ISO code for the source language.')
     add_argument('tgt_lang', dtype=str, msg='ISO code for the target language.')
 
-    def get_data_loader(self, task: Task, *args, **kwargs) -> BaseDataLoader:
+    def get_data_loader(self, task: Task, split: Split, *args, **kwargs) -> BaseDataLoader:
         if task.name == 'one_pair':
-            dl = OnePairDataLoader(task, g.data_path, g.src_lang, g.tgt_lang)
+            dl = OnePairDataLoader(task, split, g.data_path, g.src_lang, g.tgt_lang)
         else:
             raise ValueError(f'Cannot understand this task.')
 

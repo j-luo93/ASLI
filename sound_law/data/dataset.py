@@ -1,6 +1,7 @@
 import logging
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, overload
+from typing import List, Optional, Set, Union, overload
 
 import pandas as pd
 from torch.utils.data import Dataset
@@ -46,14 +47,43 @@ class Alphabet:
         return len(self._unit2id)
 
 
+DF = pd.DataFrame
+
+
+@dataclass
+class Split:
+    """A class representing a split configuration."""
+    main_split: str
+    folds: List[int] = None
+
+    def __post_init__(self):
+        assert self.main_split in ['train', 'dev', 'test', 'all']
+
+    def select(self, df: DF) -> DF:
+        if self.main_split == 'all':
+            return df
+
+        ret = df.copy()
+        if self.folds is None:
+            values = {self.main_split}
+        else:
+            values = {str(f) for f in self.folds}
+        return ret[ret['split'].isin(values)].reset_index(drop=True)
+
+
 class OnePairDataset(Dataset):
 
-    def __init__(self, data_path: Path, src_lang: str, tgt_lang: str):
+    def __init__(self, data_path: Path, split: Split, src_lang: str, tgt_lang: str):
+        self.split = split
+
         src_path = data_path / f'{src_lang}.tsv'
         tgt_path = data_path / f'{tgt_lang}.tsv'
 
         src_df = pd.read_csv(str(src_path), sep='\t')
         tgt_df = pd.read_csv(str(tgt_path), sep='\t')
+
+        src_df = self.split.select(src_df)
+        tgt_df = self.split.select(tgt_df)
 
         self.src_vocab = get_array(src_df['transcription'])
         self.tgt_vocab = get_array(tgt_df['transcription'])
@@ -66,6 +96,8 @@ class OnePairDataset(Dataset):
 
         self.src_id_seqs = [[self.src_abc[u] for u in seq] for seq in self.src_unit_seqs]
         self.tgt_id_seqs = [[self.tgt_abc[u] for u in seq] for seq in self.tgt_unit_seqs]
+
+        logging.info(f'Total number of cognates for {src_lang}-{tgt_lang}: {len(self.src_vocab)}.')
 
     def __getitem__(self, index: int):
         return {
