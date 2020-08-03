@@ -192,7 +192,6 @@ class LstmDecoderWithAttention(LstmDecoder):
                  tgt_hidden_size: int,
                  num_layers: int,
                  dropout: float = 0.0,
-                 emb_dropout: float = 0.0,
                  embedding: Optional[nn.Module] = None):
         super().__init__(num_embeddings, input_size, tgt_hidden_size, num_layers,
                          dropout=dropout, embedding=embedding)
