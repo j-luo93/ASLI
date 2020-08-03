@@ -1,9 +1,11 @@
+import logging
 from pathlib import Path
 from typing import List, overload
 
-from dev_misc.devlib.helper import get_array
 import pandas as pd
 from torch.utils.data import Dataset
+
+from dev_misc.devlib.helper import get_array
 
 SOT = '<SOT>'
 SOT_ID = 0
@@ -12,12 +14,14 @@ SOT_ID = 0
 class Alphabet:
     """A class to represent the alphabet of any dataset."""
 
-    def __init__(self, contents: List[List[str]]):
+    def __init__(self, lang: str, contents: List[List[str]]):
         data = set()
         for content in contents:
             data.update(content)
         self._id2unit = [SOT] + sorted(data)
         self._unit2id = {c: i for i, c in enumerate(self._id2unit)}
+
+        logging.info(f'Alphabet for {lang}: {self._id2unit}.')
 
     @overload
     def __getitem__(self, index: int) -> str: ...
@@ -46,11 +50,14 @@ class OnePairDataset(Dataset):
         src_df = pd.read_csv(str(src_path), sep='\t')
         tgt_df = pd.read_csv(str(tgt_path), sep='\t')
 
+        self.src_vocab = get_array(src_df['transcription'])
+        self.tgt_vocab = get_array(tgt_df['transcription'])
+
         self.src_unit_seqs = get_array(src_df['tokens'].str.split().to_list())
         self.tgt_unit_seqs = get_array(tgt_df['tokens'].str.split().to_list())
 
-        self.src_abc = Alphabet(self.src_unit_seqs)
-        self.tgt_abc = Alphabet(self.tgt_unit_seqs)
+        self.src_abc = Alphabet(src_lang, self.src_unit_seqs)
+        self.tgt_abc = Alphabet(tgt_lang, self.tgt_unit_seqs)
 
         self.src_id_seqs = [[self.src_abc[u] for u in seq] for seq in self.src_unit_seqs]
         self.tgt_id_seqs = [[self.tgt_abc[u] for u in seq] for seq in self.tgt_unit_seqs]

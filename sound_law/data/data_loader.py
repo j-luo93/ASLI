@@ -117,6 +117,12 @@ class OnePairDataLoader(BaseDataLoader):
             ret.cuda()
         return ret
 
+    def get_token_from_index(self, index: int, side: str):
+        assert side in ['src', 'tgt']
+
+        vocab = self.dataset.src_vocab if side == 'src' else self.dataset.tgt_vocab
+        return vocab[index]
+
 
 class DataLoaderRegistry(BaseDataLoaderRegistry):
 
