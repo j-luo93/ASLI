@@ -3,6 +3,7 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 from torch.nn.functional import normalize
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from dev_misc import BT, FT, LT, get_zeros
 from dev_misc.devlib.named_tensor import NoName
@@ -219,7 +220,7 @@ class LstmDecoderWithAttention(LstmDecoder):
                       src_states: FT,
                       mask_src: BT,
                       target: Optional[LT] = None):
-        _, ctx = self.attn.forward(input_, src_states, mask_src)  # FIXME(j_luo) add mask here
+        _, ctx = self.attn.forward(input_, src_states, mask_src)
         cat = torch.cat([input_, ctx], dim=0)
         hid_input = self.hidden(cat)
         return super()._forward_step(step, hid_input, state, target=target)
@@ -240,10 +241,10 @@ class LstmEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, bidirectional=bidirectional, dropout=dropout)
 
-    def forward(self, input_: LT) -> LstmOutputTuple:
-        # FIXME(j_luo) what happened to paddings?
-        batch_size = input_.size('batch')
+    def forward(self, input_: LT, lengths: LT) -> LstmOutputTuple:
         emb = self.embedding(input_)
-        with NoName(emb):
-            output, state = self.lstm(emb)
+        with NoName(emb, lengths):
+            packed_emb = pack_padded_sequence(emb, lengths, enforce_sorted=False)
+            output, state = self.lstm(packed_emb)
+            output = pad_packed_sequence(output)[0]
         return output, LstmStateTuple(state, bidirectional=self.lstm.bidirectional)

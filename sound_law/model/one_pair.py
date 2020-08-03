@@ -34,7 +34,7 @@ class OnePairModel(nn.Module):
                                    dropout=g.dropout)
 
     def _get_log_probs(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> FT:
-        output, state = self.encoder(batch.src_seqs.ids)
+        output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         states_by_layers = state.to_layers()
         target = batch.tgt_seqs.ids if use_target else None
         log_probs = self.decoder(SOT_ID, states_by_layers, target=batch.tgt_seqs.ids,

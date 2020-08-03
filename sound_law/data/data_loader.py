@@ -1,3 +1,4 @@
+from dataclasses import field
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple
 
@@ -20,10 +21,12 @@ class PaddedUnitSeqs(BaseBatch):
     units: NDA
     ids: LT
     paddings: BT  # If a position is a padding, we mark it as False. Otherwise True.
+    lengths: LT = field(init=False)
 
     def __post_init__(self):
         self.ids.rename_('pos', 'batch')
         self.paddings.rename_('pos', 'batch')
+        self.lengths = self.paddings.sum(dim='pos').rename_('batch')
 
     def __len__(self):
         return self.ids.size('batch')
@@ -36,7 +39,7 @@ class PaddedUnitSeqs(BaseBatch):
 @batch_class
 class OnePairBatch(BaseBatch):
     src_seqs: PaddedUnitSeqs
-    tgt_seqs: PaddedUnitSeqs  # FIXME(j_luo) add the last </S> unit.
+    tgt_seqs: PaddedUnitSeqs
     indices: LT  # This records the original indices in the dataset, i.e., in what order these tokens appear.
 
     def __post_init__(self):
