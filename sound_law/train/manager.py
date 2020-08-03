@@ -54,6 +54,7 @@ class OnePairManager:
         all_dl = self.dl_reg.register_data_loader(all_task, all_split)
         num_src_chars = len(all_dl.dataset.src_abc)
         num_tgt_chars = len(all_dl.dataset.tgt_abc)
+        # FIXME(j_luo) Move model to run.
         self.model = OnePairModel(num_src_chars, num_tgt_chars)
         if has_gpus():
             self.model.cuda()
@@ -67,6 +68,11 @@ class OnePairManager:
             train_dl = self.dl_reg[train_task]
             dev_dl = self.dl_reg[dev_task]
             evaluator = OnePairEvaluator(self.model, {f'train@{fold}': train_dl, f'dev@{fold}': dev_dl})
+
+            for param in self.model.parameters():
+                if param.dim() == 2:
+                    import torch.nn.init
+                    torch.nn.init.xavier_normal_(param)
 
             trainer = OnePairTrainer(self.model, [train_task],
                                      [1.0], 'step',

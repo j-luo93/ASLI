@@ -1,3 +1,4 @@
+from typing import Tuple
 import torch.nn.init
 from typing import List
 import logging
@@ -189,6 +190,59 @@ class GlobalAttention(nn.Module):
         return 'src=%d, tgt=%d' % (self.input_src_size, self.input_tgt_size)
 
 
+class NormControlledResidual(nn.Module):
+
+    def __init__(self, norms_or_ratios=None, multiplier=1.0, control_mode=None):
+        super().__init__()
+
+        assert control_mode in ['none', 'relative', 'absolute']
+
+        self.control_mode = control_mode
+        self.norms_or_ratios = None
+        if self.control_mode in ['relative', 'absolute']:
+            self.norms_or_ratios = norms_or_ratios
+            if self.control_mode == 'relative':
+                assert self.norms_or_ratios[0] == 1.0
+
+        self.multiplier = multiplier
+
+    def anneal_ratio(self):
+        if self.control_mode == 'relative':
+            new_ratios = [self.norms_or_ratios[0]]
+            for r in self.norms_or_ratios[1:]:
+                r = min(r * self.multiplier, 1.0)
+                new_ratios.append(r)
+            self.norms_or_ratios = new_ratios
+            logging.debug('Ratios are now [%s]' % (', '.join(map(lambda f: '%.2f' % f, self.norms_or_ratios))))
+
+    def forward(self, *inputs):
+        if self.control_mode == 'none':
+            output = sum(inputs)
+        else:
+            assert len(inputs) == len(self.norms_or_ratios)
+            outs = list()
+            if self.control_mode == 'absolute':
+                for inp, norm in zip(inputs, self.norms_or_ratios):
+                    if norm >= 0.0:  # NOTE(j_luo) a negative value means no control applied
+                        outs.append(normalize(inp, dim=-1) * norm)
+                    else:
+                        outs.append(inp)
+            else:
+                outs.append(inputs[0])
+                norm_base = inputs[0].norm(dim=-1, keepdim=True)
+                for inp, ratio in zip(inputs[1:], self.norms_or_ratios[1:]):
+                    if ratio >= 0.0:  # NOTE(j_luo) same here
+                        norm_actual = inp.norm(dim=-1, keepdim=True)
+                        max_norm = norm_base * ratio
+                        too_big = norm_actual > max_norm
+                        adjusted_norm = torch.where(too_big, max_norm, norm_actual)
+                        outs.append(normalize(inp, dim=-1) * adjusted_norm)
+                    else:
+                        outs.append(inp)
+            output = sum(outs)
+        return output
+
+
 class LstmDecoderWithAttention(LstmDecoder):
 
     def __init__(self,
@@ -198,16 +252,22 @@ class LstmDecoderWithAttention(LstmDecoder):
                  tgt_hidden_size: int,
                  num_layers: int,
                  dropout: float = 0.0,
-                 embedding: Optional[nn.Module] = None):
+                 control_mode: str = 'relative',
+                 embedding: Optional[nn.Module] = None,
+                 norms_or_ratios: Optional[Tuple[float]] = None):
         super().__init__(num_embeddings, input_size, tgt_hidden_size, num_layers,
                          dropout=dropout, embedding=embedding)
-        self.attn = GlobalAttention(src_hidden_size, tgt_hidden_size)
-        self.hidden = nn.Linear(src_hidden_size + tgt_hidden_size, tgt_hidden_size)
         self.src_hidden_size = src_hidden_size
         self.tgt_hidden_size = tgt_hidden_size
 
+        self.attn = GlobalAttention(src_hidden_size, tgt_hidden_size)
+        self.hidden = nn.Linear(src_hidden_size + tgt_hidden_size, tgt_hidden_size)
+
+        self.nc_residual = NormControlledResidual(norms_or_ratios, control_mode=control_mode)
+
     def forward(self,
                 sot_id: int,
+                src_emb: FT,
                 src_states: FT,
                 mask_src: BT,
                 max_length: Optional[int] = None,
@@ -219,24 +279,29 @@ class LstmDecoderWithAttention(LstmDecoder):
                                               self.tgt_hidden_size, bidirectional=False)
         log_probs = list()
         for l in range(max_length):
-            input_, state, log_prob = self._forward_step(l, input_, state, src_states, mask_src, target=target)
+            input_, state, log_prob = self._forward_step(l, input_, src_emb, state, src_states, mask_src, target=target)
             log_probs.append(log_prob)
         return self._gather_log_probs(log_probs)
 
     def _forward_step(self,
                       step: int,
                       input_: FT,
+                      src_emb: FT,
                       state: LstmStatesByLayers,
                       src_states: FT,
                       mask_src: BT,
                       target: Optional[LT] = None):
         emb = self.embed(input_)
         hid_rnn, next_state = self.lstm(emb, state)
-        _, ctx = self.attn.forward(hid_rnn, src_states, mask_src)
+        almt, ctx = self.attn.forward(hid_rnn, src_states, mask_src)
         cat = torch.cat([hid_rnn, ctx], dim=-1)
         hid_cat = self.hidden(cat)
 
-        logit = self.embedding.project(hid_cat)
+        with NoName(src_emb, hid_cat, almt):
+            ctx_emb = (src_emb * almt.t().unsqueeze(dim=-1)).sum(dim=0)
+            hid_res = self.nc_residual(ctx_emb, hid_cat)
+
+        logit = self.embedding.project(hid_res)
         log_prob = logit.log_softmax(dim=-1)
 
         if self.training:
@@ -261,10 +326,10 @@ class LstmEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, bidirectional=bidirectional, dropout=dropout)
 
-    def forward(self, input_: LT, lengths: LT) -> LstmOutputTuple:
+    def forward(self, input_: LT, lengths: LT) -> Tuple[FT, LstmOutputTuple]:
         emb = self.embedding(input_)
         with NoName(emb, lengths):
             packed_emb = pack_padded_sequence(emb, lengths, enforce_sorted=False)
             output, state = self.lstm(packed_emb)
             output = pad_packed_sequence(output)[0]
-        return output, LstmStateTuple(state, bidirectional=self.lstm.bidirectional)
+        return emb, output, LstmStateTuple(state, bidirectional=self.lstm.bidirectional)

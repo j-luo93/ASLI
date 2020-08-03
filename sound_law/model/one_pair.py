@@ -18,6 +18,10 @@ class OnePairModel(nn.Module):
     add_argument('hidden_size', default=256, dtype=int, msg='Hidden size for LSTM states.')
     add_argument('num_layers', default=1, dtype=int, msg='Number of LSTM layers.')
     add_argument('dropout', default=0.2, dtype=int, msg='Dropout rate.')
+    add_argument('norms_or_ratios', default=(1.0, 0.2), nargs=2, dtype=int,
+                 msg='Norms or ratios of norms for the norm-controlled residual module.')
+    add_argument('control_mode', default='relative', dtype=str, choices=['relative', 'absolute', 'none'],
+                 msg='Control mode for the norm-controlled residual module.')
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int):
         super().__init__()
@@ -32,12 +36,14 @@ class OnePairModel(nn.Module):
                                                 g.hidden_size * 2,
                                                 g.hidden_size,
                                                 g.num_layers,
-                                                dropout=g.dropout)
+                                                norms_or_ratios=g.norms_or_ratios,
+                                                dropout=g.dropout,
+                                                control_mode=g.control_mode)
 
     def _get_log_probs(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> FT:
-        output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
+        src_emb, output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         target = batch.tgt_seqs.ids if use_target else None
-        log_probs = self.decoder(SOT_ID, output, batch.src_seqs.paddings,
+        log_probs = self.decoder(SOT_ID, src_emb, output, batch.src_seqs.paddings,
                                  target=target,
                                  max_length=max_length)
         return log_probs
