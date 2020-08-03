@@ -8,7 +8,9 @@ from torch.utils.data import Dataset
 from dev_misc.devlib.helper import get_array
 
 SOT = '<SOT>'
+EOT = '<EOT>'
 SOT_ID = 0
+EOT_ID = 1
 
 
 class Alphabet:
@@ -18,8 +20,11 @@ class Alphabet:
         data = set()
         for content in contents:
             data.update(content)
-        self._id2unit = [SOT] + sorted(data)
-        self._unit2id = {c: i for i, c in enumerate(self._id2unit)}
+        data = sorted(data)
+        special_units = [SOT, EOT]
+        self._id2unit = special_units + data
+        self._unit2id = {SOT: SOT_ID, EOT: EOT_ID}
+        self._unit2id.update({c: i for i, c in enumerate(data, len(special_units))})
 
         logging.info(f'Alphabet for {lang}: {self._id2unit}.')
 
@@ -66,8 +71,8 @@ class OnePairDataset(Dataset):
         return {
             'src_id_seq': self.src_id_seqs[index],
             'src_unit_seq': self.src_unit_seqs[index],
-            'tgt_id_seq': self.tgt_id_seqs[index],
-            'tgt_unit_seq': self.tgt_unit_seqs[index],
+            'tgt_id_seq': self.tgt_id_seqs[index] + [EOT_ID],
+            'tgt_unit_seq': self.tgt_unit_seqs[index] + [EOT],
             'index': index
         }
 
