@@ -1,3 +1,6 @@
+import torch.nn.init
+from typing import List
+import logging
 from typing import Optional, Tuple
 
 import torch
@@ -99,7 +102,7 @@ class LstmDecoder(LstmCellWithEmbedding):
                 target: Optional[LT] = None,
                 init_state_direction: Optional[str] = None) -> FT:
         max_length = self._get_max_length(max_length, target)
-        input_ = self._prepare_first_input(sot_id, init_state)
+        input_ = self._prepare_first_input(sot_id, init_state.batch_size, init_state.device)
         log_probs = list()
         state = init_state
         state_direction = init_state_direction
@@ -110,6 +113,9 @@ class LstmDecoder(LstmCellWithEmbedding):
             state_direction = None
             log_probs.append(log_prob)
 
+        return self._gather_log_probs(log_probs)
+
+    def _gather_log_probs(self, log_probs: List[FT]) -> FT:
         with NoName(*log_probs):
             log_probs = torch.stack(log_probs, dim=0).refine_names('pos', 'batch', 'unit')
         return log_probs
@@ -123,11 +129,8 @@ class LstmDecoder(LstmCellWithEmbedding):
             max_length = target.size("pos")
         return max_length
 
-    def _prepare_first_input(self, sot_id: int, init_state: LstmStatesByLayers):
-        state = init_state
-        batch_size = init_state.batch_size
-        log_probs = list()
-        input_ = torch.full([batch_size], sot_id, dtype=torch.long).rename('batch').to(init_state.device)
+    def _prepare_first_input(self, sot_id: int, batch_size: int, device: torch.device) -> FT:
+        input_ = torch.full([batch_size], sot_id, dtype=torch.long).rename('batch').to(device)
         return input_
 
     def _forward_step(self,
@@ -161,6 +164,7 @@ class GlobalAttention(nn.Module):
         self.input_tgt_size = input_tgt_size
 
         self.Wa = nn.Parameter(torch.Tensor(input_src_size, input_tgt_size))
+        torch.nn.init.xavier_normal_(self.Wa)
         self.drop = nn.Dropout(dropout)
 
     def forward(self,
@@ -171,11 +175,13 @@ class GlobalAttention(nn.Module):
         dt = h_t.shape[-1]
         Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
 
-        scores = Wh_s.matmul(self.drop(h_t).unsqueeze(dim=-1)).squeeze(dim=-1)  # sl x bs
+        with NoName(h_t):
+            scores = (Wh_s * h_t).sum(dim=-1)
 
         scores = torch.where(mask_src, scores, torch.full_like(scores, -9999.9))
         almt_distr = nn.functional.log_softmax(scores, dim=0).exp()  # sl x bs
-        ctx = (almt_distr.unsqueeze(dim=-1) * h_s).sum(dim=0)  # bs x d
+        with NoName(almt_distr):
+            ctx = (almt_distr.unsqueeze(dim=-1) * h_s).sum(dim=0)  # bs x d
         almt_distr = almt_distr.t()
         return almt_distr, ctx
 
@@ -197,20 +203,25 @@ class LstmDecoderWithAttention(LstmDecoder):
                          dropout=dropout, embedding=embedding)
         self.attn = GlobalAttention(src_hidden_size, tgt_hidden_size)
         self.hidden = nn.Linear(src_hidden_size + tgt_hidden_size, tgt_hidden_size)
+        self.src_hidden_size = src_hidden_size
+        self.tgt_hidden_size = tgt_hidden_size
 
     def forward(self,
                 sot_id: int,
                 src_states: FT,
                 mask_src: BT,
-                init_state: LstmStatesByLayers,
                 max_length: Optional[int] = None,
                 target: Optional[LT] = None) -> FT:
         max_length = self._get_max_length(max_length, target)
-        input_ = self._prepare_first_input(sot_id, init_state)
+        batch_size = mask_src.size('batch')
+        input_ = self._prepare_first_input(sot_id, batch_size, mask_src.device)
+        state = LstmStatesByLayers.zero_state(self.lstm.num_layers, batch_size,
+                                              self.tgt_hidden_size, bidirectional=False)
         log_probs = list()
         for l in range(max_length):
             input_, state, log_prob = self._forward_step(l, input_, state, src_states, mask_src, target=target)
             log_probs.append(log_prob)
+        return self._gather_log_probs(log_probs)
 
     def _forward_step(self,
                       step: int,
@@ -219,10 +230,20 @@ class LstmDecoderWithAttention(LstmDecoder):
                       src_states: FT,
                       mask_src: BT,
                       target: Optional[LT] = None):
-        _, ctx = self.attn.forward(input_, src_states, mask_src)
-        cat = torch.cat([input_, ctx], dim=0)
-        hid_input = self.hidden(cat)
-        return super()._forward_step(step, hid_input, state, target=target)
+        emb = self.embed(input_)
+        hid_rnn, next_state = self.lstm(emb, state)
+        _, ctx = self.attn.forward(hid_rnn, src_states, mask_src)
+        cat = torch.cat([hid_rnn, ctx], dim=-1)
+        hid_cat = self.hidden(cat)
+
+        logit = self.embedding.project(hid_cat)
+        log_prob = logit.log_softmax(dim=-1)
+
+        if self.training:
+            next_input = target[step]
+        else:
+            next_input = log_prob.max(dim=-1)[1]
+        return next_input, next_state, log_prob
 
 
 class LstmEncoder(nn.Module):

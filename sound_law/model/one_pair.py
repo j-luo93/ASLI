@@ -9,7 +9,7 @@ from dev_misc.devlib.named_tensor import Rename
 from sound_law.data.data_loader import OnePairBatch, PaddedUnitSeqs
 from sound_law.data.dataset import SOT_ID
 
-from .module import LstmDecoder, LstmEncoder
+from .module import LstmDecoderWithAttention, LstmEncoder
 
 
 class OnePairModel(nn.Module):
@@ -27,18 +27,19 @@ class OnePairModel(nn.Module):
                                    g.num_layers,
                                    dropout=g.dropout,
                                    bidirectional=True)
-        self.decoder = LstmDecoder(num_tgt_chars,
-                                   g.char_emb_size,
-                                   g.hidden_size,
-                                   g.num_layers,
-                                   dropout=g.dropout)
+        self.decoder = LstmDecoderWithAttention(num_tgt_chars,
+                                                g.char_emb_size,
+                                                g.hidden_size * 2,
+                                                g.hidden_size,
+                                                g.num_layers,
+                                                dropout=g.dropout)
 
     def _get_log_probs(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> FT:
         output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
-        states_by_layers = state.to_layers()
         target = batch.tgt_seqs.ids if use_target else None
-        log_probs = self.decoder(SOT_ID, states_by_layers, target=batch.tgt_seqs.ids,
-                                 max_length=max_length, init_state_direction='sum')
+        log_probs = self.decoder(SOT_ID, output, batch.src_seqs.paddings,
+                                 target=target,
+                                 max_length=max_length)
         return log_probs
 
     def forward(self, batch: OnePairBatch) -> FT:

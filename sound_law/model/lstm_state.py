@@ -106,3 +106,11 @@ class LstmStatesByLayers(LstmState):
     @property
     def device(self) -> torch.device:
         return self._f_hs[0].device
+
+    @classmethod
+    def zero_state(cls,
+                   num_layers: int,
+                   batch_size: int,
+                   hidden_size: int,
+                   bidirectional: bool = False) -> LstmStatesByLayers:
+        return LstmStateTuple.zero_state(num_layers, batch_size, hidden_size, bidirectional=bidirectional).to_layers()
