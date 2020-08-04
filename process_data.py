@@ -236,18 +236,21 @@ def save_dataset(cognate_pair_dict, output_dir=None):
             writer_d.writerow(daughter_line + pad)
 
 
-def read_saved_dataset(parent_file, daughter_file):
+def read_saved_dataset(data_path, parent_iso, daughter_iso):
     '''
     Reads two paired .tsv datasets, like those created by save_dataset, \
         and recreates their cognate dictionary
     
-    TODO(Derek): the current usage is a little inconvenient since you have to type out \
-        two long paths, and they're in the same directory. Maybe there's a better way.
-        The files aren't marked for parenthood/daughterhood so that ordering can't be done automatically.
+    data_path: str, path to the folder the two .tsv are kept in
+    parent_iso: str, iso code of the parent language
+    daughter_iso: str, iso code of the daughter language
     '''
+    parent_path = os.path.join(data_path, parent_iso + '.tsv')
+    daughter_path = os.path.join(data_path, daughter_iso + '.tsv')
+
     cog_dict = {}
 
-    with open(parent_file) as f_p, open(daughter_file) as f_d:
+    with open(parent_path) as f_p, open(daughter_path) as f_d:
         reader_p = csv.reader(f_p, delimiter='\t')
         reader_d = csv.reader(f_d, delimiter='\t')
 
