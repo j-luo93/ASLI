@@ -53,12 +53,8 @@ class OnePairManager:
         all_task = OnePairTask()
         all_split = Split('all')
         all_dl = self.dl_reg.register_data_loader(all_task, all_split)
-        num_src_chars = len(all_dl.dataset.src_abc)
-        num_tgt_chars = len(all_dl.dataset.tgt_abc)
-        # FIXME(j_luo) Move model to run.
-        self.model = OnePairModel(num_src_chars, num_tgt_chars)
-        if has_gpus():
-            self.model.cuda()
+        self.num_src_chars = len(all_dl.dataset.src_abc)
+        self.num_tgt_chars = len(all_dl.dataset.tgt_abc)
 
     def run(self):
         for fold in range(5):
@@ -68,9 +64,13 @@ class OnePairManager:
 
             train_dl = self.dl_reg[train_task]
             dev_dl = self.dl_reg[dev_task]
-            evaluator = OnePairEvaluator(self.model, {f'train@{fold}': train_dl, f'dev@{fold}': dev_dl})
 
-            trainer = OnePairTrainer(self.model, [train_task],
+            model = OnePairModel(self.num_src_chars, self.num_tgt_chars)
+            if has_gpus():
+                model.cuda()
+            evaluator = OnePairEvaluator(model, {f'train@{fold}': train_dl, f'dev@{fold}': dev_dl})
+
+            trainer = OnePairTrainer(model, [train_task],
                                      [1.0], 'step',
                                      check_interval=g.check_interval,
                                      evaluator=evaluator,
