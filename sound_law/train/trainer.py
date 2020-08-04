@@ -6,7 +6,7 @@ from dev_misc.trainlib.base_trainer import BaseTrainer
 from sound_law.data.data_loader import OnePairDataLoader
 
 
-class OnePairTrainer(BaseTrainer):
+class Trainer(BaseTrainer):
 
     add_argument('num_steps', default=1000, dtype=int, msg='Number of steps for training.')
 

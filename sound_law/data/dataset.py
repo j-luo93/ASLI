@@ -32,8 +32,17 @@ class Alphabet:
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
 
     @classmethod
-    def from_tsv(cls, lang: str, path: Path) -> Alphabet:
+    def from_tsv(cls, lang: str, path: str) -> Alphabet:
         df = pd.read_csv(path, sep='\t')
+        return cls(lang, df['tokens'].str.split().tolist())
+
+    @classmethod
+    def from_tsvs(cls, lang: str, paths: List[str]) -> Alphabet:
+        dfs = list()
+        for path in paths:
+            df = pd.read_csv(path, sep='\t')
+            dfs.append(df)
+        df = pd.concat(dfs)
         return cls(lang, df['tokens'].str.split().tolist())
 
     @overload
@@ -78,6 +87,13 @@ class Split:
         return ret[ret['split'].isin(values)].reset_index(drop=True)
 
 
+def get_paths(data_path: Path, src_lang: str, tgt_lang: str) -> Tuple[str, str]:
+    prefix = data_path / f'{src_lang}-{tgt_lang}'
+    src_path = f'{prefix / src_lang}.tsv'
+    tgt_path = f'{prefix / tgt_lang}.tsv'
+    return src_path, tgt_path
+
+
 class OnePairDataset(Dataset):
 
     def __init__(self,
@@ -88,9 +104,10 @@ class OnePairDataset(Dataset):
                  src_abc: Alphabet,
                  tgt_abc: Alphabet):
         self.split = split
+        self.src_lang = src_lang
+        self.tgt_lang = tgt_lang
 
-        src_path = data_path / f'{src_lang}.tsv'
-        tgt_path = data_path / f'{tgt_lang}.tsv'
+        src_path, tgt_path = get_paths(data_path, src_lang, tgt_lang)
 
         src_df = pd.read_csv(str(src_path), sep='\t')
         tgt_df = pd.read_csv(str(tgt_path), sep='\t')
@@ -115,7 +132,9 @@ class OnePairDataset(Dataset):
             'src_unit_seq': self.src_unit_seqs[index],
             'tgt_id_seq': self.tgt_id_seqs[index] + [EOT_ID],
             'tgt_unit_seq': self.tgt_unit_seqs[index] + [EOT],
-            'index': index
+            'index': index,
+            'src_lang': self.src_lang,
+            'tgt_lang': self.tgt_lang
         }
 
     def __len__(self):

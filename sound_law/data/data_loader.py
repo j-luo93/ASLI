@@ -1,7 +1,6 @@
-from .dataset import Alphabet
 from dataclasses import field
 from pathlib import Path
-from typing import Dict, Iterator, List, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -15,16 +14,18 @@ from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
 from dev_misc.utils import cached_property
 from sound_law.data.dataset import OnePairDataset
 
-from .dataset import Split
+from .dataset import Alphabet, Split
 
 
 @batch_class
 class PaddedUnitSeqs(BaseBatch):
-    """`unit_seqs` should not be transposed, but the others are."""
+    """`units` should not be transposed, but the others are."""
+    lang: str
     units: NDA
     ids: LT
     paddings: BT  # If a position is a padding, we mark it as False. Otherwise True.
     lengths: LT = field(init=False)
+    lang_id: Optional[int] = None  # This is only needed for one-to-many scenarios.
 
     def __post_init__(self):
         self.ids.rename_('pos', 'batch')
@@ -87,8 +88,10 @@ def one_pair_collate_fn(batches: List[Dict]) -> OnePairBatch:
     tgt_units = _gather_from_batches(batches, 'tgt_unit_seq', is_tensor=False)
     indices = _gather_from_batches(batches, 'index', is_seq=False)
 
-    src_seqs = PaddedUnitSeqs(src_units, src_ids, src_paddings)
-    tgt_seqs = PaddedUnitSeqs(tgt_units, tgt_ids, tgt_paddings)
+    src_lang = batches[0]['src_lang']
+    tgt_lang = batches[0]['tgt_lang']
+    src_seqs = PaddedUnitSeqs(src_lang, src_units, src_ids, src_paddings)
+    tgt_seqs = PaddedUnitSeqs(tgt_lang, tgt_units, tgt_ids, tgt_paddings)
 
     return OnePairBatch(src_seqs, tgt_seqs, indices)
 
@@ -106,13 +109,20 @@ class OnePairDataLoader(BaseDataLoader):
                  src_lang: str,
                  tgt_lang: str,
                  src_abc: Alphabet,
-                 tgt_abc: Alphabet):
+                 tgt_abc: Alphabet,
+                 lang2id: Dict[str, int] = None):
         dataset = OnePairDataset(data_path, split, src_lang, tgt_lang, src_abc, tgt_abc)
+        self.lang2id = lang2id
+        self.src_lang = src_lang
+        self.tgt_lang = tgt_lang
         super().__init__(dataset, task, batch_size=g.batch_size)
 
     # IDEA(j_luo) Move this to core?
     def __iter__(self) -> Iterator[OnePairBatch]:
         for batch in super().__iter__():
+            if self.lang2id is not None:
+                batch.src_seqs.lang_id = self.lang2id[batch.src_seqs.lang]
+                batch.tgt_seqs.lang_id = self.lang2id[batch.tgt_seqs.lang]
             if has_gpus():
                 yield batch.cuda()
             else:
@@ -125,7 +135,7 @@ class OnePairDataLoader(BaseDataLoader):
             items.append(self.dataset[i])
         ids, paddings = (_gather_from_batches(items, 'tgt_id_seq'))
         units = _gather_from_batches(items, 'tgt_unit_seq', is_tensor=False)
-        ret = PaddedUnitSeqs(units, ids, paddings)
+        ret = PaddedUnitSeqs(self.tgt_lang, units, ids, paddings)
         if has_gpus():
             ret.cuda()
         return ret
@@ -145,7 +155,7 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
 
     def get_data_loader(self, task: Task, split: Split, src_abc: Alphabet, tgt_abc: Alphabet, **kwargs) -> BaseDataLoader:
         if task.name == 'one_pair':
-            dl = OnePairDataLoader(task, split, g.data_path, g.src_lang, g.tgt_lang, src_abc, tgt_abc)
+            dl = OnePairDataLoader(task, split, g.data_path, g.src_lang, g.tgt_lang, src_abc, tgt_abc, **kwargs)
         else:
             raise ValueError(f'Cannot understand this task.')
 
