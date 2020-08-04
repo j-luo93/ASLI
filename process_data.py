@@ -14,9 +14,11 @@ header = ['language', 'iso_code', 'gloss', 'global_id',
     'local_id', 'transcription', 'cognate_class', 'tokens', 'notes',
     'parsed_tokens', 'split']
 
+# non: Old Norse, isl: Icelandic, fao: Faroese, swe: Swedish, dan: Danish, nor: Riksmal Norwegian, qov: Elfdalian
 old_norse_iso_code = 'non'
-# non: Old Norse, isl: Icelandic, fao: Faroese, swe: Swedish, dan: Danish, nor: Norwegian
-nordic_iso_codes = {'isl', 'fao', 'swe', 'dan', 'nor'}
+nordic_iso_codes = {'isl', 'fao', 'swe', 'dan', 'nor', 'qov'}
+# the ielex data has some language varieties, arguably dialects, that aren't assigned iso codes but do have 'language' entries
+nordic_dialect_names = {'DANISH_FJOLDE', 'STAVANGERSK', 'GUTNISH_LAU', 'OLD_SWEDISH'}
 
 latin_iso_code = 'lat'
 # lat: Latin, spa: Spanish, por: Portuguese, fra: French, ita: Italian
@@ -315,23 +317,38 @@ def cog_dict_to_splits(cognate_dict):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="process .tsv cognate datasets")
 
-    parser.add_argument('-par_iso', required=True, help="iso code of the parent language")
-    parser.add_argument('-dau_iso', required=True, nargs='+', help="iso code(s) of the daughter language(s)")
     parser.add_argument('-data_path', default='data/ielex.tsv', help="path to .tsv dataset")
+    parser.add_argument('-par_iso', required=True, help="iso code of the parent language")
+    parser.add_argument('-dau_iso', required=False, nargs='+', help="iso code(s) of daughter language(s)")
+    parser.add_argument('-dau_name', required=False, nargs='+', help="name(s) of daughter language(s) without iso codes")
     parser.add_argument('--preserve_data', action="store_true", help="include to prevent data processing")
     parser.add_argument('-v', '--verbose', action="store_true", help="increase output verbosity")
 
     args = parser.parse_args()
 
-    args.dau_iso = set(args.dau_iso)
+    if args.dau_iso is None and args.dau_name is None:
+        parser.error("at least one of -dau_iso and -dau_name is required")
 
-    cognate_dicts = filter_subfamily(args.par_iso, args.dau_iso, args.data_path)
+    args.dau_iso = set(args.dau_iso) if args.dau_iso else set()
+    
+    if args.dau_name:
+        args.dau_name = set(args.dau_name)
+        # process the dataset to add iso codes for the daughter languages without iso codes
+        new_path = assign_iso_codes(args.dau_name, args.data_path)
+        # add their new iso codes to the list of daughter iso codes
+        args.dau_iso = args.dau_iso | {'q_' + lang.lower() for lang in args.dau_name}
+        if args.verbose:
+            print('added iso codes in', args.data_path, 'for', str.join(', ', args.dau_name))
+            print('now reading', new_path)
+        args.data_path = new_path
+
+    cognate_dicts = filter_subfamily(args.par_iso, args.dau_iso, dataset_path=args.data_path)
     
     if args.verbose:
-        print("reading", args.data_path, 'for', args.par_iso, 'and', str.join(', ', args.dau_iso))
-        print('# of identified cognate pairs per language:')
+        print('reading', args.data_path, 'for', args.par_iso, 'and', str.join(', ', args.dau_iso))
+        print("# of identified cognate pairs per language:")
         for iso, cog_dict in cognate_dicts.items():
-            print('    ', iso, ':', len(cog_dict))
+            print('\t' + iso, ':', len(cog_dict))
     
     if not args.preserve_data:
         for iso, cog_dict in cognate_dicts.items():
@@ -345,4 +362,4 @@ if __name__ == '__main__':
     for cog_dict in cognate_dicts.values():
         save_dataset(cog_dict)
     if args.verbose:
-        print("saved dataset(s) under data/")
+        print("saved dataset(s) under data")
