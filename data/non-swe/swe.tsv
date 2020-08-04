@@ -1,0 +1,196 @@
+language	iso_code	gloss	global_id	local_id	transcription	cognate_class	tokens	notes	parsed_tokens	split
+SWEDISH	swe	sharp	1396	sharp	skarp	sharp:B	s k a r p		s k a r p	4
+SWEDISH	swe	come	1446	come	ˈkɔ̀mːa	come:B	ˈk ɔ̀ mː a		ˈk ɔ̀ mː a	test
+SWEDISH	swe	yellow	1424	yellow	ɡʉːl	yellow:A	ɡ ʉː l		ɡ ʉː l	1
+SWEDISH	swe	snow	784	snow	snøː	snow:B	s n øː		s n øː	5
+SWEDISH	swe	sing	1261	sing	ˈɧɵ̀ŋːa	sing:B	ˈɧ ɵ̀ ŋː a		ˈɧ ɵ̀ ŋː a	2
+SWEDISH	swe	tail	1220	tail	ɧæʈː	tail:B	ɧ æ ʈː		ɧ æ ʈː	test
+SWEDISH	swe	die	1494	die	dø:	die:B	d ø:		d ø:	3
+SWEDISH	swe	cold	1287	cold	kalː	cold:B	k a lː		k a lː	4
+SWEDISH	swe	name	1405	name	namn	name:A	n a m n		n a m n	test
+SWEDISH	swe	stick	1295	stick	stɑːv	stick:D	s t ɑː v		s t ɑː v	1
+SWEDISH	swe	water	948	water	ˈvatːən	water:B	ˈv a tː ə n		ˈv a tː ə n	3
+SWEDISH	swe	what	1236	what	vɑːd	what:A	v ɑː d		v ɑː d	1
+SWEDISH	swe	fight	1423	fight	slɔsː	fight:Q	s l ɔ sː		s l ɔ sː	5
+SWEDISH	swe	kill	1417	kill	ˈdø̀ːda	kill:T	ˈd ø̀ː d a		ˈd ø̀ː d a	5
+SWEDISH	swe	root	670	root	ru:t	root:B	r u: t		r u: t	1
+SWEDISH	swe	two	1498	two	tvo:	two:A	t v o:		t v o:	test
+SWEDISH	swe	at	1461	at	viːd	at:U	v iː d		v iː d	test
+SWEDISH	swe	narrow	1267	narrow	trɔŋ	narrow:O	t r ɔ ŋ		t r ɔ ŋ	test
+SWEDISH	swe	turn	1588	turn	ˈvɛ̀nda	turn:U	ˈv ɛ̀ n d a		ˈv ɛ̀ n d a	test
+SWEDISH	swe	four	1500	four	ˈfỳːra	four:N	ˈf ỳː r a		ˈf ỳː r a	5
+SWEDISH	swe	rain	658	rain	rɛŋn	rain:B	r ɛ ŋ n		r ɛ ŋ n	3
+SWEDISH	swe	fear	1419	fear	ˈrɛ̀ːdas	fear:J	ˈr ɛ̀ː d a s		ˈr ɛ̀ː d a s	5
+SWEDISH	swe	neck	1333	neck	hals	neck:B	h a l s		h a l s	2
+SWEDISH	swe	throw	1456	throw	ˈkàsta	throw:I	ˈk à s t a		ˈk à s t a	5
+SWEDISH	swe	sit	1416	sit	ˈsìtːa	sit:B	ˈs ì tː a		ˈs ì tː a	test
+SWEDISH	swe	bone	1394	bone	beːn	bone:B	b eː n		b eː n	5
+SWEDISH	swe	right	1725	right	rɛtː	right:C	r ɛ tː		r ɛ tː	3
+SWEDISH	swe	flow	2003	flow	ˈrɪ̀nːa	flow:H	ˈr ɪ̀ nː a		ˈr ɪ̀ nː a	5
+SWEDISH	swe	tree	906	tree	trɛ:d	tree:C	t r ɛ: d		t r ɛ: d	2
+SWEDISH	swe	leaf	628	leaf	lø:v	leaf:I	l ø: v		l ø: v	2
+SWEDISH	swe	red	156	red	røːd	red:B	r øː d		r øː d	test
+SWEDISH	swe	animal	619	animal	jʉːr	animal:A	j ʉː r		j ʉː r	3
+SWEDISH	swe	swell	1573	swell	ˈsvɛ̀lːa	swell:B	ˈs v ɛ̀ lː a		ˈs v ɛ̀ lː a	2
+SWEDISH	swe	day	1225	day	dɑːg	day:B	d ɑː g		d ɑː g	test
+SWEDISH	swe	hair	1040	hair	ho:r	hair:B	h o: r		h o: r	2
+SWEDISH	swe	few	1242	few	foː	few:F	f oː		f oː	5
+SWEDISH	swe	pull	1455	pull	drɑ:	pull:J	d r ɑ:		d r ɑ:	4
+SWEDISH	swe	back	1291	back	rʏgː	back:R	r ʏ gː		r ʏ gː	4
+SWEDISH	swe	sand	671	sand	sand	sand:B	s a n d		s a n d	1
+SWEDISH	swe	with	1340	with	meːd	with:C	m eː d		m eː d	2
+SWEDISH	swe	stone	857	stone	ste:n	stone:A	s t e: n		s t e: n	3
+SWEDISH	swe	eye	1248	eye	ˈø̀ːɡa	eye:B	ˈø̀ː ɡ a		ˈø̀ː ɡ a	2
+SWEDISH	swe	grass	606	grass	grɛ:s	grass:B	g r ɛ: s		g r ɛ: s	2
+SWEDISH	swe	river	666	river	ɛlv	river:N	ɛ l v		ɛ l v	1
+SWEDISH	swe	worm	1219	worm	mask	worm:F	m a s k		m a s k	1
+SWEDISH	swe	black	163	black	svaʈː	black:B	s v a ʈː		s v a ʈː	1
+SWEDISH	swe	split	1437	split	ˈklỳːva	split:I	ˈk l ỳː v a		ˈk l ỳː v a	5
+SWEDISH	swe	give	1447	give	je:	give:A	j e:		j e:	2
+SWEDISH	swe	stab	1434	stab	ˈstɪ̀ŋːa	stab:B	ˈs t ɪ̀ ŋː a		ˈs t ɪ̀ ŋː a	test
+SWEDISH	swe	horn	1393	horn	hu:ɳ	horn:A	h u: ɳ		h u: ɳ	5
+SWEDISH	swe	earth	1228	earth	mɵlː	earth:H	m ɵ lː		m ɵ lː	1
+SWEDISH	swe	snake	730	snake	ʊrm	snake:K	ʊ r m		ʊ r m	4
+SWEDISH	swe	walk	1443	walk	go:	walk:G	g o:		g o:	5
+SWEDISH	swe	dog	2009	dog	hɵnd	dog:A	h ɵ n d		h ɵ n d	3
+SWEDISH	swe	stand	1442	stand	sto:	stand:B	s t o:		s t o:	test
+SWEDISH	swe	scratch	1436	scratch	ˈklø̀:sa	scratch:I	ˈk l ø̀: s a		ˈk l ø̀: s a	1
+SWEDISH	swe	thick	1244	thick	ɕɔkː	thick:A	ɕ ɔ kː		ɕ ɔ kː	test
+SWEDISH	swe	in	1460	in	iː	in:E	iː		iː	test
+SWEDISH	swe	big	1202	big	stuːr	big:O	s t uː r		s t uː r	test
+SWEDISH	swe	wing	1257	wing	ˈvɪ̀ŋːə	wing:J	ˈv ɪ̀ ŋː ə		ˈv ɪ̀ ŋː ə	1
+SWEDISH	swe	not	1240	not	ˈɪ̀ntə	not:C	ˈɪ̀ n t ə		ˈɪ̀ n t ə	test
+SWEDISH	swe	fly	1441	fly	ˈflỳ:ga	fly:A	ˈf l ỳ: g a		ˈf l ỳ: g a	4
+SWEDISH	swe	say	1458	say	ˈsɛ̀jːa	say:B	ˈs ɛ̀ jː a		ˈs ɛ̀ jː a	test
+SWEDISH	swe	you	1213	you	niː	you:A	n iː		n iː	test
+SWEDISH	swe	warm	1232	warm	varm	warm:B	v a r m		v a r m	3
+SWEDISH	swe	cloud	1489	cloud	ɧy:	cloud:J	ɧ y:		ɧ y:	3
+SWEDISH	swe	rotten	1728	rotten	ˈrɵ̀tːən	rotten:B	ˈr ɵ̀ tː ə n		ˈr ɵ̀ tː ə n	3
+SWEDISH	swe	smooth	1234	smooth	slɛːt	smooth:J	s l ɛː t		s l ɛː t	3
+SWEDISH	swe	hand	1277	hand	hand	hand:B	h a n d		h a n d	2
+SWEDISH	swe	ice	617	ice	i:s	ice:B	i: s		i: s	4
+SWEDISH	swe	tongue	1205	tongue	ˈtɵ̀ŋːa	tongue:W	ˈt ɵ̀ ŋː a		ˈt ɵ̀ ŋː a	2
+SWEDISH	swe	wet	1726	wet	voːt	wet:I	v oː t		v oː t	test
+SWEDISH	swe	head	1256	head	ˈhʉ̀:vɵd	head:B	ˈh ʉ̀: v ɵ d		ˈh ʉ̀: v ɵ d	3
+SWEDISH	swe	seed	714	seed	sɛ:d	seed:B	s ɛ: d		s ɛ: d	1
+SWEDISH	swe	float	1574	float	ˈflỳ:ta	float:D	ˈf l ỳ: t a		ˈf l ỳ: t a	4
+SWEDISH	swe	suck	1421	suck	ˈsʉ̀:ga	suck:B	ˈs ʉ̀: g a		ˈs ʉ̀: g a	1
+SWEDISH	swe	fish	227	fish	fisk	fish:B	f i s k		f i s k	3
+SWEDISH	swe	live	1422	live	buː	live:I	b uː		b uː	2
+SWEDISH	swe	push	1452	push	ˈɧʉ̀:ta	push:C	ˈɧ ʉ̀: t a		ˈɧ ʉ̀: t a	3
+SWEDISH	swe	egg	744	egg	ɛgː	egg:A	ɛ gː		ɛ gː	3
+SWEDISH	swe	green	1425	green	grøːn	green:B	g r øː n		g r øː n	2
+SWEDISH	swe	thou	1215	thou	dʉː	thou:A	d ʉː		d ʉː	3
+SWEDISH	swe	many	1198	many	ˈmɔ̀ŋːa	many:H	ˈm ɔ̀ ŋː a		ˈm ɔ̀ ŋː a	1
+SWEDISH	swe	tie	1094	tie	ˈbɪ̀nda	tie:B	ˈb ɪ̀ n d a		ˈb ɪ̀ n d a	1
+SWEDISH	swe	tooth	1380	tooth	tand	tooth:B	t a n d		t a n d	test
+SWEDISH	swe	dust	2	dust	damː	dust:N	d a mː		d a mː	3
+SWEDISH	swe	sun	1343	sun	suːl	sun:W	s uː l		s uː l	test
+SWEDISH	swe	wide	1243	wide	breːd	wide:I	b r eː d		b r eː d	1
+SWEDISH	swe	husband	1200	husband	manː	husband:B	m a nː		m a nː	2
+SWEDISH	swe	feather	1201	feather	ˈfjɛ:dər	feather:A	ˈf j ɛ: d ə r		ˈf j ɛ: d ə r	4
+SWEDISH	swe	who	1235	who	vɛmː	who:B	v ɛ mː		v ɛ mː	5
+SWEDISH	swe	cut	1432	cut	ˈɧæ̀ːra	cut:E	ˈɧ æ̀ː r a		ˈɧ æ̀ː r a	4
+SWEDISH	swe	straight	1404	straight	rɑ:k	straight:M	r ɑ: k		r ɑ: k	3
+SWEDISH	swe	three	492	three	treː	three:A	t r eː		t r eː	4
+SWEDISH	swe	fat	1282	fat	fɛtː	fat:B	f ɛ tː		f ɛ tː	4
+SWEDISH	swe	freeze	1431	freeze	ˈfrỳ:sa	freeze:B	ˈf r ỳ: s a		ˈf r ỳ: s a	3
+SWEDISH	swe	smoke	778	smoke	rø:k	smoke:B	r ø: k		r ø: k	3
+SWEDISH	swe	when	1238	when	næ:r	when:A	n æ: r		n æ: r	1
+SWEDISH	swe	drink	1401	drink	ˈdrɪ̀kːa	drink:B	ˈd r ɪ̀ kː a		ˈd r ɪ̀ kː a	1
+SWEDISH	swe	he	1211	he	hanː	he:A	h a nː		h a nː	1
+SWEDISH	swe	five	493	five	fɛmː	five:O	f ɛ mː		f ɛ mː	4
+SWEDISH	swe	how	1239	how	hʉ:r	how:B	h ʉ: r		h ʉ: r	2
+SWEDISH	swe	old	1229	old	ˈgàmːal	old:J	ˈg à mː a l		ˈg à mː a l	3
+SWEDISH	swe	night	1233	night	natː	night:B	n a tː		n a tː	5
+SWEDISH	swe	that	78	that	ˈdɛ̀nə	that:B	ˈd ɛ̀ n ə		ˈd ɛ̀ n ə	test
+SWEDISH	swe	here	136	here	hæːr	here:B	h æː r		h æː r	5
+SWEDISH	swe	star	1430	star	ˈɧæ̀ːɳa	star:V	ˈɧ æ̀ː ɳ a		ˈɧ æ̀ː ɳ a	2
+SWEDISH	swe	fog	249	fog	ˈɕɔ̀kːa	fog:D	ˈɕ ɔ̀ kː a		ˈɕ ɔ̀ kː a	2
+SWEDISH	swe	hit	1433	hit	slo:	hit:V	s l o:		s l o:	5
+SWEDISH	swe	dig	1418	dig	ˈgrɛ̀:va	dig:N	ˈg r ɛ̀: v a		ˈg r ɛ̀: v a	2
+SWEDISH	swe	there	1937	there	dæːr	there:B	d æː r		d æː r	test
+SWEDISH	swe	woods	420	woods	skuːg	woods:I	s k uː g		s k uː g	4
+SWEDISH	swe	breast	1402	breast	brøst	breast:C	b r ø s t		b r ø s t	test
+SWEDISH	swe	lie	1411	lie	ˈlɪ̀gːa	lie:A	ˈl ɪ̀ gː a		ˈl ɪ̀ gː a	5
+SWEDISH	swe	road	667	road	vɛ:g	road:B	v ɛ: g		v ɛ: g	5
+SWEDISH	swe	salt	1274	salt	salt	salt:B	s a l t		s a l t	test
+SWEDISH	swe	sea	1474	sea	ɧøː	sea:J	ɧ øː		ɧ øː	2
+SWEDISH	swe	long	1203	long	lɔŋ	long:B	l ɔ ŋ		l ɔ ŋ	1
+SWEDISH	swe	they	817	they	dɔmː	they:J	d ɔ mː		d ɔ mː	5
+SWEDISH	swe	child	2099	child	bɑːɳ	child:K	b ɑː ɳ		b ɑː ɳ	5
+SWEDISH	swe	swim	1439	swim	ˈsɪ̀mːa	swim:B	ˈs ɪ̀ mː a		ˈs ɪ̀ mː a	3
+SWEDISH	swe	ear	1247	ear	œ̀ːra	ear:B	œ̀ː r a		œ̀ː r a	test
+SWEDISH	swe	fire	221	fire	ɛld	fire:H	ɛ l d		ɛ l d	4
+SWEDISH	swe	see	1409	see	se:	see:B	s e:		s e:	3
+SWEDISH	swe	hold	1448	hold	ˈhɔ̀lːa	hold:A	ˈh ɔ̀ lː a		ˈh ɔ̀ lː a	test
+SWEDISH	swe	nose	1221	nose	ˈnɛ̀ːsa	nose:B	ˈn ɛ̀ː s a		ˈn ɛ̀ː s a	2
+SWEDISH	swe	near	1942	near	ˈnæ̀:ra	near:B	ˈn æ̀: r a		ˈn æ̀: r a	4
+SWEDISH	swe	guts	1991	guts	ˈìnˌɛlvʊr	guts:K	ˈì n ˌɛ l v ʊ r		ˈì n ˌɛ l v ʊ r	2
+SWEDISH	swe	I	1209	I	jɑːɡ	I:A	j ɑː ɡ		j ɑː ɡ	3
+SWEDISH	swe	vomit	1278	vomit	spy:	vomit:R	s p y:		s p y:	1
+SWEDISH	swe	left	244	left	vɛnstər	left:K	v ɛ n s t ə r		v ɛ n s t ə r	1
+SWEDISH	swe	mountain	639	mountain	fjɛlː	mountain:P	f j ɛ lː		f j ɛ lː	test
+SWEDISH	swe	breathe	1407	breathe	ˈàndas	breathe:O	ˈà n d a s		ˈà n d a s	test
+SWEDISH	swe	other	197	other	ˈànːan	other:S	ˈà nː a n		ˈà nː a n	4
+SWEDISH	swe	wipe	1454	wipe	ˈtɔ̀rka	wipe:H	ˈt ɔ̀ r k a		ˈt ɔ̀ r k a	1
+SWEDISH	swe	where	1237	where	vɑːr	where:B	v ɑː r		v ɑː r	4
+SWEDISH	swe	mother	1216	mother	ˈmù:dər	mother:A	ˈm ù: d ə r		ˈm ù: d ə r	4
+SWEDISH	swe	knee	1371	knee	knɛ:	knee:N	k n ɛ:		k n ɛ:	5
+SWEDISH	swe	blood	946	blood	blu:d	blood:B	b l u: d		b l u: d	test
+SWEDISH	swe	moon	1313	moon	ˈmòːnə	moon:A	ˈm òː n ə		ˈm òː n ə	1
+SWEDISH	swe	man	1554	man	kɑ:r	man:H	k ɑ: r		k ɑ: r	1
+SWEDISH	swe	we	1212	we	viː	we:A	v iː		v iː	test
+SWEDISH	swe	and	1577	and	ɔkː	and:I	ɔ kː		ɔ kː	4
+SWEDISH	swe	mouth	674	mouth	mɵnː	mouth:B	m ɵ nː		m ɵ nː	4
+SWEDISH	swe	eat	1336	eat	ˈɛ̀:ta	eat:B	ˈɛ̀: t a		ˈɛ̀: t a	5
+SWEDISH	swe	skin	763	skin	ɧɪnː	skin:L	ɧ ɪ nː		ɧ ɪ nː	4
+SWEDISH	swe	dry	1398	dry	tɔrː	dry:D	t ɔ rː		t ɔ rː	test
+SWEDISH	swe	some	1241	some	ˈnòːgra	some:B	ˈn òː g r a		ˈn òː g r a	test
+SWEDISH	swe	heavy	1210	heavy	tɵŋː	heavy:H	t ɵ ŋː		t ɵ ŋː	3
+SWEDISH	swe	white	1335	white	vi:t	white:B	v i: t		v i: t	5
+SWEDISH	swe	play	1413	play	ˈlè:ka	play:M	ˈl è: k a		ˈl è: k a	test
+SWEDISH	swe	bite	1403	bite	ˈbì:ta	bite:B	ˈb ì: t a		ˈb ì: t a	2
+SWEDISH	swe	thin	1400	thin	tɵnː	thin:B	t ɵ nː		t ɵ nː	2
+SWEDISH	swe	woman	962	woman	ˈkvɪ̀nːa	woman:D	ˈk v ɪ̀ nː a		ˈk v ɪ̀ nː a	5
+SWEDISH	swe	spit	1440	spit	ˈspɔ̀tːa	spit:Ac	ˈs p ɔ̀ tː a		ˈs p ɔ̀ tː a	3
+SWEDISH	swe	this	1214	this	dɛn	this:B	d ɛ n		d ɛ n	4
+SWEDISH	swe	hear	1408	hear	ˈhœ̀:ra	hear:B	ˈh œ̀: r a		ˈh œ̀: r a	4
+SWEDISH	swe	one	1493	one	ɛnː	one:A	ɛ nː		ɛ nː	test
+SWEDISH	swe	sleep	1585	sleep	ˈsò:va	sleep:C	ˈs ò: v a		ˈs ò: v a	5
+SWEDISH	swe	bad	1292	bad	ɪ̀lːa	bad:R	ɪ̀ lː a		ɪ̀ lː a	1
+SWEDISH	swe	good	1035	good	gu:d	good:B	g u: d		g u: d	1
+SWEDISH	swe	know	1410	know	ˈvè:ta	know:F	ˈv è: t a		ˈv è: t a	test
+SWEDISH	swe	rightside	1019	rightside	ˈhø:gər	rightside:M	ˈh ø: g ə r		ˈh ø: g ə r	test
+SWEDISH	swe	flower	239	flower	ˈblɔmstər	flower:B	ˈb l ɔ m s t ə r		ˈb l ɔ m s t ə r	2
+SWEDISH	swe	fruit	1507	fruit	frɵkt	fruit:B	f r ɵ k t		f r ɵ k t	1
+SWEDISH	swe	rub	1449	rub	ˈgnì:da	rub:J	ˈg n ì: d a		ˈg n ì: d a	4
+SWEDISH	swe	bark	1204	bark	bark	bark:G	b a r k		b a r k	1
+SWEDISH	swe	year	1226	year	o:r	year:B	o: r		o: r	4
+SWEDISH	swe	new	1231	new	nyː	new:A	n yː		n yː	4
+SWEDISH	swe	all	98	all	ˈàlːa	all:A	ˈà lː a		ˈà lː a	5
+SWEDISH	swe	blow	175	blow	ˈblò:sa	blow:A	ˈb l ò: s a		ˈb l ò: s a	5
+SWEDISH	swe	bird	937	bird	ˈfo:gəl	bird:B	ˈf o: g ə l		ˈf o: g ə l	2
+SWEDISH	swe	liver	1224	liver	ˈle:vər	liver:B	ˈl e: v ə r		ˈl e: v ə r	2
+SWEDISH	swe	small	1246	small	smoː	small:K	s m oː		s m oː	4
+SWEDISH	swe	wind	960	wind	vɪnd	wind:B	v ɪ n d		v ɪ n d	3
+SWEDISH	swe	full	1429	full	fɵlː	full:A	f ɵ lː		f ɵ lː	1
+SWEDISH	swe	burn	2102	burn	ˈbrɛ̀nːa	burn:B	ˈb r ɛ̀ nː a		ˈb r ɛ̀ nː a	4
+SWEDISH	swe	smell	1586	smell	ˈlɵ̀kta	smell:K	ˈl ɵ̀ k t a		ˈl ɵ̀ k t a	5
+SWEDISH	swe	meat	634	meat	ɕœtː	meat:F	ɕ œ tː		ɕ œ tː	5
+SWEDISH	swe	fingernail	1258	fingernail	ˈnɑːɡəl	fingernail:A	ˈn ɑː ɡ ə l		ˈn ɑː ɡ ə l	test
+SWEDISH	swe	ashes	646	ashes	ˈàska	ashes:A	ˈà s k a		ˈà s k a	1
+SWEDISH	swe	far	1406	far	ˈfjæ̀rːan	far:B	ˈf j æ̀ rː a n		ˈf j æ̀ rː a n	2
+SWEDISH	swe	fall	1280	fall	ˈfàlːa	fall:B	ˈf à lː a		ˈf à lː a	2
+SWEDISH	swe	rope	1218	rope	re:p	rope:K	r e: p		r e: p	test
+SWEDISH	swe	dull	379	dull	sløː	dull:A	s l øː		s l øː	2
+SWEDISH	swe	dirty	1230	dirty	ˈùːˌre:n	dirty:Aa	ˈùː ˌr e: n		ˈùː ˌr e: n	test
+SWEDISH	swe	heart	1223	heart	ˈjæ̀ʈːa	heart:J	ˈj æ̀ ʈː a		ˈj æ̀ ʈː a	3
+SWEDISH	swe	belly	1251	belly	ˈmɑ̀ːɡə	belly:N	ˈm ɑ̀ː ɡ ə		ˈm ɑ̀ː ɡ ə	5
+SWEDISH	swe	sew	1457	sew	sy:	sew:F	s y:		s y:	3
+SWEDISH	swe	wash	1453	wash	tvoː	wash:J	t v oː		t v oː	2
+SWEDISH	swe	sky	1732	sky	ˈhɪ̀mːəl	sky:B	ˈh ɪ̀ mː ə l		ˈh ɪ̀ mː ə l	5
+SWEDISH	swe	hunt	1435	hunt	ˈjɑ̀ːɡa	hunt:B	ˈj ɑ̀ː ɡ a		ˈj ɑ̀ː ɡ a	3
+SWEDISH	swe	foot	1301	foot	fuːt	foot:B	f uː t		f uː t	4
+SWEDISH	swe	louse	1392	louse	lʉ:s	louse:B	l ʉ: s		l ʉ: s	3
+SWEDISH	swe	father	1217	father	ˈfɑ̀:dər	father:A	ˈf ɑ̀: d ə r		ˈf ɑ̀: d ə r	4

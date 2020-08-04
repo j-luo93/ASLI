@@ -1,0 +1,132 @@
+language	iso_code	gloss	global_id	local_id	transcription	cognate_class	tokens	notes	parsed_tokens	split
+LATIN	lat	sharp	1396	sharp	ˈaːker	sharp:C	ˈaː k e r		ˈaː k e r	test
+LATIN	lat	come	1446	come	weˈniːre	come:B	w e ˈn iː r e		w e ˈn iː r e	1
+LATIN	lat	snow	784	snow	niks	snow:B	n i k s		n i k s	1
+LATIN	lat	sing	1261	sing	ˈkanere	sing:D	ˈk a n e r e		ˈk a n e r e	2
+LATIN	lat	tail	1220	tail	ˈkau̯da	tail:F	ˈk a u̯ d a		ˈk a u̯ d a	3
+LATIN	lat	die	1494	die	ˈmoriː	die:A	ˈm o r iː		ˈm o r iː	4
+LATIN	lat	cold	1287	cold	ˈfriːgidus	cold:E	ˈf r iː g i d u s		ˈf r iː g i d u s	5
+LATIN	lat	name	1405	name	ˈnoːmen	name:A	ˈn oː m e n		ˈn oː m e n	test
+LATIN	lat	water	948	water	ˈakʷa	water:E	ˈa kʷ a		ˈa kʷ a	5
+LATIN	lat	what	1236	what	kʷid	what:A	kʷ i d		kʷ i d	2
+LATIN	lat	root	670	root	ˈraːdiks	root:B	ˈr aː d i k s		ˈr aː d i k s	5
+LATIN	lat	two	1498	two	ˈduo	two:A	ˈd u o		ˈd u o	1
+LATIN	lat	four	1500	four	ˈkʷatːuor	four:N	ˈkʷ a tː u o r		ˈkʷ a tː u o r	1
+LATIN	lat	fear	1419	fear	tiˈmeːre	fear:F	t i ˈm eː r e		t i ˈm eː r e	3
+LATIN	lat	sit	1416	sit	seˈdeːre	sit:B	s e ˈd eː r e		s e ˈd eː r e	1
+LATIN	lat	bone	1394	bone	os	bone:D	o s		o s	test
+LATIN	lat	right	1725	right	ˈrektus	right:C	ˈr e k t u s		ˈr e k t u s	4
+LATIN	lat	flow	2003	flow	ˈfluere	flow:E	ˈf l u e r e		ˈf l u e r e	2
+LATIN	lat	tree	906	tree	ˈarbor	tree:F	ˈa r b o r		ˈa r b o r	3
+LATIN	lat	leaf	628	leaf	ˈfolium	leaf:B	ˈf o l i u m		ˈf o l i u m	test
+LATIN	lat	animal	619	animal	ˈanimal	animal:F	ˈa n i m a l		ˈa n i m a l	5
+LATIN	lat	day	1225	day	ˈdieːs	day:C	ˈd i eː s		ˈd i eː s	1
+LATIN	lat	hair	1040	hair	kaˈpilːiː	hair:G	k a ˈp i lː iː		k a ˈp i lː iː	3
+LATIN	lat	few	1242	few	ˈpau̯kiː	few:F	ˈp a u̯ k iː		ˈp a u̯ k iː	5
+LATIN	lat	with	1340	with	kum	with:E	k u m		k u m	test
+LATIN	lat	stone	857	stone	ˈpetra	stone:E	ˈp e t r a		ˈp e t r a	1
+LATIN	lat	eye	1248	eye	ˈokulus	eye:B	ˈo k u l u s		ˈo k u l u s	4
+LATIN	lat	grass	606	grass	ˈherba	grass:F	ˈh e r b a		ˈh e r b a	test
+LATIN	lat	worm	1219	worm	ˈwermis	worm:B	ˈw e r m i s		ˈw e r m i s	2
+LATIN	lat	black	163	black	ˈniɡer	black:F	ˈn i ɡ e r		ˈn i ɡ e r	3
+LATIN	lat	give	1447	give	ˈdare	give:B	ˈd a r e		ˈd a r e	5
+LATIN	lat	earth	1228	earth	ˈterːa	earth:F	ˈt e rː a		ˈt e rː a	4
+LATIN	lat	snake	730	snake	ˈserpeːns	snake:E	ˈs e r p eː n s		ˈs e r p eː n s	3
+LATIN	lat	walk	1443	walk	ambuˈlaːre	walk:D	a m b u ˈl aː r e		a m b u ˈl aː r e	test
+LATIN	lat	dog	2009	dog	ˈkanis	dog:A	ˈk a n i s		ˈk a n i s	3
+LATIN	lat	thick	1244	thick	ˈspisːus	thick:Q	ˈs p i sː u s		ˈs p i sː u s	2
+LATIN	lat	in	1460	in	in	in:E	i n		i n	test
+LATIN	lat	big	1202	big	ˈɡrandis	big:D	ˈɡ r a n d i s		ˈɡ r a n d i s	test
+LATIN	lat	wing	1257	wing	ˈaːla	wing:G	ˈaː l a		ˈaː l a	4
+LATIN	lat	if	1459	if	siː	if:G	s iː		s iː	3
+LATIN	lat	not	1240	not	noːn	not:A	n oː n		n oː n	5
+LATIN	lat	fly	1441	fly	woˈlaːre	fly:E	w o ˈl aː r e		w o ˈl aː r e	1
+LATIN	lat	say	1458	say	ˈdiːkere	say:F	ˈd iː k e r e		ˈd iː k e r e	test
+LATIN	lat	you	1213	you	woːs	you:A	w oː s		w oː s	2
+LATIN	lat	cloud	1489	cloud	ˈnuːbeːs	cloud:F	ˈn uː b eː s		ˈn uː b eː s	1
+LATIN	lat	rotten	1728	rotten	ˈputridus	rotten:O	ˈp u t r i d u s		ˈp u t r i d u s	2
+LATIN	lat	hand	1277	hand	ˈmanus	hand:E	ˈm a n u s		ˈm a n u s	1
+LATIN	lat	ice	617	ice	glaˈkieːs	ice:G	g l a ˈk i eː s		g l a ˈk i eː s	2
+LATIN	lat	tongue	1205	tongue	ˈliŋɡwa	tongue:W	ˈl i ŋ ɡ w a		ˈl i ŋ ɡ w a	test
+LATIN	lat	wet	1726	wet	ˈuːmidus	wet:K	ˈuː m i d u s		ˈuː m i d u s	test
+LATIN	lat	head	1256	head	ˈkaput	head:B	ˈk a p u t		ˈk a p u t	4
+LATIN	lat	seed	714	seed	ˈseːmen	seed:B	ˈs eː m e n		ˈs eː m e n	4
+LATIN	lat	float	1574	float	fluiˈtaːre	float:D	f l u i ˈt aː r e		f l u i ˈt aː r e	3
+LATIN	lat	suck	1421	suck	ˈsuːgere	suck:B	ˈs uː g e r e		ˈs uː g e r e	4
+LATIN	lat	fish	227	fish	ˈpiskis	fish:B	ˈp i s k i s		ˈp i s k i s	test
+LATIN	lat	live	1422	live	ˈwiːwere	live:A	ˈw iː w e r e		ˈw iː w e r e	2
+LATIN	lat	egg	744	egg	ˈoːwum	egg:A	ˈoː w u m		ˈoː w u m	1
+LATIN	lat	green	1425	green	ˈwiridis	green:G	ˈw i r i d i s		ˈw i r i d i s	2
+LATIN	lat	thou	1215	thou	tuː	thou:A	t uː		t uː	test
+LATIN	lat	many	1198	many	multiː	many:G	m u l t iː		m u l t iː	3
+LATIN	lat	tooth	1380	tooth	dens	tooth:B	d e n s		d e n s	2
+LATIN	lat	dust	2	dust	ˈpulwis	dust:F	ˈp u l w i s		ˈp u l w i s	5
+LATIN	lat	sun	1343	sun	soːl	sun:W	s oː l		s oː l	test
+LATIN	lat	husband	1200	husband	maˈriːtus	husband:E	m a ˈr iː t u s		m a ˈr iː t u s	2
+LATIN	lat	feather	1201	feather	ˈpenːa	feather:A	ˈp e nː a		ˈp e nː a	5
+LATIN	lat	who	1235	who	kʷiː	who:B	kʷ iː		kʷ iː	5
+LATIN	lat	straight	1404	straight	ˈrektus	straight:M	ˈr e k t u s		ˈr e k t u s	4
+LATIN	lat	three	492	three	treːs	three:A	t r eː s		t r eː s	5
+LATIN	lat	freeze	1431	freeze	geˈlaːre	freeze:G	g e ˈl aː r e		g e ˈl aː r e	2
+LATIN	lat	smoke	778	smoke	ˈfuːmus	smoke:A	ˈf uː m u s		ˈf uː m u s	5
+LATIN	lat	when	1238	when	ˈkwandoː	when:A	ˈk w a n d oː		ˈk w a n d oː	4
+LATIN	lat	drink	1401	drink	ˈbibere	drink:C	ˈb i b e r e		ˈb i b e r e	test
+LATIN	lat	five	493	five	ˈkʷiːnkʷe	five:O	ˈkʷ iː n kʷ e		ˈkʷ iː n kʷ e	4
+LATIN	lat	how	1239	how	ˈkʷoːmodo	how:B	ˈkʷ oː m o d o		ˈkʷ oː m o d o	2
+LATIN	lat	old	1229	old	ˈwetus	old:G	ˈw e t u s		ˈw e t u s	5
+LATIN	lat	night	1233	night	noks	night:B	n o k s		n o k s	2
+LATIN	lat	star	1430	star	ˈsteːlːa	star:V	ˈs t eː lː a		ˈs t eː lː a	5
+LATIN	lat	fog	249	fog	ˈnebula	fog:I	ˈn e b u l a		ˈn e b u l a	1
+LATIN	lat	salt	1274	salt	saːl	salt:B	s aː l		s aː l	2
+LATIN	lat	sea	1474	sea	ˈmare	sea:B	ˈm a r e		ˈm a r e	4
+LATIN	lat	long	1203	long	ˈlongus	long:B	ˈl o n g u s		ˈl o n g u s	1
+LATIN	lat	they	817	they	eiː	they:F	e iː		e iː	4
+LATIN	lat	swim	1439	swim	ˈnaːre	swim:D	ˈn aː r e		ˈn aː r e	3
+LATIN	lat	ear	1247	ear	ˈauris	ear:B	ˈa u r i s		ˈa u r i s	2
+LATIN	lat	see	1409	see	wiˈdeːre	see:E	w i ˈd eː r e		w i ˈd eː r e	test
+LATIN	lat	nose	1221	nose	ˈnaːsus	nose:B	ˈn aː s u s		ˈn aː s u s	3
+LATIN	lat	guts	1991	guts	intesˈtiːna	guts:K	i n t e s ˈt iː n a		i n t e s ˈt iː n a	4
+LATIN	lat	I	1209	I	ˈego	I:A	ˈe g o		ˈe g o	5
+LATIN	lat	vomit	1278	vomit	ˈwomere	vomit:E	ˈw o m e r e		ˈw o m e r e	3
+LATIN	lat	mountain	639	mountain	moːns	mountain:F	m oː n s		m oː n s	test
+LATIN	lat	breathe	1407	breathe	spiːˈraːre	breathe:L	s p iː ˈr aː r e		s p iː ˈr aː r e	1
+LATIN	lat	other	197	other	ˈalius	other:D	ˈa l i u s		ˈa l i u s	test
+LATIN	lat	where	1237	where	ˈubi	where:B	ˈu b i		ˈu b i	3
+LATIN	lat	mother	1216	mother	ˈmaːter	mother:A	ˈm aː t e r		ˈm aː t e r	test
+LATIN	lat	blood	946	blood	ˈsaŋgwiːs	blood:G	ˈs a ŋ g w iː s		ˈs a ŋ g w iː s	5
+LATIN	lat	we	1212	we	noːs	we:A	n oː s		n oː s	5
+LATIN	lat	and	1577	and	et	and:F	e t		e t	4
+LATIN	lat	skin	763	skin	ˈpelːis	skin:B	ˈp e lː i s		ˈp e lː i s	3
+LATIN	lat	dry	1398	dry	ˈsikːus	dry:G	ˈs i kː u s		ˈs i kː u s	5
+LATIN	lat	bite	1403	bite	morˈdeːre	bite:G	m o r ˈd eː r e		m o r ˈd eː r e	4
+LATIN	lat	woman	962	woman	ˈmulier	woman:E	ˈm u l i e r		ˈm u l i e r	test
+LATIN	lat	spit	1440	spit	ˈspuere	spit:Ac	ˈs p u e r e		ˈs p u e r e	5
+LATIN	lat	hear	1408	hear	au̯ˈdiːre	hear:G	a u̯ ˈd iː r e		a u̯ ˈd iː r e	test
+LATIN	lat	one	1493	one	ˈuːnus	one:A	ˈuː n u s		ˈuː n u s	3
+LATIN	lat	sleep	1585	sleep	dorˈmiːre	sleep:E	d o r ˈm iː r e		d o r ˈm iː r e	5
+LATIN	lat	bad	1292	bad	ˈmalus	bad:D	ˈm a l u s		ˈm a l u s	5
+LATIN	lat	good	1035	good	ˈbonus	good:F	ˈb o n u s		ˈb o n u s	1
+LATIN	lat	flower	239	flower	floːs	flower:B	f l oː s		f l oː s	2
+LATIN	lat	rub	1449	rub	friˈkaːre	rub:F	f r i ˈk aː r e		f r i ˈk aː r e	1
+LATIN	lat	bark	1204	bark	ˈkorteks	bark:B	ˈk o r t e k s		ˈk o r t e k s	2
+LATIN	lat	year	1226	year	ˈanːus	year:F	ˈa nː u s		ˈa nː u s	3
+LATIN	lat	new	1231	new	ˈnowus	new:A	ˈn o w u s		ˈn o w u s	1
+LATIN	lat	all	98	all	ˈtoːtus	all:C	ˈt oː t u s		ˈt oː t u s	4
+LATIN	lat	laugh	1355	laugh	riːˈdeːre	laugh:F	r iː ˈd eː r e		r iː ˈd eː r e	4
+LATIN	lat	blow	175	blow	ˈflaːre	blow:A	ˈf l aː r e		ˈf l aː r e	1
+LATIN	lat	bird	937	bird	ˈawis	bird:F	ˈa w i s		ˈa w i s	2
+LATIN	lat	wind	960	wind	ˈwentus	wind:B	ˈw e n t u s		ˈw e n t u s	4
+LATIN	lat	burn	2102	burn	arˈdeːre	burn:I	a r ˈd eː r e		a r ˈd eː r e	1
+LATIN	lat	lake	624	lake	ˈlakus	lake:E	ˈl a k u s		ˈl a k u s	test
+LATIN	lat	meat	634	meat	ˈkaroː	meat:D	ˈk a r oː		ˈk a r oː	3
+LATIN	lat	ashes	646	ashes	ˈkinis	ashes:E	ˈk i n i s		ˈk i n i s	test
+LATIN	lat	far	1406	far	ˈlongeː	far:M	ˈl o n g eː		ˈl o n g eː	test
+LATIN	lat	fall	1280	fall	ˈkadere	fall:G	ˈk a d e r e		ˈk a d e r e	3
+LATIN	lat	heart	1223	heart	kor	heart:J	k o r		k o r	4
+LATIN	lat	belly	1251	belly	ˈwenter	belly:E	ˈw e n t e r		ˈw e n t e r	2
+LATIN	lat	sew	1457	sew	ˈsuere	sew:F	ˈs u e r e		ˈs u e r e	3
+LATIN	lat	wash	1453	wash	laˈwaːre	wash:G	l a ˈw aː r e		l a ˈw aː r e	3
+LATIN	lat	sky	1732	sky	ˈkae̯lum	sky:E	ˈk a e̯ l u m		ˈk a e̯ l u m	1
+LATIN	lat	foot	1301	foot	peːs	foot:B	p eː s		p eː s	4
+LATIN	lat	louse	1392	louse	peːˈdikulus	louse:F	p eː ˈd i k u l u s		p eː ˈd i k u l u s	1
+LATIN	lat	father	1217	father	ˈpater	father:A	ˈp a t e r		ˈp a t e r	test

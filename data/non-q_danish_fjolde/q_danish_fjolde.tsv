@@ -1,0 +1,183 @@
+language	iso_code	gloss	global_id	local_id	transcription	cognate_class	tokens	notes	parsed_tokens	split
+DANISH_FJOLDE	q_danish_fjolde	sharp	1396	sharp	ˈsxɑɹəb	sharp:B	ˈs x ɑ ɹ ə b		ˈs x ɑ ɹ ə b	2
+DANISH_FJOLDE	q_danish_fjolde	come	1446	come	kom	come:B	k o m		k o m	test
+DANISH_FJOLDE	q_danish_fjolde	yellow	1424	yellow	ɡuːl	yellow:A	ɡ uː l		ɡ uː l	1
+DANISH_FJOLDE	q_danish_fjolde	snow	784	snow	snie	snow:B	s n i e		s n i e	3
+DANISH_FJOLDE	q_danish_fjolde	tail	1220	tail	sxæɹd	tail:B	s x æ ɹ d		s x æ ɹ d	3
+DANISH_FJOLDE	q_danish_fjolde	die	1494	die	dyø	die:B	d y ø		d y ø	3
+DANISH_FJOLDE	q_danish_fjolde	cold	1287	cold	koːlʲ	cold:B	k oː lʲ		k oː lʲ	test
+DANISH_FJOLDE	q_danish_fjolde	name	1405	name	nɑːwn	name:A	n ɑː w n		n ɑː w n	test
+DANISH_FJOLDE	q_danish_fjolde	water	948	water	vanʲ	water:B	v a nʲ		v a nʲ	test
+DANISH_FJOLDE	q_danish_fjolde	what	1236	what	vɑɹ	what:A	v ɑ ɹ		v ɑ ɹ	4
+DANISH_FJOLDE	q_danish_fjolde	fight	1423	fight	ˈsloasəs	fight:Q	ˈs l o a s ə s		ˈs l o a s ə s	5
+DANISH_FJOLDE	q_danish_fjolde	root	670	root	ɹuoj	root:B	ɹ u o j		ɹ u o j	5
+DANISH_FJOLDE	q_danish_fjolde	two	1498	two	tuo	two:A	t u o		t u o	5
+DANISH_FJOLDE	q_danish_fjolde	at	1461	at	ve	at:U	v e		v e	1
+DANISH_FJOLDE	q_danish_fjolde	turn	1588	turn	veːnʲ	turn:U	v eː nʲ		v eː nʲ	1
+DANISH_FJOLDE	q_danish_fjolde	four	1500	four	ˈfejəɹ	four:N	ˈf e j ə ɹ		ˈf e j ə ɹ	1
+DANISH_FJOLDE	q_danish_fjolde	rain	658	rain	ɹæjn	rain:B	ɹ æ j n		ɹ æ j n	2
+DANISH_FJOLDE	q_danish_fjolde	neck	1333	neck	hɑls	neck:B	h ɑ l s		h ɑ l s	5
+DANISH_FJOLDE	q_danish_fjolde	sit	1416	sit	seð	sit:B	s e ð		s e ð	3
+DANISH_FJOLDE	q_danish_fjolde	right	1725	right	ɹeæd	right:C	ɹ e æ d		ɹ e æ d	1
+DANISH_FJOLDE	q_danish_fjolde	flow	2003	flow	flyd	flow:B	f l y d		f l y d	5
+DANISH_FJOLDE	q_danish_fjolde	leaf	628	leaf	blɑ	leaf:B	b l ɑ		b l ɑ	4
+DANISH_FJOLDE	q_danish_fjolde	red	156	red	ɹyøɹ	red:B	ɹ y ø ɹ		ɹ y ø ɹ	test
+DANISH_FJOLDE	q_danish_fjolde	animal	619	animal	deːɹd	animal:A	d eː ɹ d		d eː ɹ d	test
+DANISH_FJOLDE	q_danish_fjolde	swell	1573	swell	svol	swell:B	s v o l		s v o l	5
+DANISH_FJOLDE	q_danish_fjolde	day	1225	day	dɑw	day:B	d ɑ w		d ɑ w	1
+DANISH_FJOLDE	q_danish_fjolde	hair	1040	hair	hoaɹ	hair:B	h o a ɹ		h o a ɹ	test
+DANISH_FJOLDE	q_danish_fjolde	pull	1455	pull	dɹæj	pull:J	d ɹ æ j		d ɹ æ j	3
+DANISH_FJOLDE	q_danish_fjolde	back	1291	back	ɹøɣ	back:R	ɹ ø ɣ		ɹ ø ɣ	test
+DANISH_FJOLDE	q_danish_fjolde	sand	671	sand	sɑːnʲ	sand:B	s ɑː nʲ		s ɑː nʲ	5
+DANISH_FJOLDE	q_danish_fjolde	with	1340	with	mæ	with:C	m æ		m æ	1
+DANISH_FJOLDE	q_danish_fjolde	stone	857	stone	sdien	stone:A	s d i e n		s d i e n	5
+DANISH_FJOLDE	q_danish_fjolde	eye	1248	eye	øj	eye:B	ø j		ø j	3
+DANISH_FJOLDE	q_danish_fjolde	grass	606	grass	ɡɹeːs	grass:B	ɡ ɹ eː s		ɡ ɹ eː s	3
+DANISH_FJOLDE	q_danish_fjolde	river	666	river	oa	river:O	o a		o a	4
+DANISH_FJOLDE	q_danish_fjolde	worm	1219	worm	uoɹm	worm:B	u o ɹ m		u o ɹ m	test
+DANISH_FJOLDE	q_danish_fjolde	black	163	black	suoɹd	black:B	s u o ɹ d		s u o ɹ d	1
+DANISH_FJOLDE	q_danish_fjolde	split	1437	split	klyøw	split:I	k l y ø w		k l y ø w	5
+DANISH_FJOLDE	q_danish_fjolde	give	1447	give	ɡi	give:A	ɡ i		ɡ i	2
+DANISH_FJOLDE	q_danish_fjolde	stab	1434	stab	sdeɡ	stab:B	s d e ɡ		s d e ɡ	test
+DANISH_FJOLDE	q_danish_fjolde	horn	1393	horn	huoɹn	horn:A	h u o ɹ n		h u o ɹ n	test
+DANISH_FJOLDE	q_danish_fjolde	earth	1228	earth	juoɹ	earth:B	j u o ɹ		j u o ɹ	4
+DANISH_FJOLDE	q_danish_fjolde	snake	730	snake	ˈslɑŋə	snake:B	ˈs l ɑ ŋ ə		ˈs l ɑ ŋ ə	1
+DANISH_FJOLDE	q_danish_fjolde	walk	1443	walk	ɡoa	walk:G	ɡ o a		ɡ o a	2
+DANISH_FJOLDE	q_danish_fjolde	dog	2009	dog	huːnʲ	dog:A	h uː nʲ		h uː nʲ	2
+DANISH_FJOLDE	q_danish_fjolde	stand	1442	stand	sdɔː	stand:B	s d ɔː		s d ɔː	4
+DANISH_FJOLDE	q_danish_fjolde	count	1420	count	teːl	count:A	t eː l		t eː l	4
+DANISH_FJOLDE	q_danish_fjolde	scratch	1436	scratch	klyø	scratch:I	k l y ø		k l y ø	4
+DANISH_FJOLDE	q_danish_fjolde	thick	1244	thick	cyɡ	thick:A	c y ɡ		c y ɡ	5
+DANISH_FJOLDE	q_danish_fjolde	in	1460	in	i	in:E	i		i	5
+DANISH_FJOLDE	q_danish_fjolde	big	1202	big	sduoɹ	big:O	s d u o ɹ		s d u o ɹ	test
+DANISH_FJOLDE	q_danish_fjolde	wing	1257	wing	veŋ	wing:J	v e ŋ		v e ŋ	3
+DANISH_FJOLDE	q_danish_fjolde	not	1240	not	eɡ	not:C	e ɡ		e ɡ	2
+DANISH_FJOLDE	q_danish_fjolde	fly	1441	fly	flyw	fly:A	f l y w		f l y w	2
+DANISH_FJOLDE	q_danish_fjolde	say	1458	say	sej	say:B	s e j		s e j	3
+DANISH_FJOLDE	q_danish_fjolde	you	1213	you	im	you:A	i m		i m	test
+DANISH_FJOLDE	q_danish_fjolde	warm	1232	warm	vɑɹm	warm:B	v ɑ ɹ m		v ɑ ɹ m	test
+DANISH_FJOLDE	q_danish_fjolde	cloud	1489	cloud	sxøj	cloud:J	s x ø j		s x ø j	test
+DANISH_FJOLDE	q_danish_fjolde	rotten	1728	rotten	ɹɔɹn	rotten:B	ɹ ɔ ɹ n		ɹ ɔ ɹ n	5
+DANISH_FJOLDE	q_danish_fjolde	smooth	1234	smooth	sleæd	smooth:J	s l e æ d		s l e æ d	test
+DANISH_FJOLDE	q_danish_fjolde	hand	1277	hand	hoanʲ	hand:B	h o a nʲ		h o a nʲ	1
+DANISH_FJOLDE	q_danish_fjolde	ice	617	ice	iːs	ice:B	iː s		iː s	1
+DANISH_FJOLDE	q_danish_fjolde	tongue	1205	tongue	toŋ	tongue:W	t o ŋ		t o ŋ	test
+DANISH_FJOLDE	q_danish_fjolde	wet	1726	wet	vɔd	wet:I	v ɔ d		v ɔ d	3
+DANISH_FJOLDE	q_danish_fjolde	head	1256	head	ˈhɔwəɹ	head:B	ˈh ɔ w ə ɹ		ˈh ɔ w ə ɹ	1
+DANISH_FJOLDE	q_danish_fjolde	seed	714	seed	seæ	seed:B	s e æ		s e æ	1
+DANISH_FJOLDE	q_danish_fjolde	float	1574	float	flyd	float:D	f l y d		f l y d	1
+DANISH_FJOLDE	q_danish_fjolde	suck	1421	suck	sox	suck:B	s o x		s o x	5
+DANISH_FJOLDE	q_danish_fjolde	fish	227	fish	fæsɡ	fish:B	f æ s ɡ		f æ s ɡ	4
+DANISH_FJOLDE	q_danish_fjolde	live	1422	live	buo	live:I	b u o		b u o	2
+DANISH_FJOLDE	q_danish_fjolde	push	1452	push	sxyw	push:N	s x y w		s x y w	test
+DANISH_FJOLDE	q_danish_fjolde	egg	744	egg	æɣ	egg:A	æ ɣ		æ ɣ	test
+DANISH_FJOLDE	q_danish_fjolde	green	1425	green	ɡɹyøn	green:B	ɡ ɹ y ø n		ɡ ɹ y ø n	3
+DANISH_FJOLDE	q_danish_fjolde	wife	1199	wife	kuːn	wife:Z	k uː n		k uː n	2
+DANISH_FJOLDE	q_danish_fjolde	thou	1215	thou	du	thou:A	d u		d u	1
+DANISH_FJOLDE	q_danish_fjolde	many	1198	many	ˈmɑnəŋ	many:H	ˈm ɑ n ə ŋ		ˈm ɑ n ə ŋ	5
+DANISH_FJOLDE	q_danish_fjolde	tie	1094	tie	binʲ	tie:B	b i nʲ		b i nʲ	2
+DANISH_FJOLDE	q_danish_fjolde	tooth	1380	tooth	tɑnʲ	tooth:B	t ɑ nʲ		t ɑ nʲ	4
+DANISH_FJOLDE	q_danish_fjolde	sun	1343	sun	suol	sun:W	s u o l		s u o l	2
+DANISH_FJOLDE	q_danish_fjolde	wide	1243	wide	bɹie	wide:I	b ɹ i e		b ɹ i e	3
+DANISH_FJOLDE	q_danish_fjolde	husband	1200	husband	mɑnʲ	husband:B	m ɑ nʲ		m ɑ nʲ	3
+DANISH_FJOLDE	q_danish_fjolde	feather	1201	feather	fieð	feather:A	f i e ð		f i e ð	5
+DANISH_FJOLDE	q_danish_fjolde	who	1235	who	væn	who:B	v æ n		v æ n	4
+DANISH_FJOLDE	q_danish_fjolde	cut	1432	cut	sxeæɹ	cut:E	s x e æ ɹ		s x e æ ɹ	3
+DANISH_FJOLDE	q_danish_fjolde	three	492	three	tɹie	three:A	t ɹ i e		t ɹ i e	3
+DANISH_FJOLDE	q_danish_fjolde	fat	1282	fat	fæd	fat:B	f æ d		f æ d	4
+DANISH_FJOLDE	q_danish_fjolde	freeze	1431	freeze	fɹyːs	freeze:B	f ɹ yː s		f ɹ yː s	test
+DANISH_FJOLDE	q_danish_fjolde	smoke	778	smoke	ɹyøɣ	smoke:B	ɹ y ø ɣ		ɹ y ø ɣ	test
+DANISH_FJOLDE	q_danish_fjolde	when	1238	when	ven_vinʲəɹ	when:A	v e n _ v i nʲ ə ɹ		v e n _ v i nʲ ə ɹ	5
+DANISH_FJOLDE	q_danish_fjolde	drink	1401	drink	dɹæŋɡ	drink:B	d ɹ æ ŋ ɡ		d ɹ æ ŋ ɡ	4
+DANISH_FJOLDE	q_danish_fjolde	he	1211	he	hɑnʲ	he:A	h ɑ nʲ		h ɑ nʲ	3
+DANISH_FJOLDE	q_danish_fjolde	five	493	five	feːm	five:O	f eː m		f eː m	5
+DANISH_FJOLDE	q_danish_fjolde	how	1239	how	vund	how:B	v u n d		v u n d	5
+DANISH_FJOLDE	q_danish_fjolde	old	1229	old	ˈɡɑməl	old:J	ˈɡ ɑ m ə l		ˈɡ ɑ m ə l	4
+DANISH_FJOLDE	q_danish_fjolde	night	1233	night	nɑt	night:B	n ɑ t		n ɑ t	3
+DANISH_FJOLDE	q_danish_fjolde	that	78	that	dænʲ	that:B	d æ nʲ		d æ nʲ	3
+DANISH_FJOLDE	q_danish_fjolde	here	136	here	heæɹ	here:B	h e æ ɹ		h e æ ɹ	5
+DANISH_FJOLDE	q_danish_fjolde	star	1430	star	sdeːɹn	star:V	s d eː ɹ n		s d eː ɹ n	5
+DANISH_FJOLDE	q_danish_fjolde	fog	249	fog	tɔːɣ	fog:D	t ɔː ɣ		t ɔː ɣ	5
+DANISH_FJOLDE	q_danish_fjolde	hit	1433	hit	sloa	hit:V	s l o a		s l o a	1
+DANISH_FJOLDE	q_danish_fjolde	dig	1418	dig	ɡɹeːw	dig:N	ɡ ɹ eː w		ɡ ɹ eː w	3
+DANISH_FJOLDE	q_danish_fjolde	there	1937	there	deæɹ	there:B	d e æ ɹ		d e æ ɹ	2
+DANISH_FJOLDE	q_danish_fjolde	woods	420	woods	sɡɔw	woods:I	s ɡ ɔ w		s ɡ ɔ w	4
+DANISH_FJOLDE	q_danish_fjolde	breast	1402	breast	bɹyst	breast:C	b ɹ y s t		b ɹ y s t	2
+DANISH_FJOLDE	q_danish_fjolde	lie	1411	lie	leɣ	lie:A	l e ɣ		l e ɣ	2
+DANISH_FJOLDE	q_danish_fjolde	road	667	road	væj	road:B	v æ j		v æ j	2
+DANISH_FJOLDE	q_danish_fjolde	salt	1274	salt	sɔlt	salt:B	s ɔ l t		s ɔ l t	4
+DANISH_FJOLDE	q_danish_fjolde	sea	1474	sea	haw	sea:K	h a w		h a w	test
+DANISH_FJOLDE	q_danish_fjolde	long	1203	long	lɔːŋ	long:B	l ɔː ŋ		l ɔː ŋ	test
+DANISH_FJOLDE	q_danish_fjolde	they	817	they	di	they:J	d i		d i	5
+DANISH_FJOLDE	q_danish_fjolde	child	2099	child	bɑːɹn	child:K	b ɑː ɹ n		b ɑː ɹ n	5
+DANISH_FJOLDE	q_danish_fjolde	swim	1439	swim	svem	swim:B	s v e m		s v e m	1
+DANISH_FJOLDE	q_danish_fjolde	ear	1247	ear	yøɹ	ear:B	y ø ɹ		y ø ɹ	2
+DANISH_FJOLDE	q_danish_fjolde	fire	221	fire	ielʲ	fire:H	i e lʲ		i e lʲ	4
+DANISH_FJOLDE	q_danish_fjolde	see	1409	see	sie	see:B	s i e		s i e	test
+DANISH_FJOLDE	q_danish_fjolde	hold	1448	hold	hoːlʲ	hold:A	h oː lʲ		h oː lʲ	4
+DANISH_FJOLDE	q_danish_fjolde	nose	1221	nose	neːs	nose:B	n eː s		n eː s	4
+DANISH_FJOLDE	q_danish_fjolde	near	1942	near	neæɹ	near:B	n e æ ɹ		n e æ ɹ	5
+DANISH_FJOLDE	q_danish_fjolde	I	1209	I	æ	I:A	æ		æ	2
+DANISH_FJOLDE	q_danish_fjolde	vomit	1278	vomit	sbej	vomit:R	s b e j		s b e j	4
+DANISH_FJOLDE	q_danish_fjolde	mountain	639	mountain	ˈbjeɹəɹ	mountain:B	ˈb j e ɹ ə ɹ		ˈb j e ɹ ə ɹ	1
+DANISH_FJOLDE	q_danish_fjolde	breathe	1407	breathe	oanʲ	breathe:O	o a nʲ		o a nʲ	1
+DANISH_FJOLDE	q_danish_fjolde	other	197	other	ˈɑnʲən	other:S	ˈɑ nʲ ə n		ˈɑ nʲ ə n	3
+DANISH_FJOLDE	q_danish_fjolde	wipe	1454	wipe	tøɹ	wipe:H	t ø ɹ		t ø ɹ	2
+DANISH_FJOLDE	q_danish_fjolde	where	1237	where	vuɹ	where:B	v u ɹ		v u ɹ	2
+DANISH_FJOLDE	q_danish_fjolde	mother	1216	mother	muoɹ	mother:A	m u o ɹ		m u o ɹ	1
+DANISH_FJOLDE	q_danish_fjolde	knee	1371	knee	ˈkneːbən	knee:N	ˈk n eː b ə n		ˈk n eː b ə n	3
+DANISH_FJOLDE	q_danish_fjolde	blood	946	blood	bluo	blood:B	b l u o		b l u o	5
+DANISH_FJOLDE	q_danish_fjolde	moon	1313	moon	moan	moon:A	m o a n		m o a n	1
+DANISH_FJOLDE	q_danish_fjolde	man	1554	man	mɑnʲ	man:A	m ɑ nʲ		m ɑ nʲ	test
+DANISH_FJOLDE	q_danish_fjolde	we	1212	we	vi	we:A	v i		v i	2
+DANISH_FJOLDE	q_danish_fjolde	and	1577	and	ɑ	and:I	ɑ		ɑ	1
+DANISH_FJOLDE	q_danish_fjolde	mouth	674	mouth	monʲ	mouth:B	m o nʲ		m o nʲ	2
+DANISH_FJOLDE	q_danish_fjolde	eat	1336	eat	eæð	eat:B	e æ ð		e æ ð	4
+DANISH_FJOLDE	q_danish_fjolde	skin	763	skin	sxinʲ	skin:L	s x i nʲ		s x i nʲ	1
+DANISH_FJOLDE	q_danish_fjolde	dry	1398	dry	tøɹ	dry:D	t ø ɹ		t ø ɹ	4
+DANISH_FJOLDE	q_danish_fjolde	some	1241	some	ˈnɔvəɹ	some:B	ˈn ɔ v ə ɹ		ˈn ɔ v ə ɹ	3
+DANISH_FJOLDE	q_danish_fjolde	white	1335	white	viːɹ	white:B	v iː ɹ		v iː ɹ	5
+DANISH_FJOLDE	q_danish_fjolde	play	1413	play	lieɡ	play:M	l i e ɡ		l i e ɡ	2
+DANISH_FJOLDE	q_danish_fjolde	bite	1403	bite	bid	bite:B	b i d		b i d	test
+DANISH_FJOLDE	q_danish_fjolde	thin	1400	thin	tynʲ	thin:B	t y nʲ		t y nʲ	3
+DANISH_FJOLDE	q_danish_fjolde	woman	962	woman	kvinʲ	woman:D	k v i nʲ		k v i nʲ	2
+DANISH_FJOLDE	q_danish_fjolde	spit	1440	spit	sbød	spit:Ac	s b ø d		s b ø d	1
+DANISH_FJOLDE	q_danish_fjolde	this	1214	this	dænʲ_heæɹ	this:B	d æ nʲ _ h e æ ɹ		d æ nʲ _ h e æ ɹ	test
+DANISH_FJOLDE	q_danish_fjolde	hear	1408	hear	hyøɹ	hear:B	h y ø ɹ		h y ø ɹ	4
+DANISH_FJOLDE	q_danish_fjolde	one	1493	one	ien	one:A	i e n		i e n	2
+DANISH_FJOLDE	q_danish_fjolde	sleep	1585	sleep	sɔːw	sleep:C	s ɔː w		s ɔː w	2
+DANISH_FJOLDE	q_danish_fjolde	bad	1292	bad	ilʲ	bad:R	i lʲ		i lʲ	2
+DANISH_FJOLDE	q_danish_fjolde	good	1035	good	ɡuo	good:B	ɡ u o		ɡ u o	4
+DANISH_FJOLDE	q_danish_fjolde	know	1410	know	veːɹ	know:F	v eː ɹ		v eː ɹ	4
+DANISH_FJOLDE	q_danish_fjolde	rightside	1019	rightside	ˈhøjəɹ	rightside:M	ˈh ø j ə ɹ		ˈh ø j ə ɹ	test
+DANISH_FJOLDE	q_danish_fjolde	flower	239	flower	blom	flower:B	b l o m		b l o m	test
+DANISH_FJOLDE	q_danish_fjolde	fruit	1507	fruit	fɹoɡd	fruit:B	f ɹ o ɡ d		f ɹ o ɡ d	1
+DANISH_FJOLDE	q_danish_fjolde	rub	1449	rub	ɡnusɡ	rub:J	ɡ n u s ɡ		ɡ n u s ɡ	test
+DANISH_FJOLDE	q_danish_fjolde	bark	1204	bark	ˈbɑɹəɡ	bark:G	ˈb ɑ ɹ ə ɡ		ˈb ɑ ɹ ə ɡ	test
+DANISH_FJOLDE	q_danish_fjolde	year	1226	year	oaɹ	year:B	o a ɹ		o a ɹ	3
+DANISH_FJOLDE	q_danish_fjolde	new	1231	new	nøj	new:A	n ø j		n ø j	2
+DANISH_FJOLDE	q_danish_fjolde	all	98	all	ɔlʲ	all:A	ɔ lʲ		ɔ lʲ	2
+DANISH_FJOLDE	q_danish_fjolde	laugh	1355	laugh	lie	laugh:B	l i e		l i e	4
+DANISH_FJOLDE	q_danish_fjolde	blow	175	blow	bleːs	blow:A	b l eː s		b l eː s	3
+DANISH_FJOLDE	q_danish_fjolde	bird	937	bird	fɔwl	bird:B	f ɔ w l		f ɔ w l	2
+DANISH_FJOLDE	q_danish_fjolde	liver	1224	liver	lewəɹ	liver:B	l e w ə ɹ		l e w ə ɹ	1
+DANISH_FJOLDE	q_danish_fjolde	small	1246	small	smoa	small:K	s m o a		s m o a	4
+DANISH_FJOLDE	q_danish_fjolde	wind	960	wind	veːɹ	wind:B	v eː ɹ		v eː ɹ	test
+DANISH_FJOLDE	q_danish_fjolde	full	1429	full	fulʲ	full:A	f u lʲ		f u lʲ	4
+DANISH_FJOLDE	q_danish_fjolde	burn	2102	burn	bɹænʲ	burn:B	b ɹ æ nʲ		b ɹ æ nʲ	test
+DANISH_FJOLDE	q_danish_fjolde	meat	634	meat	cøɹ	meat:F	c ø ɹ		c ø ɹ	5
+DANISH_FJOLDE	q_danish_fjolde	fingernail	1258	fingernail	næjl	fingernail:A	n æ j l		n æ j l	4
+DANISH_FJOLDE	q_danish_fjolde	ashes	646	ashes	ɑːsɡ	ashes:A	ɑː s ɡ		ɑː s ɡ	3
+DANISH_FJOLDE	q_danish_fjolde	far	1406	far	lɔːŋd	far:M	l ɔː ŋ d		l ɔː ŋ d	test
+DANISH_FJOLDE	q_danish_fjolde	fall	1280	fall	fɔlʲ	fall:B	f ɔ lʲ		f ɔ lʲ	3
+DANISH_FJOLDE	q_danish_fjolde	rope	1218	rope	ɹieb	rope:K	ɹ i e b		ɹ i e b	1
+DANISH_FJOLDE	q_danish_fjolde	dirty	1230	dirty	ˈsxetən	dirty:K	ˈs x e t ə n		ˈs x e t ə n	test
+DANISH_FJOLDE	q_danish_fjolde	heart	1223	heart	jɑːɹd	heart:J	j ɑː ɹ d		j ɑː ɹ d	test
+DANISH_FJOLDE	q_danish_fjolde	belly	1251	belly	maːw	belly:N	m aː w		m aː w	5
+DANISH_FJOLDE	q_danish_fjolde	sew	1457	sew	søj	sew:F	s ø j		s ø j	5
+DANISH_FJOLDE	q_danish_fjolde	wash	1453	wash	tuo	wash:J	t u o		t u o	1
+DANISH_FJOLDE	q_danish_fjolde	sky	1732	sky	ˈheməl	sky:B	ˈh e m ə l		ˈh e m ə l	1
+DANISH_FJOLDE	q_danish_fjolde	hunt	1435	hunt	jɑːw	hunt:B	j ɑː w		j ɑː w	3
+DANISH_FJOLDE	q_danish_fjolde	foot	1301	foot	fuoð	foot:B	f u o ð		f u o ð	test
+DANISH_FJOLDE	q_danish_fjolde	louse	1392	louse	luːs	louse:B	l uː s		l uː s	4
+DANISH_FJOLDE	q_danish_fjolde	father	1217	father	fɑːɹ	father:A	f ɑː ɹ		f ɑː ɹ	3
