@@ -26,7 +26,8 @@ romance_iso_codes = {'spa', 'por', 'fra', 'ita'}
 def assign_iso_codes(languages, dataset_path=default_dataset_path):
     '''
     takes a .tsv dataset file where some languages are missing iso_code values \
-        and saves a new .tsv dataset file where those languages now have iso_codes
+        and saves a new .tsv dataset file where those languages now have iso_codes.
+        Returns the path to the new dataset file as a str.
     
     languages: set of str, the 'language' values for the languages without iso codes
     '''
@@ -46,6 +47,8 @@ def assign_iso_codes(languages, dataset_path=default_dataset_path):
             if language in languages and iso_code=='':
                 line[1] = 'q-' + language.lower()
             writer.writerow(line)
+
+    return new_path
 
 
 def filter_subfamily(parent_iso_code, daughter_iso_codes, dataset_path=default_dataset_path):
