@@ -48,9 +48,15 @@ def assign_iso_codes(languages, dataset_path=default_dataset_path):
             writer.writerow(line)
 
 
+def filter_subfamily(parent_iso_code, daughter_iso_codes, dataset_path=default_dataset_path):
+    '''
     returns a dictionary of the form {lang_iso_code: {global_id: (parent_line, daughter_line)}}, \
         which maps a daughter lang's iso code to a dict containing all cognate pairs in the dataset
         between the ancestor and that daughter lang.
+
+    parent_iso_code: str, the iso code of the common ancestral language
+    daughter_iso_codes: a set of str, the iso codes of the daughter languages of that parent
+    dataset_path: str, the path to the .tsv dataset to be read from. Default written above.
     '''
 
     with open(dataset_path) as f:
@@ -115,7 +121,7 @@ def filter_daughter(parent_iso_code, daughter_iso_code, dataset_path=default_dat
 
     returns: {global_id: (parent_line, daughter_line)}
     '''
-    return filter_subfamily(parent_iso_code, {daughter_iso_code}, dataset_path)[daughter_iso_code]
+    return filter_subfamily(parent_iso_code, {daughter_iso_code}, dataset_path=dataset_path)[daughter_iso_code]
 
 
 def process_dataset(cognate_pair_dict):
