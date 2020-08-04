@@ -48,13 +48,17 @@ class OnePairManager:
             self.tasks[f'train@{fold}'] = train_task = OnePairTask()
             self.tasks[f'dev@{fold}'] = dev_task = OnePairTask()
 
-            train_dl = self.dl_reg.register_data_loader(train_task, train_split, self.src_abc, self.tgt_abc)
-            dev_dl = self.dl_reg.register_data_loader(dev_task, dev_split, self.src_abc, self.tgt_abc)
-        test_task = OnePairTask()
+            train_dl = self.dl_reg.register_data_loader(
+                train_task, train_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
+            dev_dl = self.dl_reg.register_data_loader(
+                dev_task, dev_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
+        self.tasks['test'] = test_task = OnePairTask()
         test_split = Split('test')
-        test_dl = self.dl_reg.register_data_loader(test_task, test_split, self.src_abc, self.tgt_abc)
+        test_dl = self.dl_reg.register_data_loader(
+            test_task, test_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
 
     def run(self):
+        test_dl = self.dl_reg[self.tasks['test']]
         for fold in range(5):
             logging.imp(f'Cross-validation, fold number {fold}')
             train_task = self.tasks[f'train@{fold}']
@@ -66,7 +70,7 @@ class OnePairManager:
             model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
             if has_gpus():
                 model.cuda()
-            evaluator = Evaluator(model, {f'train@{fold}': train_dl, f'dev@{fold}': dev_dl})
+            evaluator = Evaluator(model, {f'train@{fold}': train_dl, f'dev@{fold}': dev_dl, 'test': test_dl})
 
             trainer = Trainer(model, [train_task],
                               [1.0], 'step',
@@ -100,35 +104,43 @@ class OneToManyManager:
 
         # Get all data loaders.
         self.dl_reg = DataLoaderRegistry()
-        self.tasks = dict()
-        # Get the test language.
-        self.tasks[f'test@{g.tgt_lang}'] = test_task = OnePairTask()
-        tgt_split = Split('all')  # Use the entire dataset for testing.
-        test_dl = self.dl_reg.register_data_loader(test_task, tgt_split, self.src_abc, self.tgt_abc, lang2id=lang2id)
-        # Get the training languages.
         eval_dls = dict()
+        train_tasks = list()
+        # Get the test language.
+        tgt_task = OnePairTask()
+        tgt_split = Split('all')  # Use the entire dataset for testing.
+        eval_dls[f'test@{g.tgt_lang}'] = test_dl = self.dl_reg.register_data_loader(
+            tgt_task, tgt_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc, lang2id=lang2id)
+        # Get the training languages.
         for lang in g.train_tgt_langs:
-            self.tasks[f'train@{lang}'] = train_task = OnePairTask()
+            train_task = OnePairTask()
+            train_tasks.append(train_task)
             train_split = Split('train', [1, 2, 3, 4])  # Use the first four folds for training.
-            self.tasks[f'dev@{lang}'] = dev_task = OnePairTask()
+            dev_task = OnePairTask()
             dev_split = Split('dev', [5])  # Use the last fold for dev.
+            test_task = OnePairTask()
+            test_split = Split('test')
 
-            self.dl_reg.register_data_loader(train_task, train_split, self.src_abc, self.tgt_abc, lang2id=lang2id)
+            eval_dls[f'train@{lang}'] = self.dl_reg.register_data_loader(train_task, train_split, g.src_lang, lang,
+                                                                         self.src_abc, self.tgt_abc, lang2id=lang2id)
             eval_dls[f'dev@{lang}'] = self.dl_reg.register_data_loader(
-                dev_task, dev_split, self.src_abc, self.tgt_abc, lang2id=lang2id)
+                dev_task, dev_split, g.src_lang, lang, self.src_abc, self.tgt_abc, lang2id=lang2id)
+            eval_dls[f'test@{lang}'] = self.dl_reg.register_data_loader(test_task, test_split, g.src_lang, lang,
+                                                                        self.src_abc, self.tgt_abc, lang2id=lang2id)
 
-        self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc), len(g.train_tgt_langs))
+        self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc), len(g.train_tgt_langs) + 1)
         if has_gpus():
             self.model.cuda()
 
         self.evaluator = Evaluator(self.model, eval_dls)
 
-        train_tasks = [self.tasks[f'train@{lang}'] for lang in g.train_tgt_langs]
         self.trainer = Trainer(self.model, train_tasks,
                                [1.0] * len(train_tasks), 'step',
                                evaluator=self.evaluator,
                                check_interval=g.check_interval,
                                eval_interval=g.eval_interval)
+        self.trainer.init_params(method='xavier_uniform')
+        self.trainer.set_optimizer(Adam, lr=0.002)
 
     def run(self):
-        self.trainer.train()
+        self.trainer.train(self.dl_reg)

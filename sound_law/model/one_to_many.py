@@ -16,7 +16,7 @@ class OneToManyModel(OnePairModel):
 
     def _get_log_probs(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> FT:
         src_emb, output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
-        lang_emb = self.lang_emb(batch.tgt_seqs.lang_id)
+        lang_emb = self.lang_emb.weight[batch.tgt_seqs.lang_id]
         target = batch.tgt_seqs.ids if use_target else None
         log_probs = self.decoder(SOT_ID, src_emb,
                                  output, batch.src_seqs.paddings,

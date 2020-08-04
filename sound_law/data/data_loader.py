@@ -121,7 +121,7 @@ class OnePairDataLoader(BaseDataLoader):
     def __iter__(self) -> Iterator[OnePairBatch]:
         for batch in super().__iter__():
             if self.lang2id is not None:
-                batch.src_seqs.lang_id = self.lang2id[batch.src_seqs.lang]
+                # NOTE(j_luo) Source lang id not needed for now.
                 batch.tgt_seqs.lang_id = self.lang2id[batch.tgt_seqs.lang]
             if has_gpus():
                 yield batch.cuda()
@@ -153,9 +153,9 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
     add_argument('src_lang', dtype=str, msg='ISO code for the source language.')
     add_argument('tgt_lang', dtype=str, msg='ISO code for the target language.')
 
-    def get_data_loader(self, task: Task, split: Split, src_abc: Alphabet, tgt_abc: Alphabet, **kwargs) -> BaseDataLoader:
+    def get_data_loader(self, task: Task, split: Split, src_lang: str, tgt_lang: str, src_abc: Alphabet, tgt_abc: Alphabet, **kwargs) -> BaseDataLoader:
         if task.name == 'one_pair':
-            dl = OnePairDataLoader(task, split, g.data_path, g.src_lang, g.tgt_lang, src_abc, tgt_abc, **kwargs)
+            dl = OnePairDataLoader(task, split, g.data_path, src_lang, tgt_lang, src_abc, tgt_abc, **kwargs)
         else:
             raise ValueError(f'Cannot understand this task.')
 
