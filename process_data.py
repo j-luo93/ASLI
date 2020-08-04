@@ -22,11 +22,31 @@ latin_iso_code = 'lat'
 # lat: Latin, spa: Spanish, por: Portuguese, fra: French, ita: Italian
 romance_iso_codes = {'spa', 'por', 'fra', 'ita'}
 
-def filter_subfamily(parent_iso_code, daughter_iso_codes, dataset_path=default_dataset_path):
+
+def assign_iso_codes(languages, dataset_path=default_dataset_path):
     '''
-    parent_iso_code: str, the iso code of the common ancestral language
-    daughter_iso_codes: a set of str, the iso codes of the daughter languages of that parent
-    dataset_path: str, the path to the .tsv dataset to be read from. Default written above.
+    takes a .tsv dataset file where some languages are missing iso_code values \
+        and saves a new .tsv dataset file where those languages now have iso_codes
+    
+    languages: set of str, the 'language' values for the languages without iso codes
+    '''
+    file_path, file_name = os.path.split(dataset_path)
+    new_filename = 'updated_' + file_name
+    new_path = os.path.join(file_path, new_filename)
+
+    with open(dataset_path) as f, open(new_path, 'w') as w:
+        reader = csv.reader(f, delimiter='\t')
+        header = next(reader)
+        writer = csv.writer(w, delimiter='\t')
+        writer.writerow(header)
+
+        for line in reader:
+            language = line[0]
+            iso_code = line[1]
+            if language in languages and iso_code=='':
+                line[1] = 'q-' + language.lower()
+            writer.writerow(line)
+
 
     returns a dictionary of the form {lang_iso_code: {global_id: (parent_line, daughter_line)}}, \
         which maps a daughter lang's iso code to a dict containing all cognate pairs in the dataset
