@@ -49,6 +49,7 @@ class OnePairManager:
         test_dl = self.dl_reg.register_data_loader(test_task, test_split)
 
         # For consistency, use the entire dataset to init the model.
+        # FIXME(j_luo) alphabet should be used for init everything for consistent manppings.
         all_task = OnePairTask()
         all_split = Split('all')
         all_dl = self.dl_reg.register_data_loader(all_task, all_split)
@@ -69,15 +70,11 @@ class OnePairManager:
             dev_dl = self.dl_reg[dev_task]
             evaluator = OnePairEvaluator(self.model, {f'train@{fold}': train_dl, f'dev@{fold}': dev_dl})
 
-            for param in self.model.parameters():
-                if param.dim() == 2:
-                    import torch.nn.init
-                    torch.nn.init.xavier_normal_(param)
-
             trainer = OnePairTrainer(self.model, [train_task],
                                      [1.0], 'step',
                                      check_interval=g.check_interval,
                                      evaluator=evaluator,
                                      eval_interval=g.eval_interval)
+            trainer.init_params(method='xavier_uniform')
             trainer.set_optimizer(Adam, lr=0.002)
             trainer.train(self.dl_reg)

@@ -27,7 +27,7 @@ class Alphabet:
         self._unit2id = {SOT: SOT_ID, EOT: EOT_ID}
         self._unit2id.update({c: i for i, c in enumerate(data, len(special_units))})
 
-        logging.info(f'Alphabet for {lang}: {self._id2unit}.')
+        logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
 
     @overload
     def __getitem__(self, index: int) -> str: ...
