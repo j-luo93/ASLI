@@ -45,7 +45,8 @@ def assign_iso_codes(languages, dataset_path=default_dataset_path):
             language = line[0]
             iso_code = line[1]
             if language in languages and iso_code=='':
-                line[1] = 'q-' + language.lower()
+                line[1] = 'q_' + language.lower()
+                # the naming convention of q_ was chosen since iso codes qaa-qtz are 'reserved for local use'
             writer.writerow(line)
 
     return new_path
