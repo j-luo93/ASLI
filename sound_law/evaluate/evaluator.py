@@ -8,7 +8,7 @@ from sound_law.data.data_loader import OnePairDataLoader
 from sound_law.model.one_pair import OnePairModel
 
 
-class OnePairEvaluator:
+class Evaluator:
 
     def __init__(self, model: OnePairModel, dls: Dict[str, OnePairDataLoader]):
         """
