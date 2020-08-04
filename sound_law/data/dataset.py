@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +30,11 @@ class Alphabet:
         self._unit2id.update({c: i for i, c in enumerate(data, len(special_units))})
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
+
+    @classmethod
+    def from_tsv(cls, lang: str, path: Path) -> Alphabet:
+        df = pd.read_csv(path, sep='\t')
+        return cls(lang, df['tokens'].str.split().tolist())
 
     @overload
     def __getitem__(self, index: int) -> str: ...
@@ -73,7 +80,13 @@ class Split:
 
 class OnePairDataset(Dataset):
 
-    def __init__(self, data_path: Path, split: Split, src_lang: str, tgt_lang: str):
+    def __init__(self,
+                 data_path: Path,
+                 split: Split,
+                 src_lang: str,
+                 tgt_lang: str,
+                 src_abc: Alphabet,
+                 tgt_abc: Alphabet):
         self.split = split
 
         src_path = data_path / f'{src_lang}.tsv'
@@ -91,13 +104,10 @@ class OnePairDataset(Dataset):
         self.src_unit_seqs = get_array(src_df['tokens'].str.split().to_list())
         self.tgt_unit_seqs = get_array(tgt_df['tokens'].str.split().to_list())
 
-        self.src_abc = Alphabet(src_lang, self.src_unit_seqs)
-        self.tgt_abc = Alphabet(tgt_lang, self.tgt_unit_seqs)
+        self.src_id_seqs = [[src_abc[u] for u in seq] for seq in self.src_unit_seqs]
+        self.tgt_id_seqs = [[tgt_abc[u] for u in seq] for seq in self.tgt_unit_seqs]
 
-        self.src_id_seqs = [[self.src_abc[u] for u in seq] for seq in self.src_unit_seqs]
-        self.tgt_id_seqs = [[self.tgt_abc[u] for u in seq] for seq in self.tgt_unit_seqs]
-
-        logging.info(f'Total number of cognates for {src_lang}-{tgt_lang}: {len(self.src_vocab)}.')
+        logging.info(f'Total number of cognates for {src_lang}-{tgt_lang} for {split}: {len(self.src_vocab)}.')
 
     def __getitem__(self, index: int):
         return {

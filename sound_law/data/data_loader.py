@@ -1,3 +1,4 @@
+from .dataset import Alphabet
 from dataclasses import field
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple
@@ -98,8 +99,15 @@ class OnePairDataLoader(BaseDataLoader):
 
     collate_fn = one_pair_collate_fn
 
-    def __init__(self, task: Task, split: Split, data_path: Path, src_lang: str, tgt_lang: str):
-        dataset = OnePairDataset(data_path, split, src_lang, tgt_lang)
+    def __init__(self,
+                 task: Task,
+                 split: Split,
+                 data_path: Path,
+                 src_lang: str,
+                 tgt_lang: str,
+                 src_abc: Alphabet,
+                 tgt_abc: Alphabet):
+        dataset = OnePairDataset(data_path, split, src_lang, tgt_lang, src_abc, tgt_abc)
         super().__init__(dataset, task, batch_size=g.batch_size)
 
     # IDEA(j_luo) Move this to core?
@@ -135,9 +143,9 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
     add_argument('src_lang', dtype=str, msg='ISO code for the source language.')
     add_argument('tgt_lang', dtype=str, msg='ISO code for the target language.')
 
-    def get_data_loader(self, task: Task, split: Split, *args, **kwargs) -> BaseDataLoader:
+    def get_data_loader(self, task: Task, split: Split, src_abc: Alphabet, tgt_abc: Alphabet, **kwargs) -> BaseDataLoader:
         if task.name == 'one_pair':
-            dl = OnePairDataLoader(task, split, g.data_path, g.src_lang, g.tgt_lang)
+            dl = OnePairDataLoader(task, split, g.data_path, g.src_lang, g.tgt_lang, src_abc, tgt_abc)
         else:
             raise ValueError(f'Cannot understand this task.')
 

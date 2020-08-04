@@ -10,7 +10,7 @@ from dev_misc import add_argument, g
 from dev_misc.devlib.helper import has_gpus
 from dev_misc.trainlib import Task
 from sound_law.data.data_loader import DataLoaderRegistry
-from sound_law.data.dataset import Split
+from sound_law.data.dataset import Alphabet, Split
 from sound_law.evaluate.evaluator import OnePairEvaluator
 from sound_law.model.one_pair import OnePairModel
 
@@ -28,6 +28,12 @@ class OnePairManager:
     """A manager for sound law induction on one src-tgt pair."""
 
     def __init__(self):
+        # Prepare alphabets first.
+        src_path = g.data_path / f'{g.src_lang}.tsv'
+        self.src_abc = Alphabet.from_tsv(g.src_lang, src_path)
+        tgt_path = g.data_path / f'{g.tgt_lang}.tsv'
+        self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path)
+
         # Prepare data loaders with different splits.
         self.dl_reg = DataLoaderRegistry()
         self.tasks = dict()  # TODO(j_luo) Integrate tasks into dl_reg.
@@ -42,19 +48,11 @@ class OnePairManager:
             self.tasks[f'train@{fold}'] = train_task = OnePairTask()
             self.tasks[f'dev@{fold}'] = dev_task = OnePairTask()
 
-            train_dl = self.dl_reg.register_data_loader(train_task, train_split)
-            dev_dl = self.dl_reg.register_data_loader(dev_task, dev_split)
+            train_dl = self.dl_reg.register_data_loader(train_task, train_split, self.src_abc, self.tgt_abc)
+            dev_dl = self.dl_reg.register_data_loader(dev_task, dev_split, self.src_abc, self.tgt_abc)
         test_task = OnePairTask()
         test_split = Split('test')
-        test_dl = self.dl_reg.register_data_loader(test_task, test_split)
-
-        # For consistency, use the entire dataset to init the model.
-        # FIXME(j_luo) alphabet should be used for init everything for consistent manppings.
-        all_task = OnePairTask()
-        all_split = Split('all')
-        all_dl = self.dl_reg.register_data_loader(all_task, all_split)
-        self.num_src_chars = len(all_dl.dataset.src_abc)
-        self.num_tgt_chars = len(all_dl.dataset.tgt_abc)
+        test_dl = self.dl_reg.register_data_loader(test_task, test_split, self.src_abc, self.tgt_abc)
 
     def run(self):
         for fold in range(5):
@@ -65,7 +63,7 @@ class OnePairManager:
             train_dl = self.dl_reg[train_task]
             dev_dl = self.dl_reg[dev_task]
 
-            model = OnePairModel(self.num_src_chars, self.num_tgt_chars)
+            model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
             if has_gpus():
                 model.cuda()
             evaluator = OnePairEvaluator(model, {f'train@{fold}': train_dl, f'dev@{fold}': dev_dl})
