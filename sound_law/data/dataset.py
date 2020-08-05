@@ -118,8 +118,8 @@ class OnePairDataset(Dataset):
         self.src_vocab = get_array(src_df['transcription'])
         self.tgt_vocab = get_array(tgt_df['transcription'])
 
-        self.src_unit_seqs = get_array(src_df['tokens'].str.split().to_list())
-        self.tgt_unit_seqs = get_array(tgt_df['tokens'].str.split().to_list())
+        self.src_unit_seqs = get_array(src_df['parsed_tokens'].str.split().to_list())
+        self.tgt_unit_seqs = get_array(tgt_df['parsed_tokens'].str.split().to_list())
 
         self.src_id_seqs = [[src_abc[u] for u in seq] for seq in self.src_unit_seqs]
         self.tgt_id_seqs = [[tgt_abc[u] for u in seq] for seq in self.tgt_unit_seqs]
