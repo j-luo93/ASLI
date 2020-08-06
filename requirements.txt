@@ -1,1 +1,5 @@
 pycountry
+epitran
+cltk
+lingpy
+greek_accentuation

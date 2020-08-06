@@ -4,8 +4,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pycountry
+from cltk.phonology.latin.transcription import Transcriber
+from epitran import Epitran
+from lingpy.sequence.sound_classes import ipa2tokens
 
 lookup = pycountry.languages.lookup
+
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -14,16 +18,51 @@ if __name__ == "__main__":
     parser.add_argument('--random_seed', type=str, help='Random seed.')
     args = parser.parse_args()
 
+    if args.target == 'roa-opt':
+        tgt = 'roa_opt'
+    else:
+        tgt = lookup(args.target).alpha_3
+
+    if tgt in ['ita', 'spa', 'por', 'fra', 'cat', 'ron']:
+        epi_code = f'{tgt}-Latn'
+    else:
+        raise ValueError(f'language {args.target} not supported.')
+    lat_transcriber = Transcriber(dialect="Classical", reconstruction="Allen")
+    tgt_transcriber = Epitran(epi_code)
+
     np.random.seed(args.random_seed)
     df = pd.read_csv(args.data_path, sep='\t', keep_default_na=False)
 
     df = df[df['Language'] == args.target]
     lat_cogs = list()
+    lat_ipas = list()
+    lat_tokens = list()
     tgt_cogs = list()
+    tgt_ipas = list()
+    tgt_tokens = list()
+
+    weird_chars = set('[]')
     for latin, group in df.groupby('Latin')['Token']:
-        if '-' not in latin:
-            lat_cogs.append(latin)
-            tgt_cogs.append('|'.join(group.tolist()))
+        group = [t for t in group if t]
+        if len(latin) == 0 or len(group) == 0:
+            continue
+        if (set(latin) & weird_chars) or any(set(t) & weird_chars for t in group):
+            continue
+
+        lat_cogs.append(latin)
+        try:
+            ipa = lat_transcriber.transcribe(latin)
+        except IndexError:
+            ipa = lat_transcriber.transcribe(latin, syllabify=False)
+        ipa = ipa.strip('[]')
+        lat_ipas.append(ipa)
+        lat_tokens.append(' '.join(ipa2tokens(ipa, merge_vowels=False)))
+
+        ipas = [tgt_transcriber.transliterate(t) for t in group]
+        tokens = [ipa2tokens(i, merge_vowels=False) for i in ipas]
+        tgt_cogs.append('|'.join(group))
+        tgt_ipas.append('|'.join(ipas))
+        tgt_tokens.append('|'.join([' '.join(token) for token in tokens]))
 
     r = np.random.rand(len(lat_cogs))
     splits = list()
@@ -34,13 +73,9 @@ if __name__ == "__main__":
             splits.append('dev')
         else:
             splits.append('train')
-    lat_df = pd.DataFrame({'cognate': lat_cogs, 'split': splits})
-    tgt_df = pd.DataFrame({'cognate': tgt_cogs, 'split': splits})
+    lat_df = pd.DataFrame({'cognate': lat_cogs, 'split': splits, 'ipa': lat_ipas, 'tokens': lat_tokens})
+    tgt_df = pd.DataFrame({'cognate': tgt_cogs, 'split': splits, 'ipa': tgt_ipas, 'tokens': tgt_tokens})
 
-    if args.target == 'roa-opt':
-        tgt = 'roa_opt'
-    else:
-        tgt = lookup(args.target).alpha_3
     folder = Path(f'./data/wikt/lat-{tgt}')
     folder.mkdir(parents=True, exist_ok=True)
 
