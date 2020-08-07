@@ -4,6 +4,7 @@ from typing import Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 import torch
+from torch.utils.data.sampler import WeightedRandomSampler
 
 from dev_misc import BT, LT, NDA, add_argument, g
 from dev_misc.devlib import BaseBatch, batch_class, pad_to_dense
@@ -110,12 +111,19 @@ class OnePairDataLoader(BaseDataLoader):
                  tgt_lang: str,
                  src_abc: Alphabet,
                  tgt_abc: Alphabet,
+                 input_format: str,
                  lang2id: Dict[str, int] = None):
-        dataset = OnePairDataset(data_path, split, src_lang, tgt_lang, src_abc, tgt_abc)
+        dataset = OnePairDataset(data_path, split, src_lang, tgt_lang, src_abc, tgt_abc, input_format)
         self.lang2id = lang2id
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
-        super().__init__(dataset, task, batch_size=g.batch_size)
+
+        sampler = None
+        if dataset.sample_weights is not None:
+            sampler = WeightedRandomSampler(dataset.sample_weights, len(dataset))
+        super().__init__(dataset, task,
+                         batch_size=g.batch_size,
+                         sampler=sampler)
 
     # IDEA(j_luo) Move this to core?
     def __iter__(self) -> Iterator[OnePairBatch]:
@@ -152,10 +160,12 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
     add_argument('data_path', dtype='path', msg='Path to the dataset.')
     add_argument('src_lang', dtype=str, msg='ISO code for the source language.')
     add_argument('tgt_lang', dtype=str, msg='ISO code for the target language.')
+    add_argument('input_format', dtype=str, choices=['wikt', 'ielex'], default='ielex', msg='Input format.')
 
     def get_data_loader(self, task: Task, split: Split, src_lang: str, tgt_lang: str, src_abc: Alphabet, tgt_abc: Alphabet, **kwargs) -> BaseDataLoader:
         if task.name == 'one_pair':
-            dl = OnePairDataLoader(task, split, g.data_path, src_lang, tgt_lang, src_abc, tgt_abc, **kwargs)
+            dl = OnePairDataLoader(task, split, g.data_path, src_lang, tgt_lang,
+                                   src_abc, tgt_abc, g.input_format, **kwargs)
         else:
             raise ValueError(f'Cannot understand this task.')
 

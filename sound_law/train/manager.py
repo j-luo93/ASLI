@@ -22,6 +22,7 @@ add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the
 
 
 class OnePairTask(Task):
+    # TODO(j_luo) Use Setting instead of task so that split or other metadata can be included here as well.
     name: ClassVar[str] = 'one_pair'
 
 
@@ -31,46 +32,53 @@ class OnePairManager:
     def __init__(self):
         # Prepare alphabets first.
         src_path, tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
-        self.src_abc = Alphabet.from_tsv(g.src_lang, src_path)
-        self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path)
+        self.src_abc = Alphabet.from_tsv(g.src_lang, src_path, g.input_format)
+        self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path, g.input_format)
 
         # Prepare data loaders with different splits.
         self.dl_reg = DataLoaderRegistry()
         self.tasks = dict()  # TODO(j_luo) Integrate tasks into dl_reg.
-        for fold in range(5):
-            dev_fold = fold + 1
-            train_folds = list(range(1, 6))
-            train_folds.remove(dev_fold)
-
-            train_split = Split('train', train_folds)
-            dev_split = Split('dev', [dev_fold])
-
-            self.tasks[f'train@{fold}'] = train_task = OnePairTask()
-            self.tasks[f'dev@{fold}'] = dev_task = OnePairTask()
-
+        if g.input_format == 'wikt':
+            self.tasks['train'] = train_task = OnePairTask()
+            self.tasks['dev'] = dev_task = OnePairTask()
+            train_split = Split('train')
+            dev_split = Split('dev')
             train_dl = self.dl_reg.register_data_loader(
                 train_task, train_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
             dev_dl = self.dl_reg.register_data_loader(
                 dev_task, dev_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
+        else:
+            for fold in range(5):
+                dev_fold = fold + 1
+                train_folds = list(range(1, 6))
+                train_folds.remove(dev_fold)
+
+                train_split = Split('train', train_folds)
+                dev_split = Split('dev', [dev_fold])
+
+                self.tasks[f'train@{fold}'] = train_task = OnePairTask()
+                self.tasks[f'dev@{fold}'] = dev_task = OnePairTask()
+
+                train_dl = self.dl_reg.register_data_loader(
+                    train_task, train_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
+                dev_dl = self.dl_reg.register_data_loader(
+                    dev_task, dev_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
         self.tasks['test'] = test_task = OnePairTask()
         test_split = Split('test')
         test_dl = self.dl_reg.register_data_loader(
             test_task, test_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
 
     def run(self):
-        test_dl = self.dl_reg[self.tasks['test']]
-        for fold in range(5):
-            logging.imp(f'Cross-validation, fold number {fold}')
-            train_task = self.tasks[f'train@{fold}']
-            dev_task = self.tasks[f'dev@{fold}']
 
+        def run_once(train_task, dev_task, test_task, train_name, dev_name, test_name):
             train_dl = self.dl_reg[train_task]
             dev_dl = self.dl_reg[dev_task]
+            test_dl = self.dl_reg[test_task]
 
             model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
             if has_gpus():
                 model.cuda()
-            evaluator = Evaluator(model, {f'train@{fold}': train_dl, f'dev@{fold}': dev_dl, 'test': test_dl})
+            evaluator = Evaluator(model, {train_name: train_dl, dev_name: dev_dl, test_name: test_dl})
 
             trainer = Trainer(model, [train_task],
                               [1.0], 'step',
@@ -80,6 +88,21 @@ class OnePairManager:
             trainer.init_params(method='xavier_uniform')
             trainer.set_optimizer(Adam, lr=0.002)
             trainer.train(self.dl_reg)
+
+        test_task = self.tasks['test']
+        if g.input_format == 'wikt':
+            run_once(self.tasks['train'], self.tasks['dev'], self.tasks['test'],
+                     'train', 'dev', 'test')
+        else:
+            for fold in range(5):
+                logging.imp(f'Cross-validation, fold number {fold}')
+                train_name = f'train@{fold}'
+                dev_name = f'dev@{fold}'
+                train_task = self.tasks[train_name]
+                dev_task = self.tasks[dev_name]
+
+                run_once(train_task, dev_task, test_task,
+                         train_name, dev_name, 'test')
 
 
 class OneToManyManager:

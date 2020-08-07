@@ -42,7 +42,7 @@ if __name__ == "__main__":
         tgt_ipas = list()
         tgt_tokens = list()
 
-        weird_chars = set('[]')
+        weird_chars = set('[] ')
         for latin, group in df.groupby('Latin')['Token']:
             group = [t for t in group if t]
             if len(latin) == 0 or len(group) == 0:

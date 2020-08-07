@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Set, Union, overload
 
+import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 
@@ -32,9 +33,16 @@ class Alphabet:
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
 
     @classmethod
-    def from_tsv(cls, lang: str, path: str) -> Alphabet:
+    def from_tsv(cls, lang: str, path: str, input_format: str) -> Alphabet:
         df = pd.read_csv(path, sep='\t')
-        return cls(lang, df['tokens'].str.split().tolist())
+        if input_format == 'wikt':
+            contents = list()
+            for seqs in df['tokens']:
+                for tokens in seqs.split('|'):
+                    contents.append(tokens.split())
+        else:
+            contents = df['tokens'].str.split().tolist()
+        return cls(lang, contents)
 
     @classmethod
     def from_tsvs(cls, lang: str, paths: List[str]) -> Alphabet:
@@ -102,7 +110,8 @@ class OnePairDataset(Dataset):
                  src_lang: str,
                  tgt_lang: str,
                  src_abc: Alphabet,
-                 tgt_abc: Alphabet):
+                 tgt_abc: Alphabet,
+                 input_format: str):
         self.split = split
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
@@ -112,19 +121,41 @@ class OnePairDataset(Dataset):
         src_df = pd.read_csv(str(src_path), sep='\t')
         tgt_df = pd.read_csv(str(tgt_path), sep='\t')
 
+        if input_format == 'wikt':
+            src_df = src_df.rename(columns={col: f'src_{col}' for col in src_df.columns})
+            tgt_df = tgt_df.rename(columns={col: f'tgt_{col}' for col in tgt_df.columns})
+            cat_df: pd.DataFrame = pd.concat([src_df, tgt_df], axis=1)
+            cat_df['split_tgt_tokens'] = cat_df['tgt_tokens'].str.split('|')
+            cat_df['num_variants'] = cat_df['split_tgt_tokens'].apply(len)
+            cat_df['sample_weight'] = 1.0 / cat_df['num_variants']
+            cat_df = cat_df.explode('split_tgt_tokens')
+
+            src_df = cat_df[['src_ipa', 'src_split', 'src_tokens', 'sample_weight']]
+            tgt_df = cat_df[['tgt_ipa', 'tgt_split', 'split_tgt_tokens', 'sample_weight']]
+
+            src_df = src_df.rename(columns={'src_ipa': 'transcription', 'src_split': 'split', 'src_tokens': 'tokens'})
+            # FIXME(j_luo) Transcription column contains '|' here.
+            tgt_df = tgt_df.rename(columns={'tgt_ipa': 'transcription',
+                                            'tgt_split': 'split', 'split_tgt_tokens': 'tokens'})
+
         src_df = self.split.select(src_df)
         tgt_df = self.split.select(tgt_df)
 
         self.src_vocab = get_array(src_df['transcription'])
         self.tgt_vocab = get_array(tgt_df['transcription'])
 
-        self.src_unit_seqs = get_array(src_df['parsed_tokens'].str.split().to_list())
-        self.tgt_unit_seqs = get_array(tgt_df['parsed_tokens'].str.split().to_list())
+        token_col = 'tokens' if input_format == 'wikt' else 'parsed_tokens'
+        self.src_unit_seqs = get_array(src_df[token_col].str.split().to_list())
+        self.tgt_unit_seqs = get_array(tgt_df[token_col].str.split().to_list())
 
         self.src_id_seqs = [[src_abc[u] for u in seq] for seq in self.src_unit_seqs]
         self.tgt_id_seqs = [[tgt_abc[u] for u in seq] for seq in self.tgt_unit_seqs]
 
-        logging.info(f'Total number of cognates for {src_lang}-{tgt_lang} for {split}: {len(self.src_vocab)}.')
+        logging.info(f'Total number of cognate pairs for {src_lang}-{tgt_lang} for {split}: {len(self.src_vocab)}.')
+
+        self.sample_weights: Optional[np.ndarray] = None
+        if input_format == 'wikt':
+            self.sample_weights = src_df['sample_weight'].values
 
     def __getitem__(self, index: int):
         return {
