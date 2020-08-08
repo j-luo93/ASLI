@@ -85,7 +85,7 @@ class OnePairManager:
                               check_interval=g.check_interval,
                               evaluator=evaluator,
                               eval_interval=g.eval_interval)
-            trainer.init_params(method='xavier_uniform')
+            trainer.init_params('uniform', -0.1, 0.1)
             trainer.set_optimizer(Adam, lr=0.002)
             trainer.train(self.dl_reg)
 
@@ -168,7 +168,7 @@ class OneToManyManager:
                                evaluator=self.evaluator,
                                check_interval=g.check_interval,
                                eval_interval=g.eval_interval)
-        self.trainer.init_params(method='xavier_uniform')
+        self.trainer.init_params('uniform', -0.1, 0.1)
         self.trainer.set_optimizer(Adam, lr=0.002)
 
     def run(self):
