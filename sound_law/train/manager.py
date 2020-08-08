@@ -119,8 +119,8 @@ class OneToManyManager:
             src_path, tgt_path = get_paths(g.data_path, g.src_lang, tgt)
             src_paths.append(src_path)
             tgt_paths.append(tgt_path)
-        self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths)
-        self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths)
+        self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
+        self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
 
         # Get language-to-id mappings. Used only for the targets (i.e., decoder side).
         lang2id = {tgt: i for i, tgt in enumerate(all_tgt)}
@@ -138,9 +138,15 @@ class OneToManyManager:
         for lang in g.train_tgt_langs:
             train_task = OnePairTask()
             train_tasks.append(train_task)
-            train_split = Split('train', [1, 2, 3, 4])  # Use the first four folds for training.
+            if g.input_format == 'ielex':
+                train_split = Split('train', [1, 2, 3, 4])  # Use the first four folds for training.
+            else:
+                train_split = Split('train')
             dev_task = OnePairTask()
-            dev_split = Split('dev', [5])  # Use the last fold for dev.
+            if g.input_format == 'ielex':
+                dev_split = Split('dev', [5])  # Use the last fold for dev.
+            else:
+                dev_split = Split('dev')
             test_task = OnePairTask()
             test_split = Split('test')
 

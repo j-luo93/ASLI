@@ -17,6 +17,20 @@ SOT_ID = 0
 EOT_ID = 1
 
 
+DF = pd.DataFrame
+
+
+def _get_contents(df: DF, input_format: str) -> List[List[str]]:
+    if input_format == 'wikt':
+        contents = list()
+        for seqs in df['tokens']:
+            for tokens in seqs.split('|'):
+                contents.append(tokens.split())
+    else:
+        contents = df['tokens'].str.split().tolist()
+    return contents
+
+
 class Alphabet:
     """A class to represent the alphabet of any dataset."""
 
@@ -35,23 +49,18 @@ class Alphabet:
     @classmethod
     def from_tsv(cls, lang: str, path: str, input_format: str) -> Alphabet:
         df = pd.read_csv(path, sep='\t')
-        if input_format == 'wikt':
-            contents = list()
-            for seqs in df['tokens']:
-                for tokens in seqs.split('|'):
-                    contents.append(tokens.split())
-        else:
-            contents = df['tokens'].str.split().tolist()
+        contents = _get_contents(df, input_format)
         return cls(lang, contents)
 
     @classmethod
-    def from_tsvs(cls, lang: str, paths: List[str]) -> Alphabet:
+    def from_tsvs(cls, lang: str, paths: List[str], input_format: str) -> Alphabet:
         dfs = list()
         for path in paths:
             df = pd.read_csv(path, sep='\t')
             dfs.append(df)
         df = pd.concat(dfs)
-        return cls(lang, df['tokens'].str.split().tolist())
+        contents = _get_contents(df, input_format)
+        return cls(lang, contents)
 
     @overload
     def __getitem__(self, index: int) -> str: ...
@@ -69,9 +78,6 @@ class Alphabet:
 
     def __len__(self):
         return len(self._unit2id)
-
-
-DF = pd.DataFrame
 
 
 @dataclass

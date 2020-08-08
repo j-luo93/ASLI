@@ -25,6 +25,7 @@ class Evaluator:
         return metrics
 
     def _evaluate_one_dl(self, stage: str, dl: OnePairDataLoader) -> Metrics:
+        # FIXME(j_luo) This is incorrect for wikt data.
         num_pred = 0
         num_correct = 0
         records = list()
