@@ -16,6 +16,7 @@ from dev_misc.utils import cached_property
 from sound_law.data.dataset import OnePairDataset
 
 from .dataset import Alphabet, Split
+from .setting import Setting
 
 
 @batch_class
@@ -104,7 +105,7 @@ class OnePairDataLoader(BaseDataLoader):
     collate_fn = one_pair_collate_fn
 
     def __init__(self,
-                 setting: BaseSetting,
+                 setting: Setting,
                  data_path: Path,
                  input_format: str,
                  lang2id: Dict[str, int] = None):
@@ -116,7 +117,7 @@ class OnePairDataLoader(BaseDataLoader):
         self.tgt_lang = setting.tgt_lang
 
         sampler = None
-        if dataset.sample_weights is not None:
+        if setting.for_training and dataset.sample_weights is not None:
             sampler = WeightedRandomSampler(dataset.sample_weights, len(dataset))
         super().__init__(dataset, setting,
                          batch_size=g.batch_size,
@@ -164,5 +165,4 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
             dl = OnePairDataLoader(setting, g.data_path, g.input_format, **kwargs)
         else:
             raise ValueError(f'Cannot understand this setting.')
-
         return dl

@@ -1,17 +1,15 @@
 """
 A manager class takes care of managing the data loader, the model, and the trainer.
 """
-from dataclasses import dataclass
 import logging
-from typing import ClassVar
 
 from torch.optim import Adam
 
 from dev_misc import add_argument, g
 from dev_misc.devlib.helper import has_gpus
-from dev_misc.trainlib import BaseSetting
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.dataset import Alphabet, Split, get_paths
+from sound_law.data.setting import Setting
 from sound_law.evaluate.evaluator import Evaluator
 from sound_law.model.one_pair import OnePairModel
 from sound_law.model.one_to_many import OneToManyModel
@@ -20,21 +18,6 @@ from .trainer import Trainer
 
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
-
-
-class OnePairTask(BaseSetting):
-    # TODO(j_luo) Use Setting instead of task so that split or other metadata can be included here as well.
-    name: ClassVar[str] = 'one_pair'
-
-
-@dataclass
-class Setting(BaseSetting):
-    task: str
-    split: Split
-    src_lang: str
-    tgt_lang: str
-    src_abc: Alphabet
-    tgt_abc: Alphabet
 
 
 class OnePairManager:
@@ -48,58 +31,45 @@ class OnePairManager:
 
         # Prepare data loaders with different splits.
         self.dl_reg = DataLoaderRegistry()
-        # self.tasks = dict()  # TODO(j_luo) Integrate tasks into dl_reg.
 
-        def create_setting(name: str, split: Split) -> Setting:
-            return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
+        def create_setting(name: str, split: Split, for_training: bool) -> Setting:
+            return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc, for_training)
 
         if g.input_format == 'wikt':
-            # self.tasks['train'] = train_task = OnePairTask()
-            # self.tasks['dev'] = dev_task = OnePairTask()
-            train_setting = create_setting('train', Split('train'))
-            dev_setting = create_setting('dev', Split('dev'))
+            train_setting = create_setting('train', Split('train'), True)
+            train_e_setting = create_setting('train_e', Split('train'), False)  # For evaluation.
+            dev_setting = create_setting('dev', Split('dev'), False)
             self.dl_reg.register_data_loader(train_setting)
+            self.dl_reg.register_data_loader(train_e_setting)
             self.dl_reg.register_data_loader(dev_setting)
-            # train_dl = self.dl_reg.register_data_loader(
-            #     train_task, train_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
-            # dev_dl = self.dl_reg.register_data_loader(
-            #     dev_task, dev_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
         else:
             for fold in range(5):
                 dev_fold = fold + 1
                 train_folds = list(range(1, 6))
                 train_folds.remove(dev_fold)
 
-                train_setting = create_setting(f'train@{fold}', Split('train', train_folds))
-                dev_setting = create_setting(f'dev@{fold}', Split('dev', [dev_fold]))
+                train_setting = create_setting(f'train@{fold}', Split('train', train_folds), True)
+                train_e_setting = create_setting(f'train@{fold}_e', Split('train', train_folds), False)
+                dev_setting = create_setting(f'dev@{fold}', Split('dev', [dev_fold]), False)
                 self.dl_reg.register_data_loader(train_setting)
+                self.dl_reg.register_data_loader(train_e_setting)
                 self.dl_reg.register_data_loader(dev_setting)
 
-                # self.tasks[f'train@{fold}'] = train_task = OnePairTask()
-                # self.tasks[f'dev@{fold}'] = dev_task = OnePairTask()
-
-                # train_dl = self.dl_reg.register_data_loader(
-                #     train_task, train_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
-                # dev_dl = self.dl_reg.register_data_loader(
-                #     dev_task, dev_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
-        # self.tasks['test'] = test_task = OnePairTask()
-        # test_split = Split('test')
-        # test_dl = self.dl_reg.register_data_loader(
-        #     test_task, test_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc)
-        test_setting = create_setting('test', Split('test'))
+        test_setting = create_setting('test', Split('test'), False)
         self.dl_reg.register_data_loader(test_setting)
 
     def run(self):
 
         def run_once(train_name, dev_name, test_name):
             train_dl = self.dl_reg[train_name]
+            train_e_dl = self.dl_reg[f'{train_name}_e']
             dev_dl = self.dl_reg[dev_name]
             test_dl = self.dl_reg[test_name]
 
             model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
             if has_gpus():
                 model.cuda()
-            evaluator = Evaluator(model, {train_name: train_dl, dev_name: dev_dl, test_name: test_dl})
+            evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl})
 
             trainer = Trainer(model, [self.dl_reg.get_setting_by_name(train_name)],
                               [1.0], 'step',
@@ -110,7 +80,6 @@ class OnePairManager:
             trainer.set_optimizer(Adam, lr=0.002)
             trainer.train(self.dl_reg)
 
-        # test_task = self.tasks['test']
         if g.input_format == 'wikt':
             run_once('train', 'dev', 'test')
         else:
@@ -141,56 +110,37 @@ class OneToManyManager:
 
         # Get all data loaders.
         self.dl_reg = DataLoaderRegistry()
-        # eval_dls = dict()
 
-        # Get the test language.
-        # tgt_task = OnePairTask()
-        # tgt_split = Split('all')  # Use the entire dataset for testing.
-        # eval_dls[f'test@{g.tgt_lang}'] = test_dl = self.dl_reg.register_data_loader(
-        #     tgt_task, tgt_split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc, lang2id=lang2id)
+        def create_setting(name: str, tgt_lang: str, split: Split, for_training: bool) -> Setting:
+            return Setting(name, 'one_pair', split, g.src_lang, tgt_lang, self.src_abc, self.tgt_abc, for_training)
 
-        def create_setting(name: str, tgt_lang: str, split: Split) -> Setting:
-            return Setting(name, 'one_pair', split, g.src_lang, tgt_lang, self.src_abc, self.tgt_abc)
-
-        test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'))
+        test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'), False)
         self.dl_reg.register_data_loader(test_setting, lang2id=lang2id)
 
         # Get the training languages.
         for train_tgt_lang in g.train_tgt_langs:
-            # train_task = OnePairTask()
-            # train_tasks.append(train_task)
             if g.input_format == 'ielex':
                 train_split = Split('train', [1, 2, 3, 4])  # Use the first four folds for training.
                 dev_split = Split('dev', [5])  # Use the last fold for dev.
             else:
                 train_split = Split('train')
                 dev_split = Split('dev')
-            train_setting = create_setting(f'train@{train_tgt_lang}', train_tgt_lang, train_split)
-            dev_setting = create_setting(f'dev@{train_tgt_lang}', train_tgt_lang, dev_split)
-            test_setting = create_setting(f'test@{train_tgt_lang}', train_tgt_lang, Split('test'))
-
-            # dev_task = OnePairTask()
+            train_setting = create_setting(f'train@{train_tgt_lang}', train_tgt_lang, train_split, True)
+            train_e_setting = create_setting(f'train@{train_tgt_lang}_e', train_tgt_lang, train_split, False)
+            dev_setting = create_setting(f'dev@{train_tgt_lang}', train_tgt_lang, dev_split, False)
+            test_setting = create_setting(f'test@{train_tgt_lang}', train_tgt_lang, Split('test'), False)
 
             self.dl_reg.register_data_loader(train_setting, lang2id=lang2id)
+            self.dl_reg.register_data_loader(train_e_setting, lang2id=lang2id)
             self.dl_reg.register_data_loader(dev_setting, lang2id=lang2id)
             self.dl_reg.register_data_loader(test_setting, lang2id=lang2id)
-
-            # test_task = OnePairTask()
-            # test_split = Split('test')
-
-            # eval_dls[f'train@{train_tgt_lang}'] = self.dl_reg.register_data_loader(train_task, train_split, g.src_lang, train_tgt_lang,
-            #                                                              self.src_abc, self.tgt_abc, lang2id=lang2id)
-            # eval_dls[f'dev@{train_tgt_lang}'] = self.dl_reg.register_data_loader(
-            #     dev_task, dev_split, g.src_lang, train_tgt_lang, self.src_abc, self.tgt_abc, lang2id=lang2id)
-            # eval_dls[f'test@{train_tgt_lang}'] = self.dl_reg.register_data_loader(test_task, test_split, g.src_lang, train_tgt_lang,
-            #                                                             self.src_abc, self.tgt_abc, lang2id=lang2id)
 
         self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc), len(g.train_tgt_langs) + 1)
         if has_gpus():
             self.model.cuda()
 
-        # NOTE(j_luo) Evaluate on every loader.
-        eval_dls = self.dl_reg.get_loaders_by_name(lambda name: True)
+        # NOTE(j_luo) Evaluate on every loader that is not for training.
+        eval_dls = self.dl_reg.get_loaders_by_name(lambda name: 'train' not in name or '_e' in name)
         self.evaluator = Evaluator(self.model, eval_dls)
 
         train_names = [f'train@{train_tgt_lang}' for train_tgt_lang in g.train_tgt_langs]

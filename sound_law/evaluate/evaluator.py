@@ -44,7 +44,8 @@ class Evaluator:
         out_df = pd.DataFrame.from_records(records)
         out_folder = g.log_dir / 'predictions'
         out_folder.mkdir(exist_ok=True)
-        out_path = str(out_folder / f'{stage}.tsv')
+        setting = dl.setting
+        out_path = str(out_folder / f'{setting.name}.{stage}.tsv')
         out_df.to_csv(out_path, sep='\t', index=None)
 
         correct = Metric('correct', num_correct, weight=num_pred)
