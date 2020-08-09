@@ -136,23 +136,21 @@ class OnePairDataset(Dataset):
             cat_df['sample_weight'] = 1.0 / cat_df['num_variants']
             cat_df = cat_df.explode('split_tgt_tokens')
 
-            src_df = cat_df[['src_ipa', 'src_split', 'src_tokens', 'sample_weight']]
-            tgt_df = cat_df[['tgt_ipa', 'tgt_split', 'split_tgt_tokens', 'sample_weight']]
+            src_df = cat_df[['src_split', 'src_tokens', 'sample_weight']]
+            tgt_df = cat_df[['tgt_split', 'split_tgt_tokens', 'sample_weight']]
 
-            src_df = src_df.rename(columns={'src_ipa': 'transcription', 'src_split': 'split', 'src_tokens': 'tokens'})
-            # FIXME(j_luo) Transcription column contains '|' here.
-            tgt_df = tgt_df.rename(columns={'tgt_ipa': 'transcription',
-                                            'tgt_split': 'split', 'split_tgt_tokens': 'tokens'})
+            src_df = src_df.rename(columns={'src_split': 'split', 'src_tokens': 'tokens'})
+            tgt_df = tgt_df.rename(columns={'tgt_split': 'split', 'split_tgt_tokens': 'tokens'})
 
         src_df = self.split.select(src_df)
         tgt_df = self.split.select(tgt_df)
 
-        self.src_vocab = get_array(src_df['transcription'])
-        self.tgt_vocab = get_array(tgt_df['transcription'])
-
         token_col = 'tokens' if input_format == 'wikt' else 'parsed_tokens'
         self.src_unit_seqs = get_array(src_df[token_col].str.split().to_list())
         self.tgt_unit_seqs = get_array(tgt_df[token_col].str.split().to_list())
+
+        self.src_vocab = np.asarray([''.join(us) for us in self.src_unit_seqs])
+        self.tgt_vocab = np.asarray([''.join(us) for us in self.tgt_unit_seqs])
 
         self.src_id_seqs = [[src_abc[u] for u in seq] for seq in self.src_unit_seqs]
         self.tgt_id_seqs = [[tgt_abc[u] for u in seq] for seq in self.tgt_unit_seqs]

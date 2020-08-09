@@ -25,28 +25,36 @@ class Evaluator:
         return metrics
 
     def _evaluate_one_dl(self, stage: str, dl: OnePairDataLoader) -> Metrics:
-        # FIXME(j_luo) This is incorrect for wikt data.
-        num_pred = 0
-        num_correct = 0
         records = list()
         for batch in dl:
             scores = self.model.get_scores(batch, dl.tgt_seqs)
             preds = scores.max(dim='tgt_vocab')[1]
             assert preds.shape == batch.indices.shape
-            num_pred += len(batch)
-            correct = (batch.indices == preds)
-            num_correct += correct.sum()
-            for pi, gi, corr in zip(preds, batch.indices, correct.cpu().numpy()):
+            for pi, gi in zip(preds, batch.indices):
                 pred = dl.get_token_from_index(pi, 'tgt')
                 gold = dl.get_token_from_index(gi, 'tgt')
                 src = dl.get_token_from_index(gi, 'src')
-                records.append({'source': src, 'gold_target': gold, 'pred_target': pred, 'correct': corr})
+                records.append({'source': src, 'gold_target': gold, 'pred_target': pred})
         out_df = pd.DataFrame.from_records(records)
+        out_df = out_df.pivot_table(index='source', values=['gold_target', 'pred_target'],
+                                    aggfunc={'gold_target': 'last',
+                                             'pred_target': '|'.join}
+                                    )
+
+        def is_correct(item):
+            pred, gold = item
+            golds = gold.split('|')
+            preds = pred.split('|')
+            return bool(set(golds) & set(preds))
+
+        out_df['correct'] = out_df[['pred_target', 'gold_target']].apply(is_correct, axis=1)
         out_folder = g.log_dir / 'predictions'
         out_folder.mkdir(exist_ok=True)
         setting = dl.setting
         out_path = str(out_folder / f'{setting.name}.{stage}.tsv')
         out_df.to_csv(out_path, sep='\t', index=None)
 
+        num_pred = len(out_df)
+        num_correct = out_df['correct'].sum()
         correct = Metric('correct', num_correct, weight=num_pred)
         return Metrics(correct)
