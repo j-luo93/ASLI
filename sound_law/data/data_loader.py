@@ -9,7 +9,7 @@ from torch.utils.data.sampler import WeightedRandomSampler
 from dev_misc import BT, LT, NDA, add_argument, g
 from dev_misc.devlib import BaseBatch, batch_class, pad_to_dense
 from dev_misc.devlib.helper import get_array, get_tensor, has_gpus
-from dev_misc.trainlib import Task
+from dev_misc.trainlib import BaseSetting
 from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
                                                 BaseDataLoaderRegistry)
 from dev_misc.utils import cached_property
@@ -104,24 +104,21 @@ class OnePairDataLoader(BaseDataLoader):
     collate_fn = one_pair_collate_fn
 
     def __init__(self,
-                 task: Task,
-                 split: Split,
+                 setting: BaseSetting,
                  data_path: Path,
-                 src_lang: str,
-                 tgt_lang: str,
-                 src_abc: Alphabet,
-                 tgt_abc: Alphabet,
                  input_format: str,
                  lang2id: Dict[str, int] = None):
-        dataset = OnePairDataset(data_path, split, src_lang, tgt_lang, src_abc, tgt_abc, input_format)
+        dataset = OnePairDataset(data_path, setting.split,
+                                 setting.src_lang, setting.tgt_lang,
+                                 setting.src_abc, setting.tgt_abc, input_format)
         self.lang2id = lang2id
-        self.src_lang = src_lang
-        self.tgt_lang = tgt_lang
+        self.src_lang = setting.src_lang
+        self.tgt_lang = setting.tgt_lang
 
         sampler = None
         if dataset.sample_weights is not None:
             sampler = WeightedRandomSampler(dataset.sample_weights, len(dataset))
-        super().__init__(dataset, task,
+        super().__init__(dataset, setting,
                          batch_size=g.batch_size,
                          sampler=sampler)
 
@@ -162,11 +159,10 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
     add_argument('tgt_lang', dtype=str, msg='ISO code for the target language.')
     add_argument('input_format', dtype=str, choices=['wikt', 'ielex'], default='ielex', msg='Input format.')
 
-    def get_data_loader(self, task: Task, split: Split, src_lang: str, tgt_lang: str, src_abc: Alphabet, tgt_abc: Alphabet, **kwargs) -> BaseDataLoader:
-        if task.name == 'one_pair':
-            dl = OnePairDataLoader(task, split, g.data_path, src_lang, tgt_lang,
-                                   src_abc, tgt_abc, g.input_format, **kwargs)
+    def get_data_loader(self, setting: BaseSetting, **kwargs) -> BaseDataLoader:
+        if setting.task == 'one_pair':
+            dl = OnePairDataLoader(setting, g.data_path, g.input_format, **kwargs)
         else:
-            raise ValueError(f'Cannot understand this task.')
+            raise ValueError(f'Cannot understand this setting.')
 
         return dl
