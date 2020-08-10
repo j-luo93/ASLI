@@ -163,8 +163,8 @@ class OnePairDataset(Dataset):
 
     def __getitem__(self, index: int):
         return {
-            'src_id_seq': self.src_id_seqs[index],
-            'src_unit_seq': self.src_unit_seqs[index],
+            'src_id_seq': [SOT_ID] + self.src_id_seqs[index] + [EOT_ID],
+            'src_unit_seq': [SOT] + self.src_unit_seqs[index] + [EOT],
             'tgt_id_seq': self.tgt_id_seqs[index] + [EOT_ID],
             'tgt_unit_seq': self.tgt_unit_seqs[index] + [EOT],
             'index': index,
