@@ -19,3 +19,10 @@ class ZSLatIta:  # "ZS" stands for zero-shot.
     train_tgt_langs: Tuple[str] = ('ron', 'fra', 'spa', 'por')
     task: str = 'one_to_many'
     lang_emb_mode: str = 'mean'
+
+
+@reg
+class ZSPgmcDeu(ZSLatIta):
+    src_lang: str = 'pgmc'
+    tgt_lang: str = 'deu'
+    train_tgt_langs: Tuple[str] = ('swe', 'nld')
