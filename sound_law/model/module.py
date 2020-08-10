@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -341,3 +341,21 @@ class LstmEncoder(nn.Module):
             output, state = self.lstm(packed_emb)
             output = pad_packed_sequence(output)[0]
         return emb, output, LstmStateTuple(state, bidirectional=self.lstm.bidirectional)
+
+
+class LanguageEmbedding(nn.Embedding):
+
+    def __init__(self, num_embeddings: int, embedding_dim: int, unseen_idx: Optional[int] = None, mode: str = 'random', **kwargs):
+        super().__init__(num_embeddings, embedding_dim, **kwargs)
+        self.unseen_idx = unseen_idx
+        assert mode in ['random', 'mean']
+        self.mode = mode
+
+    def forward(self, index: int) -> FT:
+        if index == self.unseen_idx:
+            if self.mode == 'random':
+                return self.weight[index]
+            else:
+                return (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
+        else:
+            return self.weight[index]

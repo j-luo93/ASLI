@@ -136,7 +136,8 @@ class OneToManyManager:
             self.dl_reg.register_data_loader(dev_setting, lang2id=lang2id)
             self.dl_reg.register_data_loader(test_setting, lang2id=lang2id)
 
-        self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc), len(g.train_tgt_langs) + 1)
+        self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc),
+                                    len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang])
         if has_gpus():
             self.model.cuda()
 
