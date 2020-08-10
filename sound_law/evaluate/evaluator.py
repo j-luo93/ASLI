@@ -1,9 +1,11 @@
 from typing import Dict
 
 import pandas as pd
+import torch
 
 from dev_misc import g
 from dev_misc.trainlib import Metric, Metrics
+from dev_misc.utils import pbar
 from sound_law.data.data_loader import OnePairDataLoader
 from sound_law.model.one_pair import OnePairModel
 
@@ -19,27 +21,32 @@ class Evaluator:
 
     def evaluate(self, stage: str) -> Metrics:
         metrics = Metrics()
-        for name, dl in self.dls.items():
+        for name, dl in pbar(self.dls.items(), desc='eval: loader'):
             dl_metrics = self._evaluate_one_dl(stage, dl)
             metrics += dl_metrics.with_prefix_(name)
         return metrics
 
     def _evaluate_one_dl(self, stage: str, dl: OnePairDataLoader) -> Metrics:
         records = list()
-        for batch in dl:
+        K = 5
+        for batch in pbar(dl, desc='eval: batch'):
             scores = self.model.get_scores(batch, dl.tgt_seqs)
-            preds = scores.max(dim='tgt_vocab')[1]
-            assert preds.shape == batch.indices.shape
-            for pi, gi in zip(preds, batch.indices):
-                pred = dl.get_token_from_index(pi, 'tgt')
+            top_scores, top_preds = torch.topk(scores, 5, dim='tgt_vocab')
+            for pss, pis, gi in zip(top_scores, top_preds, batch.indices):
                 gold = dl.get_token_from_index(gi, 'tgt')
                 src = dl.get_token_from_index(gi, 'src')
-                records.append({'source': src, 'gold_target': gold, 'pred_target': pred})
+                record = {'source': src, 'gold_target': gold}
+                for i, (ps, pi) in enumerate(zip(pss, pis), 1):
+                    pred = dl.get_token_from_index(pi, 'tgt')
+                    record[f'pred_target@{i}'] = pred
+                    record[f'pred_target@{i}_score'] = ps
+                records.append(record)
         out_df = pd.DataFrame.from_records(records)
-        out_df = out_df.pivot_table(index='source', values=['gold_target', 'pred_target'],
-                                    aggfunc={'gold_target': '|'.join,
-                                             'pred_target': '|'.join}
-                                    )
+        values = ['gold_target'] + [f'pred_target@{i}' for i in range(1, K + 1)]
+        aggfunc = {'gold_target': '|'.join}
+        aggfunc.update({f'pred_target@{i}': 'last' for i in range(1, K + 1)})
+        out_df = out_df.pivot_table(index='source', values=values,
+                                    aggfunc=aggfunc)
 
         def is_correct(item):
             pred, gold = item
@@ -47,7 +54,11 @@ class Evaluator:
             preds = pred.split('|')
             return bool(set(golds) & set(preds))
 
-        out_df['correct'] = out_df[['pred_target', 'gold_target']].apply(is_correct, axis=1)
+        for i in range(1, K + 1):
+            correct = out_df[[f'pred_target@{i}', 'gold_target']].apply(is_correct, axis=1)
+            if i > 1:
+                correct = correct | out_df[f'correct@{i - 1}']
+            out_df[f'correct@{i}'] = correct
         out_folder = g.log_dir / 'predictions'
         out_folder.mkdir(exist_ok=True)
         setting = dl.setting
@@ -55,6 +66,9 @@ class Evaluator:
         out_df.to_csv(out_path, sep='\t')
 
         num_pred = len(out_df)
-        num_correct = out_df['correct'].sum()
-        correct = Metric('correct', num_correct, weight=num_pred)
-        return Metrics(correct)
+        metrics = Metrics()
+        for i in [1, K]:
+            num_correct = out_df[f'correct@{i}'].sum()
+            correct = Metric(f'correct@{i}', num_correct, weight=num_pred)
+            metrics += correct
+        return metrics

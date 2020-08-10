@@ -1,3 +1,5 @@
+import logging
+
 from torch.nn.utils import clip_grad_norm_
 
 from dev_misc import add_argument, g
@@ -14,7 +16,7 @@ class Trainer(BaseTrainer):
         self.tracker.add_count_trackable('step', g.num_steps)
 
     def save(self, eval_metrics: Metrics):
-        pass
+        logging.info('Not saving anything.')
 
     def train_one_step(self, dl: OnePairDataLoader) -> Metrics:
         batch = dl.get_next_batch()
