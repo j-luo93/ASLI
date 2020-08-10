@@ -73,6 +73,7 @@ class OnePairManager:
 
             trainer = Trainer(model, [self.dl_reg.get_setting_by_name(train_name)],
                               [1.0], 'step',
+                              stage_tnames=['step'],
                               check_interval=g.check_interval,
                               evaluator=evaluator,
                               eval_interval=g.eval_interval)
@@ -147,6 +148,7 @@ class OneToManyManager:
         train_settings = [self.dl_reg.get_setting_by_name(name) for name in train_names]
         self.trainer = Trainer(self.model, train_settings,
                                [1.0] * len(train_settings), 'step',
+                               stage_tnames=['step'],
                                evaluator=self.evaluator,
                                check_interval=g.check_interval,
                                eval_interval=g.eval_interval)

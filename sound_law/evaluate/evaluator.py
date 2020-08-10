@@ -37,7 +37,7 @@ class Evaluator:
                 records.append({'source': src, 'gold_target': gold, 'pred_target': pred})
         out_df = pd.DataFrame.from_records(records)
         out_df = out_df.pivot_table(index='source', values=['gold_target', 'pred_target'],
-                                    aggfunc={'gold_target': 'last',
+                                    aggfunc={'gold_target': '|'.join,
                                              'pred_target': '|'.join}
                                     )
 
@@ -52,7 +52,7 @@ class Evaluator:
         out_folder.mkdir(exist_ok=True)
         setting = dl.setting
         out_path = str(out_folder / f'{setting.name}.{stage}.tsv')
-        out_df.to_csv(out_path, sep='\t', index=None)
+        out_df.to_csv(out_path, sep='\t')
 
         num_pred = len(out_df)
         num_correct = out_df['correct'].sum()
