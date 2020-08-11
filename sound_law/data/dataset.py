@@ -117,7 +117,8 @@ class OnePairDataset(Dataset):
                  tgt_lang: str,
                  src_abc: Alphabet,
                  tgt_abc: Alphabet,
-                 input_format: str):
+                 input_format: str,
+                 keep_ratio: Optional[float] = None):
         self.split = split
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
@@ -144,6 +145,12 @@ class OnePairDataset(Dataset):
 
         src_df = self.split.select(src_df)
         tgt_df = self.split.select(tgt_df)
+
+        if keep_ratio is not None:
+            logging.info(f'keep_ratio is {keep_ratio}.')
+            num = int(len(src_df) * keep_ratio)
+            src_df = src_df.loc[:num]
+            tgt_df = tgt_df.loc[:num]
 
         token_col = 'tokens' if input_format == 'wikt' else 'parsed_tokens'
         self.src_unit_seqs = get_array(src_df[token_col].str.split().to_list())

@@ -108,10 +108,12 @@ class OnePairDataLoader(BaseDataLoader):
                  setting: Setting,
                  data_path: Path,
                  input_format: str,
-                 lang2id: Dict[str, int] = None):
+                 lang2id: Dict[str, int] = None,
+                 keep_ratio: Optional[float] = None):
         dataset = OnePairDataset(data_path, setting.split,
                                  setting.src_lang, setting.tgt_lang,
-                                 setting.src_abc, setting.tgt_abc, input_format)
+                                 setting.src_abc, setting.tgt_abc,
+                                 input_format, keep_ratio=keep_ratio)
         self.lang2id = lang2id
         self.src_lang = setting.src_lang
         self.tgt_lang = setting.tgt_lang
@@ -162,7 +164,8 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
 
     def get_data_loader(self, setting: BaseSetting, **kwargs) -> BaseDataLoader:
         if setting.task == 'one_pair':
+            # TODO(j_luo) The options can all be part of setting.
             dl = OnePairDataLoader(setting, g.data_path, g.input_format, **kwargs)
         else:
-            raise ValueError(f'Cannot understand this setting.')
+            raise ValueError(f'Cannot understand this task "{setting.task}".')
         return dl

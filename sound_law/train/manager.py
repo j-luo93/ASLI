@@ -18,6 +18,7 @@ from .trainer import Trainer
 
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
+add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 
 
 class OnePairManager:
@@ -35,13 +36,17 @@ class OnePairManager:
         def create_setting(name: str, split: Split, for_training: bool) -> Setting:
             return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc, for_training)
 
+        def register_dl(setting: Setting, keep_ratio=None):
+            # NOTE(j_luo) For now, `keep_ratio` should only be used for training set since a smaller pool of candiates for dev/test would inflate the scores.
+            self.dl_reg.register_data_loader(setting, keep_ratio=keep_ratio)
+
         if g.input_format == 'wikt':
             train_setting = create_setting('train', Split('train'), True)
             train_e_setting = create_setting('train_e', Split('train'), False)  # For evaluation.
             dev_setting = create_setting('dev', Split('dev'), False)
-            self.dl_reg.register_data_loader(train_setting)
-            self.dl_reg.register_data_loader(train_e_setting)
-            self.dl_reg.register_data_loader(dev_setting)
+            register_dl(train_setting, keep_ratio=g.keep_ratio)
+            register_dl(train_e_setting, keep_ratio=g.keep_ratio)
+            register_dl(dev_setting)
         else:
             for fold in range(5):
                 dev_fold = fold + 1
@@ -51,12 +56,12 @@ class OnePairManager:
                 train_setting = create_setting(f'train@{fold}', Split('train', train_folds), True)
                 train_e_setting = create_setting(f'train@{fold}_e', Split('train', train_folds), False)
                 dev_setting = create_setting(f'dev@{fold}', Split('dev', [dev_fold]), False)
-                self.dl_reg.register_data_loader(train_setting)
-                self.dl_reg.register_data_loader(train_e_setting)
-                self.dl_reg.register_data_loader(dev_setting)
+                register_dl(train_setting, keep_ratio=g.keep_ratio)
+                register_dl(train_e_setting, keep_ratio=g.keep_ratio)
+                register_dl(dev_setting)
 
         test_setting = create_setting('test', Split('test'), False)
-        self.dl_reg.register_data_loader(test_setting)
+        register_dl(test_setting)
 
     def run(self):
 
@@ -115,8 +120,11 @@ class OneToManyManager:
         def create_setting(name: str, tgt_lang: str, split: Split, for_training: bool) -> Setting:
             return Setting(name, 'one_pair', split, g.src_lang, tgt_lang, self.src_abc, self.tgt_abc, for_training)
 
+        def register_dl(setting: Setting, keep_ratio=None):
+            self.dl_reg.register_data_loader(setting, lang2id=lang2id, keep_ratio=keep_ratio)
+
         test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'), False)
-        self.dl_reg.register_data_loader(test_setting, lang2id=lang2id)
+        register_dl(test_setting)
 
         # Get the training languages.
         for train_tgt_lang in g.train_tgt_langs:
@@ -131,10 +139,10 @@ class OneToManyManager:
             dev_setting = create_setting(f'dev@{train_tgt_lang}', train_tgt_lang, dev_split, False)
             test_setting = create_setting(f'test@{train_tgt_lang}', train_tgt_lang, Split('test'), False)
 
-            self.dl_reg.register_data_loader(train_setting, lang2id=lang2id)
-            self.dl_reg.register_data_loader(train_e_setting, lang2id=lang2id)
-            self.dl_reg.register_data_loader(dev_setting, lang2id=lang2id)
-            self.dl_reg.register_data_loader(test_setting, lang2id=lang2id)
+            register_dl(train_setting, keep_ratio=g.keep_ratio)
+            register_dl(train_e_setting, keep_ratio=g.keep_ratio)
+            register_dl(dev_setting)
+            register_dl(test_setting)
 
         self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc),
                                     len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang])

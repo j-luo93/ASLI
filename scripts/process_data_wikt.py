@@ -76,9 +76,9 @@ if __name__ == "__main__":
 
             def src_func(token):
                 try:
-                    ipa = src_transcriber.transcribe(src_token)
+                    ipa = src_transcriber.transcribe(token)
                 except IndexError:
-                    ipa = src_transcriber.transcribe(src_token, syllabify=False)
+                    ipa = src_transcriber.transcribe(token, syllabify=False)
                 ipa = ipa.strip('[]')
                 return ipa
         else:
