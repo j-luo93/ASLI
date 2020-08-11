@@ -20,6 +20,7 @@ from .trainer import Trainer
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
+add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
 
@@ -77,6 +78,7 @@ class OnePairManager:
             model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
+                logging.info(f'Loaded from {g.saved_model_path}.')
             if has_gpus():
                 model.cuda()
 
@@ -133,7 +135,7 @@ class OneToManyManager:
             self.dl_reg.register_data_loader(setting, lang2id=lang2id, keep_ratio=keep_ratio)
 
         test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'), False)
-        register_dl(test_setting)
+        register_dl(test_setting, keep_ratio=g.test_keep_ratio)
 
         # Get the training languages.
         for train_tgt_lang in g.train_tgt_langs:
@@ -157,6 +159,7 @@ class OneToManyManager:
                                     len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang])
         if g.saved_model_path is not None:
             self.model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
+            logging.info(f'Loaded from {g.saved_model_path}.')
         if has_gpus():
             self.model.cuda()
 

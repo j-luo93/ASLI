@@ -1,3 +1,4 @@
+import logging
 from typing import Dict
 
 import pandas as pd
@@ -26,6 +27,7 @@ class Evaluator:
             for name, dl in pbar(self.dls.items(), desc='eval: loader'):
                 dl_metrics = self._evaluate_one_dl(stage, dl)
                 metrics += dl_metrics.with_prefix_(name)
+        logging.info(metrics.get_table(title=f'Eval: {stage}', num_paddings=8))
         return metrics
 
     def _evaluate_one_dl(self, stage: str, dl: OnePairDataLoader) -> Metrics:
