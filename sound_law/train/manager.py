@@ -3,6 +3,7 @@ A manager class takes care of managing the data loader, the model, and the train
 """
 import logging
 
+import torch
 from torch.optim import Adam
 
 from dev_misc import add_argument, g
@@ -19,6 +20,8 @@ from .trainer import Trainer
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
+add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
+add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
 
 
 class OnePairManager:
@@ -72,19 +75,25 @@ class OnePairManager:
             test_dl = self.dl_reg[test_name]
 
             model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
+            if g.saved_model_path is not None:
+                model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
             if has_gpus():
                 model.cuda()
+
             evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl})
 
-            trainer = Trainer(model, [self.dl_reg.get_setting_by_name(train_name)],
-                              [1.0], 'step',
-                              stage_tnames=['step'],
-                              check_interval=g.check_interval,
-                              evaluator=evaluator,
-                              eval_interval=g.eval_interval)
-            trainer.init_params('uniform', -0.1, 0.1)
-            trainer.set_optimizer(Adam, lr=0.002)
-            trainer.train(self.dl_reg)
+            if g.evaluate_only:
+                evaluator.evaluate('evaluate_only')
+            else:
+                trainer = Trainer(model, [self.dl_reg.get_setting_by_name(train_name)],
+                                  [1.0], 'step',
+                                  stage_tnames=['step'],
+                                  check_interval=g.check_interval,
+                                  evaluator=evaluator,
+                                  eval_interval=g.eval_interval)
+                trainer.init_params('uniform', -0.1, 0.1)
+                trainer.set_optimizer(Adam, lr=0.002)
+                trainer.train(self.dl_reg)
 
         if g.input_format == 'wikt':
             run_once('train', 'dev', 'test')
@@ -146,6 +155,8 @@ class OneToManyManager:
 
         self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc),
                                     len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang])
+        if g.saved_model_path is not None:
+            self.model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
         if has_gpus():
             self.model.cuda()
 
@@ -153,16 +164,20 @@ class OneToManyManager:
         eval_dls = self.dl_reg.get_loaders_by_name(lambda name: 'train' not in name or '_e' in name)
         self.evaluator = Evaluator(self.model, eval_dls)
 
-        train_names = [f'train@{train_tgt_lang}' for train_tgt_lang in g.train_tgt_langs]
-        train_settings = [self.dl_reg.get_setting_by_name(name) for name in train_names]
-        self.trainer = Trainer(self.model, train_settings,
-                               [1.0] * len(train_settings), 'step',
-                               stage_tnames=['step'],
-                               evaluator=self.evaluator,
-                               check_interval=g.check_interval,
-                               eval_interval=g.eval_interval)
-        self.trainer.init_params('uniform', -0.1, 0.1)
-        self.trainer.set_optimizer(Adam, lr=0.002)
+        if not g.evaluate_only:
+            train_names = [f'train@{train_tgt_lang}' for train_tgt_lang in g.train_tgt_langs]
+            train_settings = [self.dl_reg.get_setting_by_name(name) for name in train_names]
+            self.trainer = Trainer(self.model, train_settings,
+                                   [1.0] * len(train_settings), 'step',
+                                   stage_tnames=['step'],
+                                   evaluator=self.evaluator,
+                                   check_interval=g.check_interval,
+                                   eval_interval=g.eval_interval)
+            self.trainer.init_params('uniform', -0.1, 0.1)
+            self.trainer.set_optimizer(Adam, lr=0.002)
 
     def run(self):
-        self.trainer.train(self.dl_reg)
+        if g.evaluate_only:
+            self.evaluator.evaluate('evaluate_only')
+        else:
+            self.trainer.train(self.dl_reg)

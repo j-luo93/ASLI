@@ -20,10 +20,12 @@ class Evaluator:
         self.dls = dls
 
     def evaluate(self, stage: str) -> Metrics:
+        self.model.eval()
         metrics = Metrics()
-        for name, dl in pbar(self.dls.items(), desc='eval: loader'):
-            dl_metrics = self._evaluate_one_dl(stage, dl)
-            metrics += dl_metrics.with_prefix_(name)
+        with torch.no_grad():
+            for name, dl in pbar(self.dls.items(), desc='eval: loader'):
+                dl_metrics = self._evaluate_one_dl(stage, dl)
+                metrics += dl_metrics.with_prefix_(name)
         return metrics
 
     def _evaluate_one_dl(self, stage: str, dl: OnePairDataLoader) -> Metrics:
