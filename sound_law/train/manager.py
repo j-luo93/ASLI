@@ -81,6 +81,7 @@ class OnePairManager:
                 logging.info(f'Loaded from {g.saved_model_path}.')
             if has_gpus():
                 model.cuda()
+            logging.info(self.model)
 
             evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl})
 
@@ -162,6 +163,7 @@ class OneToManyManager:
             logging.info(f'Loaded from {g.saved_model_path}.')
         if has_gpus():
             self.model.cuda()
+        logging.info(self.model)
 
         # NOTE(j_luo) Evaluate on every loader that is not for training.
         eval_dls = self.dl_reg.get_loaders_by_name(lambda name: 'train' not in name or '_e' in name)

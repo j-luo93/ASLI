@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Set, Union, overload
+from typing import List, Optional, Set, Tuple, Union, overload
 
 import numpy as np
 import pandas as pd
@@ -20,47 +21,62 @@ EOT_ID = 1
 DF = pd.DataFrame
 
 
-def _get_contents(df: DF, input_format: str) -> List[List[str]]:
+def _get_contents(df: DF, input_format: str) -> Tuple[List[List[str]], List[str]]:
     if input_format == 'wikt':
         contents = list()
-        for seqs in df['tokens']:
+        sources = list()
+        for seqs, src in zip(df['tokens'], df['source']):
             for tokens in seqs.split('|'):
                 contents.append(tokens.split())
+                sources.append(src)
     else:
         contents = df['tokens'].str.split().tolist()
-    return contents
+        sources = df['sources'].tolist()
+    return contents, sources
 
 
 class Alphabet:
     """A class to represent the alphabet of any dataset."""
 
-    def __init__(self, lang: str, contents: List[List[str]]):
-        data = set()
-        for content in contents:
-            data.update(content)
-        data = sorted(data)
+    def __init__(self, lang: str, contents: List[List[str]], sources: Optional[Union[str, List[str]]] = None):
+        if sources is not None:
+            if isinstance(sources, str):
+                sources = [sources] * len(contents)
+            else:
+                assert len(contents) == len(sources)
+        else:
+            sources = ['unknown'] * len(contents)
+
+        cnt = defaultdict(Counter)
+        for content, source in zip(contents, sources):
+            for c in content:
+                cnt[c][source] += 1
+        units = sorted(cnt.keys())
         special_units = [SOT, EOT]
-        self._id2unit = special_units + data
+        self._id2unit = special_units + units
         self._unit2id = {SOT: SOT_ID, EOT: EOT_ID}
-        self._unit2id.update({c: i for i, c in enumerate(data, len(special_units))})
+        self._unit2id.update({c: i for i, c in enumerate(units, len(special_units))})
+        self.stats = pd.DataFrame.from_dict(cnt)
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
 
     @classmethod
     def from_tsv(cls, lang: str, path: str, input_format: str) -> Alphabet:
         df = pd.read_csv(path, sep='\t')
-        contents = _get_contents(df, input_format)
-        return cls(lang, contents)
+        df['source'] = path
+        contents, sources = _get_contents(df, input_format)
+        return cls(lang, contents, sources=sources)
 
     @classmethod
     def from_tsvs(cls, lang: str, paths: List[str], input_format: str) -> Alphabet:
         dfs = list()
         for path in paths:
             df = pd.read_csv(path, sep='\t')
+            df['source'] = path
             dfs.append(df)
         df = pd.concat(dfs)
-        contents = _get_contents(df, input_format)
-        return cls(lang, contents)
+        contents, sources = _get_contents(df, input_format)
+        return cls(lang, contents, sources=sources)
 
     @overload
     def __getitem__(self, index: int) -> str: ...
