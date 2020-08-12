@@ -123,6 +123,13 @@ class OneToManyManager:
         self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
         self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
 
+        stats = self.tgt_abc.stats
+        _, test_tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
+        mask = (stats.sum() == stats.loc[test_tgt_path])
+        unseen = mask[mask].index.tolist()
+        total = len(stats.loc[test_tgt_path].dropna())
+        logging.info(f'Unseen units ({len(unseen)}/{total}) for {g.tgt_lang} are: {unseen}.')
+
         # Get language-to-id mappings. Used only for the targets (i.e., decoder side).
         lang2id = {tgt: i for i, tgt in enumerate(all_tgt)}
 

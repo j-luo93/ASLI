@@ -56,7 +56,7 @@ class Alphabet:
         self._id2unit = special_units + units
         self._unit2id = {SOT: SOT_ID, EOT: EOT_ID}
         self._unit2id.update({c: i for i, c in enumerate(units, len(special_units))})
-        self.stats = pd.DataFrame.from_dict(cnt)
+        self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
 
