@@ -23,6 +23,7 @@ add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
+add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
 
 
 class OnePairManager:
@@ -31,8 +32,12 @@ class OnePairManager:
     def __init__(self):
         # Prepare alphabets first.
         src_path, tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
-        self.src_abc = Alphabet.from_tsv(g.src_lang, src_path, g.input_format)
-        self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path, g.input_format)
+        if g.share_src_tgt_abc:
+            self.src_abc = Alphabet.from_tsvs('shared', [src_path, tgt_path], g.input_format)
+            self.tgt_abc = self.src_abc
+        else:
+            self.src_abc = Alphabet.from_tsv(g.src_lang, src_path, g.input_format)
+            self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path, g.input_format)
 
         # Prepare data loaders with different splits.
         self.dl_reg = DataLoaderRegistry()
@@ -120,8 +125,12 @@ class OneToManyManager:
             src_path, tgt_path = get_paths(g.data_path, g.src_lang, tgt)
             src_paths.append(src_path)
             tgt_paths.append(tgt_path)
-        self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
-        self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
+        if g.share_src_tgt_abc:
+            self.src_abc = Alphabet.from_tsvs('shared', src_paths + tgt_paths, g.input_format)
+            self.tgt_abc = self.src_abc
+        else:
+            self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
+            self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
 
         stats = self.tgt_abc.stats
         _, test_tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)

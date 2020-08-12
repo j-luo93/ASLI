@@ -73,6 +73,6 @@ class Evaluator:
         metrics = Metrics()
         for i in [1, K]:
             num_correct = out_df[f'correct@{i}'].sum()
-            correct = Metric(f'correct@{i}', num_correct, weight=num_pred)
+            correct = Metric(f'precision@{i}', num_correct, weight=num_pred)
             metrics += correct
         return metrics

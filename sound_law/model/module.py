@@ -73,6 +73,8 @@ class LstmCellWithEmbedding(nn.Module):
                  embedding: Optional[nn.Module] = None):
         super().__init__()
 
+        if embedding is not None:
+            logging.info(f'Using a shared embedding for LSTM.')
         self.embedding = embedding or SharedEmbedding(num_embeddings, input_size)
         self.lstm = MultiLayerLSTMCell(input_size, hidden_size, num_layers, dropout=dropout)
 

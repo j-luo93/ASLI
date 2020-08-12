@@ -33,6 +33,7 @@ class OnePairModel(nn.Module):
                                    g.num_layers,
                                    dropout=g.dropout,
                                    bidirectional=True)
+        embedding = self.encoder.embedding if g.share_src_tgt_abc else None
         self.decoder = LstmDecoderWithAttention(num_tgt_chars,
                                                 g.char_emb_size,
                                                 g.hidden_size * 2,
@@ -40,7 +41,8 @@ class OnePairModel(nn.Module):
                                                 g.num_layers,
                                                 norms_or_ratios=g.norms_or_ratios,
                                                 dropout=g.dropout,
-                                                control_mode=g.control_mode)
+                                                control_mode=g.control_mode,
+                                                embedding=embedding)
 
     def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
         src_emb, output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
