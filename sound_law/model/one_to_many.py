@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 
@@ -20,13 +22,13 @@ class OneToManyModel(OnePairModel):
         self.lang_emb = LanguageEmbedding(num_tgt_langs, g.char_emb_size,
                                           unseen_idx=unseen_idx, mode=g.lang_emb_mode)
 
-    def _get_log_probs(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> FT:
+    def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
         src_emb, output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         lang_emb = self.lang_emb(batch.tgt_seqs.lang_id)
         target = batch.tgt_seqs.ids if use_target else None
-        log_probs = self.decoder(SOT_ID, src_emb,
-                                 output, batch.src_seqs.paddings,
-                                 target=target,
-                                 max_length=max_length,
-                                 lang_emb=lang_emb)
-        return log_probs
+        log_probs, almt_distrs = self.decoder(SOT_ID, src_emb,
+                                              output, batch.src_seqs.paddings,
+                                              target=target,
+                                              max_length=max_length,
+                                              lang_emb=lang_emb)
+        return log_probs, almt_distrs

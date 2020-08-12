@@ -272,7 +272,7 @@ class LstmDecoderWithAttention(LstmDecoder):
                 mask_src: BT,
                 max_length: Optional[int] = None,
                 target: Optional[LT] = None,
-                lang_emb: Optional[FT] = None) -> FT:
+                lang_emb: Optional[FT] = None) -> Tuple[FT, FT]:
         max_length = self._get_max_length(max_length, target)
         batch_size = mask_src.size('batch')
         input_ = self._prepare_first_input(sot_id, batch_size, mask_src.device)
@@ -281,11 +281,16 @@ class LstmDecoderWithAttention(LstmDecoder):
                                               self.tgt_hidden_size,
                                               bidirectional=False)
         log_probs = list()
+        almt_distrs = list()
         for l in range(max_length):
-            input_, state, log_prob = self._forward_step(
+            input_, state, log_prob, almt_distr = self._forward_step(
                 l, input_, src_emb, state, src_states, mask_src, target=target, lang_emb=lang_emb)
             log_probs.append(log_prob)
-        return self._gather_log_probs(log_probs)
+            almt_distrs.append(almt_distr)
+        log_probs = self._gather_log_probs(log_probs)
+        with NoName(*almt_distrs):
+            almt_distrs = torch.stack(almt_distrs).rename('tgt_pos', 'batch', 'src_pos')
+        return log_probs, almt_distrs
 
     def _forward_step(self,
                       step: int,
@@ -295,8 +300,7 @@ class LstmDecoderWithAttention(LstmDecoder):
                       src_states: FT,
                       mask_src: BT,
                       target: Optional[LT] = None,
-                      lang_id: Optional[int] = None,
-                      lang_emb: Optional[FT] = None):
+                      lang_emb: Optional[FT] = None) -> Tuple[FT, FT, FT, FT]:
         emb = self.embed(input_)
         if lang_emb is not None:
             emb = emb + lang_emb
@@ -316,7 +320,7 @@ class LstmDecoderWithAttention(LstmDecoder):
             next_input = target[step]
         else:
             next_input = log_prob.max(dim=-1)[1]
-        return next_input, next_state, log_prob
+        return next_input, next_state, log_prob, almt
 
 
 class LstmEncoder(nn.Module):

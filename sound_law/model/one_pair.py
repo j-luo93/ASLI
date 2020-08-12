@@ -2,6 +2,8 @@
 This file contains models for one pair of src-tgt languags.
 """
 
+from typing import Tuple
+
 import torch.nn as nn
 
 from dev_misc import FT, LT, add_argument, g, get_zeros
@@ -40,26 +42,20 @@ class OnePairModel(nn.Module):
                                                 dropout=g.dropout,
                                                 control_mode=g.control_mode)
 
-    def _get_log_probs(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> FT:
+    def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
         src_emb, output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         target = batch.tgt_seqs.ids if use_target else None
-        log_probs = self.decoder(SOT_ID, src_emb,
-                                 output, batch.src_seqs.paddings,
-                                 target=target,
-                                 max_length=max_length)
-        return log_probs
-
-    def forward(self, batch: OnePairBatch) -> FT:
-        log_probs = self._get_log_probs(batch)
-        loss = -log_probs.gather('unit', batch.tgt_seqs.ids)
-        loss = loss * batch.tgt_seqs.paddings.float()
-        return loss
+        log_probs, almt_distrs = self.decoder(SOT_ID, src_emb,
+                                              output, batch.src_seqs.paddings,
+                                              target=target,
+                                              max_length=max_length)
+        return log_probs, almt_distrs
 
     def get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs) -> FT:
         """Given a batch and a list of target tokens (provided as id sequences), return scores produced by the model."""
         assert not self.training
         max_length = tgt_vocab_seqs.ids.size('pos')
-        log_probs = self._get_log_probs(batch, use_target=False, max_length=max_length)
+        log_probs, _ = self.forward(batch, use_target=False, max_length=max_length)
         with Rename(tgt_vocab_seqs.ids, batch='tgt_vocab'), Rename(tgt_vocab_seqs.paddings, batch='tgt_vocab'):
             unit_scores = log_probs.gather('unit', tgt_vocab_seqs.ids)
             unit_scores = unit_scores * tgt_vocab_seqs.paddings.float().align_as(unit_scores)

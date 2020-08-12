@@ -81,7 +81,7 @@ class OnePairManager:
                 logging.info(f'Loaded from {g.saved_model_path}.')
             if has_gpus():
                 model.cuda()
-            logging.info(self.model)
+            logging.info(model)
 
             evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl})
 
