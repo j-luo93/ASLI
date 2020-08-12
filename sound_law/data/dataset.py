@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import List, Optional, Set, Tuple, Union, overload
 
 import numpy as np
+from dev_misc import g, add_argument
 import pandas as pd
 from torch.utils.data import Dataset
 
 from dev_misc.devlib.helper import get_array
+from dev_misc.utils import handle_sequence_inputs
 
 SOT = '<SOT>'
 EOT = '<EOT>'
@@ -20,6 +22,15 @@ EOT_ID = 1
 
 DF = pd.DataFrame
 
+add_argument('use_stress', dtype=bool, default=True, msg='Flag to use stress.')
+
+
+@handle_sequence_inputs
+def _preprocess(s: str) -> str:
+    if not g.use_stress and s[0] == "'":
+        s = s[1:]
+    return s
+
 
 def _get_contents(df: DF, input_format: str) -> Tuple[List[List[str]], List[str]]:
     if input_format == 'wikt':
@@ -27,10 +38,10 @@ def _get_contents(df: DF, input_format: str) -> Tuple[List[List[str]], List[str]
         sources = list()
         for seqs, src in zip(df['tokens'], df['source']):
             for tokens in seqs.split('|'):
-                contents.append(tokens.split())
+                contents.append(_preprocess(tokens.split()))
                 sources.append(src)
     else:
-        contents = df['tokens'].str.split().tolist()
+        contents = [_preprocess(tokens) for tokens in df['tokens'].str.split()]
         sources = df['sources'].tolist()
     return contents, sources
 
@@ -169,8 +180,8 @@ class OnePairDataset(Dataset):
             tgt_df = tgt_df.loc[:num]
 
         token_col = 'tokens' if input_format == 'wikt' else 'parsed_tokens'
-        self.src_unit_seqs = get_array(src_df[token_col].str.split().to_list())
-        self.tgt_unit_seqs = get_array(tgt_df[token_col].str.split().to_list())
+        self.src_unit_seqs = get_array([_preprocess(tokens) for tokens in src_df[token_col].str.split()])
+        self.tgt_unit_seqs = get_array([_preprocess(tokens) for tokens in tgt_df[token_col].str.split()])
 
         self.src_vocab = np.asarray([''.join(us) for us in self.src_unit_seqs])
         self.tgt_vocab = np.asarray([''.join(us) for us in self.tgt_unit_seqs])
