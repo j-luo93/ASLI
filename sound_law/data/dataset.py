@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -23,12 +24,28 @@ EOT_ID = 1
 DF = pd.DataFrame
 
 add_argument('use_stress', dtype=bool, default=True, msg='Flag to use stress.')
+add_argument('use_duration', dtype=bool, default=True, msg='Flag to use duration (long or short).')
+add_argument('use_diacritics', dtype=bool, default=True, msg='Flag to use diacritics.')
 
 
 @handle_sequence_inputs
 def _preprocess(s: str) -> str:
-    if not g.use_stress and s[0] == "'":
-        s = s[1:]
+    s = unicodedata.normalize('NFD', s)
+
+    def one_pass(s):
+        if not g.use_stress and s[0] == "'":
+            s = s[1:]
+        if not g.use_duration and s[-1] == 'ː':
+            s = s[:-1]
+        if not g.use_diacritics and unicodedata.category(s[-1]) in ['Mn', 'Lm']:
+            s = s[:-1]
+        return s
+
+    while True:
+        new_s = one_pass(s)
+        if s == new_s:
+            break
+        s = new_s
     return s
 
 
