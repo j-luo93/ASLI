@@ -32,7 +32,7 @@ def _get_contents(df: DF, input_format: str) -> Tuple[List[List[str]], List[str]
                 sources.append(src)
     else:
         contents = df['tokens'].str.split().tolist()
-        sources = df['sources'].tolist()
+        sources = df['source'].tolist()
     return contents, sources
 
 
