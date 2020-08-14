@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.nn.init
 from torch.nn.functional import normalize
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
@@ -345,6 +346,81 @@ class LstmEncoder(nn.Module):
             output, state = self.lstm(packed_emb)
             output = pad_packed_sequence(output)[0]
         return emb, output, LstmStateTuple(state, bidirectional=self.lstm.bidirectional)
+
+
+class CnnEncoder(nn.Module):
+    
+    def __init__(self,
+                 num_embeddings: int,
+                 input_size: int,
+                 hidden_size: int,
+                 max_word_len: int,
+                 stride: int = 1,
+                 padding: int = 0,
+                 dropout: float = 0.0,
+                 embedding: Optional[nn.Module] = None):
+        super().__init__()
+        self.embedding = embedding or SharedEmbedding(num_embeddings, input_size, padding_idx=PAD_ID)
+
+        self.cnn_3 = nn.Conv1d(input_size, hidden_size, kernel_size=3, stride=stride, padding=padding)
+        self.cnn_4 = nn.Conv1d(input_size, hidden_size, kernel_size=4, stride=stride, padding=padding)
+        self.cnn_5 = nn.Conv1d(input_size, hidden_size, kernel_size=5, stride=stride, padding=padding)
+
+        # self.lin_3 = nn.Linear(max_word_len-3, hidden_size)
+        # self.lin_4 = nn.Linear(max_word_len-4, hidden_size)
+        # self.lin_5 = nn.Linear(max_word_len-5, hidden_size)
+
+        # self.relu = nn.ReLU(hidden_size)
+        self.dropout = nn.Dropout(dropout)
+
+        # the input size comes from the sum of the sizes of the outputs of the cnn layers (max_word_len-2), (max_word_len-3), (max_word_len-4).
+        self.W = nn.Linear((3*max_word_len) - 9, max_word_len)
+
+        self.W_output = nn.Linear(hidden_size, 2*hidden_size) # creates the "outputs"
+
+        self.W_h = nn.Linear(max_word_len, 2) # creates the "last hidden state"
+        self.W_c = nn.Linear(max_word_len, 2) # creates the "last cell state"
+
+    def forward(self, input_: LT, lengths: LT) -> Tuple[FT, LstmOutputTuple]:
+        # input_: max_word_len x batch_size
+        emb = self.embedding(input_) # max_word_len x batch_size x input_size(emb_size)
+        
+        with NoName(emb, lengths):
+            emb = emb.permute(1, 2, 0) # reshape to batch_size x num_channels(emb_size) x max_word_len for CNN input
+            x_3 = self.dropout(F.relu(self.cnn_3(emb))) # batch_size x hidden_size x output_length(which is a function of kernel_size)
+            x_4 = self.dropout(F.relu(self.cnn_4(emb)))
+            x_5 = self.dropout(F.relu(self.cnn_5(emb)))
+
+            # stack the CNN outputs
+            x = torch.cat([x_3, x_4, x_5], dim=2) # batch-size x hidden_size x (3*max_word_len)-9
+            
+            x = self.W(x) # batch_size x hidden_size x max_word_len
+            x = x.permute(2, 0, 1) # max_word_len x batch_size x hidden_size
+
+            output = self.W_output(x) # max_word_len x batch_size x 2*hidden_size
+
+            # make max_word_len the last dimension to help reshape to construct the equivalent of `state`
+            x = x.permute(1, 2, 0) # batch_size x hidden_size x max_word_len
+            
+            h = self.W_h(x) # batch_size x hidden_size x 2
+            c = self.W_h(x) # batch_size x hidden_size x 2
+            # reshape these to be of the right dimensions
+            h = h.permute(2, 0, 1) # 2 x batch_size x hidden_size
+            c = c.permute(2, 0, 1) # 2 x batch_size x hidden_size
+            state = (h, c)
+
+            with open('foobar.txt', 'w') as f:
+                writer = csv.writer(f, delimiter='\t')
+                writer.writerow(['output', output.size()])
+                writer.writerow(['h', h.size()])
+                writer.writerow(['c', c.size()])
+
+            # max pooling over time approach
+            # # apply max pooling over time, i.e. select the max value from each set of features, and concatenate these values
+            # x = torch.cat(max(x_3), max(x_4), max(x_5)) # specify dimension, make sure it's right
+            # x = self.relu(x)
+        # TODO(djwyen): I believe the error is related to the fact that the way you get the max seq length is actually only getting the max seq length for the training fold, which is not for the whole dataset and causes dimensionality errors.
+        return emb, output, LstmStateTuple(state)
 
 
 class LanguageEmbedding(nn.Embedding):

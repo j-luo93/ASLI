@@ -12,7 +12,7 @@ from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.dataset import Alphabet, Split, get_paths
 from sound_law.data.setting import Setting
 from sound_law.evaluate.evaluator import Evaluator
-from sound_law.model.one_pair import OnePairModel
+from sound_law.model.one_pair import OnePairModel, CnnEncoderOnePairModel
 from sound_law.model.one_to_many import OneToManyModel
 
 from .trainer import Trainer
@@ -75,7 +75,11 @@ class OnePairManager:
             dev_dl = self.dl_reg[dev_name]
             test_dl = self.dl_reg[test_name]
 
-            model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
+            if g.model_encoder_type == 'lstm':
+                model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
+            elif g.model_encoder_type == 'cnn':
+                max_seq_length = self.dl_reg[train_name].dataset.max_seq_length
+                model = CnnEncoderOnePairModel(len(self.src_abc), len(self.tgt_abc), max_seq_length)
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
                 logging.info(f'Loaded from {g.saved_model_path}.')
