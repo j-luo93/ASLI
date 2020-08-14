@@ -1,13 +1,12 @@
 """
 A manager class takes care of managing the data loader, the model, and the trainer.
 """
-from dev_misc import get_tensor
 import logging
 
 import torch
 from torch.optim import Adam
 
-from dev_misc import add_argument, g, add_condition
+from dev_misc import add_argument, add_condition, g, get_tensor
 from dev_misc.devlib.helper import has_gpus
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.dataset import Alphabet, Split, get_paths
@@ -15,6 +14,7 @@ from sound_law.data.setting import Setting
 from sound_law.evaluate.evaluator import Evaluator
 from sound_law.model.one_pair import OnePairModel
 from sound_law.model.one_to_many import OneToManyModel
+from dev_misc.trainlib.tb_writer import MetricWriter
 
 from .trainer import Trainer
 
@@ -49,7 +49,7 @@ class OnePairManager:
             return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc, for_training)
 
         def register_dl(setting: Setting, keep_ratio=None):
-            # NOTE(j_luo) For now, `keep_ratio` should only be used for training set since a smaller pool of candiates for dev/test would inflate the scores.
+            # NOTE(j_luo) `keep_ratio` should only be used for training set since a smaller pool of candiates for dev/test would inflate the scores.
             self.dl_reg.register_data_loader(setting, keep_ratio=keep_ratio)
 
         if g.input_format == 'wikt':
@@ -81,6 +81,8 @@ class OnePairManager:
             phono_feat_mat = get_tensor(self.src_abc.pfm)
             special_ids = get_tensor(self.src_abc.special_ids)
 
+        metric_writer = MetricWriter(g.log_dir, flush_secs=5)
+
         def run_once(train_name, dev_name, test_name):
             train_dl = self.dl_reg[train_name]
             train_e_dl = self.dl_reg[f'{train_name}_e']
@@ -100,14 +102,16 @@ class OnePairManager:
             evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl})
 
             if g.evaluate_only:
-                evaluator.evaluate('evaluate_only')
+                # FIXME(j_luo) load global_step from saved model.
+                evaluator.evaluate('evaluate_only', 0)
             else:
                 trainer = Trainer(model, [self.dl_reg.get_setting_by_name(train_name)],
                                   [1.0], 'step',
                                   stage_tnames=['step'],
                                   check_interval=g.check_interval,
                                   evaluator=evaluator,
-                                  eval_interval=g.eval_interval)
+                                  eval_interval=g.eval_interval,
+                                  metric_writer=metric_writer)
                 trainer.init_params('uniform', -0.1, 0.1)
                 trainer.set_optimizer(Adam, lr=0.002)
                 trainer.train(self.dl_reg)
@@ -196,9 +200,12 @@ class OneToManyManager:
             self.model.cuda()
         logging.info(self.model)
 
+        metric_writer = MetricWriter(g.log_dir, flush_secs=5)
+
         # NOTE(j_luo) Evaluate on every loader that is not for training.
         eval_dls = self.dl_reg.get_loaders_by_name(lambda name: 'train' not in name or '_e' in name)
-        self.evaluator = Evaluator(self.model, eval_dls)
+        self.evaluator = Evaluator(self.model, eval_dls,
+                                   metric_writer=metric_writer)
 
         if not g.evaluate_only:
             train_names = [f'train@{train_tgt_lang}' for train_tgt_lang in g.train_tgt_langs]
@@ -208,12 +215,14 @@ class OneToManyManager:
                                    stage_tnames=['step'],
                                    evaluator=self.evaluator,
                                    check_interval=g.check_interval,
-                                   eval_interval=g.eval_interval)
+                                   eval_interval=g.eval_interval,
+                                   metric_writer=metric_writer)
             self.trainer.init_params('uniform', -0.1, 0.1)
             self.trainer.set_optimizer(Adam, lr=0.002)
 
     def run(self):
         if g.evaluate_only:
-            self.evaluator.evaluate('evaluate_only')
+            # FIXME(j_luo) load global_step from saved model.
+            self.evaluator.evaluate('evaluate_only', 0)
         else:
             self.trainer.train(self.dl_reg)

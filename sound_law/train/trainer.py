@@ -75,4 +75,5 @@ class Trainer(BaseTrainer):
         # Update.
         self.optimizer.step()
 
+        metrics = metrics.with_prefix('check')
         return metrics

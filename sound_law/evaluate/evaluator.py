@@ -6,28 +6,39 @@ import torch
 
 from dev_misc import g
 from dev_misc.trainlib import Metric, Metrics
+from dev_misc.trainlib.tb_writer import MetricWriter
 from dev_misc.utils import pbar
 from sound_law.data.data_loader import OnePairDataLoader
 from sound_law.model.one_pair import OnePairModel
 
+from typing import Optional
+
 
 class Evaluator:
 
-    def __init__(self, model: OnePairModel, dls: Dict[str, OnePairDataLoader]):
+    def __init__(self,
+                 model: OnePairModel,
+                 dls: Dict[str, OnePairDataLoader],
+                 metric_writer: Optional[MetricWriter] = None):
         """
         `dls` is a dictionary from names to dataloaders. Names are used as prefixes of metric names for the evaluator output.
         """
         self.model = model
         self.dls = dls
+        self.metric_writer = metric_writer
 
-    def evaluate(self, stage: str) -> Metrics:
+    def evaluate(self, stage: str, global_step: int) -> Metrics:
         self.model.eval()
         metrics = Metrics()
         with torch.no_grad():
             for name, dl in pbar(self.dls.items(), desc='eval: loader'):
                 dl_metrics = self._evaluate_one_dl(stage, dl)
-                metrics += dl_metrics.with_prefix_(name)
+                metrics += dl_metrics.with_prefix(name)
+        metrics = metrics.with_prefix('eval')
         logging.info(metrics.get_table(title=f'Eval: {stage}', num_paddings=8))
+        if self.metric_writer is not None:
+            self.metric_writer.add_metrics(metrics, global_step=global_step)
+            self.metric_writer.flush()
         return metrics
 
     def _evaluate_one_dl(self, stage: str, dl: OnePairDataLoader) -> Metrics:
