@@ -15,8 +15,10 @@ from dev_misc.utils import cached_property
 
 SOT = '<SOT>'
 EOT = '<EOT>'
+PAD = '<pad>'
 SOT_ID = 0
 EOT_ID = 1
+PAD_ID = 2
 
 
 DF = pd.DataFrame
@@ -53,9 +55,9 @@ class Alphabet:
             for c in content:
                 cnt[c][source] += 1
         units = sorted(cnt.keys())
-        special_units = [SOT, EOT]
+        special_units = [SOT, EOT, PAD]
         self._id2unit = special_units + units
-        self._unit2id = {SOT: SOT_ID, EOT: EOT_ID}
+        self._unit2id = {SOT: SOT_ID, EOT: EOT_ID, PAD: PAD_ID}
         self._unit2id.update({c: i for i, c in enumerate(units, len(special_units))})
         self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
 

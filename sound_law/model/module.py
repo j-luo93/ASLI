@@ -11,6 +11,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from dev_misc import BT, FT, LT, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from sound_law.model.lstm_state import LstmStatesByLayers, LstmStateTuple
+from sound_law.data.dataset import PAD_ID
 
 LstmOutputsByLayers = Tuple[FT, LstmStatesByLayers]
 LstmOutputTuple = Tuple[FT, LstmStateTuple]
