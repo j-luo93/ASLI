@@ -1,12 +1,13 @@
 """
 A manager class takes care of managing the data loader, the model, and the trainer.
 """
+from dev_misc import get_tensor
 import logging
 
 import torch
 from torch.optim import Adam
 
-from dev_misc import add_argument, g
+from dev_misc import add_argument, g, add_condition
 from dev_misc.devlib.helper import has_gpus
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.dataset import Alphabet, Split, get_paths
@@ -24,6 +25,8 @@ add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
 add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
+add_argument('use_phono_features', dtype=bool, default=False, msg='Flag to use phonological features.')
+add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 
 
 class OnePairManager:
@@ -73,6 +76,10 @@ class OnePairManager:
         register_dl(test_setting)
 
     def run(self):
+        phono_feat_mat = special_ids = None
+        if g.use_phono_features:
+            phono_feat_mat = get_tensor(self.src_abc.pfm)
+            special_ids = get_tensor(self.src_abc.special_ids)
 
         def run_once(train_name, dev_name, test_name):
             train_dl = self.dl_reg[train_name]
@@ -80,7 +87,9 @@ class OnePairManager:
             dev_dl = self.dl_reg[dev_name]
             test_dl = self.dl_reg[test_name]
 
-            model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
+            model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
+                                 phono_feat_mat=phono_feat_mat,
+                                 special_ids=special_ids)
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
                 logging.info(f'Loaded from {g.saved_model_path}.')
@@ -172,8 +181,14 @@ class OneToManyManager:
             register_dl(dev_setting)
             register_dl(test_setting)
 
+        phono_feat_mat = special_ids = None
+        if g.use_phono_features:
+            phono_feat_mat = get_tensor(self.src_abc.pfm)
+            special_ids = get_tensor(self.src_abc.special_ids)
         self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc),
-                                    len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang])
+                                    len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang],
+                                    phono_feat_mat=phono_feat_mat,
+                                    special_ids=special_ids)
         if g.saved_model_path is not None:
             self.model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
             logging.info(f'Loaded from {g.saved_model_path}.')

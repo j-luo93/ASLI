@@ -1,18 +1,33 @@
-from functools import lru_cache
 import re
+import unicodedata
 from argparse import ArgumentParser
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pycountry
 from cltk.phonology.latin.transcription import Transcriber
-# from cltk.phonology.old_norse.orthophonology import on as non_trans
 from epitran import Epitran
+from ipapy.ipastring import IPAString
 from lingpy.sequence.sound_classes import ipa2tokens
 
-# Default settings for IPA tokenization after removing leading * (reconstructed terms).
-i2t = lambda i: ipa2tokens(re.sub(r'^\*', '', i), merge_vowels=False, merge_geminates=False)
+
+# IPA tokenization including removing leading * (reconstructed terms) and normalizing symbols.
+@lru_cache(maxsize=None)
+def i2t(ipa):
+    ipa = unicodedata.normalize('NFD', ipa)
+    ipa = re.sub(r'^\*', '', ipa)
+    tokens = ipa2tokens(ipa, merge_vowels=False, merge_geminates=False)
+    ret = list()
+    for t in tokens:
+        # NOTE(j_luo) Stress symbol is not handled by `ipapy`'s canonicalization process.
+        t = t.replace("'", 'ˈ')
+        # NOTE(j_luo) Not sure what these symbols mean.
+        t = t.replace('̣', '').replace('̧', '').replace('̦', '')
+        ret.append(str(IPAString(unicode_string=t)))
+    return ret
+
 
 lookup = pycountry.languages.lookup
 

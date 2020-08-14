@@ -1,19 +1,24 @@
 from __future__ import annotations
 
-import unicodedata
 import logging
+import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Set, Tuple, Union, overload
 
 import numpy as np
-from dev_misc import g, add_argument
 import pandas as pd
+import torch
+from panphon.featuretable import FeatureTable
 from torch.utils.data import Dataset
 
+from dev_misc import LT, add_argument, g
 from dev_misc.devlib.helper import get_array
 from dev_misc.utils import handle_sequence_inputs
+
+_ft = FeatureTable()
+
 
 SOT = '<SOT>'
 EOT = '<EOT>'
@@ -33,7 +38,7 @@ def _preprocess(s: str) -> str:
     s = unicodedata.normalize('NFD', s)
 
     def one_pass(s):
-        if not g.use_stress and s[0] == "'":
+        if not g.use_stress and s[0] == "ˈ":
             s = s[1:]
         if not g.use_duration and s[-1] == 'ː':
             s = s[:-1]
@@ -80,13 +85,34 @@ class Alphabet:
             for c in content:
                 cnt[c][source] += 1
         units = sorted(cnt.keys())
-        special_units = [SOT, EOT]
-        self._id2unit = special_units + units
-        self._unit2id = {SOT: SOT_ID, EOT: EOT_ID}
-        self._unit2id.update({c: i for i, c in enumerate(units, len(special_units))})
+        self.special_units = [SOT, EOT]
+        self.special_ids = [SOT_ID, EOT_ID]
+        self._id2unit = self.special_units + units
+        self._unit2id = dict(zip(self.special_units, self.special_ids))
+        self._unit2id.update({c: i for i, c in enumerate(units, len(self.special_units))})
         self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
+
+    @property
+    def pfm(self) -> LT:
+        """Phonological feature matrix for the entire alphabet. For the special units, use all 0's."""
+        pfvs = [torch.zeros(22).long() for _ in range(len(self.special_ids))]
+        for unit in self._id2unit[len(self.special_ids):]:
+            pfv = self.get_pfv(unit)
+            pfvs.append(pfv)
+        pfm = torch.stack(pfvs, dim=0).refine_names(..., 'phono_feat')
+        return pfm
+
+    def get_pfv(self, s: str) -> LT:
+        """Get phonological feature vector (pfv) for a unit."""
+        ret = _ft.word_to_vector_list(s, numeric=True)
+        if len(ret) != 1:
+            raise ValueError(f'Inconsistent tokenization results between panphon and lingpy.')
+
+        # NOTE(j_luo) `+1` since the original features range from -1 to 1.
+        ret = torch.LongTensor(ret[0]) + 1
+        return ret
 
     @classmethod
     def from_tsv(cls, lang: str, path: str, input_format: str) -> Alphabet:
