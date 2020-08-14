@@ -59,7 +59,7 @@ def _get_contents(df: DF, input_format: str) -> Tuple[List[List[str]], List[str]
                 sources.append(src)
     else:
         contents = [_preprocess(tokens) for tokens in df['tokens'].str.split()]
-        sources = df['sources'].tolist()
+        sources = df['source'].tolist()
     return contents, sources
 
 
