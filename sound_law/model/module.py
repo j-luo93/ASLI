@@ -409,17 +409,6 @@ class CnnEncoder(nn.Module):
             h = h.permute(2, 0, 1) # 2 x batch_size x hidden_size
             c = c.permute(2, 0, 1) # 2 x batch_size x hidden_size
             state = (h, c)
-
-            with open('foobar.txt', 'w') as f:
-                writer = csv.writer(f, delimiter='\t')
-                writer.writerow(['output', output.size()])
-                writer.writerow(['h', h.size()])
-                writer.writerow(['c', c.size()])
-
-            # max pooling over time approach
-            # # apply max pooling over time, i.e. select the max value from each set of features, and concatenate these values
-            # x = torch.cat(max(x_3), max(x_4), max(x_5)) # specify dimension, make sure it's right
-            # x = self.relu(x)
         # TODO(djwyen): I believe the error is related to the fact that the way you get the max seq length is actually only getting the max seq length for the training fold, which is not for the whole dataset and causes dimensionality errors.
         return emb, output, LstmStateTuple(state)
 
