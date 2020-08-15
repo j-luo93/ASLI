@@ -30,6 +30,11 @@ class ZSLatSpa(ZSLatIta):
 
 
 @reg
+class OPLatSpa(ZSLatSpa):  # "OP" stands for one-pair.
+    task: str = 'one_pair'
+
+
+@reg
 class ZSPgmcDeu(ZSLatIta):
     src_lang: str = 'pgmc'
     tgt_lang: str = 'deu'
@@ -52,3 +57,8 @@ class ZSLatItaPhono(ZSLatIta, UsePhono):
 @reg
 class ZSLatSpaPhono(ZSLatSpa, UsePhono):
     pass
+
+
+@reg
+class OPLatSpaPhono(ZSLatSpaPhono):  # "OP" stands for one-pair.
+    task: str = 'one_pair'

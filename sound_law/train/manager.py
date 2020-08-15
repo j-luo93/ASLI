@@ -99,7 +99,8 @@ class OnePairManager:
                 model.cuda()
             logging.info(model)
 
-            evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl})
+            evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl},
+                                  metric_writer=metric_writer)
 
             if g.evaluate_only:
                 # FIXME(j_luo) load global_step from saved model.
