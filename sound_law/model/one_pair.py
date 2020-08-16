@@ -65,12 +65,11 @@ class OnePairModel(nn.Module):
 
 class CnnEncoderOnePairModel(OnePairModel):
 
-    def __init__(self, num_src_chars: int, num_tgt_chars: int, max_word_len: int):
+    def __init__(self, num_src_chars: int, num_tgt_chars: int):
         super().__init__(num_src_chars, num_tgt_chars)
         self.encoder = CnnEncoder(num_src_chars,
                                   g.char_emb_size,
                                   g.hidden_size,
-                                  max_word_len=max_word_len,
                                   dropout=g.dropout)
         self.decoder = LstmDecoderWithAttention(num_tgt_chars,
                                                 g.char_emb_size,

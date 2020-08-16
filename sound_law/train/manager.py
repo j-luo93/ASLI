@@ -78,8 +78,7 @@ class OnePairManager:
             if g.model_encoder_type == 'lstm':
                 model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
             elif g.model_encoder_type == 'cnn':
-                max_seq_length = self.dl_reg[train_name].dataset.max_seq_length
-                model = CnnEncoderOnePairModel(len(self.src_abc), len(self.tgt_abc), max_seq_length)
+                model = CnnEncoderOnePairModel(len(self.src_abc), len(self.tgt_abc))
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
                 logging.info(f'Loaded from {g.saved_model_path}.')
