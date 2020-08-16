@@ -74,18 +74,16 @@ class OnePairModel(nn.Module):
 
 class CnnEncoderOnePairModel(OnePairModel):
 
-    def __init__(self, num_src_chars: int, num_tgt_chars: int):
-        super().__init__(num_src_chars, num_tgt_chars)
+    def __init__(self, num_src_chars: int, num_tgt_chars: int,
+                 phono_feat_mat: Optional[LT] = None,
+                 special_ids: Optional[Sequence[int]] = None):
+        super().__init__(num_src_chars, num_tgt_chars, 
+                         phono_feat_mat=phono_feat_mat,
+                         special_ids=special_ids)
         self.encoder = CnnEncoder(num_src_chars,
                                   g.char_emb_size,
                                   g.hidden_size,
-                                  dropout=g.dropout)
-        self.decoder = LstmDecoderWithAttention(num_tgt_chars,
-                                                g.char_emb_size,
-                                                g.hidden_size * 2,
-                                                g.hidden_size,
-                                                g.num_layers,
-                                                norms_or_ratios=g.norms_or_ratios,
-                                                dropout=g.dropout,
-                                                control_mode=g.control_mode)
+                                  dropout=g.dropout,
+                                  phono_feat_mat=phono_feat_mat,
+                                  special_ids=special_ids)
         

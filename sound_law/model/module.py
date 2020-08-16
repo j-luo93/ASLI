@@ -403,11 +403,16 @@ class CnnEncoder(nn.Module):
                  hidden_size: int,
                  stride: int = 1,
                  dropout: float = 0.0,
-                 embedding: Optional[nn.Module] = None):
+                 embedding: Optional[nn.Module] = None,
+                 phono_feat_mat: Optional[LT] = None,
+                 special_ids: Optional[Sequence[int]] = None):
         super().__init__()
         assert input_size == hidden_size # the layers' dimensionalities rely on this assumption
 
-        self.embedding = embedding or SharedEmbedding(num_embeddings, input_size, padding_idx=PAD_ID)
+        if phono_feat_mat is not None and embedding is None:
+            self.embedding = PhonoEmbedding(phono_feat_mat, special_ids, num_embeddings, input_size)
+        else:
+            self.embedding = embedding or SharedEmbedding(num_embeddings, input_size)
 
         # we pad the layers so that the output for each layer is length max_word_len
         self.cnn_3 = nn.Conv1d(input_size, hidden_size, kernel_size=3, stride=stride, padding=1)
