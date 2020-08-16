@@ -75,6 +75,8 @@ class OnePairModel(nn.Module):
 
 class CnnEncoderOnePairModel(OnePairModel):
 
+    add_argument('kernel_sizes', dtype=int, nargs='+', default=(3, 5, 7), msg='What kernel sizes to use for the CNN Encoder (can include repeats).')
+
     def __init__(self, num_src_chars: int, num_tgt_chars: int,
                  phono_feat_mat: Optional[LT] = None,
                  special_ids: Optional[Sequence[int]] = None):
@@ -84,6 +86,7 @@ class CnnEncoderOnePairModel(OnePairModel):
         self.encoder = CnnEncoder(num_src_chars,
                                   g.char_emb_size,
                                   g.hidden_size,
+                                  kernel_sizes=g.kernel_sizes,
                                   dropout=g.dropout,
                                   phono_feat_mat=phono_feat_mat,
                                   special_ids=special_ids)
