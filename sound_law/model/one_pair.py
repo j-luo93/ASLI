@@ -24,6 +24,7 @@ class OnePairModel(nn.Module):
                  msg='Norms or ratios of norms for the norm-controlled residual module.')
     add_argument('control_mode', default='relative', dtype=str, choices=['relative', 'absolute', 'none'],
                  msg='Control mode for the norm-controlled residual module.')
+    add_argument('model_encoder_type', dtype=str, default='lstm', choices=['lstm', 'cnn'], msg='Which encoder to use.')
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int,
                  phono_feat_mat: Optional[LT] = None,
