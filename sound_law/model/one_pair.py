@@ -2,7 +2,7 @@
 This file contains models for one pair of src-tgt languags.
 """
 
-from typing import Tuple
+from typing import Optional, Sequence, Tuple
 
 import torch.nn as nn
 
@@ -25,14 +25,20 @@ class OnePairModel(nn.Module):
     add_argument('control_mode', default='relative', dtype=str, choices=['relative', 'absolute', 'none'],
                  msg='Control mode for the norm-controlled residual module.')
 
-    def __init__(self, num_src_chars: int, num_tgt_chars: int):
+    def __init__(self, num_src_chars: int, num_tgt_chars: int,
+                 phono_feat_mat: Optional[LT] = None,
+                 special_ids: Optional[Sequence[int]] = None):
+
         super().__init__()
         self.encoder = LstmEncoder(num_src_chars,
                                    g.char_emb_size,
                                    g.hidden_size,
                                    g.num_layers,
                                    dropout=g.dropout,
-                                   bidirectional=True)
+                                   bidirectional=True,
+                                   phono_feat_mat=phono_feat_mat,
+                                   special_ids=special_ids)
+        embedding = self.encoder.embedding if g.share_src_tgt_abc else None
         self.decoder = LstmDecoderWithAttention(num_tgt_chars,
                                                 g.char_emb_size,
                                                 g.hidden_size * 2,
@@ -40,7 +46,10 @@ class OnePairModel(nn.Module):
                                                 g.num_layers,
                                                 norms_or_ratios=g.norms_or_ratios,
                                                 dropout=g.dropout,
-                                                control_mode=g.control_mode)
+                                                control_mode=g.control_mode,
+                                                embedding=embedding,
+                                                phono_feat_mat=phono_feat_mat,
+                                                special_ids=special_ids)
 
     def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
         src_emb, output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)

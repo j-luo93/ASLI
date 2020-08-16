@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple
 
@@ -33,3 +34,21 @@ class ZSPgmcDeu(ZSLatIta):
     src_lang: str = 'pgmc'
     tgt_lang: str = 'deu'
     train_tgt_langs: Tuple[str] = ('swe', 'nld')
+
+
+@dataclass
+class UsePhono:
+    use_phono_features: bool = True
+    share_src_tgt_abc: bool = True
+    char_emb_size: int = 220
+    hidden_size: int = 220
+
+
+@reg
+class ZSLatItaPhono(ZSLatIta, UsePhono):
+    pass
+
+
+@reg
+class ZSLatSpaPhono(ZSLatSpa, UsePhono):
+    pass

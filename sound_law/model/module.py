@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -9,7 +9,7 @@ from torch.nn.functional import normalize
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from dev_misc import BT, FT, LT, get_zeros
-from dev_misc.devlib.named_tensor import NoName
+from dev_misc.devlib.named_tensor import NameHelper, NoName
 from sound_law.model.lstm_state import LstmStatesByLayers, LstmStateTuple
 from sound_law.data.dataset import PAD_ID
 
@@ -63,6 +63,37 @@ class SharedEmbedding(nn.Embedding):
         return h @ self.weight.t()
 
 
+class PhonoEmbedding(SharedEmbedding):
+
+    def __init__(self, phono_feat_mat: LT, special_ids: Sequence[int], num_embeddings: int, embedding_dim: int, *args, **kwargs):
+        num_phones, num_features = phono_feat_mat.shape
+        if embedding_dim % num_features > 0:
+            raise ValueError(
+                f'Embedding size {embedding_dim} cannot be divided by number of phonological features {num_features}.')
+        super().__init__(num_embeddings, embedding_dim // num_features, *args, **kwargs)
+
+        self.register_buffer('pfm', phono_feat_mat)
+        self.special_weight = nn.Parameter(torch.randn(num_phones, embedding_dim))  # NOTE(j_luo) Use the undivided dim.
+        special_mask = torch.zeros(num_phones).bool()
+        special_mask[special_ids] = True
+        self.register_buffer('special_mask', special_mask)
+
+    @property
+    def real_weight(self) -> FT:
+        emb = super().forward(self.pfm)
+        emb = emb.refine_names(..., 'phono_emb')
+        nh = NameHelper()
+        emb = nh.flatten(emb, ['phono_feat', 'phono_emb'], 'emb')
+        return torch.where(self.special_mask.view(-1, 1), self.special_weight, emb)
+
+    def forward(self, input_: LT) -> FT:
+        with NoName(self.real_weight, input_):
+            return self.real_weight[input_]
+
+    def project(self, h: FT) -> FT:
+        return h @ self.real_weight.t()
+
+
 class LstmCellWithEmbedding(nn.Module):
     """An LSTM cell on top of an embedding layer."""
 
@@ -72,10 +103,18 @@ class LstmCellWithEmbedding(nn.Module):
                  hidden_size: int,
                  num_layers: int,
                  dropout: float = 0.0,
-                 embedding: Optional[nn.Module] = None):
+                 embedding: Optional[nn.Module] = None,
+                 phono_feat_mat: Optional[LT] = None,
+                 special_ids: Optional[Sequence[int]] = None):
         super().__init__()
 
-        self.embedding = embedding or SharedEmbedding(num_embeddings, input_size)
+        if embedding is not None:
+            logging.info(f'Using a shared embedding for LSTM.')
+
+        if phono_feat_mat is not None and embedding is None:
+            self.embedding = PhonoEmbedding(phono_feat_mat, special_ids, num_embeddings, input_size)
+        else:
+            self.embedding = embedding or SharedEmbedding(num_embeddings, input_size)
         self.lstm = MultiLayerLSTMCell(input_size, hidden_size, num_layers, dropout=dropout)
 
     def embed(self, input_: LT) -> FT:
@@ -256,6 +295,8 @@ class LstmDecoderWithAttention(LstmDecoder):
                  dropout: float = 0.0,
                  control_mode: str = 'relative',
                  embedding: Optional[nn.Module] = None,
+                 phono_feat_mat: Optional[LT] = None,
+                 special_ids: Optional[Sequence[int]] = None,
                  norms_or_ratios: Optional[Tuple[float]] = None):
         super().__init__(num_embeddings, input_size, tgt_hidden_size, num_layers,
                          dropout=dropout, embedding=embedding)
@@ -334,9 +375,14 @@ class LstmEncoder(nn.Module):
                  num_layers: int,
                  dropout: float = 0.0,
                  bidirectional: bool = False,
-                 embedding: Optional[nn.Module] = None):
+                 embedding: Optional[nn.Module] = None,
+                 phono_feat_mat: Optional[LT] = None,
+                 special_ids: Optional[Sequence[int]] = None):
         super().__init__()
-        self.embedding = embedding or SharedEmbedding(num_embeddings, input_size)
+        if phono_feat_mat is not None and embedding is None:
+            self.embedding = PhonoEmbedding(phono_feat_mat, special_ids, num_embeddings, input_size)
+        else:
+            self.embedding = embedding or SharedEmbedding(num_embeddings, input_size)
         self.dropout = nn.Dropout(dropout)
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, bidirectional=bidirectional, dropout=dropout)
 

@@ -6,7 +6,7 @@ import logging
 import torch
 from torch.optim import Adam
 
-from dev_misc import add_argument, g
+from dev_misc import add_argument, add_condition, g, get_tensor
 from dev_misc.devlib.helper import has_gpus
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.dataset import Alphabet, Split, get_paths
@@ -14,6 +14,7 @@ from sound_law.data.setting import Setting
 from sound_law.evaluate.evaluator import Evaluator
 from sound_law.model.one_pair import OnePairModel, CnnEncoderOnePairModel
 from sound_law.model.one_to_many import OneToManyModel
+from dev_misc.trainlib.tb_writer import MetricWriter
 
 from .trainer import Trainer
 
@@ -23,6 +24,9 @@ add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
+add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
+add_argument('use_phono_features', dtype=bool, default=False, msg='Flag to use phonological features.')
+add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 
 
 class OnePairManager:
@@ -31,8 +35,12 @@ class OnePairManager:
     def __init__(self):
         # Prepare alphabets first.
         src_path, tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
-        self.src_abc = Alphabet.from_tsv(g.src_lang, src_path, g.input_format)
-        self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path, g.input_format)
+        if g.share_src_tgt_abc:
+            self.src_abc = Alphabet.from_tsvs('shared', [src_path, tgt_path], g.input_format)
+            self.tgt_abc = self.src_abc
+        else:
+            self.src_abc = Alphabet.from_tsv(g.src_lang, src_path, g.input_format)
+            self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path, g.input_format)
 
         # Prepare data loaders with different splits.
         self.dl_reg = DataLoaderRegistry()
@@ -41,7 +49,7 @@ class OnePairManager:
             return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc, for_training)
 
         def register_dl(setting: Setting, keep_ratio=None):
-            # NOTE(j_luo) For now, `keep_ratio` should only be used for training set since a smaller pool of candiates for dev/test would inflate the scores.
+            # NOTE(j_luo) `keep_ratio` should only be used for training set since a smaller pool of candiates for dev/test would inflate the scores.
             self.dl_reg.register_data_loader(setting, keep_ratio=keep_ratio)
 
         if g.input_format == 'wikt':
@@ -68,17 +76,26 @@ class OnePairManager:
         register_dl(test_setting)
 
     def run(self):
+        phono_feat_mat = special_ids = None
+        if g.use_phono_features:
+            phono_feat_mat = get_tensor(self.src_abc.pfm)
+            special_ids = get_tensor(self.src_abc.special_ids)
+
+        metric_writer = MetricWriter(g.log_dir, flush_secs=5)
 
         def run_once(train_name, dev_name, test_name):
             train_dl = self.dl_reg[train_name]
             train_e_dl = self.dl_reg[f'{train_name}_e']
             dev_dl = self.dl_reg[dev_name]
             test_dl = self.dl_reg[test_name]
-
             if g.model_encoder_type == 'lstm':
-                model = OnePairModel(len(self.src_abc), len(self.tgt_abc))
+                model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
+                                     phono_feat_mat=phono_feat_mat,
+                                     special_ids=special_ids)
             elif g.model_encoder_type == 'cnn':
-                model = CnnEncoderOnePairModel(len(self.src_abc), len(self.tgt_abc))
+                model = CnnEncoderOnePairModel(len(self.src_abc), len(self.tgt_abc),
+                                               phono_feat_mat=phono_feat_mat,
+                                               special_ids=special_ids)
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
                 logging.info(f'Loaded from {g.saved_model_path}.')
@@ -89,14 +106,16 @@ class OnePairManager:
             evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl})
 
             if g.evaluate_only:
-                evaluator.evaluate('evaluate_only')
+                # FIXME(j_luo) load global_step from saved model.
+                evaluator.evaluate('evaluate_only', 0)
             else:
                 trainer = Trainer(model, [self.dl_reg.get_setting_by_name(train_name)],
                                   [1.0], 'step',
                                   stage_tnames=['step'],
                                   check_interval=g.check_interval,
                                   evaluator=evaluator,
-                                  eval_interval=g.eval_interval)
+                                  eval_interval=g.eval_interval,
+                                  metric_writer=metric_writer)
                 trainer.init_params('uniform', -0.1, 0.1)
                 trainer.set_optimizer(Adam, lr=0.002)
                 trainer.train(self.dl_reg)
@@ -123,8 +142,12 @@ class OneToManyManager:
             src_path, tgt_path = get_paths(g.data_path, g.src_lang, tgt)
             src_paths.append(src_path)
             tgt_paths.append(tgt_path)
-        self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
-        self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
+        if g.share_src_tgt_abc:
+            self.src_abc = Alphabet.from_tsvs('shared', src_paths + tgt_paths, g.input_format)
+            self.tgt_abc = self.src_abc
+        else:
+            self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
+            self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
 
         stats = self.tgt_abc.stats
         _, test_tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
@@ -166,8 +189,14 @@ class OneToManyManager:
             register_dl(dev_setting)
             register_dl(test_setting)
 
+        phono_feat_mat = special_ids = None
+        if g.use_phono_features:
+            phono_feat_mat = get_tensor(self.src_abc.pfm)
+            special_ids = get_tensor(self.src_abc.special_ids)
         self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc),
-                                    len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang])
+                                    len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang],
+                                    phono_feat_mat=phono_feat_mat,
+                                    special_ids=special_ids)
         if g.saved_model_path is not None:
             self.model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
             logging.info(f'Loaded from {g.saved_model_path}.')
@@ -175,9 +204,12 @@ class OneToManyManager:
             self.model.cuda()
         logging.info(self.model)
 
+        metric_writer = MetricWriter(g.log_dir, flush_secs=5)
+
         # NOTE(j_luo) Evaluate on every loader that is not for training.
         eval_dls = self.dl_reg.get_loaders_by_name(lambda name: 'train' not in name or '_e' in name)
-        self.evaluator = Evaluator(self.model, eval_dls)
+        self.evaluator = Evaluator(self.model, eval_dls,
+                                   metric_writer=metric_writer)
 
         if not g.evaluate_only:
             train_names = [f'train@{train_tgt_lang}' for train_tgt_lang in g.train_tgt_langs]
@@ -187,12 +219,14 @@ class OneToManyManager:
                                    stage_tnames=['step'],
                                    evaluator=self.evaluator,
                                    check_interval=g.check_interval,
-                                   eval_interval=g.eval_interval)
+                                   eval_interval=g.eval_interval,
+                                   metric_writer=metric_writer)
             self.trainer.init_params('uniform', -0.1, 0.1)
             self.trainer.set_optimizer(Adam, lr=0.002)
 
     def run(self):
         if g.evaluate_only:
-            self.evaluator.evaluate('evaluate_only')
+            # FIXME(j_luo) load global_step from saved model.
+            self.evaluator.evaluate('evaluate_only', 0)
         else:
             self.trainer.train(self.dl_reg)

@@ -1,18 +1,43 @@
 import re
+import unicodedata
 from argparse import ArgumentParser
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pycountry
 from cltk.phonology.latin.transcription import Transcriber
-# from cltk.phonology.old_norse.orthophonology import on as non_trans
 from epitran import Epitran
+from ipapy.ipastring import IPAString
 from lingpy.sequence.sound_classes import ipa2tokens
+
+
+# IPA tokenization including removing leading * (reconstructed terms) and normalizing symbols.
+@lru_cache(maxsize=None)
+def i2t(ipa):
+    ipa = unicodedata.normalize('NFD', ipa)
+    ipa = re.sub(r'^\*', '', ipa)
+    tokens = ipa2tokens(ipa, merge_vowels=False, merge_geminates=False)
+    ret = list()
+    for t in tokens:
+        # NOTE(j_luo) Stress symbol is not handled by `ipapy`'s canonicalization process.
+        t = t.replace("'", 'ˈ')
+        # NOTE(j_luo) Not sure what these symbols mean.
+        t = t.replace('̣', '').replace('̧', '').replace('̦', '')
+        ret.append(str(IPAString(unicode_string=t)))
+    return ret
+
 
 lookup = pycountry.languages.lookup
 
 
+# Copied from https://stackoverflow.com/questions/48255244/python-check-if-a-string-contains-cyrillic-characters.
+def has_cyrillic(text):
+    return bool(re.search('[\u0400-\u04FF]', text))
+
+
+@lru_cache(maxsize=None)
 def PGmc_ipa_trans(word):  # only for latin-transliterated Gothic and Greek without diacritics
     # vowels
     word = re.sub(r"ē", "eː", word)
@@ -59,6 +84,24 @@ if __name__ == "__main__":
     parser.add_argument('--random_seed', type=str, help='Random seed.')
     args = parser.parse_args()
 
+    if args.source == 'lat':
+        src_transcriber = Transcriber(dialect="Classical", reconstruction="Allen")
+        src = 'Latin'
+
+        @lru_cache(maxsize=None)
+        def src_func(token):
+            try:
+                ipa = src_transcriber.transcribe(token)
+            except IndexError:
+                ipa = src_transcriber.transcribe(token, syllabify=False)
+            ipa = ipa.strip('[]')
+            # Some weird cases of failed macronization.
+            ipa = re.sub(r'(.)_', r'\1ː', ipa)
+            return ipa
+    else:
+        src = 'Proto-Germanic'
+        src_func = PGmc_ipa_trans
+
     for target in args.targets:
         if target == 'roa-opt':
             tgt = 'roa_opt'
@@ -69,22 +112,6 @@ if __name__ == "__main__":
             epi_code = f'{tgt}-Latn'
         else:
             raise ValueError(f'language {target} not supported.')
-
-        if args.source == 'lat':
-            src_transcriber = Transcriber(dialect="Classical", reconstruction="Allen")
-            src = 'Latin'
-
-            def src_func(token):
-                try:
-                    ipa = src_transcriber.transcribe(token)
-                except IndexError:
-                    ipa = src_transcriber.transcribe(token, syllabify=False)
-                ipa = ipa.strip('[]')
-                return ipa
-        else:
-            # src_transcriber = non_trans
-            src = 'Proto-Germanic'
-            src_func = PGmc_ipa_trans
 
         tgt_transcriber = Epitran(epi_code)
 
@@ -99,21 +126,24 @@ if __name__ == "__main__":
         tgt_ipas = list()
         tgt_tokens = list()
 
-        weird_chars = set('[] ')
+        weird_chars = set("[] #/'")  # Quotation marks in words (not IPA transcriptions) are used for contractions.
         for src_token, group in df.groupby(src)['Token']:
             group = [t for t in group if t]
             if len(src_token) == 0 or len(group) == 0:
                 continue
             if (set(src_token) & weird_chars) or any(set(t) & weird_chars for t in group):
                 continue
+            # Skip some Cyrillic words.
+            if has_cyrillic(src_token) or any(has_cyrillic(t) for t in group):
+                continue
 
             ipa = src_func(src_token)
             src_cogs.append(src_token)
             src_ipas.append(ipa)
-            src_tokens.append(' '.join(ipa2tokens(ipa, merge_vowels=False)))
+            src_tokens.append(' '.join(i2t(ipa)))
 
             ipas = [tgt_transcriber.transliterate(t) for t in group]
-            tokens = [ipa2tokens(i, merge_vowels=False) for i in ipas]
+            tokens = [i2t(i) for i in ipas]
             tgt_cogs.append('|'.join(group))
             tgt_ipas.append('|'.join(ipas))
             tgt_tokens.append('|'.join([' '.join(token) for token in tokens]))

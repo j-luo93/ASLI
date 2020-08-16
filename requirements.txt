@@ -3,3 +3,5 @@ epitran
 cltk
 lingpy
 greek_accentuation
+panphon
+ipapy
