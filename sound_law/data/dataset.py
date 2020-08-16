@@ -15,15 +15,17 @@ from torch.utils.data import Dataset
 
 from dev_misc import LT, add_argument, g
 from dev_misc.devlib.helper import get_array
-from dev_misc.utils import handle_sequence_inputs
+from dev_misc.utils import handle_sequence_inputs, cached_property
 
 _ft = FeatureTable()
 
 
 SOT = '<SOT>'
 EOT = '<EOT>'
+PAD = '<pad>'
 SOT_ID = 0
 EOT_ID = 1
+PAD_ID = 2
 
 
 DF = pd.DataFrame
@@ -251,3 +253,8 @@ class OnePairDataset(Dataset):
 
     def __len__(self):
         return len(self.src_id_seqs)
+
+    @cached_property
+    def max_seq_length(self) -> int:
+        '''Returns the max sequence length among sequences in this Dataset'''
+        return max(map(len, self.src_unit_seqs)) + 2 # the +2 comes from the SOT and EOT tokens

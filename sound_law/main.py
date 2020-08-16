@@ -5,6 +5,7 @@ from sound_law.config import reg
 from sound_law.train.manager import OnePairManager, OneToManyManager
 
 add_argument('task', dtype=str, default='one_pair', choices=['one_pair', 'one_to_many'], msg='Which task to execute.')
+add_argument('model_encoder_type', dtype=str, default='cnn', choices=['lstm', 'cnn'], msg='Which encoder to use.')
 
 
 def run():

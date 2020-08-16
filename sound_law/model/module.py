@@ -3,6 +3,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.nn.init
 from torch.nn.functional import normalize
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
@@ -10,6 +11,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from dev_misc import BT, FT, LT, get_zeros
 from dev_misc.devlib.named_tensor import NameHelper, NoName
 from sound_law.model.lstm_state import LstmStatesByLayers, LstmStateTuple
+from sound_law.data.dataset import PAD_ID
 
 LstmOutputsByLayers = Tuple[FT, LstmStatesByLayers]
 LstmOutputTuple = Tuple[FT, LstmStateTuple]
@@ -391,6 +393,51 @@ class LstmEncoder(nn.Module):
             output, state = self.lstm(packed_emb)
             output = pad_packed_sequence(output)[0]
         return emb, output, LstmStateTuple(state, bidirectional=self.lstm.bidirectional)
+
+
+class CnnEncoder(nn.Module):
+    
+    def __init__(self,
+                 num_embeddings: int,
+                 input_size: int,
+                 hidden_size: int,
+                 stride: int = 1,
+                 dropout: float = 0.0,
+                 embedding: Optional[nn.Module] = None):
+        super().__init__()
+        assert input_size == hidden_size # the layers' dimensionalities rely on this assumption
+
+        self.embedding = embedding or SharedEmbedding(num_embeddings, input_size, padding_idx=PAD_ID)
+
+        # we pad the layers so that the output for each layer is length max_word_len
+        self.cnn_3 = nn.Conv1d(input_size, hidden_size, kernel_size=3, stride=stride, padding=1)
+        self.cnn_5 = nn.Conv1d(input_size, hidden_size, kernel_size=5, stride=stride, padding=2)
+        self.cnn_7 = nn.Conv1d(input_size, hidden_size, kernel_size=7, stride=stride, padding=3)
+
+        self.dropout = nn.Dropout(dropout)
+
+        self.W_output = nn.Linear(3*hidden_size, 2*hidden_size)
+
+    def forward(self, input_: LT, lengths: LT) -> Tuple[FT, LstmOutputTuple]:
+        # input_: max_word_len x batch_size
+        # note that input_size == hidden_size
+        emb = self.embedding(input_) # max_word_len x batch_size x input_size
+        
+        with NoName(emb, lengths):
+            reshaped_emb = emb.permute(1, 2, 0) # reshape to batch_size x input_size x seq_length for CNN input
+            x_3 = self.dropout(F.relu(self.cnn_3(reshaped_emb))) # batch_size x hidden_size x new_seq_length
+            x_5 = self.dropout(F.relu(self.cnn_5(reshaped_emb)))
+            x_7 = self.dropout(F.relu(self.cnn_7(reshaped_emb)))
+            # because of the padding, all new_seq_length are equal — equal to the original seq_length
+
+            # stack the CNN outputs on the hidden_size dimension
+            x = torch.cat([x_3, x_5, x_7], dim=1) # batch_size x 3*hidden_size x seq_length
+            x = x.permute(2, 0, 1) # seq_length x batch_size x 3*hidden_size
+
+            # project the concatenated convolutional layer outputs into 2*hidden_size dimensions so that `output` looks as though it were the states of a bidirectional lstm
+            output = self.W_output(x) # seq_length x batch_size x 2*hidden_size
+            # we don't try to reconstruct the state
+        return emb, output, (None, None)
 
 
 class LanguageEmbedding(nn.Embedding):

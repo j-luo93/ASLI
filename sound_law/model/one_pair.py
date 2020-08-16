@@ -11,7 +11,7 @@ from dev_misc.devlib.named_tensor import Rename
 from sound_law.data.data_loader import OnePairBatch, PaddedUnitSeqs
 from sound_law.data.dataset import SOT_ID
 
-from .module import LstmDecoderWithAttention, LstmEncoder
+from .module import LstmDecoderWithAttention, LstmEncoder, CnnEncoder
 
 
 class OnePairModel(nn.Module):
@@ -70,3 +70,22 @@ class OnePairModel(nn.Module):
             unit_scores = unit_scores * tgt_vocab_seqs.paddings.float().align_as(unit_scores)
         scores = unit_scores.sum('pos')
         return scores
+
+
+class CnnEncoderOnePairModel(OnePairModel):
+
+    def __init__(self, num_src_chars: int, num_tgt_chars: int):
+        super().__init__(num_src_chars, num_tgt_chars)
+        self.encoder = CnnEncoder(num_src_chars,
+                                  g.char_emb_size,
+                                  g.hidden_size,
+                                  dropout=g.dropout)
+        self.decoder = LstmDecoderWithAttention(num_tgt_chars,
+                                                g.char_emb_size,
+                                                g.hidden_size * 2,
+                                                g.hidden_size,
+                                                g.num_layers,
+                                                norms_or_ratios=g.norms_or_ratios,
+                                                dropout=g.dropout,
+                                                control_mode=g.control_mode)
+        
