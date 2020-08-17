@@ -401,42 +401,57 @@ class CnnEncoder(nn.Module):
                  num_embeddings: int,
                  input_size: int,
                  hidden_size: int,
+                 kernel_sizes: Tuple[int, ...] = (3, 5, 7),
                  stride: int = 1,
                  dropout: float = 0.0,
-                 embedding: Optional[nn.Module] = None):
+                 embedding: Optional[nn.Module] = None,
+                 phono_feat_mat: Optional[LT] = None,
+                 special_ids: Optional[Sequence[int]] = None):
         super().__init__()
         assert input_size == hidden_size # the layers' dimensionalities rely on this assumption
 
-        self.embedding = embedding or SharedEmbedding(num_embeddings, input_size, padding_idx=PAD_ID)
+        if phono_feat_mat is not None and embedding is None:
+            self.embedding = PhonoEmbedding(phono_feat_mat, special_ids, num_embeddings, input_size)
+        else:
+            self.embedding = embedding or SharedEmbedding(num_embeddings, input_size)
 
-        # we pad the layers so that the output for each layer is length max_word_len
-        self.cnn_3 = nn.Conv1d(input_size, hidden_size, kernel_size=3, stride=stride, padding=1)
-        self.cnn_5 = nn.Conv1d(input_size, hidden_size, kernel_size=5, stride=stride, padding=2)
-        self.cnn_7 = nn.Conv1d(input_size, hidden_size, kernel_size=7, stride=stride, padding=3)
+        # we want all the convolutional layers to create outputs with the same length. It's easiest to calculate the padding to do so when the kernel sizes are odd, so for now we only support odd kernel sizes.
+        assert all(map(lambda x: x%2 == 1, kernel_sizes))
+
+        self.conv_layers = nn.ModuleList()
+        for kernel_size in kernel_sizes:
+            # we pad the layers so that the output for each layer is of length seq_length
+            padding = int((kernel_size - 1) / 2)
+            layer = nn.Conv1d(input_size, hidden_size,
+                              kernel_size=kernel_size, 
+                              stride=stride, 
+                              padding=padding)
+            self.conv_layers.append(layer)
 
         self.dropout = nn.Dropout(dropout)
 
-        self.W_output = nn.Linear(3*hidden_size, 2*hidden_size)
+        # the input size of this output projection layer depends on the number of convolutional modules
+        n_conv = len(kernel_sizes)
+        self.W_output = nn.Linear(n_conv*hidden_size, 2*hidden_size)
 
     def forward(self, input_: LT, lengths: LT) -> Tuple[FT, LstmOutputTuple]:
-        # input_: max_word_len x batch_size
+        # input_: seq_length x batch_size
         # note that input_size == hidden_size
-        emb = self.embedding(input_) # max_word_len x batch_size x input_size
+        # define n_conv as the number of parallel convolutional layers
+        emb = self.embedding(input_) # seq_length x batch_size x input_size
         
         with NoName(emb, lengths):
             reshaped_emb = emb.permute(1, 2, 0) # reshape to batch_size x input_size x seq_length for CNN input
-            x_3 = self.dropout(F.relu(self.cnn_3(reshaped_emb))) # batch_size x hidden_size x new_seq_length
-            x_5 = self.dropout(F.relu(self.cnn_5(reshaped_emb)))
-            x_7 = self.dropout(F.relu(self.cnn_7(reshaped_emb)))
-            # because of the padding, all new_seq_length are equal — equal to the original seq_length
+            conv_outputs = [self.dropout(F.relu(conv(reshaped_emb))) for conv in self.conv_layers]
+            # each conv layer's output is batch_size x hidden_size x seq_length
 
             # stack the CNN outputs on the hidden_size dimension
-            x = torch.cat([x_3, x_5, x_7], dim=1) # batch_size x 3*hidden_size x seq_length
-            x = x.permute(2, 0, 1) # seq_length x batch_size x 3*hidden_size
+            x = torch.cat(conv_outputs, dim=1) # batch_size x n_conv*hidden_size x seq_length
+            x = x.permute(2, 0, 1) # seq_length x batch_size x n_conv*hidden_size
 
             # project the concatenated convolutional layer outputs into 2*hidden_size dimensions so that `output` looks as though it were the states of a bidirectional lstm
             output = self.W_output(x) # seq_length x batch_size x 2*hidden_size
-            # we don't try to reconstruct the state
+            # we don't try to reconstruct the state, so we just pass (None, None)
         return emb, output, (None, None)
 
 
