@@ -11,7 +11,9 @@ from dev_misc.devlib.named_tensor import Rename
 from sound_law.data.data_loader import OnePairBatch, PaddedUnitSeqs
 from sound_law.data.dataset import SOT_ID
 
-from .module import LstmDecoderWithAttention, LstmEncoder
+from .decoder import DecParams, LstmDecoder
+from .encoder import LstmEncoder
+from .module import EmbParams, LstmParams
 
 
 class OnePairModel(nn.Module):
@@ -30,34 +32,41 @@ class OnePairModel(nn.Module):
                  special_ids: Optional[Sequence[int]] = None):
 
         super().__init__()
-        self.encoder = LstmEncoder(num_src_chars,
-                                   g.char_emb_size,
-                                   g.hidden_size,
-                                   g.num_layers,
-                                   dropout=g.dropout,
-                                   bidirectional=True,
-                                   phono_feat_mat=phono_feat_mat,
-                                   special_ids=special_ids)
-        embedding = self.encoder.embedding if g.share_src_tgt_abc else None
-        self.decoder = LstmDecoderWithAttention(num_tgt_chars,
-                                                g.char_emb_size,
-                                                g.hidden_size * 2,
-                                                g.hidden_size,
-                                                g.num_layers,
-                                                norms_or_ratios=g.norms_or_ratios,
-                                                dropout=g.dropout,
-                                                control_mode=g.control_mode,
-                                                embedding=embedding,
-                                                phono_feat_mat=phono_feat_mat,
-                                                special_ids=special_ids)
+        emb_params = EmbParams(num_src_chars, g.char_emb_size, g.dropout,
+                               phono_feat_mat=phono_feat_mat,
+                               special_ids=special_ids)
+
+        def get_lstm_params(bidirectional: bool) -> LstmParams:
+            return LstmParams(g.char_emb_size, g.hidden_size,
+                              g.num_layers, g.dropout,
+                              bidirectional=bidirectional)
+
+        enc_lstm_params = get_lstm_params(True)
+        self.encoder = LstmEncoder.from_params(emb_params, enc_lstm_params)
+
+        if g.share_src_tgt_abc:
+            dec_emb_params = None
+            dec_embedding = self.encoder.embedding
+        else:
+            dec_emb_params = emb_params
+            dec_embedding = None
+        dec_lstm_params = get_lstm_params(False)
+        dec_params = DecParams(dec_lstm_params,
+                               g.hidden_size * 2,  # Bidirectional outputs.
+                               g.hidden_size,
+                               g.norms_or_ratios,
+                               g.control_mode,
+                               emb_params=dec_emb_params)
+        self.decoder = LstmDecoder.from_params(dec_params,
+                                               embedding=dec_embedding)
 
     def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
-        src_emb, output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
+        src_emb, (output, state) = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         target = batch.tgt_seqs.ids if use_target else None
         log_probs, almt_distrs = self.decoder(SOT_ID, src_emb,
                                               output, batch.src_seqs.paddings,
-                                              target=target,
-                                              max_length=max_length)
+                                              max_length=max_length,
+                                              target=target)
         return log_probs, almt_distrs
 
     def get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs) -> FT:
