@@ -85,8 +85,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.source == 'lat':
-        src_transcriber = Transcriber(dialect="Classical", reconstruction="Allen")
-        src = 'Latin'
+        try:
+            src_transcriber = Transcriber(dialect="Classical", reconstruction="Allen")
+            src = 'Latin'
+        except FileNotFoundError:
+            print("Did not have the corpus `latin_models_cltk`, downloading it now")
+            from cltk.corpus.utils.importer import CorpusImporter
+            corpus_importer = CorpusImporter('latin')
+            corpus_importer.import_corpus('latin_models_cltk')
+
+            src_transcriber = Transcriber(dialect="Classical", reconstruction="Allen")
+            src = 'Latin'
 
         @lru_cache(maxsize=None)
         def src_func(token):
