@@ -10,9 +10,9 @@ from dev_misc import BT, FT, LT
 from dev_misc.devlib.named_tensor import NoName
 
 from .lstm_state import LstmStatesByLayers
-from .module import (EmbParams, GlobalAttention, LanguageEmbedding,
-                     LstmCellWithEmbedding, LstmParams, NormControlledResidual,
-                     SharedEmbedding)
+from .module import (EmbParams, GlobalAttention, LanguageEmbedding, LstmParams,
+                     MultiLayerLSTMCell, NormControlledResidual,
+                     SharedEmbedding, get_embedding)
 
 
 @dataclass
@@ -32,12 +32,14 @@ class LstmDecoder(nn.Module):
     """A decoder that unrolls the LSTM decoding procedure by steps."""
 
     def __init__(self,
-                 cell: LstmCellWithEmbedding,
+                 char_emb: SharedEmbedding,
+                 cell: MultiLayerLSTMCell,
                  attn: GlobalAttention,
                  hidden: nn.Linear,
                  nc_residual: NormControlledResidual,
                  lang_emb: Optional[LanguageEmbedding] = None):
         super().__init__()
+        self.char_emb = char_emb
         self.cell = cell
         self.attn = attn
         self.hidden = hidden
@@ -48,19 +50,27 @@ class LstmDecoder(nn.Module):
     def from_params(cls,
                     dec_params: DecParams,
                     embedding: Optional[SharedEmbedding] = None) -> LstmDecoder:
-        cell = LstmCellWithEmbedding.from_params(dec_params.lstm_params,
-                                                 emb_params=dec_params.emb_params,
-                                                 embedding=embedding)
+        emb_params = dec_params.emb_params
+        lstm_params = dec_params.lstm_params
+        if emb_params is None and embedding is None:
+            raise ValueError('Must specify either `emb_params` or `embedding`.')
+        embedding_dim = emb_params.embedding_dim if emb_params is not None else embedding.embedding_dim
+        if embedding_dim != lstm_params.input_size:
+            raise ValueError(
+                f'Expect equal values, but got {emb_params.embedding_dim} and {lstm_params.input_size}.')
+
+        char_emb = get_embedding(emb_params) if embedding is None else embedding
+        cell = MultiLayerLSTMCell.from_params(lstm_params)
         attn = GlobalAttention(dec_params.src_hidden_size,
                                dec_params.tgt_hidden_size)
-        nc_residual = NormControlledResidual(
-            norms_or_ratios=dec_params.norms_or_ratios,
-            control_mode=dec_params.control_mode)
         hidden = nn.Linear(
             dec_params.src_hidden_size + dec_params.tgt_hidden_size,
             dec_params.tgt_hidden_size)
+        nc_residual = NormControlledResidual(
+            norms_or_ratios=dec_params.norms_or_ratios,
+            control_mode=dec_params.control_mode)
 
-        return LstmDecoder(cell, attn, hidden, nc_residual)
+        return LstmDecoder(char_emb, cell, attn, hidden, nc_residual)
 
     def forward(self,
                 sot_id: int,
@@ -76,7 +86,7 @@ class LstmDecoder(nn.Module):
         lang_emb = None if lang_id is None else self.lang_emb(lang_id)
         input_ = self._prepare_first_input(sot_id, batch_size, mask_src.device)
         state = LstmStatesByLayers.zero_state(
-            self.cell.lstm_cell.num_layers,
+            self.cell.num_layers,
             batch_size,
             self.attn.input_tgt_size,
             bidirectional=False)
@@ -122,11 +132,11 @@ class LstmDecoder(nn.Module):
                       src_states: FT,
                       mask_src: BT,
                       lang_emb: Optional[FT] = None) -> Tuple[FT, FT, FT]:
-        # emb = self.embed(input_)
-        # if lang_emb is not None:
-        #     emb = emb + lang_emb
+        emb = self.char_emb(input_)
+        if lang_emb is not None:
+            emb = emb + lang_emb
         assert lang_emb is None
-        hid_rnn, next_state = self.cell(input_, state)
+        hid_rnn, next_state = self.cell(emb, state)
         almt, ctx = self.attn.forward(hid_rnn, src_states, mask_src)
         cat = torch.cat([hid_rnn, ctx], dim=-1)
         hid_cat = self.hidden(cat)
@@ -135,7 +145,7 @@ class LstmDecoder(nn.Module):
             ctx_emb = (src_emb * almt.t().unsqueeze(dim=-1)).sum(dim=0)
             hid_res = self.nc_residual(ctx_emb, hid_cat)
 
-        logit = self.cell.embedding.project(hid_res)
+        logit = self.char_emb.project(hid_res)
         log_prob = logit.log_softmax(dim=-1)
 
         return next_state, log_prob, almt

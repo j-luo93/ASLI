@@ -152,47 +152,6 @@ def get_embedding(emb_params: EmbParams) -> Union[PhonoEmbedding, SharedEmbeddin
     return embedding
 
 
-class LstmCellWithEmbedding(nn.Module):
-    """An LSTM cell on top of an embedding layer."""
-
-    def __init__(self, lstm_cell: MultiLayerLSTMCell, embedding: SharedEmbedding):
-        super().__init__()
-        self.lstm_cell = lstm_cell
-        self.embedding = embedding
-
-    @classmethod
-    def from_params(cls,
-                    lstm_params: LstmParams,
-                    emb_params: Optional[EmbParams] = None,
-                    embedding: Optional[SharedEmbedding] = None) -> LstmCellWithEmbedding:
-        if emb_params is None and embedding is None:
-            raise ValueError(f'Must specify either `emb_params` or `embedding`.')
-        embedding_dim = emb_params.embedding_dim if emb_params is not None else embedding.embedding_dim
-        if embedding_dim != lstm_params.input_size:
-            raise ValueError(
-                f'Expect equal values, but got {emb_params.embedding_dim} and {lstm_params.input_size}.')
-
-        lstm_cell = MultiLayerLSTMCell.from_params(lstm_params)
-        embedding = embedding or get_embedding(emb_params)
-        return cls(lstm_cell, embedding)
-
-    def embed(self, input_: LT) -> FT:
-        return self.embedding(input_)
-
-    def forward(self,
-                input_: LT,
-                init_state: Optional[LstmStatesByLayers] = None,
-                state_direction: Optional[str] = None) -> LstmOutputsByLayers:
-        emb = self.embed(input_)
-
-        batch_size = input_.size('batch')
-        init_state = init_state or LstmStateTuple.zero_state(self.lstm.num_layers,
-                                                             batch_size,
-                                                             self.lstm.hidden_size)
-        output, state = self.lstm_cell(emb, init_state, state_direction=state_direction)
-        return output, state
-
-
 class GlobalAttention(nn.Module):
 
     def __init__(self,
