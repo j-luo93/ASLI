@@ -32,23 +32,26 @@ class OnePairModel(nn.Module):
                  special_ids: Optional[Sequence[int]] = None):
 
         super().__init__()
-        emb_params = EmbParams(num_src_chars, g.char_emb_size, g.dropout,
-                               phono_feat_mat=phono_feat_mat,
-                               special_ids=special_ids)
+
+        def get_emb_params(num_chars: int) -> EmbParams:
+            return EmbParams(num_chars, g.char_emb_size, g.dropout,
+                             phono_feat_mat=phono_feat_mat,
+                             special_ids=special_ids)
 
         def get_lstm_params(bidirectional: bool) -> LstmParams:
             return LstmParams(g.char_emb_size, g.hidden_size,
                               g.num_layers, g.dropout,
                               bidirectional=bidirectional)
 
+        enc_emb_params = get_emb_params(num_src_chars)
         enc_lstm_params = get_lstm_params(True)
-        self.encoder = LstmEncoder.from_params(emb_params, enc_lstm_params)
+        self.encoder = LstmEncoder.from_params(enc_emb_params, enc_lstm_params)
 
         if g.share_src_tgt_abc:
             dec_emb_params = None
             dec_embedding = self.encoder.embedding
         else:
-            dec_emb_params = emb_params
+            dec_emb_params = get_emb_params(num_tgt_chars)
             dec_embedding = None
         dec_lstm_params = get_lstm_params(False)
         dec_params = DecParams(dec_lstm_params,

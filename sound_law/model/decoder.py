@@ -24,7 +24,7 @@ class DecParams:
     # Params for residual.
     norms_or_ratios: Tuple[float]
     control_mode: str
-    # Shared embedding with encoder if specified.
+    # This is optional due to potential module sharing with encoder.
     emb_params: Optional[EmbParams] = None
 
 
@@ -36,15 +36,13 @@ class LstmDecoder(nn.Module):
                  cell: MultiLayerLSTMCell,
                  attn: GlobalAttention,
                  hidden: nn.Linear,
-                 nc_residual: NormControlledResidual,
-                 lang_emb: Optional[LanguageEmbedding] = None):
+                 nc_residual: NormControlledResidual):
         super().__init__()
         self.char_emb = char_emb
         self.cell = cell
         self.attn = attn
         self.hidden = hidden
         self.nc_residual = nc_residual
-        self.lang_emb = lang_emb
 
     @classmethod
     def from_params(cls,
@@ -79,11 +77,10 @@ class LstmDecoder(nn.Module):
                 mask_src: BT,
                 max_length: Optional[int] = None,
                 target: Optional[LT] = None,
-                lang_id: Optional[int] = None) -> Tuple[FT, FT]:
+                lang_emb: Optional[FT] = None) -> Tuple[FT, FT]:
         # Prepare inputs.
         max_length = self._get_max_length(max_length, target)
         batch_size = mask_src.size('batch')
-        lang_emb = None if lang_id is None else self.lang_emb(lang_id)
         input_ = self._prepare_first_input(sot_id, batch_size, mask_src.device)
         state = LstmStatesByLayers.zero_state(
             self.cell.num_layers,
@@ -135,7 +132,7 @@ class LstmDecoder(nn.Module):
         emb = self.char_emb(input_)
         if lang_emb is not None:
             emb = emb + lang_emb
-        assert lang_emb is None
+        # TODO(j_luo) add dropout.
         hid_rnn, next_state = self.cell(emb, state)
         almt, ctx = self.attn.forward(hid_rnn, src_states, mask_src)
         cat = torch.cat([hid_rnn, ctx], dim=-1)

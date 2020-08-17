@@ -244,17 +244,22 @@ class NormControlledResidual(nn.Module):
 
 class LanguageEmbedding(nn.Embedding):
 
-    def __init__(self, num_embeddings: int, embedding_dim: int, unseen_idx: Optional[int] = None, mode: str = 'random', **kwargs):
+    def __init__(self, num_embeddings: int, embedding_dim: int,
+                 unseen_idx: Optional[int] = None,
+                 mode: str = 'random',
+                 dropout: float = 0.0, **kwargs):
         super().__init__(num_embeddings, embedding_dim, **kwargs)
         self.unseen_idx = unseen_idx
         assert mode in ['random', 'mean']
         self.mode = mode
+        self.drop = nn.Dropout(dropout)
 
     def forward(self, index: int) -> FT:
         if index == self.unseen_idx:
             if self.mode == 'random':
-                return self.weight[index]
+                ret =  self.weight[index]
             else:
-                return (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
+                ret = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
         else:
-            return self.weight[index]
+            ret = self.weight[index]
+        return self.drop(ret)
