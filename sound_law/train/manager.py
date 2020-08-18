@@ -22,6 +22,8 @@ add_argument('check_interval', default=10, dtype=int, msg='Frequency to check th
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
+add_argument('train_e_keep_ratio', dtype=float, default=0.1,
+             msg='Ratio of cognate pairs to keep for the training set during evaluation.')
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
 add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
@@ -69,7 +71,7 @@ class OnePairManager:
                 train_e_setting = create_setting(f'train@{fold}_e', Split('train', train_folds), False)
                 dev_setting = create_setting(f'dev@{fold}', Split('dev', [dev_fold]), False)
                 register_dl(train_setting, keep_ratio=g.keep_ratio)
-                register_dl(train_e_setting, keep_ratio=g.keep_ratio)
+                register_dl(train_e_setting, keep_ratio=g.train_e_keep_ratio)
                 register_dl(dev_setting)
 
         test_setting = create_setting('test', Split('test'), False)
@@ -182,7 +184,7 @@ class OneToManyManager:
             test_setting = create_setting(f'test@{train_tgt_lang}', train_tgt_lang, Split('test'), False)
 
             register_dl(train_setting, keep_ratio=g.keep_ratio)
-            register_dl(train_e_setting, keep_ratio=g.keep_ratio)
+            register_dl(train_e_setting, keep_ratio=g.train_e_keep_ratio)
             register_dl(dev_setting)
             register_dl(test_setting)
 

@@ -52,11 +52,13 @@ class PaddedUnitSeqs(BaseBatch):
         start = 0
         ret = list()
         for ids, paddings in zip(ids_lst, paddings_lst):
-            units = self.units[start: start + len(ids)]
+            length = ids.size(1)
+            units = self.units[start: start + length]
             split = PaddedUnitSeqs(self.lang, units, ids, paddings,
                                    lang_id=self.lang_id)
             ret.append(split)
-            start += len(ids)
+            start += length
+        assert start == self.ids.size('batch')
         return ret
 
 

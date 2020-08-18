@@ -1,5 +1,5 @@
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 import pandas as pd
 import torch
@@ -10,8 +10,6 @@ from dev_misc.trainlib.tb_writer import MetricWriter
 from dev_misc.utils import pbar
 from sound_law.data.data_loader import OnePairDataLoader
 from sound_law.model.one_pair import OnePairModel
-
-from typing import Optional
 
 
 class Evaluator:
@@ -45,7 +43,7 @@ class Evaluator:
         records = list()
         K = 5
         for batch in pbar(dl, desc='eval: batch'):
-            scores = self.model.old_get_scores(batch, dl.tgt_seqs)
+            scores = self.model.get_scores(batch, dl.tgt_seqs)
             top_scores, top_preds = torch.topk(scores, 5, dim='tgt_vocab')
             for pss, pis, gi in zip(top_scores, top_preds, batch.indices):
                 gold = dl.get_token_from_index(gi, 'tgt')

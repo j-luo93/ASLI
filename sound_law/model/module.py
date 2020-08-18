@@ -174,6 +174,7 @@ class GlobalAttention(nn.Module):
                 mask_src: BT) -> Tuple[FT, FT]:
         sl, bs, ds = h_s.size()
         dt = h_t.shape[-1]
+        # FIXME(j_luo) Cache this
         with NoName(h_s):
             Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
 
