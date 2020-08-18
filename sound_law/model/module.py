@@ -120,6 +120,7 @@ class PhonoEmbedding(SharedEmbedding):
         special_mask = torch.zeros(num_phones).bool()
         special_mask[special_ids] = True
         self.register_buffer('special_mask', special_mask)
+        self.embedding_dim = embedding_dim
 
     @classmethod
     def from_params(cls, emb_params: EmbParams) -> PhonoEmbedding:
@@ -173,7 +174,8 @@ class GlobalAttention(nn.Module):
                 mask_src: BT) -> Tuple[FT, FT]:
         sl, bs, ds = h_s.size()
         dt = h_t.shape[-1]
-        Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
+        with NoName(h_s):
+            Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
 
         with NoName(h_t):
             scores = (Wh_s * h_t).sum(dim=-1)
@@ -257,7 +259,7 @@ class LanguageEmbedding(nn.Embedding):
     def forward(self, index: int) -> FT:
         if index == self.unseen_idx:
             if self.mode == 'random':
-                ret =  self.weight[index]
+                ret = self.weight[index]
             else:
                 ret = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
         else:

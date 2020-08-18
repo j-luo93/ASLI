@@ -2,8 +2,11 @@
 This file contains models for one pair of src-tgt languags.
 """
 
+from dev_misc.devlib.named_tensor import NoName
+from dev_misc.utils import pbar
 from typing import Optional, Sequence, Tuple
 
+import torch
 import torch.nn as nn
 
 from dev_misc import FT, LT, add_argument, g, get_zeros
@@ -72,7 +75,7 @@ class OnePairModel(nn.Module):
                                               target=target)
         return log_probs, almt_distrs
 
-    def get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs) -> FT:
+    def old_get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs) -> FT:
         """Given a batch and a list of target tokens (provided as id sequences), return scores produced by the model."""
         assert not self.training
         max_length = tgt_vocab_seqs.ids.size('pos')
@@ -81,4 +84,44 @@ class OnePairModel(nn.Module):
             unit_scores = log_probs.gather('unit', tgt_vocab_seqs.ids)
             unit_scores = unit_scores * tgt_vocab_seqs.paddings.float().align_as(unit_scores)
         scores = unit_scores.sum('pos')
+        return scores
+
+    def get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs, chunk_size: int = 100) -> FT:
+        """Given a batch and a list of target tokens (provided as id sequences), return scores produced by the model."""
+        src_emb, (output, state) = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
+        output = output.refine_names('pos', 'batch', 'output')
+        batch_size = src_emb.size('batch')
+
+        def create_chunk(size, base, old_chunk, interleave: bool = True):
+            if not interleave:
+                return base.repeat(1, batch_size)
+
+            if old_chunk is not None and old_chunk.size('batch') == batch_size * size:
+                return old_chunk
+
+            new_chunk = torch.repeat_interleave(base, size, dim='batch')
+            return new_chunk
+
+        chunk_src_emb = None
+        chunk_output = None
+        chunk_src_paddings = None
+        scores = list()
+        for split in pbar(tgt_vocab_seqs.split(chunk_size), desc='Get scores: chunk'):
+            split: PaddedUnitSeqs
+            bs_split = len(split)
+            chunk_src_emb = create_chunk(bs_split, src_emb, chunk_src_emb)
+            chunk_output = create_chunk(bs_split, output, chunk_output)
+            chunk_src_paddings = create_chunk(bs_split, batch.src_seqs.paddings, chunk_src_paddings)
+            chunk_target = create_chunk(None, split.ids, None, interleave=False)
+            chunk_tgt_paddings = create_chunk(None, split.paddings, None, interleave=False)
+            chunk_log_probs, _ = self.decoder(SOT_ID, chunk_src_emb,
+                                              chunk_output, chunk_src_paddings,
+                                              target=chunk_target)
+            chunk_scores = chunk_log_probs.gather('unit', chunk_target)
+            chunk_scores = (chunk_scores * chunk_tgt_paddings).sum('pos')
+            scores.append(chunk_scores)
+        scores = torch.cat(scores, dim='batch')
+        with NoName(scores):
+            scores = scores.view(batch_size, len(tgt_vocab_seqs))
+            scores = scores.refine_names('batch', 'tgt_vocab')
         return scores
