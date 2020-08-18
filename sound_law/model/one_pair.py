@@ -6,7 +6,7 @@ from typing import Optional, Sequence, Tuple
 
 import torch.nn as nn
 
-from dev_misc import FT, LT, add_argument, g, get_zeros
+from dev_misc import FT, LT, add_argument, add_condition, g, get_zeros
 from dev_misc.devlib.named_tensor import Rename
 from sound_law.data.data_loader import OnePairBatch, PaddedUnitSeqs
 from sound_law.data.dataset import SOT_ID
@@ -24,7 +24,6 @@ class OnePairModel(nn.Module):
                  msg='Norms or ratios of norms for the norm-controlled residual module.')
     add_argument('control_mode', default='relative', dtype=str, choices=['relative', 'absolute', 'none'],
                  msg='Control mode for the norm-controlled residual module.')
-    add_argument('model_encoder_type', dtype=str, default='lstm', choices=['lstm', 'cnn'], msg='Which encoder to use.')
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int,
                  phono_feat_mat: Optional[LT] = None,
@@ -75,6 +74,8 @@ class OnePairModel(nn.Module):
 
 class CnnEncoderOnePairModel(OnePairModel):
 
+    add_argument('model_encoder_type', dtype=str, default='lstm', choices=['lstm', 'cnn'], msg='Which encoder to use.')
+    # add_condition('kernel_sizes', Any, 'model_encoder_type', 'cnn') # must be a CNN Encoder to specify kernel sizes
     add_argument('kernel_sizes', dtype=int, nargs='+', default=(3, 5, 7), msg='What kernel sizes to use for the CNN Encoder (can include repeats).')
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int,
