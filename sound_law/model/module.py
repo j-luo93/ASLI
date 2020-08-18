@@ -171,12 +171,14 @@ class GlobalAttention(nn.Module):
     def forward(self,
                 h_t: FT,
                 h_s: FT,
-                mask_src: BT) -> Tuple[FT, FT]:
+                mask_src: BT,
+                Wh_s: Optional[FT] = None) -> Tuple[FT, FT, FT]:
         sl, bs, ds = h_s.size()
         dt = h_t.shape[-1]
-        # FIXME(j_luo) Cache this
-        with NoName(h_s):
-            Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
+        # FIXME(j_luo) Need a better way of caching Wh_s.
+        if Wh_s is None:
+            with NoName(h_s):
+                Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
 
         with NoName(h_t):
             scores = (Wh_s * h_t).sum(dim=-1)
@@ -186,7 +188,7 @@ class GlobalAttention(nn.Module):
         with NoName(almt_distr):
             ctx = (almt_distr.unsqueeze(dim=-1) * h_s).sum(dim=0)  # bs x d
         almt_distr = almt_distr.t()
-        return almt_distr, ctx
+        return almt_distr, ctx, Wh_s
 
     def extra_repr(self):
         return 'src=%d, tgt=%d' % (self.input_src_size, self.input_tgt_size)
