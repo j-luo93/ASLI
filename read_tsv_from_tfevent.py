@@ -20,7 +20,8 @@ def get_event_file_paths(directory):
     return glob.glob(os.path.join(directory, '*', '*', 'event*'))
 
 def read_event_file(path):
-    header = ['step', 'tag', 'score']
+    header = ['step', 'tag', 'value']
+    # what is represented by 'value' depends on the tag — it could be loss, or accuracy, or the gradient norm
 
     if not os.path.exists('processed_log'):
         os.mkdir('processed_log')
