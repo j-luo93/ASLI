@@ -9,6 +9,7 @@ reg = Registry('config')
 
 @reg
 class ZSLatIta:  # "ZS" stands for zero-shot.
+    share_src_tgt_abc: bool = True
     data_path: Path = Path('data/wikt')
     src_lang: str = 'lat'
     tgt_lang: str = 'ita'
@@ -18,7 +19,7 @@ class ZSLatIta:  # "ZS" stands for zero-shot.
     input_format: str = 'wikt'
     eval_interval: int = 1000
     control_mode: str = 'none'
-    train_tgt_langs: Tuple[str] = ('ron', 'cat', 'spa', 'por')
+    train_tgt_langs: Tuple[str, ...] = ('ron', 'cat', 'spa', 'por')
     task: str = 'one_to_many'
     lang_emb_mode: str = 'mean'
 
@@ -26,7 +27,7 @@ class ZSLatIta:  # "ZS" stands for zero-shot.
 @reg
 class ZSLatSpa(ZSLatIta):
     tgt_lang: str = 'spa'
-    train_tgt_langs: Tuple[str] = ('ron', 'cat', 'ita', 'por')
+    train_tgt_langs: Tuple[str, ...] = ('ron', 'cat', 'ita', 'por')
 
 
 @reg
@@ -38,7 +39,7 @@ class OPLatSpa(ZSLatSpa):  # "OP" stands for one-pair.
 class ZSPgmcDeu(ZSLatIta):
     src_lang: str = 'pgmc'
     tgt_lang: str = 'deu'
-    train_tgt_langs: Tuple[str] = ('swe', 'nld')
+    train_tgt_langs: Tuple[str, ...] = ('swe', 'nld')
 
 
 @dataclass

@@ -8,13 +8,13 @@ from torch.optim import Adam
 
 from dev_misc import add_argument, add_condition, g, get_tensor
 from dev_misc.devlib.helper import has_gpus
+from dev_misc.trainlib.tb_writer import MetricWriter
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.dataset import Alphabet, Split, get_paths
 from sound_law.data.setting import Setting
 from sound_law.evaluate.evaluator import Evaluator
 from sound_law.model.one_pair import OnePairModel
 from sound_law.model.one_to_many import OneToManyModel
-from dev_misc.trainlib.tb_writer import MetricWriter
 
 from .trainer import Trainer
 
