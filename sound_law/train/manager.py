@@ -20,6 +20,7 @@ from .trainer import Trainer
 
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
+add_argument('save_interval', default=100, dtype=int, msg='Frequency to save the progress and the model.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
 add_argument('train_e_keep_ratio', dtype=float, default=0.1,
@@ -115,6 +116,7 @@ class OnePairManager:
                                   check_interval=g.check_interval,
                                   evaluator=evaluator,
                                   eval_interval=g.eval_interval,
+                                  save_interval=g.save_interval,
                                   metric_writer=metric_writer)
                 trainer.init_params('uniform', -0.1, 0.1)
                 trainer.set_optimizer(Adam, lr=0.002)
@@ -222,6 +224,7 @@ class OneToManyManager:
                                    evaluator=self.evaluator,
                                    check_interval=g.check_interval,
                                    eval_interval=g.eval_interval,
+                                   save_interval=g.save_interval,
                                    metric_writer=metric_writer)
             self.trainer.init_params('uniform', -0.1, 0.1)
             self.trainer.set_optimizer(Adam, lr=0.002)
