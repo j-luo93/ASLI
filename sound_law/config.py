@@ -52,3 +52,12 @@ class ZSLatItaPhono(ZSLatIta, UsePhono):
 @reg
 class ZSLatSpaPhono(ZSLatSpa, UsePhono):
     pass
+
+@reg
+class CnnZSLatIta(ZSLatIta):
+    model_encoder_type: str = 'cnn'
+    kernel_sizes: Tuple[int, ...] = (3, 5, 7)
+
+@reg
+class CnnZSLatItaPhono(CnnZSLatIta, UsePhono):
+    pass
