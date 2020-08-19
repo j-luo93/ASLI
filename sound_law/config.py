@@ -40,6 +40,7 @@ class ZSPgmcDeu(ZSLatIta):
 class UsePhono:
     use_phono_features: bool = True
     share_src_tgt_abc: bool = True
+    # the char_emb_size and hidden_size must be multiples of 22 since there are 22 phonological features being used (each of which has its own embedding)
     char_emb_size: int = 220
     hidden_size: int = 220
 
@@ -61,3 +62,15 @@ class CnnZSLatIta(ZSLatIta):
 @reg
 class CnnZSLatItaPhono(CnnZSLatIta, UsePhono):
     pass
+
+
+# I will be trying out the following things in this grid search:
+# (without phono features)
+# char_emb_size/hidden_size: 128, 256, 512
+# (with phono features)
+# char_emb_size/hidden_size: 110, 220, 440
+# (for both)
+# lstm/cnn encoder
+# if cnn encoder, kernel sizes — and eventually different Cnn Encoder architectures
+# dropout 0, 0.2, 0.4, 0.6
+# different src/tgt lang pairs within wikt data
