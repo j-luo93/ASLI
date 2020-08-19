@@ -317,17 +317,17 @@ def cog_dict_to_splits(cognate_dict):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="process .tsv cognate datasets")
 
-    parser.add_argument('-data_path', default='data/ielex.tsv', help="path to .tsv dataset")
-    parser.add_argument('-par_iso', required=True, help="iso code of the parent language")
-    parser.add_argument('-dau_iso', required=False, nargs='+', help="iso code(s) of daughter language(s)")
-    parser.add_argument('-dau_name', required=False, nargs='+', help="name(s) of daughter language(s) without iso codes")
+    parser.add_argument('--data_path', default='data/ielex.tsv', help="path to .tsv dataset")
+    parser.add_argument('--par_iso', required=True, help="iso code of the parent language")
+    parser.add_argument('--dau_iso', required=False, nargs='+', help="iso code(s) of daughter language(s)")
+    parser.add_argument('--dau_name', required=False, nargs='+', help="name(s) of daughter language(s) without iso codes")
     parser.add_argument('--preserve_data', action="store_true", help="include to prevent data processing")
     parser.add_argument('-v', '--verbose', action="store_true", help="increase output verbosity")
 
     args = parser.parse_args()
 
     if args.dau_iso is None and args.dau_name is None:
-        parser.error("at least one of -dau_iso and -dau_name is required")
+        parser.error("at least one of --dau_iso and --dau_name is required")
 
     args.dau_iso = set(args.dau_iso) if args.dau_iso else set()
     

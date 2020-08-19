@@ -7,14 +7,14 @@ from typing import Optional, Sequence, Tuple
 import torch
 import torch.nn as nn
 
-from dev_misc import FT, LT, add_argument, g, get_zeros
+from dev_misc import FT, LT, add_argument, add_condition, g, get_zeros
 from dev_misc.devlib.named_tensor import NoName, Rename
 from dev_misc.utils import pbar
 from sound_law.data.data_loader import OnePairBatch, PaddedUnitSeqs
 from sound_law.data.dataset import SOT_ID
 
 from .decoder import DecParams, LstmDecoder
-from .encoder import LstmEncoder
+from .encoder import CnnEncoder, CnnParams, LstmEncoder
 from .module import EmbParams, LstmParams
 
 
@@ -28,6 +28,9 @@ class OnePairModel(nn.Module):
                  msg='Norms or ratios of norms for the norm-controlled residual module.')
     add_argument('control_mode', default='relative', dtype=str, choices=['relative', 'absolute', 'none'],
                  msg='Control mode for the norm-controlled residual module.')
+    add_argument('model_encoder_type', dtype=str, default='lstm', choices=['lstm', 'cnn'], msg='Which encoder to use.')
+    add_argument('kernel_sizes', dtype=int, nargs='+', default=(3, 5, 7),
+                 msg='What kernel sizes to use for the CNN Encoder (can include repeats).')
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int,
                  phono_feat_mat: Optional[LT] = None,
@@ -46,8 +49,12 @@ class OnePairModel(nn.Module):
                               bidirectional=bidirectional)
 
         enc_emb_params = get_emb_params(num_src_chars)
-        enc_lstm_params = get_lstm_params(True)
-        self.encoder = LstmEncoder.from_params(enc_emb_params, enc_lstm_params)
+        if g.model_encoder_type == 'lstm':
+            enc_lstm_params = get_lstm_params(True)
+            self.encoder = LstmEncoder.from_params(enc_emb_params, enc_lstm_params)
+        else:
+            cnn_params = CnnParams(g.hidden_size, g.kernel_sizes, g.dropout)
+            self.encoder = CnnEncoder.from_params(enc_emb_params, cnn_params)
 
         if g.share_src_tgt_abc:
             dec_emb_params = None

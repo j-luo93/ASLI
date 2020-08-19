@@ -63,3 +63,14 @@ class ZSLatSpaPhono(ZSLatSpa, UsePhono):
 @reg
 class OPLatSpaPhono(ZSLatSpaPhono):  # "OP" stands for one-pair.
     task: str = 'one_pair'
+
+
+@reg
+class CnnZSLatIta(ZSLatIta):
+    model_encoder_type: str = 'cnn'
+    kernel_sizes: Tuple[int, ...] = (3, 5, 7)
+
+
+@reg
+class CnnZSLatItaPhono(CnnZSLatIta, UsePhono):
+    pass

@@ -106,6 +106,7 @@ ENV/
 .vscode
 /data
 log/
+processed_log/
 notebooks/
 *.prof
 *.cpp

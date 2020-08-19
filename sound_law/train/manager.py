@@ -94,6 +94,7 @@ class OnePairManager:
             model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
                                  phono_feat_mat=phono_feat_mat,
                                  special_ids=special_ids)
+
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
                 logging.info(f'Loaded from {g.saved_model_path}.')
@@ -192,10 +193,12 @@ class OneToManyManager:
         if g.use_phono_features:
             phono_feat_mat = get_tensor(self.src_abc.pfm)
             special_ids = get_tensor(self.src_abc.special_ids)
+
         self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc),
                                     len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang],
                                     phono_feat_mat=phono_feat_mat,
                                     special_ids=special_ids)
+
         if g.saved_model_path is not None:
             self.model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
             logging.info(f'Loaded from {g.saved_model_path}.')
