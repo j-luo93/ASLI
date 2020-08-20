@@ -8,20 +8,23 @@ from torch.optim import Adam
 
 from dev_misc import add_argument, add_condition, g, get_tensor
 from dev_misc.devlib.helper import has_gpus
+from dev_misc.trainlib.tb_writer import MetricWriter
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.dataset import Alphabet, Split, get_paths
 from sound_law.data.setting import Setting
 from sound_law.evaluate.evaluator import Evaluator
-from sound_law.model.one_pair import OnePairModel, CnnEncoderOnePairModel
-from sound_law.model.one_to_many import OneToManyModel, CnnEncoderOneToManyModel
-from dev_misc.trainlib.tb_writer import MetricWriter
+from sound_law.model.one_pair import OnePairModel
+from sound_law.model.one_to_many import OneToManyModel
 
 from .trainer import Trainer
 
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
+add_argument('save_interval', default=100, dtype=int, msg='Frequency to save the progress and the model.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
+add_argument('train_e_keep_ratio', dtype=float, default=0.1,
+             msg='Ratio of cognate pairs to keep for the training set during evaluation.')
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
 add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
@@ -69,7 +72,7 @@ class OnePairManager:
                 train_e_setting = create_setting(f'train@{fold}_e', Split('train', train_folds), False)
                 dev_setting = create_setting(f'dev@{fold}', Split('dev', [dev_fold]), False)
                 register_dl(train_setting, keep_ratio=g.keep_ratio)
-                register_dl(train_e_setting, keep_ratio=g.keep_ratio)
+                register_dl(train_e_setting, keep_ratio=g.train_e_keep_ratio)
                 register_dl(dev_setting)
 
         test_setting = create_setting('test', Split('test'), False)
@@ -88,16 +91,11 @@ class OnePairManager:
             train_e_dl = self.dl_reg[f'{train_name}_e']
             dev_dl = self.dl_reg[dev_name]
             test_dl = self.dl_reg[test_name]
-            
-            if g.model_encoder_type == 'lstm':
-                model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
-                                     phono_feat_mat=phono_feat_mat,
-                                     special_ids=special_ids)
-            elif g.model_encoder_type == 'cnn':
-                model = CnnEncoderOnePairModel(len(self.src_abc), len(self.tgt_abc),
-                                               phono_feat_mat=phono_feat_mat,
-                                               special_ids=special_ids)
-            
+
+            model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
+                                 phono_feat_mat=phono_feat_mat,
+                                 special_ids=special_ids)
+
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
                 logging.info(f'Loaded from {g.saved_model_path}.')
@@ -105,7 +103,8 @@ class OnePairManager:
                 model.cuda()
             logging.info(model)
 
-            evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl})
+            evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl},
+                                  metric_writer=metric_writer)
 
             if g.evaluate_only:
                 # FIXME(j_luo) load global_step from saved model.
@@ -117,6 +116,7 @@ class OnePairManager:
                                   check_interval=g.check_interval,
                                   evaluator=evaluator,
                                   eval_interval=g.eval_interval,
+                                  save_interval=g.save_interval,
                                   metric_writer=metric_writer)
                 trainer.init_params('uniform', -0.1, 0.1)
                 trainer.set_optimizer(Adam, lr=0.002)
@@ -187,7 +187,7 @@ class OneToManyManager:
             test_setting = create_setting(f'test@{train_tgt_lang}', train_tgt_lang, Split('test'), False)
 
             register_dl(train_setting, keep_ratio=g.keep_ratio)
-            register_dl(train_e_setting, keep_ratio=g.keep_ratio)
+            register_dl(train_e_setting, keep_ratio=g.train_e_keep_ratio)
             register_dl(dev_setting)
             register_dl(test_setting)
 
@@ -224,6 +224,7 @@ class OneToManyManager:
                                    evaluator=self.evaluator,
                                    check_interval=g.check_interval,
                                    eval_interval=g.eval_interval,
+                                   save_interval=g.save_interval,
                                    metric_writer=metric_writer)
             self.trainer.init_params('uniform', -0.1, 0.1)
             self.trainer.set_optimizer(Adam, lr=0.002)
