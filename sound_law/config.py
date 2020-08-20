@@ -40,7 +40,6 @@ class ZSPgmcDeu(ZSLatIta):
 class UsePhono:
     use_phono_features: bool = True
     share_src_tgt_abc: bool = True
-    # the char_emb_size and hidden_size must be multiples of 22 since there are 22 phonological features being used (each of which has its own embedding)
     char_emb_size: int = 220
     hidden_size: int = 220
 

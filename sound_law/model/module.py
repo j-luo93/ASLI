@@ -1,7 +1,7 @@
 import logging
-from typing import List, Optional, Sequence, Tuple, Union, Dict
+from dataclasses import dataclass
+from typing import List, Optional, Sequence, Tuple, Union
 
-import numpy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,11 +9,9 @@ import torch.nn.init
 from torch.nn.functional import normalize
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from dev_misc import BT, FT, LT, get_zeros, add_argument, g
+from dev_misc import BT, FT, LT, get_zeros
 from dev_misc.devlib.named_tensor import NameHelper, NoName
 from sound_law.model.lstm_state import LstmStatesByLayers, LstmStateTuple
-from sound_law.data.dataset import PAD_ID
-import lang2vec.lang2vec as l2v
 
 LstmOutputsByLayers = Tuple[FT, LstmStatesByLayers]
 LstmOutputTuple = Tuple[FT, LstmStateTuple]
@@ -459,41 +457,21 @@ class CnnEncoder(nn.Module):
 
 class LanguageEmbedding(nn.Embedding):
 
-    def __init__(self, num_embeddings: int, embedding_dim: int, unseen_idx: Optional[int] = None,
-                 lang2id: Optional[Dict[str, int]] = None,
-                 mode: str = 'random', **kwargs):
-        self.unseen_idx = unseen_idx
-        assert mode in ['random', 'mean', 'mean_lang2vec']
-        self.mode = mode
-
-        if self.mode == 'mean_lang2vec':
-            self.id2lang = {i: lang for lang, i in lang2id.items()}
-            # there are several available lang2vec phonology feature sets, but most are missing languages or have null values even for languages with data. We could address this with zeroing out null values ('--') or using only certain feature sets
-            # we use phonology_knn as the default feature set since it's guaranteed to produce values
-            # TODO(derek) try out 'learned' embeddings — see what bug is preventing you from using them
-            self.feature_set = g.l2v_feature_set if g.l2v_feature_set is not None else 'phonology_knn'
-
-            # check dimensionality. English is chosen as the test just because it's unlikely to be missing from a feature set dataset
-            l2v_emb_len = len(l2v.get_features(['eng'], self.feature_set)['eng'])
-            # we want to init the learned embedding with a smaller dimension so that after concatenation with the lang2vec feature embedding, the embedding is the same size as the provided argument
-            embedding_dim -= l2v_emb_len
-            assert len(l2v.get_features(['eng'], self.feature_set)['eng']) + embedding_dim == g.char_emb_size
+    def __init__(self, num_embeddings: int, embedding_dim: int,
+                 unseen_idx: Optional[int] = None,
+                 mode: str = 'random',
+                 dropout: float = 0.0, **kwargs):
         super().__init__(num_embeddings, embedding_dim, **kwargs)
+        self.unseen_idx = unseen_idx
+        assert mode in ['random', 'mean']
+        self.mode = mode
 
     def forward(self, index: int) -> FT:
         if index == self.unseen_idx:
             if self.mode == 'random':
-                emb = self.weight[index]
-            elif self.mode == 'mean' or self.mode == 'mean_lang2vec':
-                emb = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
+                ret = self.weight[index]
+            else:
+                ret = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
         else:
-            emb = self.weight[index]
-        
-        if self.mode == 'mean_lang2vec':
-            lang_iso = self.id2lang[index] # get the iso code of the language being requested
-            feature_list = l2v.get_features([lang_iso], self.feature_set, minimal=False)[lang_iso]
-            # convert the array to a torch.FloatTensor
-            l2v_emb = torch.from_numpy(numpy.array(feature_list, dtype=numpy.float32))
-            emb = torch.cat([emb, l2v_emb], dim=0)
-
-        return emb
+            ret = self.weight[index]
+        return self.drop(ret)
