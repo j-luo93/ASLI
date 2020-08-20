@@ -85,4 +85,3 @@ class CnnEncoderOneToManyModel(CnnEncoderOnePairModel):
                                               max_length=max_length,
                                               lang_emb=lang_emb)
         return log_probs, almt_distrs
-
