@@ -196,11 +196,18 @@ class OneToManyManager:
             phono_feat_mat = get_tensor(self.src_abc.pfm)
             special_ids = get_tensor(self.src_abc.special_ids)
 
-        self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc),
-                                    len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang],
-                                    lang2id=lang2id,
-                                    phono_feat_mat=phono_feat_mat,
-                                    special_ids=special_ids)
+        if g.model_encoder_type == 'lstm':
+            self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc),
+                                        len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang],
+                                        lang2id=lang2id,
+                                        phono_feat_mat=phono_feat_mat,
+                                        special_ids=special_ids)
+        elif g.model_encoder_type == 'cnn':
+            self.model = CnnEncoderOneToManyModel(len(self.src_abc), len(self.tgt_abc),
+                                                  len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang],
+                                                  lang2id=lang2id,
+                                                  phono_feat_mat=phono_feat_mat,
+                                                  special_ids=special_ids)
 
         if g.saved_model_path is not None:
             self.model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
