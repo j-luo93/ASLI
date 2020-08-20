@@ -14,7 +14,7 @@ from .one_pair import OnePairModel, CnnEncoderOnePairModel
 class OneToManyModel(OnePairModel):
 
     add_argument('lang_emb_mode', default='mean', dtype=str,
-                 choices=['random', 'mean', 'lang2vec', 'mean_lang2vec'], msg='Mode for the language embedding module.')
+                 choices=['random', 'mean', 'mean_lang2vec'], msg='Mode for the language embedding module.')
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int, num_tgt_langs: int, unseen_idx: int,
                  lang2id: Optional[Dict[str, int]] = None,

@@ -462,24 +462,26 @@ class LanguageEmbedding(nn.Embedding):
     add_argument('l2v_feature_set', default=None, dtype=str,
                  choices=['phonology_average', 'phonology_wals', 'phonology_ethnologue', 'learned'], msg='Which feature set to use for the lang2vec language embeddings.')
 
-    # TODO(derek): make sure the embedding dimensionalities as stated are correct if we use the lang2vec data. You could assert that the dimensionality is correct
-
     def __init__(self, num_embeddings: int, embedding_dim: int, unseen_idx: Optional[int] = None,
                  lang2id: Optional[Dict[str, int]] = None,
                  mode: str = 'random', **kwargs):
-        super().__init__(num_embeddings, embedding_dim, **kwargs)
         self.unseen_idx = unseen_idx
-        assert mode in ['random', 'mean', 'lang2vec', 'mean_lang2vec']
+        assert mode in ['random', 'mean', 'mean_lang2vec']
         self.mode = mode
 
-        if self.mode == 'lang2vec' or self.mode == 'mean_lang2vec':
-            # while lang2id is useful for the Manager, where lang2id is passed from, we need id2lang for using lang2vec
+        if self.mode == 'mean_lang2vec':
             self.id2lang = {i: lang for lang, i in lang2id.items()}
-            # there are several available lang2vec phonology feature sets, but most are missing languages or have null values even for languages with data. We could address this with zeroing out null values ('--') or using only certain embeddings
+            # there are several available lang2vec phonology feature sets, but most are missing languages or have null values even for languages with data. We could address this with zeroing out null values ('--') or using only certain feature sets
             # we use phonology_knn as the default feature set since it's guaranteed to produce values
+            # TODO(derek) try out 'learned' embeddings — see what bug is preventing you from using them
             self.feature_set = g.l2v_feature_set if g.l2v_feature_set is not None else 'phonology_knn'
-            # check dimensionality. English is chosen as the test just because it's unlikely to not be included in a feature set dataset
-            assert len(l2v.get_features(['eng'], self.feature_set)['eng']) == embedding_dim
+
+            # check dimensionality. English is chosen as the test just because it's unlikely to be missing from a feature set dataset
+            l2v_emb_len = len(l2v.get_features(['eng'], self.feature_set)['eng'])
+            # we want to init the learned embedding with a smaller dimension so that after concatenation with the lang2vec feature embedding, the embedding is the same size as the provided argument
+            embedding_dim -= l2v_emb_len
+            assert len(l2v.get_features(['eng'], self.feature_set)['eng']) + embedding_dim == g.char_emb_size
+        super().__init__(num_embeddings, embedding_dim, **kwargs)
 
     def forward(self, index: int) -> FT:
         if index == self.unseen_idx:
@@ -490,7 +492,7 @@ class LanguageEmbedding(nn.Embedding):
         else:
             emb = self.weight[index]
         
-        if self.mode == 'lang2vec' or self.mode == 'mean_lang2vec':
+        if self.mode == 'mean_lang2vec':
             lang_iso = self.id2lang[index] # get the iso code of the language being requested
             feature_list = l2v.get_features([lang_iso], self.feature_set, minimal=False)[lang_iso]
             # convert the array to a torch.FloatTensor
