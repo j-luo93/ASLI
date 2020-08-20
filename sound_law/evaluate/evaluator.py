@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 import pandas as pd
 import torch
@@ -10,6 +10,8 @@ from dev_misc.trainlib.tb_writer import MetricWriter
 from dev_misc.utils import pbar
 from sound_law.data.data_loader import OnePairDataLoader
 from sound_law.model.one_pair import OnePairModel
+
+from typing import Optional
 
 
 class Evaluator:

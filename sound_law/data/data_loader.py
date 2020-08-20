@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 from dataclasses import field
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -11,7 +9,6 @@ from torch.utils.data.sampler import WeightedRandomSampler
 from dev_misc import BT, LT, NDA, add_argument, g
 from dev_misc.devlib import BaseBatch, batch_class, pad_to_dense
 from dev_misc.devlib.helper import get_array, get_tensor, has_gpus
-from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import BaseSetting
 from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
                                                 BaseDataLoaderRegistry)
@@ -36,7 +33,6 @@ class PaddedUnitSeqs(BaseBatch):
         self.ids.rename_('pos', 'batch')
         self.paddings.rename_('pos', 'batch')
         self.lengths = self.paddings.sum(dim='pos').rename_('batch')
-        assert self.ids.shape == self.paddings.shape
 
     def __len__(self):
         return self.ids.size('batch')
@@ -45,24 +41,8 @@ class PaddedUnitSeqs(BaseBatch):
     def num_units(self) -> int:
         return self.paddings.sum()
 
-    def split(self, size: int) -> List[PaddedUnitSeqs]:
-        with NoName(self.ids, self.paddings):
-            ids_lst = self.ids.split(size, dim=-1)
-            paddings_lst = self.paddings.split(size, dim=-1)
-        start = 0
-        ret = list()
-        for ids, paddings in zip(ids_lst, paddings_lst):
-            length = ids.size(1)
-            units = self.units[start: start + length]
-            split = PaddedUnitSeqs(self.lang, units, ids, paddings,
-                                   lang_id=self.lang_id)
-            ret.append(split)
-            start += length
-        assert start == self.ids.size('batch')
-        return ret
 
-
-@ batch_class
+@batch_class
 class OnePairBatch(BaseBatch):
     src_seqs: PaddedUnitSeqs
     tgt_seqs: PaddedUnitSeqs
@@ -75,7 +55,7 @@ class OnePairBatch(BaseBatch):
     def __len__(self):
         return len(self.src_seqs)
 
-    @ property
+    @property
     def num_tgt_units(self) -> int:
         return self.tgt_seqs.num_units
 
@@ -156,7 +136,7 @@ class OnePairDataLoader(BaseDataLoader):
             else:
                 yield batch
 
-    @ cached_property
+    @cached_property
     def tgt_seqs(self) -> PaddedUnitSeqs:
         items = list()
         for i in range(len(self.dataset)):
