@@ -15,6 +15,8 @@ class OneToManyModel(OnePairModel):
 
     add_argument('lang_emb_mode', default='mean', dtype=str,
                  choices=['random', 'mean', 'mean_lang2vec'], msg='Mode for the language embedding module.')
+    add_argument('l2v_feature_set', default=None, dtype=str,
+                 choices=['phonology_average', 'phonology_wals', 'phonology_ethnologue', 'learned'], msg='Which feature set to use for the lang2vec language embeddings.')
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int, num_tgt_langs: int, unseen_idx: int,
                  lang2id: Optional[Dict[str, int]] = None,
