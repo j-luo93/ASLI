@@ -1,6 +1,8 @@
+import torch
+
 from dev_misc import add_argument, g, initiate, parse_args, show_args
-from dev_misc.trainlib import set_random_seeds
 from dev_misc.devlib.named_tensor import patch_named_tensors
+from dev_misc.trainlib import set_random_seeds
 from sound_law.config import reg
 from sound_law.train.manager import OnePairManager, OneToManyManager
 
@@ -21,4 +23,6 @@ if __name__ == '__main__':
     parse_args()
     show_args()
     set_random_seeds(g.random_seed)
+
+    torch.set_printoptions(sci_mode=False)
     run()
