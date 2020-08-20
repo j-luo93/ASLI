@@ -8,6 +8,7 @@ import torch.nn as nn
 
 from dev_misc import BT, FT, LT
 from dev_misc.devlib.named_tensor import NoName
+from dev_misc.utils import ScopedCache
 
 from .lstm_state import LstmStatesByLayers
 from .module import (EmbParams, GlobalAttention, LanguageEmbedding, LstmParams,
@@ -91,18 +92,18 @@ class LstmDecoder(nn.Module):
         # Main loop.
         log_probs = list()
         almt_distrs = list()
-        Wh_s = None
-        for l in range(max_length):
-            state, log_prob, almt_distr, Wh_s = self._forward_step(
-                input_, src_emb, state, src_outputs, mask_src,
-                lang_emb=lang_emb, Wh_s=Wh_s)
-            if target is None:
-                input_ = log_prob.max(dim=-1)[1].rename('batch')
-            else:
-                input_ = target[l]
+        with ScopedCache('Wh_s'):
+            for l in range(max_length):
+                state, log_prob, almt_distr = self._forward_step(
+                    input_, src_emb, state, src_outputs, mask_src,
+                    lang_emb=lang_emb)
+                if target is None:
+                    input_ = log_prob.max(dim=-1)[1].rename('batch')
+                else:
+                    input_ = target[l]
 
-            log_probs.append(log_prob)
-            almt_distrs.append(almt_distr)
+                log_probs.append(log_prob)
+                almt_distrs.append(almt_distr)
 
         # Prepare outputs.
         with NoName(*log_probs), NoName(*almt_distrs):
@@ -129,14 +130,13 @@ class LstmDecoder(nn.Module):
                       state: LstmStatesByLayers,
                       src_states: FT,
                       mask_src: BT,
-                      lang_emb: Optional[FT] = None,
-                      Wh_s: Optional[FT] = None) -> Tuple[FT, FT, FT, FT]:
+                      lang_emb: Optional[FT] = None) -> Tuple[FT, FT, FT]:
         emb = self.char_emb(input_)
         if lang_emb is not None:
             emb = emb + lang_emb
         # TODO(j_luo) add dropout.
         hid_rnn, next_state = self.cell(emb, state)
-        almt, ctx, Wh_s = self.attn.forward(hid_rnn, src_states, mask_src, Wh_s=None)
+        almt, ctx = self.attn.forward(hid_rnn, src_states, mask_src)
         cat = torch.cat([hid_rnn, ctx], dim=-1)
         hid_cat = self.hidden(cat)
 
@@ -147,4 +147,4 @@ class LstmDecoder(nn.Module):
         logit = self.char_emb.project(hid_res)
         log_prob = logit.log_softmax(dim=-1)
 
-        return next_state, log_prob, almt, Wh_s
+        return next_state, log_prob, almt

@@ -9,10 +9,12 @@ import numpy
 import torch
 import torch.nn as nn
 import torch.nn.init
+from easy_cache import ecached
 from torch.nn.functional import normalize
 
 from dev_misc import BT, FT, LT, get_zeros, add_argument, g
 from dev_misc.devlib.named_tensor import NameHelper, NoName
+from dev_misc.utils import cacheable
 from sound_law.data.dataset import PAD_ID
 from sound_law.model.lstm_state import LstmStatesByLayers, LstmStateTuple
 import lang2vec.lang2vec as l2v
@@ -172,17 +174,19 @@ class GlobalAttention(nn.Module):
         torch.nn.init.xavier_normal_(self.Wa)
         self.drop = nn.Dropout(dropout)
 
+    @cacheable(switch='Wh_s')
+    def _get_Wh_s(self, h_s: FT) -> FT:
+        sl, bs, ds = h_s.size()
+        with NoName(h_s):
+            Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
+        return Wh_s
+
     def forward(self,
                 h_t: FT,
                 h_s: FT,
-                mask_src: BT,
-                Wh_s: Optional[FT] = None) -> Tuple[FT, FT, FT]:
-        sl, bs, ds = h_s.size()
+                mask_src: BT) -> Tuple[FT, FT]:
         dt = h_t.shape[-1]
-        # FIXME(j_luo) Need a better way of caching Wh_s.
-        if Wh_s is None:
-            with NoName(h_s):
-                Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
+        Wh_s = self._get_Wh_s(h_s)
 
         with NoName(h_t):
             scores = (Wh_s * h_t).sum(dim=-1)
@@ -192,7 +196,7 @@ class GlobalAttention(nn.Module):
         with NoName(almt_distr):
             ctx = (almt_distr.unsqueeze(dim=-1) * h_s).sum(dim=0)  # bs x d
         almt_distr = almt_distr.t()
-        return almt_distr, ctx, Wh_s
+        return almt_distr, ctx
 
     def extra_repr(self):
         return 'src=%d, tgt=%d' % (self.input_src_size, self.input_tgt_size)
