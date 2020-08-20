@@ -494,9 +494,7 @@ class LanguageEmbedding(nn.Embedding):
             lang_iso = self.id2lang[index] # get the iso code of the language being requested
             feature_list = l2v.get_features([lang_iso], self.feature_set, minimal=False)[lang_iso]
             # convert the array to a torch.FloatTensor
-            l2v_emb = torch.from_numpy(numpy.array(feature_list))
-        
-        if self.mode == 'mean_lang2vec':
+            l2v_emb = torch.from_numpy(numpy.array(feature_list, dtype=numpy.float32))
             emb = torch.cat([emb, l2v_emb], dim=0)
 
         return emb
