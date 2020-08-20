@@ -14,11 +14,7 @@ from .one_pair import OnePairModel, CnnEncoderOnePairModel
 class OneToManyModel(OnePairModel):
 
     add_argument('lang_emb_mode', default='mean', dtype=str,
-<<<<<<< HEAD
                  choices=['random', 'mean'], msg='Mode for the language embedding module.')
-=======
-                 choices=['random', 'mean', 'mean_lang2vec'], msg='Mode for the language embedding module.')
->>>>>>> parent of 8fc5f58... Move l2v feature set argument location for clarity
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int, num_tgt_langs: int, unseen_idx: int,
                  phono_feat_mat: Optional[LT] = None,
