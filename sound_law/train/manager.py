@@ -199,11 +199,13 @@ class OneToManyManager:
         if g.model_encoder_type == 'lstm':
             self.model = OneToManyModel(len(self.src_abc), len(self.tgt_abc),
                                         len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang],
+                                        lang2id=lang2id,
                                         phono_feat_mat=phono_feat_mat,
                                         special_ids=special_ids)
         elif g.model_encoder_type == 'cnn':
             self.model = CnnEncoderOneToManyModel(len(self.src_abc), len(self.tgt_abc),
                                                   len(g.train_tgt_langs) + 1, lang2id[g.tgt_lang],
+                                                  lang2id=lang2id,
                                                   phono_feat_mat=phono_feat_mat,
                                                   special_ids=special_ids)
 
