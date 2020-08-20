@@ -261,6 +261,7 @@ class LanguageEmbedding(nn.Embedding):
         self.unseen_idx = unseen_idx
         assert mode in ['random', 'mean', 'mean_lang2vec']
         self.mode = mode
+        self.drop = nn.Dropout(dropout)
 
         if self.mode == 'mean_lang2vec':
             self.id2lang = {i: lang for lang, i in lang2id.items()}
@@ -275,7 +276,6 @@ class LanguageEmbedding(nn.Embedding):
             embedding_dim -= l2v_emb_len
             assert len(l2v.get_features(['eng'], self.feature_set)['eng']) + embedding_dim == g.char_emb_size
         super().__init__(num_embeddings, embedding_dim, **kwargs)
-        self.drop = nn.Dropout(dropout)
 
     def forward(self, index: int) -> FT:
         if index == self.unseen_idx:
