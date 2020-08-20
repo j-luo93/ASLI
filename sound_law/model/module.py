@@ -467,7 +467,7 @@ class LanguageEmbedding(nn.Embedding):
         if index == self.unseen_idx:
             if self.mode == 'random':
                 return self.weight[index]
-            else:
+            elif self.mode == 'mean':
                 return (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
         else:
             return self.weight[index]
