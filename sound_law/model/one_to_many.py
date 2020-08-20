@@ -27,7 +27,7 @@ class OneToManyModel(OnePairModel):
         self.lang_emb = LanguageEmbedding(num_tgt_langs, g.char_emb_size,
                                           unseen_idx=unseen_idx,
                                           lang2id=lang2id,
-                                          mode=g.lang_emb_mode
+                                          mode=g.lang_emb_mode,
                                           dropout=g.dropout)
 
     def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
@@ -53,7 +53,7 @@ class CnnEncoderOneToManyModel(CnnEncoderOnePairModel):
         self.lang_emb = LanguageEmbedding(num_tgt_langs, g.char_emb_size,
                                           unseen_idx=unseen_idx,
                                           lang2id=lang2id,
-                                          mode=g.lang_emb_mode
+                                          mode=g.lang_emb_mode,
                                           dropout=g.dropout)
     
     def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
