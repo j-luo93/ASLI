@@ -19,7 +19,7 @@ class OnePairModel(nn.Module):
     add_argument('char_emb_size', default=256, dtype=int, msg='Embedding size for characters (as input).')
     add_argument('hidden_size', default=256, dtype=int, msg='Hidden size for LSTM states.')
     add_argument('num_layers', default=1, dtype=int, msg='Number of LSTM layers.')
-    add_argument('dropout', default=0.2, dtype=int, msg='Dropout rate.')
+    add_argument('dropout', default=0.2, dtype=float, msg='Dropout rate.')
     add_argument('norms_or_ratios', default=(1.0, 0.2), nargs=2, dtype=float,
                  msg='Norms or ratios of norms for the norm-controlled residual module.')
     add_argument('control_mode', default='relative', dtype=str, choices=['relative', 'absolute', 'none'],
