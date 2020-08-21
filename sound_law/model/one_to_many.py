@@ -47,9 +47,9 @@ class CnnEncoderOneToManyModel(CnnEncoderOnePairModel):
                          phono_feat_mat=phono_feat_mat, special_ids=special_ids)
         self.lang_emb = LanguageEmbedding(num_tgt_langs, g.char_emb_size,
                                           unseen_idx=unseen_idx,
-                                          mode=g.lang_emb_mode,
-                                          dropout=g.dropout)
-
+                                          lang2id=lang2id,
+                                          mode=g.lang_emb_mode)
+    
     def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
         src_emb, output, state = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         lang_emb = self.lang_emb(batch.tgt_seqs.lang_id)
@@ -72,6 +72,7 @@ class CnnEncoderOneToManyModel(CnnEncoderOnePairModel):
                          phono_feat_mat=phono_feat_mat, special_ids=special_ids)
         self.lang_emb = LanguageEmbedding(num_tgt_langs, g.char_emb_size,
                                           unseen_idx=unseen_idx,
+                                          lang2id=lang2id,
                                           mode=g.lang_emb_mode,
                                           dropout=g.dropout)
     
