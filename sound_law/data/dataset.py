@@ -219,7 +219,7 @@ class OnePairDataset(Dataset):
         tgt_df = self.split.select(tgt_df)
 
         if keep_ratio is not None:
-            logging.imp(f'keep_ratio is {keep_ratio}. Note that this is not randomized.')
+            logging.info(f'keep_ratio is {keep_ratio}.')
             num = int(len(src_df) * keep_ratio)
             src_df = src_df.loc[:num]
             tgt_df = tgt_df.loc[:num]
