@@ -263,6 +263,7 @@ class LanguageEmbedding(nn.Embedding):
         self.mode = mode
 
         if self.mode == 'mean_lang2vec':
+            self.id2lang = {id_: lang for lang, id_ in lang2id.items()}
             # a lot of the feature sets are missing entries/values — we use phonology_knn as the default feature set since it's guaranteed to produce values
             # TODO(derek) try out 'learned' embeddings — see what bug is preventing you from using them
             self.feature_set = g.l2v_feature_set if g.l2v_feature_set is not None else 'phonology_knn'
@@ -281,14 +282,11 @@ class LanguageEmbedding(nn.Embedding):
         self.drop = nn.Dropout(dropout)
 
         if self.mode == 'mean_lang2vec':
-            self.id2emb = {} # maps a language id to the PyTorch Tensor version of a lang2vec vector
-
             for lang in tgt_langs:
                 index = lang2id[lang]
                 # dtype is set to float32 so that the resulting Tensor is a FloatTensor instead of a DoubleTensor
                 embedding = torch.from_numpy(numpy.array(lang2emb[lang], dtype=numpy.float32))
                 self.register_buffer('lang2vec_' + lang, embedding)
-                self.id2emb[index] = embedding
 
     def forward(self, index: int) -> FT:
         if index == self.unseen_idx:
@@ -300,7 +298,7 @@ class LanguageEmbedding(nn.Embedding):
             emb = self.weight[index]
         
         if self.mode == 'mean_lang2vec':
-            l2v_emb = self.id2emb[index]
+            l2v_emb = getattr(self, 'lang2vec_' + self.id2lang[index])
             emb = torch.cat([emb, l2v_emb], dim=0)
 
         return self.drop(emb)
