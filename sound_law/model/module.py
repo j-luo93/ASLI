@@ -263,19 +263,32 @@ class LanguageEmbedding(nn.Embedding):
         self.mode = mode
 
         if self.mode == 'mean_lang2vec':
-            self.id2lang = {i: lang for lang, i in lang2id.items()}
-            # there are several available lang2vec phonology feature sets, but most are missing languages or have null values even for languages with data. We could address this with zeroing out null values ('--') or using only certain feature sets
-            # we use phonology_knn as the default feature set since it's guaranteed to produce values
+            # a lot of the feature sets are missing entries/values — we use phonology_knn as the default feature set since it's guaranteed to produce values
             # TODO(derek) try out 'learned' embeddings — see what bug is preventing you from using them
             self.feature_set = g.l2v_feature_set if g.l2v_feature_set is not None else 'phonology_knn'
 
-            # check dimensionality. English is chosen as the test just because it's unlikely to be missing from a feature set dataset
-            l2v_emb_len = len(l2v.get_features(['eng'], self.feature_set)['eng'])
-            # we want to init the learned embedding with a smaller dimension so that after concatenation with the lang2vec feature embedding, the embedding is the same size as the provided argument
+            tgt_langs = list(g.train_tgt_langs) + [g.tgt_lang]
+            lang2emb = l2v.get_features(tgt_langs, self.feature_set, minimal=False)
+            # check that all these languages have the same embedding size
+            assert len(set([len(emb) for emb in lang2emb.values()])) == 1
+            l2v_emb_len = len(next(iter(lang2emb.values())))
+
+            # initialize the learned embedding with a smaller dimension than g.char_emb_size so that after concatenation with the lang2vec feature embedding, the total embedding is g.char_emb_size
             embedding_dim -= l2v_emb_len
-            assert len(l2v.get_features(['eng'], self.feature_set)['eng']) + embedding_dim == g.char_emb_size
+            assert l2v_emb_len + embedding_dim == g.char_emb_size
+        
         super().__init__(num_embeddings, embedding_dim, **kwargs)
         self.drop = nn.Dropout(dropout)
+
+        if self.mode == 'mean_lang2vec':
+            self.id2emb = {} # maps a language id to the PyTorch Tensor version of a lang2vec vector
+
+            for lang in tgt_langs:
+                index = lang2id[lang]
+                # dtype is set to float32 so that the resulting Tensor is a FloatTensor instead of a DoubleTensor
+                embedding = torch.from_numpy(numpy.array(lang2emb[lang], dtype=numpy.float32))
+                self.register_buffer('lang2vec_' + lang, embedding)
+                self.id2emb[index] = embedding
 
     def forward(self, index: int) -> FT:
         if index == self.unseen_idx:
@@ -287,10 +300,7 @@ class LanguageEmbedding(nn.Embedding):
             emb = self.weight[index]
         
         if self.mode == 'mean_lang2vec':
-            lang_iso = self.id2lang[index] # get the iso code of the language being requested
-            feature_list = l2v.get_features([lang_iso], self.feature_set, minimal=False)[lang_iso]
-            # convert the array to a torch.FloatTensor
-            l2v_emb = torch.from_numpy(numpy.array(feature_list, dtype=numpy.float32))
+            l2v_emb = self.id2emb[index]
             emb = torch.cat([emb, l2v_emb], dim=0)
 
         return self.drop(emb)
