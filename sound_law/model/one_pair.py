@@ -31,6 +31,7 @@ class OnePairModel(nn.Module):
     add_argument('model_encoder_type', dtype=str, default='lstm', choices=['lstm', 'cnn'], msg='Which encoder to use.')
     add_argument('kernel_sizes', dtype=int, nargs='+', default=(3, 5, 7),
                  msg='What kernel sizes to use for the CNN Encoder (can include repeats).')
+    add_argument('beam_size', dtype=int, default=1, msg='Beam size.')
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int,
                  phono_feat_mat: Optional[LT] = None,
@@ -130,3 +131,15 @@ class OnePairModel(nn.Module):
                 scores.append(chunk_scores.view(batch_size, bs_split).refine_names('batch', 'tgt_vocab'))
         scores = torch.cat(scores, dim='tgt_vocab')
         return scores
+
+    def predict(self, batch: OnePairBatch):
+        src_emb, (output, state) = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
+        src_emb = src_emb.refine_names('pos', 'batch', 'src_emb')
+        output = output.refine_names('pos', 'batch', 'output')
+
+        breakpoint()  # BREAKPOINT(j_luo)
+        beam = self.decoder.search(SOT_ID, src_emb, output,
+                                   batch.src_seqs.paddings,
+                                   batch.src_seqs.lengths,
+                                   g.beam_size)
+        beam

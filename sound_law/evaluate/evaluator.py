@@ -43,7 +43,8 @@ class Evaluator:
         records = list()
         K = 5
         for batch in pbar(dl, desc='eval: batch'):
-            scores = self.model.get_scores(batch, dl.tgt_seqs)
+            # scores = self.model.get_scores(batch, dl.tgt_seqs)
+            scores = self.model.predict(batch)
             top_scores, top_preds = torch.topk(scores, 5, dim='tgt_vocab')
             for pss, pis, gi in zip(top_scores, top_preds, batch.indices):
                 gold = dl.get_token_from_index(gi, 'tgt')

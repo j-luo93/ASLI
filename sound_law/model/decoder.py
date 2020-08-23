@@ -7,8 +7,9 @@ import torch
 import torch.nn as nn
 
 from dev_misc import BT, FT, LT
-from dev_misc.devlib.named_tensor import NoName
+from dev_misc.devlib.named_tensor import NameHelper, NoName
 from dev_misc.utils import ScopedCache
+from sound_law.evaluate.beam_searcher import BaseBeamSearcher
 
 from .lstm_state import LstmStatesByLayers
 from .module import (EmbParams, GlobalAttention, LanguageEmbedding, LstmParams,
@@ -29,7 +30,28 @@ class DecParams:
     emb_params: Optional[EmbParams] = None
 
 
-class LstmDecoder(nn.Module):
+@dataclass
+class Beam:
+    step: int
+    batch_size: int
+    beam_size: int
+    accum_scores: FT
+    tokens: LT  # Predicted tokens from last step.
+    lstm_state: LstmStatesByLayers  # Last LSTM state.
+    # Constant inputs.
+    src_emb: FT
+    src_outputs: FT
+    src_paddings: BT
+    lang_emb: Optional[FT] = None
+
+
+@dataclass
+class Candidates:
+    log_probs: FT
+    state: LstmStatesByLayers  # The LSTM state that is mapped to `log_probs`.
+
+
+class LstmDecoder(nn.Module, BaseBeamSearcher):
     """A decoder that unrolls the LSTM decoding procedure by steps."""
 
     def __init__(self,
@@ -148,3 +170,67 @@ class LstmDecoder(nn.Module):
         log_prob = logit.log_softmax(dim=-1)
 
         return next_state, log_prob, almt
+
+    def is_finished(self, beam: Beam, max_lengths: LT) -> BT:
+        return beam.step >= max_lengths
+
+    def get_next_scores(self, beam: Beam) -> Candidates:
+        state, log_probs, almt = self._forward_step(beam.tokens,
+                                                    beam.src_emb,
+                                                    beam.lstm_state,
+                                                    beam.src_outputs,
+                                                    beam.src_paddings,
+                                                    lang_emb=beam.lang_emb)
+        return Candidates(log_probs, state)
+
+    def get_next_beam(self, beam: Beam, cand: Candidates) -> Beam:
+        nh = NameHelper()
+        accum = cand.log_probs + beam.accum_scores.align_as(cand.log_probs)
+        lp = nh.flatten(accum, ['beam', 'unit'], ['BU'])
+        top_s, top_i = torch.topk(lp, beam.beam_size, dim='BU')
+        beam_ids = top_i // beam.beam_size
+        with NoName(cand.state):
+            state = cand.state[top_i, range(beam.batch_size)]
+        next_beam = Beam(beam.step + 1,
+                         beam.batch_size,
+                         beam.beam_size,
+                         top_s.rename(BU='beam'),
+                         top_i.rename(BU='beam'),
+                         state,
+                         beam.src_emb,
+                         beam.src_outputs,
+                         beam.src_paddings,
+                         beam.lang_emb
+                         )
+        return next_beam
+
+    def search(self,
+                sot_id: int,
+                src_emb: FT,
+                src_outputs: FT,
+                src_paddings: BT,
+                src_lengths: LT,
+                beam_size: int,
+                lang_emb: Optional[FT] = None) -> Beam:
+        if beam_size <= 0:
+            raise ValueError(f'`beam_size` must be positive.')
+
+        batch_size = src_emb.size('batch')
+        tokens = torch.full([batch_size * beam_size], sot_id).to(src_emb.device)
+        accum_scores = torch.zeros_like(tokens)
+        lstm_state = LstmStatesByLayers.zero_state(
+            self.cell.num_layers,
+            batch_size * beam_size,
+            self.attn.input_tgt_size,
+            bidirectional=False)
+        src_emb = torch.repeat_interleave(src_emb, beam_size, dim='batch')
+        src_outputs = torch.repeat_interleave(src_outputs, beam_size, dim='batch')
+        src_paddings = torch.repeat_interleave(src_paddings, beam_size, dim='batch')
+        max_lengths = (src_lengths.float() * 1.5).long()
+        max_lengths = torch.repeat_interleave(max_lengths, beam_size, dim='batch')
+        init_beam = Beam(0, batch_size, beam_size,
+                         accum_scores, tokens, lstm_state,
+                         src_emb, src_outputs, src_paddings,
+                         lang_emb=lang_emb)
+        final_beam = super().search(init_beam, max_lengths)
+        return final_beam

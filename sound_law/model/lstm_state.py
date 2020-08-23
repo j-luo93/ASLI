@@ -114,3 +114,17 @@ class LstmStatesByLayers(LstmState):
                    hidden_size: int,
                    bidirectional: bool = False) -> LstmStatesByLayers:
         return LstmStateTuple.zero_state(num_layers, batch_size, hidden_size, bidirectional=bidirectional).to_layers()
+
+    def __getitem__(self, key) -> LstmStatesByLayers:
+
+        def get_state_tuples(hs, cs):
+            ret = list()
+            for h, c in zip(hs, cs):
+                ret.append((h[key], c[key]))
+            return ret
+
+        fs = get_state_tuples(self._f_hs, self._f_cs)
+        bs = None
+        if self.bidirectional:
+            bs = get_state_tuples(self._b_hs, self._b_cs)
+        return LstmStatesByLayers(fs, bs)
