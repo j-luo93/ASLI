@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Sequence, Tuple
 
 import torch
@@ -10,6 +10,7 @@ from dev_misc import BT, FT, LT
 from dev_misc.devlib.named_tensor import (NameHelper, NoName, duplicate,
                                           get_named_range)
 from dev_misc.utils import ScopedCache
+from sound_law.data.dataset import EOT_ID
 
 from .beam_searcher import BaseBeamSearcher
 from .lstm_state import LstmStatesByLayers
@@ -32,18 +33,45 @@ class DecParams:
 
 
 @dataclass
-class Beam:
-    step: int
-    batch_size: int
-    beam_size: int
-    accum_scores: FT
-    tokens: LT  # Predicted tokens from last step.
-    lstm_state: LstmStatesByLayers  # Last LSTM state.
-    # Constant inputs.
+class BeamConstant:
+    """This stores some common inputs that are constant for all steps."""
     src_emb: FT
     src_outputs: FT
     src_paddings: BT
+    max_lengths: LT
     lang_emb: Optional[FT] = None
+
+
+@dataclass
+class Beam:
+    step: int
+    accum_scores: FT
+    tokens: LT  # Predicted tokens from last step.
+    lstm_state: LstmStatesByLayers  # Last LSTM state.
+    constants: BeamConstant
+    # For bookkeeping.
+    last_beam: Optional[Beam] = None
+    beam_ids: Optional[LT] = None
+    finished: BT = None
+
+    def __post_init__(self):
+        if self.finished is None:
+            self.finished = torch.zeros_like(self.tokens).bool()
+
+    @property
+    def batch_size(self):
+        return self.tokens.size('batch')
+
+    @property
+    def beam_size(self):
+        return self.tokens.size('beam')
+
+    def follow(self, finished: BT, accum_scores: FT, tokens: LT, lstm_state: LstmStatesByLayers, beam_ids: LT) -> Beam:
+        return Beam(self.step + 1, accum_scores, tokens,
+                    lstm_state, self.constants,
+                    last_beam=self,
+                    beam_ids=beam_ids,
+                    finished=finished)
 
 
 @dataclass
@@ -173,8 +201,8 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
 
         return next_state, log_prob, almt
 
-    def is_finished(self, beam: Beam, max_lengths: LT) -> BT:
-        return beam.step >= max_lengths
+    def is_finished(self, beam: Beam) -> BT:
+        return beam.finished
 
     def get_next_candidates(self, beam: Beam) -> Candidates:
         nh = NameHelper()
@@ -188,12 +216,13 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                 return orig.apply(wrapped)
             return wrapped(orig)
 
-        state, log_probs, almt = self._forward_step(collapse_beam(beam.tokens),
-                                                    collapse_beam(beam.src_emb),
-                                                    collapse_beam(beam.lstm_state, is_lstm_state=True),
-                                                    collapse_beam(beam.src_outputs),
-                                                    collapse_beam(beam.src_paddings),
-                                                    lang_emb=beam.lang_emb)
+        state, log_probs, almt = self._forward_step(
+            collapse_beam(beam.tokens),
+            beam.constants.src_emb,
+            collapse_beam(beam.lstm_state, is_lstm_state=True),
+            beam.constants.src_outputs,
+            beam.constants.src_paddings,
+            lang_emb=beam.constants.lang_emb)
 
         def unflatten(orig, is_lstm_state: bool = False):
             def wrapped(tensor):
@@ -209,7 +238,12 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
 
     def get_next_beam(self, beam: Beam, cand: Candidates) -> Beam:
         nh = NameHelper()
-        accum = cand.log_probs + beam.accum_scores.align_as(cand.log_probs)
+
+        # Get the new scores. For finished hypotheses, we should keep adding EOT.
+        placeholder = torch.full_like(cand.log_probs, -9999.9)
+        placeholder[..., EOT_ID] = 0.0
+        new_scores = torch.where(beam.finished.align_as(placeholder), placeholder, cand.log_probs)
+        accum = new_scores + beam.accum_scores.align_as(cand.log_probs)
         lp = nh.flatten(accum, ['beam', 'unit'], 'BU')
         top_s, top_i = torch.topk(lp, beam.beam_size, dim='BU')
         num_units = accum.size('unit')
@@ -219,24 +253,26 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         batch_i = get_named_range(beam.batch_size, 'batch')
         batch_i = batch_i.align_as(top_i)
 
-        def retrieve_state(tensor):
+        def retrieve(tensor, last_name: str = 'hidden') -> torch.Tensor:
             with NoName(tensor, batch_i, beam_i):
                 ret = tensor[batch_i, beam_i]
-            return ret.refine_names('batch', 'beam', 'hidden')
+            new_names = ('batch', 'beam')
+            if last_name:
+                new_names += (last_name, )
+            return ret.refine_names(*new_names)
 
-        state = cand.state.apply(retrieve_state)
-
-        next_beam = Beam(beam.step + 1,
-                         beam.batch_size,
-                         beam.beam_size,
-                         top_s.rename(BU='beam'),
-                         tokens.rename(BU='beam'),
-                         state,
-                         beam.src_emb,
-                         beam.src_outputs,
-                         beam.src_paddings,
-                         beam.lang_emb
-                         )
+        next_scores = top_s.rename(BU='beam')
+        next_tokens = tokens.rename(BU='beam')
+        next_state = cand.state.apply(retrieve)
+        last_finished = retrieve(beam.finished, last_name=None)
+        this_ended = next_tokens == EOT_ID
+        reached_max = (beam.step + 1 == beam.constants.max_lengths)
+        next_finished = last_finished | this_ended | reached_max
+        next_beam = beam.follow(next_finished,
+                                next_scores,
+                                next_tokens,
+                                next_state,
+                                beam_i)
         return next_beam
 
     def search(self,
@@ -262,17 +298,21 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
             bidirectional=False,
             names=['batch', 'beam', 'hidden'])
 
-        def expand_beam(orig):
-            return duplicate(orig, 'batch', beam_size, 'beam')
+        def expand_beam(orig, collapse: bool = True):
+            if collapse:
+                return torch.repeat_interleave(orig, beam_size, dim='batch')
+            else:
+                return duplicate(orig, 'batch', beam_size, 'beam')
 
         src_emb = expand_beam(src_emb)
         src_outputs = expand_beam(src_outputs)
         src_paddings = expand_beam(src_paddings)
         max_lengths = (src_lengths.float() * 1.5).long()
-        max_lengths = expand_beam(max_lengths)
-        init_beam = Beam(0, batch_size, beam_size,
-                         accum_scores, tokens, lstm_state,
-                         src_emb, src_outputs, src_paddings,
-                         lang_emb=lang_emb)
-        final_beam = super().search(init_beam, max_lengths)
+        max_lengths = expand_beam(max_lengths, collapse=False)
+        constants = BeamConstant(src_emb, src_outputs, src_paddings,
+                                 max_lengths,
+                                 lang_emb=lang_emb)
+        init_beam = Beam(0, accum_scores, tokens,
+                         lstm_state, constants)
+        final_beam = super().search(init_beam)
         return final_beam

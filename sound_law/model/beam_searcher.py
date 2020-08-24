@@ -14,10 +14,10 @@ class BaseBeamSearcher(ABC):
         self._batch_size = batch_size
         self._beam_size = beam_size
 
-    def search(self, init_beam: B, max_lengths: LT) -> B:
+    def search(self, init_beam: B) -> B:
         beam = init_beam
         while True:
-            finished = self.is_finished(beam, max_lengths)
+            finished = self.is_finished(beam)
             if finished.all():
                 break
 
@@ -26,7 +26,7 @@ class BaseBeamSearcher(ABC):
         return beam
 
     @abstractmethod
-    def is_finished(self, beam: B, max_lengths: LT) -> BT: ...
+    def is_finished(self, beam: B) -> BT: ...
 
     @abstractmethod
     def get_next_candidates(self, beam: B) -> C: ...
