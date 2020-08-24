@@ -5,7 +5,7 @@ Just a wrapper of LSTM states: a list of (h, c) tuples
 from __future__ import annotations
 
 from abc import ABC, abstractmethod, abstractproperty
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 import torch
 
@@ -107,24 +107,46 @@ class LstmStatesByLayers(LstmState):
     def device(self) -> torch.device:
         return self._f_hs[0].device
 
+    # @classmethod
+    # def zero_state(cls,
+    #                num_layers: int,
+    #                batch_size: int,
+    #                hidden_size: int,
+    #                bidirectional: bool = False) -> LstmStatesByLayers:
+    #     return LstmStateTuple.zero_state(num_layers, batch_size, hidden_size, bidirectional=bidirectional).to_layers()
+
     @classmethod
-    def zero_state(cls,
-                   num_layers: int,
-                   batch_size: int,
-                   hidden_size: int,
-                   bidirectional: bool = False) -> LstmStatesByLayers:
-        return LstmStateTuple.zero_state(num_layers, batch_size, hidden_size, bidirectional=bidirectional).to_layers()
-
-    def __getitem__(self, key) -> LstmStatesByLayers:
-
-        def get_state_tuples(hs, cs):
-            ret = list()
-            for h, c in zip(hs, cs):
-                ret.append((h[key], c[key]))
+    def zero_state(cls, num_layers: int, *sizes: int, bidirectional: bool = False, names: Sequence[str] = None) -> LstmStatesByLayers:
+        def init():
+            ret = get_zeros(*sizes)
+            if names:
+                ret = ret.rename(*names)
             return ret
 
-        fs = get_state_tuples(self._f_hs, self._f_cs)
-        bs = None
-        if self.bidirectional:
-            bs = get_state_tuples(self._b_hs, self._b_cs)
-        return LstmStatesByLayers(fs, bs)
+        fs = list()
+        bs = list()
+        for _ in range(num_layers):
+            fs.append((init(), init()))
+            if bidirectional:
+                bs.append((init(), init()))
+        bs = bs if bs else None
+        return LstmStatesByLayers(fs, backward_states=bs)
+
+    def apply(self, func: Callable[torch.Tensor, torch.Tensor]) -> LstmStatesByLayers:
+        fs = [(func(h), func(c)) for h, c in zip(self._f_hs, self._f_cs)]
+        bs = [(func(h), func(c)) for h, c in zip(self._b_hs, self._b_cs)] if self.bidirectional else None
+        return LstmStatesByLayers(fs, backward_states=bs)
+
+    def __getitem__(self, key) -> LstmStatesByLayers:
+        def getitem(h):
+            return h[key]
+
+        return self.apply(getitem)
+
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        return self._f_hs[0].shape
+
+    @property
+    def names(self) -> Tuple[str, ...]:
+        return self._f_hs[0].names

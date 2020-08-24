@@ -137,7 +137,6 @@ class OnePairModel(nn.Module):
         src_emb = src_emb.refine_names('pos', 'batch', 'src_emb')
         output = output.refine_names('pos', 'batch', 'output')
 
-        breakpoint()  # BREAKPOINT(j_luo)
         beam = self.decoder.search(SOT_ID, src_emb, output,
                                    batch.src_seqs.paddings,
                                    batch.src_seqs.lengths,

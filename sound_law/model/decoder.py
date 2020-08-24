@@ -7,10 +7,11 @@ import torch
 import torch.nn as nn
 
 from dev_misc import BT, FT, LT
-from dev_misc.devlib.named_tensor import NameHelper, NoName
+from dev_misc.devlib.named_tensor import (NameHelper, NoName, duplicate,
+                                          get_named_range)
 from dev_misc.utils import ScopedCache
-from sound_law.evaluate.beam_searcher import BaseBeamSearcher
 
+from .beam_searcher import BaseBeamSearcher
 from .lstm_state import LstmStatesByLayers
 from .module import (EmbParams, GlobalAttention, LanguageEmbedding, LstmParams,
                      MultiLayerLSTMCell, NormControlledResidual,
@@ -159,7 +160,8 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         # TODO(j_luo) add dropout.
         hid_rnn, next_state = self.cell(emb, state)
         almt, ctx = self.attn.forward(hid_rnn, src_states, mask_src)
-        cat = torch.cat([hid_rnn, ctx], dim=-1)
+        with NoName(hid_rnn, ctx):
+            cat = torch.cat([hid_rnn, ctx], dim=-1)
         hid_cat = self.hidden(cat)
 
         with NoName(src_emb, hid_cat, almt):
@@ -167,35 +169,68 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
             hid_res = self.nc_residual(ctx_emb, hid_cat)
 
         logit = self.char_emb.project(hid_res)
-        log_prob = logit.log_softmax(dim=-1)
+        log_prob = logit.log_softmax(dim=-1).refine_names('batch', 'unit')
 
         return next_state, log_prob, almt
 
     def is_finished(self, beam: Beam, max_lengths: LT) -> BT:
         return beam.step >= max_lengths
 
-    def get_next_scores(self, beam: Beam) -> Candidates:
-        state, log_probs, almt = self._forward_step(beam.tokens,
-                                                    beam.src_emb,
-                                                    beam.lstm_state,
-                                                    beam.src_outputs,
-                                                    beam.src_paddings,
+    def get_next_candidates(self, beam: Beam) -> Candidates:
+        nh = NameHelper()
+
+        def collapse_beam(orig, is_lstm_state: bool = False):
+
+            def wrapped(tensor):
+                return nh.flatten(tensor, ['batch', 'beam'], 'BB').rename(BB='batch')
+
+            if is_lstm_state:
+                return orig.apply(wrapped)
+            return wrapped(orig)
+
+        state, log_probs, almt = self._forward_step(collapse_beam(beam.tokens),
+                                                    collapse_beam(beam.src_emb),
+                                                    collapse_beam(beam.lstm_state, is_lstm_state=True),
+                                                    collapse_beam(beam.src_outputs),
+                                                    collapse_beam(beam.src_paddings),
                                                     lang_emb=beam.lang_emb)
+
+        def unflatten(orig, is_lstm_state: bool = False):
+            def wrapped(tensor):
+                return nh.unflatten(tensor.rename(batch='BB'), 'BB', ['batch', 'beam'])
+
+            if is_lstm_state:
+                return orig.apply(wrapped)
+            return wrapped(orig)
+
+        log_probs = unflatten(log_probs)
+        state = unflatten(state, is_lstm_state=True)
         return Candidates(log_probs, state)
 
     def get_next_beam(self, beam: Beam, cand: Candidates) -> Beam:
         nh = NameHelper()
         accum = cand.log_probs + beam.accum_scores.align_as(cand.log_probs)
-        lp = nh.flatten(accum, ['beam', 'unit'], ['BU'])
+        lp = nh.flatten(accum, ['beam', 'unit'], 'BU')
         top_s, top_i = torch.topk(lp, beam.beam_size, dim='BU')
-        beam_ids = top_i // beam.beam_size
-        with NoName(cand.state):
-            state = cand.state[top_i, range(beam.batch_size)]
+        num_units = accum.size('unit')
+        beam_i = top_i // num_units
+        tokens = top_i % num_units
+
+        batch_i = get_named_range(beam.batch_size, 'batch')
+        batch_i = batch_i.align_as(top_i)
+
+        def retrieve_state(tensor):
+            with NoName(tensor, batch_i, beam_i):
+                ret = tensor[batch_i, beam_i]
+            return ret.refine_names('batch', 'beam', 'hidden')
+
+        state = cand.state.apply(retrieve_state)
+
         next_beam = Beam(beam.step + 1,
                          beam.batch_size,
                          beam.beam_size,
                          top_s.rename(BU='beam'),
-                         top_i.rename(BU='beam'),
+                         tokens.rename(BU='beam'),
                          state,
                          beam.src_emb,
                          beam.src_outputs,
@@ -205,29 +240,36 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         return next_beam
 
     def search(self,
-                sot_id: int,
-                src_emb: FT,
-                src_outputs: FT,
-                src_paddings: BT,
-                src_lengths: LT,
-                beam_size: int,
-                lang_emb: Optional[FT] = None) -> Beam:
+               sot_id: int,
+               src_emb: FT,
+               src_outputs: FT,
+               src_paddings: BT,
+               src_lengths: LT,
+               beam_size: int,
+               lang_emb: Optional[FT] = None) -> Beam:
         if beam_size <= 0:
             raise ValueError(f'`beam_size` must be positive.')
 
         batch_size = src_emb.size('batch')
-        tokens = torch.full([batch_size * beam_size], sot_id).to(src_emb.device)
+        tokens = torch.full([batch_size, beam_size], sot_id, dtype=torch.long).to(
+            src_emb.device).rename('batch', 'beam')
         accum_scores = torch.zeros_like(tokens)
         lstm_state = LstmStatesByLayers.zero_state(
             self.cell.num_layers,
-            batch_size * beam_size,
+            batch_size,
+            beam_size,
             self.attn.input_tgt_size,
-            bidirectional=False)
-        src_emb = torch.repeat_interleave(src_emb, beam_size, dim='batch')
-        src_outputs = torch.repeat_interleave(src_outputs, beam_size, dim='batch')
-        src_paddings = torch.repeat_interleave(src_paddings, beam_size, dim='batch')
+            bidirectional=False,
+            names=['batch', 'beam', 'hidden'])
+
+        def expand_beam(orig):
+            return duplicate(orig, 'batch', beam_size, 'beam')
+
+        src_emb = expand_beam(src_emb)
+        src_outputs = expand_beam(src_outputs)
+        src_paddings = expand_beam(src_paddings)
         max_lengths = (src_lengths.float() * 1.5).long()
-        max_lengths = torch.repeat_interleave(max_lengths, beam_size, dim='batch')
+        max_lengths = expand_beam(max_lengths)
         init_beam = Beam(0, batch_size, beam_size,
                          accum_scores, tokens, lstm_state,
                          src_emb, src_outputs, src_paddings,

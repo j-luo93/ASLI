@@ -9,7 +9,6 @@ import numpy
 import torch
 import torch.nn as nn
 import torch.nn.init
-from easy_cache import ecached
 from torch.nn.functional import normalize
 
 from dev_misc import BT, FT, LT, get_zeros, add_argument, g
@@ -64,10 +63,13 @@ class MultiLayerLSTMCell(nn.Module):
 
         new_states = list()
         for i in range(self.num_layers):
-            with NoName(input_):
-                new_state = self.cells[i](input_, state.get_layer(i, state_direction))
-            new_states.append(new_state)
-            input_ = new_state[0].refine_names('batch', ...)
+            h, c = state.get_layer(i, state_direction)
+            with NoName(input_, h, c):
+                new_h, new_c = self.cells[i](input_, (h, c))
+            new_h.rename_(*h.names)
+            new_c.rename_(*c.names)
+            new_states.append((new_h, new_c))
+            input_ = new_h.refine_names('batch', ...)
             # Note that the last layer doesn't use dropout, following nn.LSTM.
             if i < self.num_layers - 1:
                 input_ = self.drop(input_)

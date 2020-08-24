@@ -8,7 +8,7 @@ B = TypeVar('Beam')
 C = TypeVar('Candidates')
 
 
-class BaseBeamCearcher(ABC):
+class BaseBeamSearcher(ABC):
 
     def __init__(self, batch_size: int, beam_size: int):
         self._batch_size = batch_size
