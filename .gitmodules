@@ -4,5 +4,5 @@
 	branch = sound_law
 [submodule "editdistance"]
 	path = editdistance
-	url = git@github.com:j-luo93/editdistance.git
+	url = https://github.com/j-luo93/editdistance.git
 	branch = master
