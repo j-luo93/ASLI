@@ -33,6 +33,8 @@ class BaseModel(nn.Module):
     add_argument('kernel_sizes', dtype=int, nargs='+', default=(3, 5, 7),
                  msg='What kernel sizes to use for the CNN Encoder (can include repeats).')
     add_argument('beam_size', dtype=int, default=1, msg='Beam size.')
+    add_argument('separate_output', dtype=bool, default=False,
+                 msg='Flag to use a separate set of params for output embeddings.')
 
     def __init__(self, num_src_chars: int, num_tgt_chars: int,
                  phono_feat_mat: Optional[LT] = None,
@@ -43,7 +45,8 @@ class BaseModel(nn.Module):
         def get_emb_params(num_chars: int) -> EmbParams:
             return EmbParams(num_chars, g.char_emb_size, g.dropout,
                              phono_feat_mat=phono_feat_mat,
-                             special_ids=special_ids)
+                             special_ids=special_ids,
+                             separate_output=g.separate_output)
 
         def get_lstm_params(bidirectional: bool) -> LstmParams:
             return LstmParams(g.char_emb_size, g.hidden_size,

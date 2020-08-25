@@ -12,7 +12,7 @@ from dev_misc import FT, LT
 from dev_misc.devlib.named_tensor import NoName
 
 from .lstm_state import LstmStateTuple
-from .module import EmbParams, LstmParams, SharedEmbedding, get_embedding
+from .module import CharEmbedding, EmbParams, LstmParams, get_embedding
 
 LstmOutputTuple = Tuple[FT, LstmStateTuple]
 
@@ -55,7 +55,7 @@ class CnnParams:
 class CnnEncoder(nn.Module):
 
     def __init__(self,
-                 embedding: SharedEmbedding,
+                 embedding: CharEmbedding,
                  conv_layers: List[nn.Conv1d],
                  W_output: nn.Linear,
                  dropout: float):

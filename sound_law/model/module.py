@@ -86,17 +86,29 @@ class EmbParams:
     dropout: float
     phono_feat_mat: Optional[LT] = None
     special_ids: Optional[Sequence[int]] = None
+    separate_output: bool = False  # Whether to use a separate set of params for output embeddings.
 
 
-class SharedEmbedding(nn.Embedding):
-    """Shared input and output embedding with dropout."""
+class CharEmbedding(nn.Embedding):
 
-    def __init__(self, *args, dropout: float = 0.0, **kwargs):
+    def __init__(self, *args,
+                 dropout: float = 0.0,
+                 separate_output: bool = False,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.drop = nn.Dropout(dropout)
+        self.separate_output = separate_output
+        if self.separate_output:
+            self.weight_out = nn.Parameter(torch.randn(self.num_embeddings, self.embedding_dim))
+
+    @property
+    def output_embedding(self) -> FT:
+        if self.separate_output:
+            return self.weight_out
+        return self.weight
 
     def project(self, h: FT) -> FT:
-        w = self.drop(self.weight)
+        w = self.drop(self.output_embedding)
         return h @ w.t()
 
     def forward(self, *args, **kwargs) -> FT:
@@ -104,13 +116,17 @@ class SharedEmbedding(nn.Embedding):
         return self.drop(emb)
 
     @classmethod
-    def from_params(cls, emb_params: EmbParams) -> SharedEmbedding:
+    def from_params(cls, emb_params: EmbParams) -> CharEmbedding:
         return cls(emb_params.num_embeddings,
                    emb_params.embedding_dim,
-                   dropout=emb_params.dropout)
+                   dropout=emb_params.dropout,
+                   separate_output=emb_params.separate_output)
+
+    def extra_repr(self) -> str:
+        return f'separate_output={self.separate_output}'
 
 
-class PhonoEmbedding(SharedEmbedding):
+class PhonoEmbedding(CharEmbedding):
 
     def __init__(self,
                  phono_feat_mat: LT,
@@ -128,7 +144,10 @@ class PhonoEmbedding(SharedEmbedding):
         special_mask = torch.zeros(num_phones).bool()
         special_mask[special_ids] = True
         self.register_buffer('special_mask', special_mask)
+        # NOTE(j_luo) Use the total dim.
         self.embedding_dim = embedding_dim
+        if self.separate_output:
+            self.weight_out = nn.Parameter(torch.randn(self.num_embeddings, embedding_dim))
 
     @classmethod
     def from_params(cls, emb_params: EmbParams) -> PhonoEmbedding:
@@ -136,7 +155,8 @@ class PhonoEmbedding(SharedEmbedding):
                    emb_params.special_ids,
                    emb_params.num_embeddings,
                    emb_params.embedding_dim,
-                   dropout=emb_params.dropout)
+                   dropout=emb_params.dropout,
+                   separate_output=emb_params.separate_output)
 
     @property
     def char_embedding(self) -> FT:
@@ -151,12 +171,15 @@ class PhonoEmbedding(SharedEmbedding):
         with NoName(self.char_embedding, input_):
             return self.char_embedding[input_]
 
-    def project(self, h: FT) -> FT:
-        return h @ self.char_embedding.t()
+    @property
+    def output_embedding(self):
+        if self.separate_output:
+            return self.weight_out
+        return self.char_embedding
 
 
-def get_embedding(emb_params: EmbParams) -> Union[PhonoEmbedding, SharedEmbedding]:
-    emb_cls = SharedEmbedding if emb_params.phono_feat_mat is None else PhonoEmbedding
+def get_embedding(emb_params: EmbParams) -> Union[PhonoEmbedding, CharEmbedding]:
+    emb_cls = CharEmbedding if emb_params.phono_feat_mat is None else PhonoEmbedding
     embedding = emb_cls.from_params(emb_params)
     return embedding
 

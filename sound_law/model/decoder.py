@@ -14,9 +14,9 @@ from sound_law.data.dataset import EOT_ID
 
 from .beam_searcher import BaseBeamSearcher
 from .lstm_state import LstmStatesByLayers
-from .module import (EmbParams, GlobalAttention, LanguageEmbedding, LstmParams,
-                     MultiLayerLSTMCell, NormControlledResidual,
-                     SharedEmbedding, get_embedding)
+from .module import (CharEmbedding, EmbParams, GlobalAttention,
+                     LanguageEmbedding, LstmParams, MultiLayerLSTMCell,
+                     NormControlledResidual, get_embedding)
 
 
 @dataclass
@@ -90,7 +90,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
     """A decoder that unrolls the LSTM decoding procedure by steps."""
 
     def __init__(self,
-                 char_emb: SharedEmbedding,
+                 char_emb: CharEmbedding,
                  cell: MultiLayerLSTMCell,
                  attn: GlobalAttention,
                  hidden: nn.Linear,
@@ -105,7 +105,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
     @classmethod
     def from_params(cls,
                     dec_params: DecParams,
-                    embedding: Optional[SharedEmbedding] = None) -> LstmDecoder:
+                    embedding: Optional[CharEmbedding] = None) -> LstmDecoder:
         emb_params = dec_params.emb_params
         lstm_params = dec_params.lstm_params
         if emb_params is None and embedding is None:
