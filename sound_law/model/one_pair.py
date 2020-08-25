@@ -13,7 +13,7 @@ from dev_misc.utils import pbar
 from sound_law.data.data_loader import OnePairBatch, PaddedUnitSeqs
 from sound_law.data.dataset import SOT_ID
 
-from .decoder import DecParams, LstmDecoder
+from .decoder import DecParams, Hypotheses, LstmDecoder
 from .encoder import CnnEncoder, CnnParams, LstmEncoder
 from .module import EmbParams, LstmParams
 
@@ -132,13 +132,13 @@ class OnePairModel(nn.Module):
         scores = torch.cat(scores, dim='tgt_vocab')
         return scores
 
-    def predict(self, batch: OnePairBatch):
+    def predict(self, batch: OnePairBatch) -> Hypotheses:
         src_emb, (output, state) = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         src_emb = src_emb.refine_names('pos', 'batch', 'src_emb')
         output = output.refine_names('pos', 'batch', 'output')
 
-        beam = self.decoder.search(SOT_ID, src_emb, output,
+        hyps = self.decoder.search(SOT_ID, src_emb, output,
                                    batch.src_seqs.paddings,
                                    batch.src_seqs.lengths,
                                    g.beam_size)
-        beam
+        return hyps

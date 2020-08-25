@@ -6,3 +6,4 @@ greek_accentuation
 panphon
 ipapy
 lang2vec
+editdistance

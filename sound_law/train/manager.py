@@ -104,6 +104,7 @@ class OnePairManager:
             logging.info(model)
 
             evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl},
+                                  self.tgt_abc,
                                   metric_writer=metric_writer)
 
             if g.evaluate_only:
@@ -213,7 +214,7 @@ class OneToManyManager:
 
         # NOTE(j_luo) Evaluate on every loader that is not for training.
         eval_dls = self.dl_reg.get_loaders_by_name(lambda name: 'train' not in name or '_e' in name)
-        self.evaluator = Evaluator(self.model, eval_dls,
+        self.evaluator = Evaluator(self.model, eval_dls, self.tgt_abc,
                                    metric_writer=metric_writer)
 
         if not g.evaluate_only:

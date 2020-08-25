@@ -6,6 +6,7 @@ from dev_misc import BT, LT
 
 B = TypeVar('Beam')
 C = TypeVar('Candidates')
+H = TypeVar('Hypotheses')
 
 
 class BaseBeamSearcher(ABC):
@@ -14,7 +15,7 @@ class BaseBeamSearcher(ABC):
         self._batch_size = batch_size
         self._beam_size = beam_size
 
-    def search(self, init_beam: B) -> B:
+    def search(self, init_beam: B) -> H:
         beam = init_beam
         while True:
             finished = self.is_finished(beam)
@@ -23,7 +24,7 @@ class BaseBeamSearcher(ABC):
 
             candidates = self.get_next_candidates(beam)
             beam = self.get_next_beam(beam, candidates)
-        return beam
+        return self.get_hypotheses(beam)
 
     @abstractmethod
     def is_finished(self, beam: B) -> BT: ...
@@ -33,3 +34,6 @@ class BaseBeamSearcher(ABC):
 
     @abstractmethod
     def get_next_beam(self, beam: B, candidates: C) -> B: ...
+
+    @abstractmethod
+    def get_hypotheses(self, final_beam: B) -> H: ...

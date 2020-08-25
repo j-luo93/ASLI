@@ -156,7 +156,7 @@ class OnePairDataLoader(BaseDataLoader):
             else:
                 yield batch
 
-    @ cached_property
+    @cached_property
     def tgt_seqs(self) -> PaddedUnitSeqs:
         items = list()
         for i in range(len(self.dataset)):
@@ -167,6 +167,10 @@ class OnePairDataLoader(BaseDataLoader):
         if has_gpus():
             ret.cuda()
         return ret
+
+    @property
+    def tgt_vocab(self):
+        return self.dataset.tgt_vocab
 
     def get_token_from_index(self, index: int, side: str):
         assert side in ['src', 'tgt']

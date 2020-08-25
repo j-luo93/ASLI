@@ -80,6 +80,12 @@ class Candidates:
     state: LstmStatesByLayers  # The LSTM state that is mapped to `log_probs`.
 
 
+@dataclass
+class Hypotheses:
+    tokens: LT
+    scores: FT
+
+
 class LstmDecoder(nn.Module, BaseBeamSearcher):
     """A decoder that unrolls the LSTM decoding procedure by steps."""
 
@@ -263,6 +269,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
 
         next_scores = top_s.rename(BU='beam')
         next_tokens = tokens.rename(BU='beam')
+        next_beam_ids = beam_i.rename(BU='beam')
         next_state = cand.state.apply(retrieve)
         last_finished = retrieve(beam.finished, last_name=None)
         this_ended = next_tokens == EOT_ID
@@ -272,7 +279,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                                 next_scores,
                                 next_tokens,
                                 next_state,
-                                beam_i)
+                                next_beam_ids)
         return next_beam
 
     def search(self,
@@ -282,14 +289,15 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                src_paddings: BT,
                src_lengths: LT,
                beam_size: int,
-               lang_emb: Optional[FT] = None) -> Beam:
+               lang_emb: Optional[FT] = None) -> Hypotheses:
         if beam_size <= 0:
             raise ValueError(f'`beam_size` must be positive.')
 
         batch_size = src_emb.size('batch')
         tokens = torch.full([batch_size, beam_size], sot_id, dtype=torch.long).to(
             src_emb.device).rename('batch', 'beam')
-        accum_scores = torch.zeros_like(tokens)
+        accum_scores = torch.full_like(tokens, -9999.9).float()
+        accum_scores[:, 0] = 0.0
         lstm_state = LstmStatesByLayers.zero_state(
             self.cell.num_layers,
             batch_size,
@@ -314,5 +322,19 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                                  lang_emb=lang_emb)
         init_beam = Beam(0, accum_scores, tokens,
                          lstm_state, constants)
-        final_beam = super().search(init_beam)
-        return final_beam
+        hyps = super().search(init_beam)
+        return hyps
+
+    def get_hypotheses(self, final_beam: Beam) -> Hypotheses:
+        tokens = list()
+        beam = final_beam
+        beam_i = get_named_range(beam.beam_size, 'beam').expand_as(final_beam.beam_ids)
+        batch_i = get_named_range(beam.batch_size, 'batch').expand_as(beam_i)
+        while beam.last_beam is not None:
+            with NoName(beam.tokens, beam.beam_ids, beam_i, batch_i):
+                tokens.insert(0, beam.tokens[batch_i, beam_i])
+                beam_i = beam_i[batch_i, beam.beam_ids]
+            beam = beam.last_beam
+        with NoName(*tokens):
+            tokens = torch.stack(tokens, dim=-1).refine_names('batch', 'beam', 'pos')
+        return Hypotheses(tokens, final_beam.accum_scores)

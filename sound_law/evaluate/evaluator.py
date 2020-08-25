@@ -1,15 +1,22 @@
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence
 
+import numpy as np
 import pandas as pd
 import torch
 
-from dev_misc import g
+from dev_misc import add_argument, g, get_tensor
+from dev_misc.devlib import get_array
 from dev_misc.trainlib import Metric, Metrics
 from dev_misc.trainlib.tb_writer import MetricWriter
-from dev_misc.utils import pbar
+from dev_misc.utils import handle_sequence_inputs, pbar
+from editdistance import eval_all
 from sound_law.data.data_loader import OnePairDataLoader
+from sound_law.data.dataset import EOT_ID, Alphabet
 from sound_law.model.one_pair import OnePairModel
+
+add_argument('eval_mode', dtype=str, default='prob', choices=[
+             'prob', 'edit_dist'], msg='Evaluation mode using probabilities or edit distance.')
 
 
 class Evaluator:
@@ -17,12 +24,14 @@ class Evaluator:
     def __init__(self,
                  model: OnePairModel,
                  dls: Dict[str, OnePairDataLoader],
+                 tgt_abc: Alphabet,
                  metric_writer: Optional[MetricWriter] = None):
         """
         `dls` is a dictionary from names to dataloaders. Names are used as prefixes of metric names for the evaluator output.
         """
         self.model = model
         self.dls = dls
+        self.tgt_abc = tgt_abc
         self.metric_writer = metric_writer
 
     def evaluate(self, stage: str, global_step: int) -> Metrics:
@@ -43,22 +52,57 @@ class Evaluator:
         records = list()
         K = 5
         for batch in pbar(dl, desc='eval: batch'):
-            # scores = self.model.get_scores(batch, dl.tgt_seqs)
-            scores = self.model.predict(batch)
-            top_scores, top_preds = torch.topk(scores, 5, dim='tgt_vocab')
-            for pss, pis, gi in zip(top_scores, top_preds, batch.indices):
-                gold = dl.get_token_from_index(gi, 'tgt')
-                src = dl.get_token_from_index(gi, 'src')
-                record = {'source': src, 'gold_target': gold}
-                for i, (ps, pi) in enumerate(zip(pss, pis), 1):
-                    pred = dl.get_token_from_index(pi, 'tgt')
-                    record[f'pred_target@{i}'] = pred
-                    record[f'pred_target@{i}_score'] = ps
-                records.append(record)
+            if g.eval_mode == 'edit_dist':
+
+                @handle_sequence_inputs
+                def translate(token_ids: Sequence[int]) -> str:
+                    ret = list()
+                    for tid in token_ids:
+                        if tid != EOT_ID:
+                            ret.append(self.tgt_abc[tid])
+                    return ''.join(ret)
+
+                hyps = self.model.predict(batch)
+                preds = np.asarray([translate(tokens) for tokens in hyps.tokens.cpu().numpy()])
+                dists = get_tensor(eval_all(preds.reshape(-1), dl.tgt_vocab)).view(-1, g.beam_size, len(dl.tgt_vocab))
+                weights = hyps.scores.log_softmax(dim=-1).exp()
+                w_dists = weights.align_to(..., 'tgt_vocab') * dists
+                expected_dists = w_dists.sum(dim='beam')
+                top_s, top_i = torch.topk(-expected_dists, K, dim='tgt_vocab')
+                top_s = -top_s
+
+                for pss, pis, gi, pbis, pbss in zip(top_s, top_i, batch.indices, preds, hyps.scores):
+                    # for scores_i, token_ids, gi in zip(scores, tokens, batch.indices):
+                    gold = dl.get_token_from_index(gi, 'tgt')
+                    src = dl.get_token_from_index(gi, 'src')
+                    record = {'source': src, 'gold_target': gold}
+                    for i, (pbs, pbi) in enumerate(zip(pbss, pbis), 1):
+                        record[f'pred_target_beam@{i}'] = pbi
+                        record[f'pred_target_beam@{i}_score'] = pbs
+                    for i, (ps, pi) in enumerate(zip(pss, pis), 1):
+                        pred_closest = dl.get_token_from_index(pi, 'tgt')
+                        record[f'pred_target@{i}'] = pred_closest
+                        record[f'pred_target@{i}_score'] = ps
+                    records.append(record)
+            else:
+                scores = self.model.get_scores(batch, dl.tgt_seqs)
+                top_scores, top_preds = torch.topk(scores, 5, dim='tgt_vocab')
+                for pss, pis, gi in zip(top_scores, top_preds, batch.indices):
+                    gold = dl.get_token_from_index(gi, 'tgt')
+                    src = dl.get_token_from_index(gi, 'src')
+                    record = {'source': src, 'gold_target': gold}
+                    for i, (ps, pi) in enumerate(zip(pss, pis), 1):
+                        pred = dl.get_token_from_index(pi, 'tgt')
+                        record[f'pred_target@{i}'] = pred
+                        record[f'pred_target@{i}_score'] = ps
+                    records.append(record)
         out_df = pd.DataFrame.from_records(records)
         values = ['gold_target'] + [f'pred_target@{i}' for i in range(1, K + 1)]
         aggfunc = {'gold_target': '|'.join}
         aggfunc.update({f'pred_target@{i}': 'last' for i in range(1, K + 1)})
+        if g.eval_mode == 'edit_dist':
+            values += [f'pred_target_beam@{i}' for i in range(1, g.beam_size + 1)]
+            aggfunc.update({f'pred_target_beam@{i}': 'last' for i in range(1, g.beam_size + 1)})
         out_df = out_df.pivot_table(index='source', values=values,
                                     aggfunc=aggfunc)
 

@@ -15,7 +15,7 @@ from torch.utils.data import Dataset
 
 from dev_misc import LT, add_argument, g
 from dev_misc.devlib.helper import get_array
-from dev_misc.utils import handle_sequence_inputs, cached_property
+from dev_misc.utils import cached_property, handle_sequence_inputs
 
 _ft = FeatureTable()
 
@@ -141,7 +141,7 @@ class Alphabet:
     def __getitem__(self, unit: str) -> int: ...
 
     def __getitem__(self, index_or_unit):
-        if isinstance(index_or_unit, int):
+        if isinstance(index_or_unit, int) or np.issubdtype(type(index_or_unit), np.integer):
             return self._id2unit[index_or_unit]
         elif isinstance(index_or_unit, str):
             return self._unit2id[index_or_unit]
@@ -257,4 +257,4 @@ class OnePairDataset(Dataset):
     @cached_property
     def max_seq_length(self) -> int:
         '''Returns the max sequence length among sequences in this Dataset'''
-        return max(map(len, self.src_unit_seqs)) + 2 # the +2 comes from the SOT and EOT tokens
+        return max(map(len, self.src_unit_seqs)) + 2  # the +2 comes from the SOT and EOT tokens
