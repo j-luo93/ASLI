@@ -7,11 +7,11 @@ from dev_misc import FT, LT, add_argument, g
 from sound_law.data.data_loader import OnePairBatch
 from sound_law.data.dataset import SOT_ID
 
+from .base_model import BaseModel
 from .module import LanguageEmbedding
-from .one_pair import OnePairModel
 
 
-class OneToManyModel(OnePairModel):
+class OneToManyModel(BaseModel):
 
     add_argument('lang_emb_mode', default='mean', dtype=str,
                  choices=['random', 'mean', 'mean_lang2vec'], msg='Mode for the language embedding module.')
@@ -30,13 +30,5 @@ class OneToManyModel(OnePairModel):
                                           mode=g.lang_emb_mode,
                                           dropout=g.dropout)
 
-    def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
-        src_emb, (output, state) = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
-        lang_emb = self.lang_emb(batch.tgt_seqs.lang_id)
-        target = batch.tgt_seqs.ids if use_target else None
-        log_probs, almt_distrs = self.decoder(SOT_ID, src_emb,
-                                              output, batch.src_seqs.paddings,
-                                              target=target,
-                                              max_length=max_length,
-                                              lang_emb=lang_emb)
-        return log_probs, almt_distrs
+    def _prepare_lang_emb(self, batch: OnePairBatch) -> FT:
+        return self.lang_emb(batch.tgt_seqs.lang_id)

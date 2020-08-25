@@ -23,7 +23,7 @@ add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the
 add_argument('save_interval', default=100, dtype=int, msg='Frequency to save the progress and the model.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
-add_argument('train_e_keep_ratio', dtype=float, default=0.1,
+add_argument('train_e_keep_ratio', dtype=float,
              msg='Ratio of cognate pairs to keep for the training set during evaluation.')
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')

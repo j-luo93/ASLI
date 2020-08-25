@@ -2,6 +2,7 @@
 This file contains models for one pair of src-tgt languags.
 """
 
+from abc import abstractmethod
 from typing import Optional, Sequence, Tuple
 
 import torch
@@ -18,7 +19,7 @@ from .encoder import CnnEncoder, CnnParams, LstmEncoder
 from .module import EmbParams, LstmParams
 
 
-class OnePairModel(nn.Module):
+class BaseModel(nn.Module):
 
     add_argument('char_emb_size', default=256, dtype=int, msg='Embedding size for characters (as input).')
     add_argument('hidden_size', default=256, dtype=int, msg='Hidden size for LSTM states.')
@@ -76,10 +77,12 @@ class OnePairModel(nn.Module):
     def forward(self, batch: OnePairBatch, use_target: bool = True, max_length: int = None) -> Tuple[FT, FT]:
         src_emb, (output, state) = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         target = batch.tgt_seqs.ids if use_target else None
+        lang_emb = self._prepare_lang_emb(batch)
         log_probs, almt_distrs = self.decoder(SOT_ID, src_emb,
                                               output, batch.src_seqs.paddings,
                                               max_length=max_length,
-                                              target=target)
+                                              target=target,
+                                              lang_emb=lang_emb)
         return log_probs, almt_distrs
 
     # def old_get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs) -> FT:
@@ -99,6 +102,7 @@ class OnePairModel(nn.Module):
         src_emb = src_emb.refine_names('pos', 'batch', 'src_emb')
         output = output.refine_names('pos', 'batch', 'output')
         batch_size = src_emb.size('batch')
+        lang_emb = self._prepare_lang_emb(batch)
 
         def create_chunk(size, base, old_chunk, interleave: bool = True):
             if not interleave:
@@ -124,7 +128,8 @@ class OnePairModel(nn.Module):
             chunk_tgt_paddings = create_chunk(None, split.paddings, None, interleave=False)
             chunk_log_probs, _ = self.decoder(SOT_ID, chunk_src_emb,
                                               chunk_output, chunk_src_paddings,
-                                              target=chunk_target)
+                                              target=chunk_target,
+                                              lang_emb=lang_emb)
             chunk_scores = chunk_log_probs.gather('unit', chunk_target)
             chunk_scores = (chunk_scores * chunk_tgt_paddings).sum('pos')
             with NoName(chunk_scores):
@@ -137,8 +142,13 @@ class OnePairModel(nn.Module):
         src_emb = src_emb.refine_names('pos', 'batch', 'src_emb')
         output = output.refine_names('pos', 'batch', 'output')
 
+        lang_emb = self._prepare_lang_emb(batch)
         hyps = self.decoder.search(SOT_ID, src_emb, output,
                                    batch.src_seqs.paddings,
                                    batch.src_seqs.lengths,
-                                   g.beam_size)
+                                   g.beam_size,
+                                   lang_emb=lang_emb)
         return hyps
+
+    @abstractmethod
+    def _prepare_lang_emb(self, batch: OnePairBatch) -> FT: ...
