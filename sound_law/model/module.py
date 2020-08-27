@@ -2,21 +2,20 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple, Union, Dict
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
-
+import lang2vec.lang2vec as l2v
 import numpy
 import torch
 import torch.nn as nn
 import torch.nn.init
 from torch.nn.functional import normalize
 
-from dev_misc import BT, FT, LT, get_zeros, add_argument, g
+from dev_misc import BT, FT, LT, add_argument, g, get_zeros
 from dev_misc.devlib.named_tensor import NameHelper, NoName
 from dev_misc.utils import cacheable
 from sound_law.data.dataset import PAD_ID
 from sound_law.model.lstm_state import LstmStatesByLayers, LstmStateTuple
-import lang2vec.lang2vec as l2v
 
 LstmOutputsByLayers = Tuple[FT, LstmStatesByLayers]
 
@@ -306,7 +305,7 @@ class LanguageEmbedding(nn.Embedding):
             # initialize the learned embedding with a smaller dimension than g.char_emb_size so that after concatenation with the lang2vec feature embedding, the total embedding is g.char_emb_size
             embedding_dim -= l2v_emb_len
             assert l2v_emb_len + embedding_dim == g.char_emb_size
-        
+
         super().__init__(num_embeddings, embedding_dim, **kwargs)
         self.drop = nn.Dropout(dropout)
 
@@ -325,7 +324,7 @@ class LanguageEmbedding(nn.Embedding):
                 emb = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
         else:
             emb = self.weight[index]
-        
+
         if self.mode == 'mean_lang2vec':
             l2v_emb = getattr(self, 'lang2vec_' + self.id2lang[index])
             emb = torch.cat([emb, l2v_emb], dim=0)

@@ -13,7 +13,7 @@ import torch
 from panphon.featuretable import FeatureTable
 from torch.utils.data import Dataset
 
-from dev_misc import LT, add_argument, g
+from dev_misc import LT, Arg, add_argument, add_check, g
 from dev_misc.devlib.helper import get_array
 from dev_misc.utils import cached_property, handle_sequence_inputs
 
@@ -33,6 +33,10 @@ DF = pd.DataFrame
 add_argument('use_stress', dtype=bool, default=True, msg='Flag to use stress.')
 add_argument('use_duration', dtype=bool, default=True, msg='Flag to use duration (long or short).')
 add_argument('use_diacritics', dtype=bool, default=True, msg='Flag to use diacritics.')
+add_argument('use_duplicate_phono', dtype=bool, default=True,
+             msg='Whether to keep duplicate symbols based on their phonological features.')
+add_check(
+    (Arg('use_duplicate_phono') == False) | (Arg('separate_output') == True) | (Arg('use_phono_features') == False))
 
 
 @handle_sequence_inputs
@@ -84,8 +88,32 @@ class Alphabet:
 
         cnt = defaultdict(Counter)
         for content, source in zip(contents, sources):
-            for c in content:
-                cnt[c][source] += 1
+            for u in content:
+                cnt[u][source] += 1
+
+        # Merge symbols with identical phonological features if needed.
+        if not g.use_duplicate_phono and g.use_phono_features:
+            t2u = defaultdict(list)  # tuple-to-units
+            for u in cnt:
+                t = tuple(self.get_pfv(u).numpy())
+                t2u[t].append(u)
+
+            u2u = dict()  # unit-to-unit. This finds the standardized unit.
+            for units in t2u.values():
+                lengths = [len(u) for u in units]
+                min_i = lengths.index(min(lengths))
+                std_u = units[min_i]
+                for u in units:
+                    u2u[u] = std_u
+
+            merged_cnt = defaultdict(Counter)
+            for u, std_u in u2u.items():
+                merged_cnt[std_u].update(cnt[u])
+
+            logging.imp(f'Symbols are merged based on phonological features: from {len(cnt)} to {len(merged_cnt)}.')
+            cnt = merged_cnt
+            self._u2u = u2u
+
         units = sorted(cnt.keys())
         self.special_units = [SOT, EOT]
         self.special_ids = [SOT_ID, EOT_ID]
@@ -105,6 +133,12 @@ class Alphabet:
             pfvs.append(pfv)
         pfm = torch.stack(pfvs, dim=0).refine_names(..., 'phono_feat')
         return pfm
+
+    def standardize(self, s: str) -> str:
+        """Standardize the string if needed."""
+        if not g.use_duplicate_phono and g.use_phono_features:
+            return self._u2u[s]
+        return s
 
     def get_pfv(self, s: str) -> LT:
         """Get phonological feature vector (pfv) for a unit."""
@@ -225,8 +259,14 @@ class OnePairDataset(Dataset):
             tgt_df = tgt_df.loc[:num]
 
         token_col = 'tokens' if input_format == 'wikt' else 'parsed_tokens'
-        self.src_unit_seqs = get_array([_preprocess(tokens) for tokens in src_df[token_col].str.split()])
-        self.tgt_unit_seqs = get_array([_preprocess(tokens) for tokens in tgt_df[token_col].str.split()])
+
+        def get_unit_seqs(df, abc: Alphabet):
+            # TODO(j_luo) A bit hacky here.
+            std_func = handle_sequence_inputs(lambda s: abc.standardize(s))
+            return get_array([std_func(_preprocess(tokens)) for tokens in df[token_col].str.split()])
+
+        self.src_unit_seqs = get_unit_seqs(src_df, src_abc)
+        self.tgt_unit_seqs = get_unit_seqs(tgt_df, tgt_abc)
 
         self.src_vocab = np.asarray([''.join(us) for us in self.src_unit_seqs])
         self.tgt_vocab = np.asarray([''.join(us) for us in self.tgt_unit_seqs])
