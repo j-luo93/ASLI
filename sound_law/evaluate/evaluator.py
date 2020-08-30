@@ -21,6 +21,8 @@ from sound_law.model.one_pair import OnePairModel
 
 add_argument('eval_mode', dtype=str, default='prob', choices=[
              'prob', 'edit_dist'], msg='Evaluation mode using probabilities or edit distance.')
+add_argument('comp_mode', dtype=str, default='ids', choices=['ids', 'units', 'str', 'ids_gpu'],
+             msg='Comparison mode.')
 
 
 class Evaluator:
@@ -116,11 +118,14 @@ class Evaluator:
             ret = list()
             for tid in token_ids:
                 if tid != EOT_ID:
-                    # ret.append(self.tgt_abc[tid])
-                    ret.append(tid)
-                    # ret.append(self.tgt_abc[tid])
-            # return ''.join(ret), len(ret)
-            return ret, len(ret)
+                    if g.comp_mode in ['units', 'str', 'ids_gpu']:
+                        ret.append(self.tgt_abc[tid])
+                    else:
+                        ret.append(tid)
+            if g.comp_mode in ['units', 'ids']:
+                return ret, len(ret)
+            else:
+                return ''.join(ret), len(ret)
 
         hyps = self.model.predict(batch)
         pred_lengths = list()
@@ -132,44 +137,50 @@ class Evaluator:
         preds = np.asarray(preds)
         pred_lengths = np.asarray(pred_lengths)
 
-        # Old code.
-        dists = get_tensor(eval_all(preds.reshape(-1), dl.tgt_vocab)).view(-1, g.beam_size, len(dl.tgt_vocab))
-        # dists = get_tensor(eval_all(preds.reshape(-1), dl.tgt_vocab)).view(-1, g.beam_size, len(dl.tgt_vocab))
+        if g.comp_mode == 'units':
+            dists = get_tensor(eval_all(preds.reshape(-1), dl.tgt_seqs.units)).view(-1, g.beam_size, len(dl.tgt_vocab))
+        elif g.comp_mode == 'ids':
+            tgt_ids = dl.tgt_seqs.ids.t().cpu().numpy()
+            tgt_lengths = dl.tgt_seqs.lengths
+            tgt_ids = [ids[: l] for ids, l in zip(tgt_ids, tgt_lengths)]
+            dists = get_tensor(eval_all(preds.reshape(-1), tgt_ids)).view(-1, g.beam_size, len(dl.tgt_vocab))
+        elif g.comp_mode == 'str':
+            dists = get_tensor(eval_all(preds.reshape(-1), dl.tgt_vocab)).view(-1, g.beam_size, len(dl.tgt_vocab))
+        else:
+            # Prepare tensorx.
+            pred_lengths = Tx(get_tensor(pred_lengths), ['pred_batch', 'beam'])
+            pred_tokens = Tx(hyps.tokens, ['pred_batch', 'beam', 'l'])
+            tgt_lengths = Tx(dl.tgt_seqs.lengths, ['tgt_batch'])
+            tgt_tokens = Tx(dl.tgt_seqs.ids.t(), ['tgt_batch', 'l'])
 
-        # # Prepare tensorx.
-        # pred_lengths = Tx(get_tensor(pred_lengths), ['pred_batch', 'beam'])
-        # pred_tokens = Tx(hyps.tokens, ['pred_batch', 'beam', 'l'])
-        # tgt_lengths = Tx(dl.tgt_seqs.lengths, ['tgt_batch'])
-        # tgt_tokens = Tx(dl.tgt_seqs.ids.t(), ['tgt_batch', 'l'])
+            # Align them to the same names.
+            new_names = ['pred_batch', 'beam', 'tgt_batch']
+            pred_lengths = pred_lengths.align_to(*new_names)
+            pred_tokens = pred_tokens.align_to(*(new_names + ['l']))
+            tgt_lengths = tgt_lengths.align_to(*new_names)
+            tgt_tokens = tgt_tokens.align_to(*(new_names + ['l']))
 
-        # # Align them to the same names.
-        # new_names = ['pred_batch', 'beam', 'tgt_batch']
-        # pred_lengths = pred_lengths.align_to(*new_names)
-        # pred_tokens = pred_tokens.align_to(*(new_names + ['l']))
-        # tgt_lengths = tgt_lengths.align_to(*new_names)
-        # tgt_tokens = tgt_tokens.align_to(*(new_names + ['l']))
+            # Expand them to have the same size.
+            pred_bs = pred_tokens.size('pred_batch')
+            tgt_bs = tgt_tokens.size('tgt_batch')
+            pred_lengths = pred_lengths.expand({'tgt_batch': tgt_bs})
+            pred_tokens = pred_tokens.expand({'tgt_batch': tgt_bs})
+            tgt_tokens = tgt_tokens.expand({'pred_batch': pred_bs, 'beam': g.beam_size})
+            tgt_lengths = tgt_lengths.expand({'pred_batch': pred_bs, 'beam': g.beam_size})
 
-        # # Expand them to have the same size.
-        # pred_bs = pred_tokens.size('pred_batch')
-        # tgt_bs = tgt_tokens.size('tgt_batch')
-        # pred_lengths = pred_lengths.expand({'tgt_batch': tgt_bs})
-        # pred_tokens = pred_tokens.expand({'tgt_batch': tgt_bs})
-        # tgt_tokens = tgt_tokens.expand({'pred_batch': pred_bs, 'beam': g.beam_size})
-        # tgt_lengths = tgt_lengths.expand({'pred_batch': pred_bs, 'beam': g.beam_size})
+            # Flatten names, preparing for DP.
+            def flatten(tx):
+                return tx.flatten(['pred_batch', 'beam', 'tgt_batch'], 'batch')
 
-        # # Flatten names, preparing for DP.
-        # def flatten(tx):
-        #     return tx.flatten(['pred_batch', 'beam', 'tgt_batch'], 'batch')
+            pred_lengths = flatten(pred_lengths)
+            pred_tokens = flatten(pred_tokens)
+            tgt_lengths = flatten(tgt_lengths)
+            tgt_tokens = flatten(tgt_tokens)
 
-        # pred_lengths = flatten(pred_lengths)
-        # pred_tokens = flatten(pred_tokens)
-        # tgt_lengths = flatten(tgt_lengths)
-        # tgt_tokens = flatten(tgt_tokens)
-
-        # dp = EditDist(pred_tokens, tgt_tokens, pred_lengths, tgt_lengths)
-        # dp.run()
-        # dists = dp.get_results().data
-        # dists = dists.view(pred_bs, g.beam_size, tgt_bs)
+            dp = EditDist(pred_tokens, tgt_tokens, pred_lengths, tgt_lengths)
+            dp.run()
+            dists = dp.get_results().data
+            dists = dists.view(pred_bs, g.beam_size, tgt_bs)
 
         weights = hyps.scores.log_softmax(dim=-1).exp()
         w_dists = weights.align_to(..., 'tgt_vocab') * dists
@@ -179,7 +190,6 @@ class Evaluator:
 
         records = list()
         for pss, pis, gi, pbis, pbss in zip(top_s, top_i, batch.indices, preds, hyps.scores):
-            # for scores_i, token_ids, gi in zip(scores, tokens, batch.indices):
             gold = dl.get_token_from_index(gi, 'tgt')
             src = dl.get_token_from_index(gi, 'src')
             record = {'source': src, 'gold_target': gold}
