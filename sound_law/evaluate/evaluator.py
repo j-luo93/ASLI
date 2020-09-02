@@ -14,15 +14,17 @@ from dev_misc.devlib.tensor_x import TensorX as Tx
 from dev_misc.trainlib import Metric, Metrics
 from dev_misc.trainlib.tb_writer import MetricWriter
 from dev_misc.utils import handle_sequence_inputs, pbar
-from editdistance import eval_all
 from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
 from sound_law.data.dataset import EOT_ID, Alphabet
+from sound_law.evaluate.edit_dist import edit_dist_all
 from sound_law.model.one_pair import OnePairModel
 
 add_argument('eval_mode', dtype=str, default='prob', choices=[
              'prob', 'edit_dist'], msg='Evaluation mode using probabilities or edit distance.')
-add_argument('comp_mode', dtype=str, default='ids', choices=['ids', 'units', 'str', 'ids_gpu'],
+add_argument('comp_mode', dtype=str, default='units', choices=['ids', 'units', 'str', 'ids_gpu'],
              msg='Comparison mode.')
+add_argument('use_phono_edit_dist', dtype=str, default=True,
+             msg='Flag to use phonologically-aware edit distance.')
 
 
 class Evaluator:
@@ -137,6 +139,8 @@ class Evaluator:
         preds = np.asarray(preds)
         pred_lengths = np.asarray(pred_lengths)
 
+        eval_all = lambda seqs_0, seqs_1: edit_dist_all(seqs_0, seqs_1, mode='ed')
+
         if g.comp_mode == 'units':
             dists = get_tensor(eval_all(preds.reshape(-1), dl.tgt_seqs.units)).view(-1, g.beam_size, len(dl.tgt_vocab))
         elif g.comp_mode == 'ids':
@@ -177,7 +181,15 @@ class Evaluator:
             tgt_lengths = flatten(tgt_lengths)
             tgt_tokens = flatten(tgt_tokens)
 
-            dp = EditDist(pred_tokens, tgt_tokens, pred_lengths, tgt_lengths)
+            penalty = None
+            if g.use_phono_edit_dist:
+                pfm = self.tgt_abc.pfm
+                x = pfm.rename('src_unit', 'phono_feat')
+                y = pfm.rename('tgt_unit', 'phono_feat')
+                names = ('src_unit', 'tgt_unit', 'phono_feat')
+                diff = x.align_to(*names) - y.align_to(*names)
+                penalty = (diff != 0).sum('phono_feat').cuda()
+            dp = EditDist(pred_tokens, tgt_tokens, pred_lengths, tgt_lengths, penalty=penalty)
             dp.run()
             dists = dp.get_results().data
             dists = dists.view(pred_bs, g.beam_size, tgt_bs)
