@@ -49,7 +49,6 @@ class MultiLayerLSTMCell(nn.Module):
             cells.append(nn.LSTMCell(hidden_size, hidden_size))
         self.cells = nn.ModuleList(cells)
 
-    # IDEA(j_luo) write a function to generate simple `from_params` classmethods?
     @classmethod
     def from_params(cls, lstm_params: LstmParams) -> MultiLayerLSTMCell:
         return cls(lstm_params.input_size,
@@ -69,9 +68,8 @@ class MultiLayerLSTMCell(nn.Module):
             new_c.rename_(*c.names)
             new_states.append((new_h, new_c))
             input_ = new_h.refine_names('batch', ...)
-            # Note that the last layer doesn't use dropout, following nn.LSTM.
-            if i < self.num_layers - 1:
-                input_ = self.drop(input_)
+            # Note that the last layer also uses dropout, which is different from nn.LSTM.
+            input_ = self.drop(input_)
         return input_, LstmStatesByLayers(new_states)
 
     def extra_repr(self):

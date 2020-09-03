@@ -94,13 +94,15 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                  cell: MultiLayerLSTMCell,
                  attn: GlobalAttention,
                  hidden: nn.Linear,
-                 nc_residual: NormControlledResidual):
+                 nc_residual: NormControlledResidual,
+                 dropout: float = 0.0):
         super().__init__()
         self.char_emb = char_emb
         self.cell = cell
         self.attn = attn
         self.hidden = hidden
         self.nc_residual = nc_residual
+        self.drop = nn.Dropout(dropout)
 
     @classmethod
     def from_params(cls,
@@ -126,7 +128,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
             norms_or_ratios=dec_params.norms_or_ratios,
             control_mode=dec_params.control_mode)
 
-        return LstmDecoder(char_emb, cell, attn, hidden, nc_residual)
+        return LstmDecoder(char_emb, cell, attn, hidden, nc_residual, lstm_params.dropout)
 
     def forward(self,
                 sot_id: int,
@@ -191,12 +193,12 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         emb = self.char_emb(input_)
         if lang_emb is not None:
             emb = emb + lang_emb
-        # TODO(j_luo) add dropout.
-        hid_rnn, next_state = self.cell(emb, state)
-        almt, ctx = self.attn.forward(hid_rnn, src_states, mask_src)
+        hid_rnn, next_state = self.cell(emb, state)  # hid_rnn has gone through dropout already.
+        almt, ctx = self.attn.forward(hid_rnn, src_states, mask_src)  # So has src_states.
         with NoName(hid_rnn, ctx):
             cat = torch.cat([hid_rnn, ctx], dim=-1)
         hid_cat = self.hidden(cat)
+        hid_cat = self.drop(hid_cat)
 
         with NoName(src_emb, hid_cat, almt):
             ctx_emb = (src_emb * almt.t().unsqueeze(dim=-1)).sum(dim=0)
