@@ -174,7 +174,7 @@ class Evaluator:
                 y = pfm.rename('tgt_unit', 'phono_feat')
                 names = ('src_unit', 'tgt_unit', 'phono_feat')
                 diff = x.align_to(*names) - y.align_to(*names)
-                penalty = (diff != 0).sum('phono_feat').cuda()
+                penalty = (diff != 0).sum('phono_feat').cuda() / 22.0
             dp = EditDist(pred_tokens, tgt_tokens, pred_lengths, tgt_lengths, penalty=penalty)
             dp.run()
             dists = dp.get_results().data
