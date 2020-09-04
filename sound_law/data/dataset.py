@@ -45,7 +45,7 @@ class Vocabulary:
     def __init__(self, forms: NDA, unit_seqs: NDA, id_seqs: NDA):
         df = pd.DataFrame({'form': forms, 'unit_seq': unit_seqs, 'id_seq': id_seqs})
         mask = df.duplicated(subset='form')
-        df = df[mask]
+        df = df[~mask]
         self.forms = df['form'].values
         self.unit_seqs = df['unit_seq'].values
         self.id_seqs = df['id_seq'].values

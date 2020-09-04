@@ -206,7 +206,7 @@ class Evaluator:
                 record[f'pred_target_beam@{i}'] = pbi
                 record[f'pred_target_beam@{i}_score'] = pbs.item()
             for i, (ps, pi) in enumerate(zip(pss, pis), 1):
-                pred_closest = tgt_vocab[pi]
+                pred_closest = tgt_vocab[pi]['form']
                 record[f'pred_target@{i}'] = pred_closest
                 record[f'pred_target@{i}_score'] = ps.item()
 
