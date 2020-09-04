@@ -23,7 +23,7 @@ from .trainer import Trainer
 
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
-add_argument('save_interval', default=100, dtype=int, msg='Frequency to save the progress and the model.')
+add_argument('save_interval', dtype=int, msg='Frequency to save the progress and the model.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
 add_argument('train_e_keep_ratio', dtype=float,
