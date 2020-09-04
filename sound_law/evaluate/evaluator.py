@@ -14,8 +14,8 @@ from dev_misc.devlib.tensor_x import TensorX as Tx
 from dev_misc.trainlib import Metric, Metrics
 from dev_misc.trainlib.tb_writer import MetricWriter
 from dev_misc.utils import handle_sequence_inputs, pbar
+from sound_law.data.alphabet import EOT_ID, Alphabet
 from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
-from sound_law.data.dataset import EOT_ID, Alphabet
 from sound_law.evaluate.edit_dist import edit_dist_all
 from sound_law.model.one_pair import OnePairModel
 

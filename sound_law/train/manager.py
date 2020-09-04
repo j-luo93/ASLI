@@ -2,6 +2,7 @@
 A manager class takes care of managing the data loader, the model, and the trainer.
 """
 import logging
+from typing import Optional
 
 import torch
 from torch.optim import Adam
@@ -9,8 +10,10 @@ from torch.optim import Adam
 from dev_misc import add_argument, add_condition, g, get_tensor
 from dev_misc.devlib.helper import has_gpus
 from dev_misc.trainlib.tb_writer import MetricWriter
+from sound_law.data.alphabet import Alphabet
+from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
-from sound_law.data.dataset import Alphabet, Split, get_paths
+from sound_law.data.dataset import Split
 from sound_law.data.setting import Setting
 from sound_law.evaluate.evaluator import Evaluator
 from sound_law.model.one_pair import OnePairModel
@@ -36,31 +39,39 @@ class OnePairManager:
     """A manager for sound law induction on one src-tgt pair."""
 
     def __init__(self):
-        # Prepare alphabets first.
-        src_path, tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
+        # Prepare cognate registry.
+        cr = CognateRegistry()
+        cr.add_pair(g.data_path, g.src_lang, g.tgt_lang)
+
+        # Prepare alphabets now.
+        # src_path, tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
         if g.share_src_tgt_abc:
-            self.src_abc = Alphabet.from_tsvs('shared', [src_path, tgt_path], g.input_format)
+            # self.src_abc = Alphabet.from_tsvs('shared', [src_path, tgt_path], g.input_format)
+            self.src_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang)
             self.tgt_abc = self.src_abc
         else:
-            self.src_abc = Alphabet.from_tsv(g.src_lang, src_path, g.input_format)
-            self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path, g.input_format)
+            self.src_abc = cr.prepare_alphabet(g.src_lang)
+            self.tgt_abc = cr.prepare_alphabet(g.tgt_lang)
+            # self.src_abc = Alphabet.from_tsv(g.src_lang, src_path, g.input_format)
+            # self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path, g.input_format)
 
         # Prepare data loaders with different splits.
         self.dl_reg = DataLoaderRegistry()
 
-        def create_setting(name: str, split: Split, for_training: bool) -> Setting:
-            return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc, for_training)
+        def create_setting(name: str, split: Split, for_training: bool, keep_ratio: Optional[float] = None) -> Setting:
+            return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, for_training, keep_ratio=keep_ratio)
 
-        def register_dl(setting: Setting, keep_ratio=None):
-            # NOTE(j_luo) `keep_ratio` should only be used for training set since a smaller pool of candiates for dev/test would inflate the scores.
-            self.dl_reg.register_data_loader(setting, keep_ratio=keep_ratio)
+        def register_dl(setting: Setting):
+            self.dl_reg.register_data_loader(setting, cr)
 
         if g.input_format == 'wikt':
-            train_setting = create_setting('train', Split('train'), True)
-            train_e_setting = create_setting('train_e', Split('train'), False)  # For evaluation.
+            train_setting = create_setting('train', Split('train'), True,
+                                           keep_ratio=g.keep_ratio)
+            train_e_setting = create_setting('train_e', Split('train'), False,
+                                             keep_ratio=g.train_e_keep_ratio)  # For evaluation.
             dev_setting = create_setting('dev', Split('dev'), False)
-            register_dl(train_setting, keep_ratio=g.keep_ratio)
-            register_dl(train_e_setting, keep_ratio=g.keep_ratio)
+            register_dl(train_setting)
+            register_dl(train_e_setting)
             register_dl(dev_setting)
         else:
             for fold in range(5):
@@ -68,11 +79,15 @@ class OnePairManager:
                 train_folds = list(range(1, 6))
                 train_folds.remove(dev_fold)
 
-                train_setting = create_setting(f'train@{fold}', Split('train', train_folds), True)
-                train_e_setting = create_setting(f'train@{fold}_e', Split('train', train_folds), False)
+                train_setting = create_setting(
+                    f'train@{fold}', Split('train', train_folds), True,
+                    keep_ratio=g.keep_ratio)
+                train_e_setting = create_setting(
+                    f'train@{fold}_e', Split('train', train_folds), False,
+                    keep_ratio=g.train_e_keep_ratio)
                 dev_setting = create_setting(f'dev@{fold}', Split('dev', [dev_fold]), False)
-                register_dl(train_setting, keep_ratio=g.keep_ratio)
-                register_dl(train_e_setting, keep_ratio=g.train_e_keep_ratio)
+                register_dl(train_setting)
+                register_dl(train_e_setting)
                 register_dl(dev_setting)
 
         test_setting = create_setting('test', Split('test'), False)
@@ -137,21 +152,36 @@ class OneToManyManager:
     add_argument('train_tgt_langs', dtype=str, nargs='+', msg='Target languages used for training.')
 
     def __init__(self):
-        # Get alphabets from tsvs. Note that the target alphabet is based on the union of all target languages, i.e., a shared alphabet for all.
-        src_paths = list()
-        tgt_paths = list()
+        # Prepare cognate registry first.
+        cr = CognateRegistry()
         all_tgt = sorted([g.tgt_lang] + list(g.train_tgt_langs))
         for tgt in all_tgt:
-            src_path, tgt_path = get_paths(g.data_path, g.src_lang, tgt)
-            src_paths.append(src_path)
-            tgt_paths.append(tgt_path)
+            cr.add_pair(g.data_path, g.src_lang, tgt)
+
+        # Get alphabets. Note that the target alphabet is based on the union of all target languages, i.e., a shared alphabet for all.
         if g.share_src_tgt_abc:
-            self.src_abc = Alphabet.from_tsvs('shared', src_paths + tgt_paths, g.input_format)
+            self.src_abc = cr.prepare_alphabet(*(all_tgt + [g.src_lang]))
             self.tgt_abc = self.src_abc
         else:
-            self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
-            self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
+            self.src_abc = cr.prepare_alphabet(g.src_lang)
+            self.tgt_abc = cr.prepare_alphabet(*all_tgt)
 
+        # # Get alphabets from tsvs. Note that the target alphabet is based on the union of all target languages, i.e., a shared alphabet for all.
+        # src_paths = list()
+        # tgt_paths = list()
+        # all_tgt = sorted([g.tgt_lang] + list(g.train_tgt_langs))
+        # for tgt in all_tgt:
+        #     src_path, tgt_path = get_paths(g.data_path, g.src_lang, tgt)
+        #     src_paths.append(src_path)
+        #     tgt_paths.append(tgt_path)
+        # if g.share_src_tgt_abc:
+        #     self.src_abc = Alphabet.from_tsvs('shared', src_paths + tgt_paths, g.input_format)
+        #     self.tgt_abc = self.src_abc
+        # else:
+        #     self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
+        #     self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
+
+        # Get stats for unseen units.
         stats = self.tgt_abc.stats
         _, test_tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
         mask = (stats.sum() == stats.loc[test_tgt_path])
@@ -165,14 +195,15 @@ class OneToManyManager:
         # Get all data loaders.
         self.dl_reg = DataLoaderRegistry()
 
-        def create_setting(name: str, tgt_lang: str, split: Split, for_training: bool) -> Setting:
-            return Setting(name, 'one_pair', split, g.src_lang, tgt_lang, self.src_abc, self.tgt_abc, for_training)
+        def create_setting(name: str, tgt_lang: str, split: Split, for_training: bool, keep_ratio: Optional[float] = None) -> Setting:
+            return Setting(name, 'one_pair', split, g.src_lang, tgt_lang, for_training, keep_ratio=keep_ratio)
 
-        def register_dl(setting: Setting, keep_ratio=None):
-            self.dl_reg.register_data_loader(setting, lang2id=lang2id, keep_ratio=keep_ratio)
+        def register_dl(setting: Setting):
+            self.dl_reg.register_data_loader(setting, cr, lang2id=lang2id)
 
-        test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'), False)
-        register_dl(test_setting, keep_ratio=g.test_keep_ratio)
+        test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'), False,
+                                      keep_ratio=g.test_keep_ratio)
+        register_dl(test_setting)
 
         # Get the training languages.
         for train_tgt_lang in g.train_tgt_langs:
@@ -182,13 +213,15 @@ class OneToManyManager:
             else:
                 train_split = Split('train')
                 dev_split = Split('dev')
-            train_setting = create_setting(f'train@{train_tgt_lang}', train_tgt_lang, train_split, True)
-            train_e_setting = create_setting(f'train@{train_tgt_lang}_e', train_tgt_lang, train_split, False)
+            train_setting = create_setting(f'train@{train_tgt_lang}', train_tgt_lang,
+                                           train_split, True, keep_ratio=g.keep_ratio)
+            train_e_setting = create_setting(
+                f'train@{train_tgt_lang}_e', train_tgt_lang, train_split, False, keep_ratio=g.train_e_keep_ratio)
             dev_setting = create_setting(f'dev@{train_tgt_lang}', train_tgt_lang, dev_split, False)
             test_setting = create_setting(f'test@{train_tgt_lang}', train_tgt_lang, Split('test'), False)
 
-            register_dl(train_setting, keep_ratio=g.keep_ratio)
-            register_dl(train_e_setting, keep_ratio=g.train_e_keep_ratio)
+            register_dl(train_setting)
+            register_dl(train_e_setting)
             register_dl(dev_setting)
             register_dl(test_setting)
 

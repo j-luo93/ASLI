@@ -18,7 +18,9 @@ from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
 from dev_misc.utils import cached_property
 from sound_law.data.dataset import OnePairDataset
 
-from .dataset import Alphabet, Split
+from .alphabet import Alphabet
+from .cognate import CognateRegistry
+from .dataset import Split
 from .setting import Setting
 
 
@@ -126,20 +128,15 @@ class OnePairDataLoader(BaseDataLoader):
 
     def __init__(self,
                  setting: Setting,
-                 data_path: Path,
-                 input_format: str,
-                 lang2id: Dict[str, int] = None,
-                 keep_ratio: Optional[float] = None):
-        dataset = OnePairDataset(data_path, setting.split,
-                                 setting.src_lang, setting.tgt_lang,
-                                 setting.src_abc, setting.tgt_abc,
-                                 input_format, keep_ratio=keep_ratio)
+                 cog_reg: CognateRegistry,
+                 lang2id: Dict[str, int] = None):
+        dataset = cog_reg.prepare_dataset(setting)
         self.lang2id = lang2id
         self.src_lang = setting.src_lang
         self.tgt_lang = setting.tgt_lang
 
         sampler = None
-        if setting.for_training and dataset.sample_weights is not None:
+        if setting.for_training:
             sampler = WeightedRandomSampler(dataset.sample_weights, len(dataset))
         super().__init__(dataset, setting,
                          batch_size=g.batch_size,
@@ -186,10 +183,10 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
     add_argument('tgt_lang', dtype=str, msg='ISO code for the target language.')
     add_argument('input_format', dtype=str, choices=['wikt', 'ielex'], default='ielex', msg='Input format.')
 
-    def get_data_loader(self, setting: BaseSetting, **kwargs) -> BaseDataLoader:
+    def get_data_loader(self, setting: BaseSetting, cog_reg: CognateRegistry, **kwargs) -> BaseDataLoader:
         if setting.task == 'one_pair':
             # TODO(j_luo) The options can all be part of setting.
-            dl = OnePairDataLoader(setting, g.data_path, g.input_format, **kwargs)
+            dl = OnePairDataLoader(setting, cog_reg, **kwargs)
         else:
             raise ValueError(f'Cannot understand this task "{setting.task}".')
         return dl
