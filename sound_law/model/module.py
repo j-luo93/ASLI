@@ -185,8 +185,7 @@ class GlobalAttention(nn.Module):
 
     def __init__(self,
                  input_src_size: int,
-                 input_tgt_size: int,
-                 dropout: float = 0.0):
+                 input_tgt_size: int):
         super(GlobalAttention, self).__init__()
 
         self.input_src_size = input_src_size
@@ -194,13 +193,12 @@ class GlobalAttention(nn.Module):
 
         self.Wa = nn.Parameter(torch.Tensor(input_src_size, input_tgt_size))
         torch.nn.init.xavier_normal_(self.Wa)
-        self.drop = nn.Dropout(dropout)
 
     @cacheable(switch='Wh_s')
     def _get_Wh_s(self, h_s: FT) -> FT:
         sl, bs, ds = h_s.size()
         with NoName(h_s):
-            Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
+            Wh_s = h_s.reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
         return Wh_s
 
     def forward(self,

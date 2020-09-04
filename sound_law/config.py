@@ -22,6 +22,7 @@ class ZSLatIta:  # "ZS" stands for zero-shot.
     train_tgt_langs: Tuple[str, ...] = ('ron', 'cat', 'spa', 'por')
     task: str = 'one_to_many'
     lang_emb_mode: str = 'mean'
+    beam_size: int = 5
 
 
 @reg
@@ -49,6 +50,7 @@ class UsePhono:
     # the char_emb_size and hidden_size must be multiples of 22 since there are 22 phonological features being used (each of which has its own embedding)
     char_emb_size: int = 220
     hidden_size: int = 220
+    use_duplicate_phono: bool = False
 
 
 @reg

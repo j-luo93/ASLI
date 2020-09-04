@@ -19,12 +19,14 @@ from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
 from sound_law.evaluate.edit_dist import edit_dist_all
 from sound_law.model.one_pair import OnePairModel
 
-add_argument('eval_mode', dtype=str, default='prob', choices=[
+add_argument('eval_mode', dtype=str, default='edit_dist', choices=[
              'prob', 'edit_dist'], msg='Evaluation mode using probabilities or edit distance.')
 add_argument('comp_mode', dtype=str, default='units', choices=['ids', 'units', 'str', 'ids_gpu'],
              msg='Comparison mode.')
 add_argument('use_phono_edit_dist', dtype=str, default=True,
              msg='Flag to use phonologically-aware edit distance.')
+add_argument('phono_edit_dist_scale', dtype=float, default=1.0,
+             msg='Scaling factor for phonological edit distance.')
 
 
 class Evaluator:
@@ -174,7 +176,7 @@ class Evaluator:
                 y = pfm.rename('tgt_unit', 'phono_feat')
                 names = ('src_unit', 'tgt_unit', 'phono_feat')
                 diff = x.align_to(*names) - y.align_to(*names)
-                penalty = (diff != 0).sum('phono_feat').cuda() / 22.0
+                penalty = (diff != 0).sum('phono_feat').cuda().float() / g.phono_edit_dist_scale
             dp = EditDist(pred_tokens, tgt_tokens, pred_lengths, tgt_lengths, penalty=penalty)
             dp.run()
             dists = dp.get_results().data
