@@ -95,24 +95,6 @@ class Alphabet:
         ret = torch.LongTensor(ret[0]) + 1
         return ret
 
-    # @classmethod
-    # def from_tsv(cls, lang: str, path: str, input_format: str) -> Alphabet:
-    #     df = pd.read_csv(path, sep='\t')
-    #     df['source'] = path
-    #     contents, sources = _get_contents(df, input_format)
-    #     return cls(lang, contents, sources=sources)
-
-    # @classmethod
-    # def from_tsvs(cls, lang: str, paths: List[str], input_format: str) -> Alphabet:
-    #     dfs = list()
-    #     for path in paths:
-    #         df = pd.read_csv(path, sep='\t')
-    #         df['source'] = path
-    #         dfs.append(df)
-    #     df = pd.concat(dfs)
-    #     contents, sources = _get_contents(df, input_format)
-    #     return cls(lang, contents, sources=sources)
-
     @overload
     def __getitem__(self, index: int) -> str: ...
 

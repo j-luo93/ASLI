@@ -88,17 +88,6 @@ class BaseModel(nn.Module):
                                               lang_emb=lang_emb)
         return log_probs, almt_distrs
 
-    # def old_get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs) -> FT:
-    #     """Given a batch and a list of target tokens (provided as id sequences), return scores produced by the model."""
-    #     assert not self.training
-    #     max_length = tgt_vocab_seqs.ids.size('pos')
-    #     log_probs, _ = self.forward(batch, use_target=False, max_length=max_length)
-    #     with Rename(tgt_vocab_seqs.ids, batch='tgt_vocab'), Rename(tgt_vocab_seqs.paddings, batch='tgt_vocab'):
-    #         unit_scores = log_probs.gather('unit', tgt_vocab_seqs.ids)
-    #         unit_scores = unit_scores * tgt_vocab_seqs.paddings.float().align_as(unit_scores)
-    #     scores = unit_scores.sum('pos')
-    #     return scores
-
     def get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs, chunk_size: int = 100) -> FT:
         """Given a batch and a list of target tokens (provided as id sequences), return scores produced by the model."""
         src_emb, (output, state) = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)

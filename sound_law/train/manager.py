@@ -44,16 +44,12 @@ class OnePairManager:
         cr.add_pair(g.data_path, g.src_lang, g.tgt_lang)
 
         # Prepare alphabets now.
-        # src_path, tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
         if g.share_src_tgt_abc:
-            # self.src_abc = Alphabet.from_tsvs('shared', [src_path, tgt_path], g.input_format)
             self.src_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang)
             self.tgt_abc = self.src_abc
         else:
             self.src_abc = cr.prepare_alphabet(g.src_lang)
             self.tgt_abc = cr.prepare_alphabet(g.tgt_lang)
-            # self.src_abc = Alphabet.from_tsv(g.src_lang, src_path, g.input_format)
-            # self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path, g.input_format)
 
         # Prepare data loaders with different splits.
         self.dl_reg = DataLoaderRegistry()
@@ -165,21 +161,6 @@ class OneToManyManager:
         else:
             self.src_abc = cr.prepare_alphabet(g.src_lang)
             self.tgt_abc = cr.prepare_alphabet(*all_tgt)
-
-        # # Get alphabets from tsvs. Note that the target alphabet is based on the union of all target languages, i.e., a shared alphabet for all.
-        # src_paths = list()
-        # tgt_paths = list()
-        # all_tgt = sorted([g.tgt_lang] + list(g.train_tgt_langs))
-        # for tgt in all_tgt:
-        #     src_path, tgt_path = get_paths(g.data_path, g.src_lang, tgt)
-        #     src_paths.append(src_path)
-        #     tgt_paths.append(tgt_path)
-        # if g.share_src_tgt_abc:
-        #     self.src_abc = Alphabet.from_tsvs('shared', src_paths + tgt_paths, g.input_format)
-        #     self.tgt_abc = self.src_abc
-        # else:
-        #     self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
-        #     self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
 
         # Get stats for unseen units.
         stats = self.tgt_abc.stats

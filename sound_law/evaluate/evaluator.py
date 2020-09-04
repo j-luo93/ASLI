@@ -61,10 +61,7 @@ class Evaluator:
         K = 5
         for batch in pbar(dl, desc='eval: batch'):
             if g.eval_mode == 'edit_dist':
-                # from pytorch_memlab import LineProfiler
-                # with LineProfiler(self._get_batch_records) as prof:
                 batch_records = self._get_batch_records(dl, batch, K)
-                # print(prof.display())
                 records.extend(batch_records)
             else:
                 scores = self.model.get_scores(batch, dl.tgt_seqs)
@@ -139,18 +136,7 @@ class Evaluator:
         preds = np.asarray(preds)
         pred_lengths = np.asarray(pred_lengths)
 
-        eval_all = lambda seqs_0, seqs_1: edit_dist_all(seqs_0, seqs_1, mode='ed')
-
-        if g.comp_mode == 'units':
-            dists = get_tensor(eval_all(preds.reshape(-1), dl.tgt_seqs.units)).view(-1, g.beam_size, len(dl.tgt_vocab))
-        elif g.comp_mode == 'ids':
-            tgt_ids = dl.tgt_seqs.ids.t().cpu().numpy()
-            tgt_lengths = dl.tgt_seqs.lengths
-            tgt_ids = [ids[: l] for ids, l in zip(tgt_ids, tgt_lengths)]
-            dists = get_tensor(eval_all(preds.reshape(-1), tgt_ids)).view(-1, g.beam_size, len(dl.tgt_vocab))
-        elif g.comp_mode == 'str':
-            dists = get_tensor(eval_all(preds.reshape(-1), dl.tgt_vocab)).view(-1, g.beam_size, len(dl.tgt_vocab))
-        else:
+        if g.comp_mode == 'ids_gpu':
             # Prepare tensorx.
             pred_lengths = Tx(get_tensor(pred_lengths), ['pred_batch', 'beam'])
             pred_tokens = Tx(hyps.tokens, ['pred_batch', 'beam', 'l'])
@@ -193,6 +179,18 @@ class Evaluator:
             dp.run()
             dists = dp.get_results().data
             dists = dists.view(pred_bs, g.beam_size, tgt_bs)
+        else:
+            eval_all = lambda seqs_0, seqs_1: edit_dist_all(seqs_0, seqs_1, mode='ed')
+            flat_preds = preds.reshape(-1)
+            if g.comp_mode == 'units':
+                flat_golds = dl.tgt_seqs.units
+            elif g.comp_mode == 'ids':
+                tgt_ids = dl.tgt_seqs.ids.t().cpu().numpy()
+                tgt_lengths = dl.tgt_seqs.lengths
+                flat_golds = [ids[: l] for ids, l in zip(tgt_ids, tgt_lengths)]
+            elif g.comp_mode == 'str':
+                flat_golds = dl.tgt_vocabulary.forms
+            dists = get_tensor(eval_all(flat_preds, flat_golds)).view(-1, g.beam_size, len(dl.tgt_vocabulary))
 
         weights = hyps.scores.log_softmax(dim=-1).exp()
         w_dists = weights.align_to(..., 'tgt_vocab') * dists
@@ -201,15 +199,14 @@ class Evaluator:
         top_s = -top_s
 
         records = list()
-        for pss, pis, gi, pbis, pbss in zip(top_s, top_i, batch.indices, preds, hyps.scores):
-            gold = dl.get_token_from_index(gi, 'tgt')
-            src = dl.get_token_from_index(gi, 'src')
+        tgt_vocab = dl.tgt_vocabulary
+        for pss, pis, src, gold, pbis, pbss in zip(top_s, top_i, batch.src_seqs.forms, batch.tgt_seqs.forms, preds, hyps.scores):
             record = {'source': src, 'gold_target': gold}
             for i, (pbs, pbi) in enumerate(zip(pbss, pbis), 1):
                 record[f'pred_target_beam@{i}'] = pbi
                 record[f'pred_target_beam@{i}_score'] = pbs.item()
             for i, (ps, pi) in enumerate(zip(pss, pis), 1):
-                pred_closest = dl.get_token_from_index(pi, 'tgt')
+                pred_closest = tgt_vocab[pi]
                 record[f'pred_target@{i}'] = pred_closest
                 record[f'pred_target@{i}_score'] = ps.item()
 
