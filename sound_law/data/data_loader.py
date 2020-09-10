@@ -16,7 +16,7 @@ from dev_misc.trainlib import BaseSetting
 from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
                                                 BaseDataLoaderRegistry)
 from dev_misc.utils import cached_property
-from sound_law.data.dataset import OnePairDataset
+from sound_law.data.dataset import OnePairDataset, Vocabulary
 
 from .alphabet import Alphabet
 from .cognate import CognateRegistry
@@ -138,6 +138,8 @@ class OnePairDataLoader(BaseDataLoader):
         self.lang2id = lang2id
         self.src_lang = setting.src_lang
         self.tgt_lang = setting.tgt_lang
+        self.src_abc = cog_reg.get_alphabet(setting.src_lang)
+        self.tgt_abc = cog_reg.get_alphabet(setting.tgt_lang)
 
         sampler = None
         if setting.for_training:
@@ -172,11 +174,11 @@ class OnePairDataLoader(BaseDataLoader):
         return ret
 
     @property
-    def src_vocabulary(self):
+    def src_vocabulary(self) -> Vocabulary:
         return self.dataset.src_vocabulary
 
     @property
-    def tgt_vocabulary(self):
+    def tgt_vocabulary(self) -> Vocabulary:
         return self.dataset.tgt_vocabulary
 
 

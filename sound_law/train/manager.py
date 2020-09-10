@@ -109,7 +109,7 @@ class OnePairManager:
 
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
-                logging.info(f'Loaded from {g.saved_model_path}.')
+                logging.imp(f'Loaded from {g.saved_model_path}.')
             if has_gpus():
                 model.cuda()
             logging.info(model)
@@ -130,7 +130,8 @@ class OnePairManager:
                                   eval_interval=g.eval_interval,
                                   save_interval=g.save_interval,
                                   metric_writer=metric_writer)
-                trainer.init_params('uniform', -0.1, 0.1)
+                if g.saved_model_path is None:
+                    trainer.init_params('uniform', -0.1, 0.1)
                 trainer.set_optimizer(Adam, lr=0.002)
                 trainer.train(self.dl_reg)
 
@@ -219,7 +220,7 @@ class OneToManyManager:
 
         if g.saved_model_path is not None:
             self.model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
-            logging.info(f'Loaded from {g.saved_model_path}.')
+            logging.imp(f'Loaded from {g.saved_model_path}.')
         if has_gpus():
             self.model.cuda()
         logging.info(self.model)
@@ -242,7 +243,8 @@ class OneToManyManager:
                                    eval_interval=g.eval_interval,
                                    save_interval=g.save_interval,
                                    metric_writer=metric_writer)
-            self.trainer.init_params('uniform', -0.1, 0.1)
+            if g.saved_model_path is None:
+                self.trainer.init_params('uniform', -0.1, 0.1)
             self.trainer.set_optimizer(Adam, lr=0.002)
 
     def run(self):

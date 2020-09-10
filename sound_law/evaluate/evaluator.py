@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -13,15 +14,15 @@ from dev_misc.devlib.dp import EditDist
 from dev_misc.devlib.tensor_x import TensorX as Tx
 from dev_misc.trainlib import Metric, Metrics
 from dev_misc.trainlib.tb_writer import MetricWriter
-from dev_misc.utils import handle_sequence_inputs, pbar
-from sound_law.data.alphabet import EOT_ID, Alphabet
+from dev_misc.utils import pbar
+from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
 from sound_law.evaluate.edit_dist import edit_dist_all
 from sound_law.model.one_pair import OnePairModel
 
 add_argument('eval_mode', dtype=str, default='edit_dist', choices=[
              'prob', 'edit_dist'], msg='Evaluation mode using probabilities or edit distance.')
-add_argument('comp_mode', dtype=str, default='units', choices=['ids', 'units', 'str', 'ids_gpu'],
+add_argument('comp_mode', dtype=str, default='str', choices=['ids', 'units', 'str', 'ids_gpu'],
              msg='Comparison mode.')
 add_argument('use_phono_edit_dist', dtype=str, default=True,
              msg='Flag to use phonologically-aware edit distance.')
@@ -113,30 +114,8 @@ class Evaluator:
         return metrics
 
     def _get_batch_records(self, dl: OnePairDataLoader, batch: OnePairBatch, K: int) -> List[Dict[str, Any]]:
-
-        @handle_sequence_inputs
-        def translate(token_ids: Sequence[int]) -> Tuple[str, int]:
-            ret = list()
-            for tid in token_ids:
-                if tid != EOT_ID:
-                    if g.comp_mode in ['units', 'str', 'ids_gpu']:
-                        ret.append(self.tgt_abc[tid])
-                    else:
-                        ret.append(tid)
-            if g.comp_mode in ['units', 'ids']:
-                return ret, len(ret)
-            else:
-                return ''.join(ret), len(ret)
-
         hyps = self.model.predict(batch)
-        pred_lengths = list()
-        preds = list()
-        for tokens in hyps.tokens.cpu().numpy():
-            p, l = zip(*translate(tokens))
-            preds.append(p)
-            pred_lengths.append(l)
-        preds = np.asarray(preds)
-        pred_lengths = np.asarray(pred_lengths)
+        preds, pred_lengths = hyps.translate(self.tgt_abc)
 
         if g.comp_mode == 'ids_gpu':
             # Prepare tensorx.

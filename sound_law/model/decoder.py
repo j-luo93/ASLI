@@ -1,22 +1,33 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Tuple
+from functools import partial
+from typing import Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 
-from dev_misc import BT, FT, LT
+from dev_misc import BT, FT, LT, NDA
 from dev_misc.devlib.named_tensor import (NameHelper, NoName, duplicate,
                                           get_named_range)
-from dev_misc.utils import ScopedCache
+from dev_misc.utils import ScopedCache, handle_sequence_inputs
+from sound_law.data.alphabet import Alphabet
 from sound_law.data.dataset import EOT_ID
+from sound_law.evaluate.edit_dist import translate
 
 from .beam_searcher import BaseBeamSearcher
 from .lstm_state import LstmStatesByLayers
 from .module import (CharEmbedding, EmbParams, GlobalAttention,
                      LanguageEmbedding, LstmParams, MultiLayerLSTMCell,
                      NormControlledResidual, get_embedding)
+
+try:
+    import graphviz
+    from graphviz import Digraph
+except ModuleNotFoundError:
+    pass
 
 
 @dataclass
@@ -73,6 +84,65 @@ class Beam:
                     beam_ids=beam_ids,
                     finished=finished)
 
+    def trace_back(self, *attr_names: str) -> Dict[str, torch.Tensor]:
+        beam_i = get_named_range(self.beam_size, 'beam').expand_as(self.beam_ids)
+        batch_i = get_named_range(self.batch_size, 'batch').expand_as(beam_i)
+        beam = self
+        ret = defaultdict(list)
+        while beam.last_beam is not None:
+            with NoName(beam.beam_ids, beam_i, batch_i):
+                for attr_name in attr_names:
+                    attr = getattr(beam, attr_name)
+                    with NoName(attr):
+                        ret[attr_name].insert(0, attr[batch_i, beam_i])
+                beam_i = beam_i[batch_i, beam_i]
+                # beam_i = beam_i[batch_i, beam.beam_ids]
+            beam = beam.last_beam
+        for attr_name in attr_names:
+            with NoName(*ret[attr_name]):
+                ret[attr_name] = torch.stack(ret[attr_name], dim=-1).refine_names('batch', 'beam', 'pos')
+        return ret
+
+    def to_traceback(self) -> BeamTraceback:
+        tb = self.trace_back('accum_scores', 'beam_ids', 'tokens')
+        scores = tb['accum_scores'].cpu().detach().numpy()
+        beam_ids = tb['beam_ids'].cpu().detach().numpy()
+        tokens = tb['tokens'].cpu().detach().numpy()
+        return BeamTraceback(scores, beam_ids, tokens)
+
+
+class BeamTraceback:
+
+    def __init__(self, scores: NDA, beam_ids: NDA, values: NDA):
+        self.scores = scores
+        self.beam_ids = beam_ids
+        self.values = values
+
+    def visualize(self, batch_index: int, output_name: str):
+        """Visualize the entire search procedure for the `batch_index`-th example, saved to `output_name`."""
+        g = Digraph('G', engine="neato", filename=output_name, format='svg')
+
+        g.attr(size='7')
+        s = self.scores[batch_index]
+        b = self.beam_ids[batch_index]
+        v = self.values[batch_index]
+        B, L = s.shape
+
+        def get_node_name(step, beam_id):
+            return f'{step + 1},{beam_id + 1},{v[beam_id, step]},{s[beam_id, step]:.3f}'
+
+        for t in range(L):
+            for bi in range(B):
+                node_name = get_node_name(t, bi)
+                pos = f'{3 * t},{(B - bi)}!'
+                g.node(node_name, pos=pos)
+        for t in range(1, L):
+            for bi in range(B):
+                in_node = get_node_name(t, bi)
+                out_node = get_node_name(t - 1, b[bi, t])
+                g.edge(out_node, in_node)
+        g.render()
+
 
 @dataclass
 class Candidates:
@@ -84,6 +154,18 @@ class Candidates:
 class Hypotheses:
     tokens: LT
     scores: FT
+
+    def translate(self, abc: Alphabet) -> Tuple[NDA, NDA]:
+        beam_translate = handle_sequence_inputs(lambda token_ids: translate(token_ids, abc=abc))
+        pred_lengths = list()
+        preds = list()
+        for tokens in self.tokens.cpu().numpy():
+            p, l = zip(*beam_translate(tokens))
+            preds.append(p)
+            pred_lengths.append(l)
+        preds = np.asarray(preds)
+        pred_lengths = np.asarray(pred_lengths)
+        return preds, pred_lengths
 
 
 class LstmDecoder(nn.Module, BaseBeamSearcher):
@@ -328,15 +410,5 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         return hyps
 
     def get_hypotheses(self, final_beam: Beam) -> Hypotheses:
-        tokens = list()
-        beam = final_beam
-        beam_i = get_named_range(beam.beam_size, 'beam').expand_as(final_beam.beam_ids)
-        batch_i = get_named_range(beam.batch_size, 'batch').expand_as(beam_i)
-        while beam.last_beam is not None:
-            with NoName(beam.tokens, beam.beam_ids, beam_i, batch_i):
-                tokens.insert(0, beam.tokens[batch_i, beam_i])
-                beam_i = beam_i[batch_i, beam.beam_ids]
-            beam = beam.last_beam
-        with NoName(*tokens):
-            tokens = torch.stack(tokens, dim=-1).refine_names('batch', 'beam', 'pos')
+        tokens = final_beam.trace_back('tokens')['tokens']
         return Hypotheses(tokens, final_beam.accum_scores)
