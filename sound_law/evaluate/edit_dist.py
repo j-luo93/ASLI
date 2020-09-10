@@ -42,7 +42,7 @@ def edit_dist(seq_0: str, seq_1: str, mode: str) -> Number:
 
 def edit_dist_all(seqs_0: Sequence[str], seqs_1: Sequence[str], mode: str) -> NDA:
     if mode == 'ed':
-        return ed_eval_all(seqs_0, seqs_1)
+        return ed_eval_all(seqs_0, seqs_1, g.num_threads)
 
     ret = list()
     for seq_0 in seqs_0:
@@ -54,7 +54,7 @@ def edit_dist_batch(seqs_0: Sequence[str], seqs_1: Sequence[str], mode: str) -> 
     if len(seqs_0) != len(seqs_1):
         raise ValueError(f'Expect equal values, but got {len(seqs_0)} and {len(seqs_1)}.')
     if mode == 'ed':
-        return ed_eval_batch(seqs_0, seqs_1)
+        return ed_eval_batch(seqs_0, seqs_1, g.num_threads)
 
     ret = [edit_dist(seq_0, seq_1, mode) for seq_0, seq_1 in zip(seqs_0, seqs_1)]
     return np.asarray(ret)

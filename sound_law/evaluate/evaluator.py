@@ -28,6 +28,7 @@ add_argument('use_phono_edit_dist', dtype=str, default=True,
              msg='Flag to use phonologically-aware edit distance.')
 add_argument('phono_edit_dist_scale', dtype=float, default=1.0,
              msg='Scaling factor for phonological edit distance.')
+add_argument('num_threads', default=8, dtype=int, msg='Number of threads used for computing edit distance.')
 
 
 class Evaluator:

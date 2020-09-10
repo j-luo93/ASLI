@@ -53,6 +53,12 @@ class BeamConstant:
     lang_emb: Optional[FT] = None
 
 
+def _stack_beam(lst: List[torch.Tensor]):
+    with NoName(*lst):
+        ret = torch.stack(lst, dim=-1).refine_names('batch', 'beam', 'pos')
+    return ret
+
+
 @dataclass
 class Beam:
     step: int
@@ -85,6 +91,7 @@ class Beam:
                     finished=finished)
 
     def trace_back(self, *attr_names: str) -> Dict[str, torch.Tensor]:
+        """Trace back some attribute by going backwards through the beam search procedure."""
         beam_i = get_named_range(self.beam_size, 'beam').expand_as(self.beam_ids)
         batch_i = get_named_range(self.batch_size, 'batch').expand_as(beam_i)
         beam = self
@@ -95,19 +102,34 @@ class Beam:
                     attr = getattr(beam, attr_name)
                     with NoName(attr):
                         ret[attr_name].insert(0, attr[batch_i, beam_i])
-                beam_i = beam_i[batch_i, beam_i]
+                beam_i = beam.beam_ids[batch_i, beam_i]
+                # beam_i = beam_i[batch_i, beam_i]
                 # beam_i = beam_i[batch_i, beam.beam_ids]
             beam = beam.last_beam
         for attr_name in attr_names:
-            with NoName(*ret[attr_name]):
-                ret[attr_name] = torch.stack(ret[attr_name], dim=-1).refine_names('batch', 'beam', 'pos')
+            ret[attr_name] = _stack_beam(ret[attr_name])
         return ret
 
     def to_traceback(self) -> BeamTraceback:
-        tb = self.trace_back('accum_scores', 'beam_ids', 'tokens')
-        scores = tb['accum_scores'].cpu().detach().numpy()
-        beam_ids = tb['beam_ids'].cpu().detach().numpy()
-        tokens = tb['tokens'].cpu().detach().numpy()
+        """Return a `BeamTraceback` object. Note that this is different from the `trace_back` method
+        because this only assembles all time steps together in a block-like fashion, whereas `trace_back`
+        actually needs to reconstruct the sequences."""
+        beam = self
+        scores = list()
+        beam_ids = list()
+        tokens = list()
+        while beam.last_beam is not None:
+            scores.insert(0, beam.accum_scores)
+            beam_ids.insert(0, beam.beam_ids)
+            tokens.insert(0, beam.tokens)
+            beam = beam.last_beam
+
+        def to_nda(tensor: torch.Tensor) -> NDA:
+            return tensor.cpu().detach().numpy()
+
+        scores = to_nda(_stack_beam(scores))
+        beam_ids = to_nda(_stack_beam(beam_ids))
+        tokens = to_nda(_stack_beam(tokens))
         return BeamTraceback(scores, beam_ids, tokens)
 
 

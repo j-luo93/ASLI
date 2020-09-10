@@ -94,6 +94,8 @@ class Trainer(BaseTrainer):
             # If no duplicates are found, then we discard the last prediction.
             if not any(duplicates[-1]):
                 duplicates[-1][-1] = True
+            if sum(duplicates[-1]) != 1:
+                raise RuntimeError(f'Should have exactly one duplicate.')
         duplicates = get_tensor(duplicates)
 
         # Assemble all scores together.
