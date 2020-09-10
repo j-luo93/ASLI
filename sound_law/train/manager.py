@@ -24,6 +24,7 @@ from .trainer import Trainer
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
 add_argument('save_interval', dtype=int, msg='Frequency to save the progress and the model.')
+add_argument('learning_rate', default=2e-3, dtype=float, msg='Learning rate.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
 add_argument('train_e_keep_ratio', dtype=float,
@@ -132,7 +133,7 @@ class OnePairManager:
                                   metric_writer=metric_writer)
                 if g.saved_model_path is None:
                     trainer.init_params('uniform', -0.1, 0.1)
-                trainer.set_optimizer(Adam, lr=0.002)
+                trainer.set_optimizer(Adam, lr=g.learning_rate)
                 trainer.train(self.dl_reg)
 
         if g.input_format == 'wikt':
@@ -245,7 +246,7 @@ class OneToManyManager:
                                    metric_writer=metric_writer)
             if g.saved_model_path is None:
                 self.trainer.init_params('uniform', -0.1, 0.1)
-            self.trainer.set_optimizer(Adam, lr=0.002)
+            self.trainer.set_optimizer(Adam, lr=g.learning_rate)
 
     def run(self):
         if g.evaluate_only:
