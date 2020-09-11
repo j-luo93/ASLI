@@ -77,15 +77,20 @@ class Evaluator:
                     for i, (ps, pi) in enumerate(zip(pss, pis), 1):
                         pred = dl.get_token_from_index(pi, 'tgt')
                         record[f'pred_target@{i}'] = pred
-                        record[f'pred_target@{i}_score'] = ps
+                        record[f'pred_target@{i}_score'] = f'{ps:.3f}'
                     records.append(record)
         out_df = pd.DataFrame.from_records(records)
-        values = ['gold_target'] + [f'pred_target@{i}' for i in range(1, K + 1)]
+        values = ['gold_target']
+        values.extend([f'pred_target@{i}' for i in range(1, K + 1)])
+        values.extend([f'pred_target@{i}_score' for i in range(1, K + 1)])
         aggfunc = {'gold_target': '|'.join}
         aggfunc.update({f'pred_target@{i}': 'last' for i in range(1, K + 1)})
+        aggfunc.update({f'pred_target@{i}_score': 'last' for i in range(1, K + 1)})
         if g.eval_mode == 'edit_dist':
-            values += [f'pred_target_beam@{i}' for i in range(1, g.beam_size + 1)]
+            values.extend([f'pred_target_beam@{i}' for i in range(1, g.beam_size + 1)])
+            values.extend([f'pred_target_beam@{i}_score' for i in range(1, g.beam_size + 1)])
             aggfunc.update({f'pred_target_beam@{i}': 'last' for i in range(1, g.beam_size + 1)})
+            aggfunc.update({f'pred_target_beam@{i}_score': 'last' for i in range(1, g.beam_size + 1)})
         out_df = out_df.pivot_table(index='source', values=values,
                                     aggfunc=aggfunc)
 
@@ -186,11 +191,11 @@ class Evaluator:
             record = {'source': src, 'gold_target': gold}
             for i, (pbs, pbi) in enumerate(zip(pbss, pbis), 1):
                 record[f'pred_target_beam@{i}'] = pbi
-                record[f'pred_target_beam@{i}_score'] = pbs.item()
+                record[f'pred_target_beam@{i}_score'] = f'{pbs.item():.3f}'
             for i, (ps, pi) in enumerate(zip(pss, pis), 1):
                 pred_closest = tgt_vocab[pi]['form']
                 record[f'pred_target@{i}'] = pred_closest
-                record[f'pred_target@{i}_score'] = ps.item()
+                record[f'pred_target@{i}_score'] = f'{ps.item():.3f}'
 
             records.append(record)
 

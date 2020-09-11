@@ -27,8 +27,6 @@ add_argument('save_interval', dtype=int, msg='Frequency to save the progress and
 add_argument('learning_rate', default=2e-3, dtype=float, msg='Learning rate.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
-add_argument('train_e_keep_ratio', dtype=float,
-             msg='Ratio of cognate pairs to keep for the training set during evaluation.')
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
 add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
@@ -66,7 +64,7 @@ class OnePairManager:
             train_setting = create_setting('train', Split('train'), True,
                                            keep_ratio=g.keep_ratio)
             train_e_setting = create_setting('train_e', Split('train'), False,
-                                             keep_ratio=g.train_e_keep_ratio)  # For evaluation.
+                                             keep_ratio=g.keep_ratio)  # For evaluation.
             dev_setting = create_setting('dev', Split('dev'), False)
             register_dl(train_setting)
             register_dl(train_e_setting)
@@ -82,7 +80,7 @@ class OnePairManager:
                     keep_ratio=g.keep_ratio)
                 train_e_setting = create_setting(
                     f'train@{fold}_e', Split('train', train_folds), False,
-                    keep_ratio=g.train_e_keep_ratio)
+                    keep_ratio=g.keep_ratio)
                 dev_setting = create_setting(f'dev@{fold}', Split('dev', [dev_fold]), False)
                 register_dl(train_setting)
                 register_dl(train_e_setting)
@@ -201,7 +199,7 @@ class OneToManyManager:
             train_setting = create_setting(f'train@{train_tgt_lang}', train_tgt_lang,
                                            train_split, True, keep_ratio=g.keep_ratio)
             train_e_setting = create_setting(
-                f'train@{train_tgt_lang}_e', train_tgt_lang, train_split, False, keep_ratio=g.train_e_keep_ratio)
+                f'train@{train_tgt_lang}_e', train_tgt_lang, train_split, False, keep_ratio=g.keep_ratio)
             dev_setting = create_setting(f'dev@{train_tgt_lang}', train_tgt_lang, dev_split, False)
             test_setting = create_setting(f'test@{train_tgt_lang}', train_tgt_lang, Split('test'), False)
 
