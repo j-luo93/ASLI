@@ -174,7 +174,7 @@ class Evaluator:
                 flat_golds = dl.tgt_vocabulary.forms
             dists = get_tensor(eval_all(flat_preds, flat_golds)).view(-1, g.beam_size, len(dl.tgt_vocabulary))
 
-        weights = hyps.scores.log_softmax(dim=-1).exp()
+        weights = (hyps.scores / g.concentration_scale).log_softmax(dim=-1).exp()
         w_dists = weights.align_to(..., 'tgt_vocab') * dists
         expected_dists = w_dists.sum(dim='beam')
         top_s, top_i = torch.topk(-expected_dists, K, dim='tgt_vocab')

@@ -44,27 +44,37 @@ class ZSPgmcDeu(ZSLatIta):
 
 
 @dataclass
-class UsePhono:
-    use_phono_features: bool = True
-    share_src_tgt_abc: bool = True
+class Size220:
     # the char_emb_size and hidden_size must be multiples of 22 since there are 22 phonological features being used (each of which has its own embedding)
     char_emb_size: int = 220
     hidden_size: int = 220
+
+
+@dataclass
+class Size440:
+    char_emb_size: int = 440
+    hidden_size: int = 440
+
+
+@dataclass
+class UsePhono:
+    use_phono_features: bool = True
+    share_src_tgt_abc: bool = True
     use_duplicate_phono: bool = False
 
 
 @reg
-class ZSLatItaPhono(ZSLatIta, UsePhono):
+class ZSLatItaPhono(ZSLatIta, UsePhono, Size220):
     pass
 
 
 @reg
-class ZSLatSpaPhono(ZSLatSpa, UsePhono):
+class ZSLatSpaPhono(ZSLatSpa, UsePhono, Size220):
     pass
 
 
 @reg
-class OPLatSpaPhono(ZSLatSpaPhono):  # "OP" stands for one-pair.
+class OPLatSpaPhono(ZSLatSpaPhono, Size220):  # "OP" stands for one-pair.
     task: str = 'one_pair'
 
 
@@ -75,5 +85,5 @@ class CnnZSLatIta(ZSLatIta):
 
 
 @reg
-class CnnZSLatItaPhono(CnnZSLatIta, UsePhono):
+class CnnZSLatItaPhono(CnnZSLatIta, UsePhono, Size220):
     pass

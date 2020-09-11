@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 import torch
-from torch.optim import Adam
+from torch.optim import SGD, Adam
 
 from dev_misc import add_argument, add_condition, g, get_tensor
 from dev_misc.devlib.helper import has_gpus
@@ -33,6 +33,7 @@ add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
 add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
 add_argument('use_phono_features', dtype=bool, default=False, msg='Flag to use phonological features.')
+add_argument('optim_cls', dtype=str, default='adam', choices=['sgd', 'adam'], msg='What optimizer to choose.')
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 
 
@@ -133,7 +134,8 @@ class OnePairManager:
                                   metric_writer=metric_writer)
                 if g.saved_model_path is None:
                     trainer.init_params('uniform', -0.1, 0.1)
-                trainer.set_optimizer(Adam, lr=g.learning_rate)
+                optim_cls = Adam if g.optim_cls == 'adam' else SGD
+                trainer.set_optimizer(optim_cls, lr=g.learning_rate)
                 trainer.train(self.dl_reg)
 
         if g.input_format == 'wikt':
@@ -246,7 +248,8 @@ class OneToManyManager:
                                    metric_writer=metric_writer)
             if g.saved_model_path is None:
                 self.trainer.init_params('uniform', -0.1, 0.1)
-            self.trainer.set_optimizer(Adam, lr=g.learning_rate)
+            optim_cls = Adam if g.optim_cls == 'adam' else SGD
+            self.trainer.set_optimizer(optim_cls, lr=g.learning_rate)
 
     def run(self):
         if g.evaluate_only:

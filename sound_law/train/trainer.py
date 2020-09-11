@@ -30,6 +30,8 @@ class Trainer(BaseTrainer):
     add_argument('save_model', dtype=bool, default=True, msg='Flag to save model.')
     add_argument('almt_reg_hyper', dtype=float, default=0.0, msg='Hyperparameter for alignment regularization.')
     add_argument('concentration_scale', dtype=float, default=10.0, msg='Hyperparameter for concentration scale.')
+    add_argument('train_mode', dtype=str, default='mle',
+                 choices=['mle', 'mrt'], msg='Training mode: either MRT or MLE.')
 
     def add_trackables(self):
         self.tracker.add_count_trackable('step', g.num_steps)
@@ -43,7 +45,7 @@ class Trainer(BaseTrainer):
         else:
             logging.info('No model is saved.')
 
-    def _train_one_step_ml(self, batch: OnePairBatch) -> Metrics:
+    def _train_one_step_mle(self, batch: OnePairBatch) -> Metrics:
         """Train for one step using maximum likelihood."""
         log_probs, almt_distrs = self.model(batch)
 
@@ -105,7 +107,8 @@ class Trainer(BaseTrainer):
         target = np.tile(batch.tgt_seqs.forms.reshape(-1, 1), [1, g.beam_size + 1])
         preds = np.concatenate([target[:, 0:1], preds], axis=-1)
         dists = edit_dist_batch(preds.reshape(-1), target.reshape(-1), 'ed')
-        dists = get_tensor(dists.reshape(-1, g.beam_size + 1))
+        lengths = batch.tgt_seqs.lengths.align_to('batch', 'beam')
+        dists = get_tensor(dists.reshape(-1, g.beam_size + 1)).float() / lengths
         risk = (probs * dists).sum(dim='beam')
         risk = Metric('risk', risk.sum(), len(batch))
         return Metrics(risk)
@@ -116,12 +119,12 @@ class Trainer(BaseTrainer):
         self.model.train()
         self.optimizer.zero_grad()
 
-        # metrics = self._train_one_step_ml(batch)
-        metrics = self._train_one_step_mrt(batch, dl.tgt_abc)
-
-        # Backprop.
-        # metrics.loss.mean.backward()
-        metrics.risk.mean.backward()
+        if g.train_mode == 'mrt':
+            metrics = self._train_one_step_mrt(batch, dl.tgt_abc)
+            metrics.risk.mean.backward()
+        else:
+            metrics = self._train_one_step_mle(batch)
+            metrics.loss.mean.backward()
 
         # Clip gradient norm.
         grad_norm = clip_grad_norm_(self.model.parameters(), 5.0)
