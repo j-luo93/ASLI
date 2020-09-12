@@ -47,15 +47,19 @@ class Vocabulary:
         mask = df.duplicated(subset='form')
         df = df[~mask]
         self.forms = df['form'].values
+        self._form2id = {form: i for i, form in enumerate(self.forms)}
         self.unit_seqs = df['unit_seq'].values
         self.id_seqs = df['id_seq'].values
 
     def __getitem__(self, idx: int) -> dict:
         return {
             'form': self.forms[idx],
-            'unit_seq': self.unit_seqs[idx],
-            'id_seq': self.id_seqs[idx]
+            'unit_seq': self.unit_seqs[idx] + [EOT],
+            'id_seq': self.id_seqs[idx] + [EOT_ID]
         }
+
+    def get_id_by_form(self, form: str) -> int:
+        return self._form2id[form]
 
     def __len__(self):
         return len(self.forms)

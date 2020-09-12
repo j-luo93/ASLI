@@ -22,6 +22,9 @@ def translate(token_ids: Sequence[int], abc: Alphabet) -> Tuple[str, int]:
                 ret.append(abc[tid])
             else:
                 ret.append(tid)
+        else:
+            break
+
     if g.comp_mode in ['units', 'ids']:
         return ret, len(ret)
     else:

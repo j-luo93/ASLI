@@ -90,8 +90,10 @@ class Evaluator:
         if g.eval_mode == 'edit_dist':
             values.extend([f'pred_target_beam@{i}' for i in range(1, g.beam_size + 1)])
             values.extend([f'pred_target_beam@{i}_score' for i in range(1, g.beam_size + 1)])
+            values.extend(['edit_dist', 'normalized_edit_dist'])
             aggfunc.update({f'pred_target_beam@{i}': 'last' for i in range(1, g.beam_size + 1)})
             aggfunc.update({f'pred_target_beam@{i}_score': 'last' for i in range(1, g.beam_size + 1)})
+            aggfunc.update({'edit_dist': min, 'normalized_edit_dist': min})
         out_df = out_df.pivot_table(index='source', values=values,
                                     aggfunc=aggfunc)
 
@@ -118,17 +120,21 @@ class Evaluator:
             num_correct = out_df[f'correct@{i}'].sum()
             correct = Metric(f'precision@{i}', num_correct, weight=num_pred)
             metrics += correct
+        metrics += Metric('edit_dist', out_df['edit_dist'].sum(), weight=num_pred)
+        metrics += Metric('normalized_edit_dist', out_df['normalized_edit_dist'].sum(), weight=num_pred)
         return metrics
 
     def _get_batch_records(self, dl: OnePairDataLoader, batch: OnePairBatch, K: int) -> List[Dict[str, Any]]:
         hyps = self.model.predict(batch)
+        # NOTE(j_luo) EOT's have been removed from translations.
         preds, pred_lengths = hyps.translate(self.tgt_abc)
 
         if g.comp_mode == 'ids_gpu':
             # Prepare tensorx.
             pred_lengths = Tx(get_tensor(pred_lengths), ['pred_batch', 'beam'])
             pred_tokens = Tx(hyps.tokens, ['pred_batch', 'beam', 'l'])
-            tgt_lengths = Tx(dl.tgt_seqs.lengths, ['tgt_batch'])
+            # NOTE(j_luo) -1 for removing EOT's.
+            tgt_lengths = Tx(dl.tgt_seqs.lengths, ['tgt_batch']) - 1
             tgt_tokens = Tx(dl.tgt_seqs.ids.t(), ['tgt_batch', 'l'])
 
             # Align them to the same names.
@@ -171,10 +177,12 @@ class Evaluator:
             eval_all = lambda seqs_0, seqs_1: edit_dist_all(seqs_0, seqs_1, mode='ed')
             flat_preds = preds.reshape(-1)
             if g.comp_mode == 'units':
-                flat_golds = dl.tgt_seqs.units
+                # NOTE(j_luo) Remove EOT's.
+                flat_golds = [units[:-1] for units in dl.tgt_seqs.units]
             elif g.comp_mode == 'ids':
                 tgt_ids = dl.tgt_seqs.ids.t().cpu().numpy()
-                tgt_lengths = dl.tgt_seqs.lengths
+                # NOTE(j_luo) -1 for EOT's.
+                tgt_lengths = dl.tgt_seqs.lengths - 1
                 flat_golds = [ids[: l] for ids, l in zip(tgt_ids, tgt_lengths)]
             elif g.comp_mode == 'str':
                 flat_golds = dl.tgt_vocabulary.forms
@@ -188,8 +196,18 @@ class Evaluator:
 
         records = list()
         tgt_vocab = dl.tgt_vocabulary
-        for pss, pis, src, gold, pbis, pbss in zip(top_s, top_i, batch.src_seqs.forms, batch.tgt_seqs.forms, preds, hyps.scores):
-            record = {'source': src, 'gold_target': gold}
+        # In order to record the edit distance between the top prediction and the ground truth,
+        # we need to find the index of the ground truth in the vocabulary, not in the dataset.
+        tgt_ids = get_tensor([tgt_vocab.get_id_by_form(form) for form in batch.tgt_seqs.forms])
+        dists_tx = Tx(dists, ['batch', 'beam', 'tgt_vocab'])
+        tgt_ids_tx = Tx(tgt_ids, ['batch'])
+        top_dists_tx = dists_tx.select('beam', 0)
+        top_dists = top_dists_tx.each_select({'tgt_vocab': tgt_ids_tx}).data
+        normalized_top_dists = top_dists.float() / (batch.tgt_seqs.lengths - 1)
+        top_dists = top_dists.cpu().numpy()
+        normalized_top_dists = normalized_top_dists.cpu().numpy()
+        for pss, pis, src, gold, pbis, pbss, top_dist, n_top_dist in zip(top_s, top_i, batch.src_seqs.forms, batch.tgt_seqs.forms, preds, hyps.scores, top_dists, normalized_top_dists):
+            record = {'source': src, 'gold_target': gold, 'edit_dist': top_dist, 'normalized_edit_dist': n_top_dist}
             for i, (pbs, pbi) in enumerate(zip(pbss, pbis), 1):
                 record[f'pred_target_beam@{i}'] = pbi
                 record[f'pred_target_beam@{i}_score'] = f'{pbs.item():.3f}'
