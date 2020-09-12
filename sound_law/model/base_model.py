@@ -48,14 +48,14 @@ class BaseModel(nn.Module):
                              special_ids=special_ids,
                              separate_output=g.separate_output)
 
-        def get_lstm_params(bidirectional: bool) -> LstmParams:
-            return LstmParams(g.char_emb_size, g.hidden_size,
+        def get_lstm_params(input_size: int, bidirectional: bool) -> LstmParams:
+            return LstmParams(input_size, g.hidden_size,
                               g.num_layers, g.dropout,
                               bidirectional=bidirectional)
 
         enc_emb_params = get_emb_params(num_src_chars)
         if g.model_encoder_type == 'lstm':
-            enc_lstm_params = get_lstm_params(True)
+            enc_lstm_params = get_lstm_params(g.char_emb_size, True)
             self.encoder = LstmEncoder.from_params(enc_emb_params, enc_lstm_params)
         else:
             cnn_params = CnnParams(g.hidden_size, g.kernel_sizes, g.dropout)
@@ -67,7 +67,8 @@ class BaseModel(nn.Module):
         else:
             dec_emb_params = get_emb_params(num_tgt_chars)
             dec_embedding = None
-        dec_lstm_params = get_lstm_params(False)
+        # NOTE(j_luo) Input size is the sum of `g.char_emb_size` and `g.hidden_size` due to input feeding.
+        dec_lstm_params = get_lstm_params(g.char_emb_size + g.hidden_size, False)
         dec_params = DecParams(dec_lstm_params,
                                g.hidden_size * 2,  # Bidirectional outputs.
                                g.hidden_size,
