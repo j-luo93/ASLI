@@ -18,6 +18,7 @@ from dev_misc.utils import pbar
 from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
 from sound_law.evaluate.edit_dist import edit_dist_all
+from sound_law.model.decoder import get_beam_probs
 from sound_law.model.one_pair import OnePairModel
 
 add_argument('eval_mode', dtype=str, default='edit_dist', choices=[
@@ -179,7 +180,7 @@ class Evaluator:
                 flat_golds = dl.tgt_vocabulary.forms
             dists = get_tensor(eval_all(flat_preds, flat_golds)).view(-1, g.beam_size, len(dl.tgt_vocabulary))
 
-        weights = (hyps.scores / g.concentration_scale).log_softmax(dim=-1).exp()
+        weights = get_beam_probs(hyps.scores)
         w_dists = weights.align_to(..., 'tgt_vocab') * dists
         expected_dists = w_dists.sum(dim='beam')
         top_s, top_i = torch.topk(-expected_dists, K, dim='tgt_vocab')

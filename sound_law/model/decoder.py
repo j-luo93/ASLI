@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from dev_misc import BT, FT, LT, NDA
+from dev_misc import BT, FT, LT, NDA, g
 from dev_misc.devlib.named_tensor import (NameHelper, NoName, duplicate,
                                           get_named_range)
 from dev_misc.utils import ScopedCache, handle_sequence_inputs
@@ -188,6 +188,13 @@ class Hypotheses:
         preds = np.asarray(preds)
         pred_lengths = np.asarray(pred_lengths)
         return preds, pred_lengths
+
+
+def get_beam_probs(scores: FT, duplicates: Optional[BT] = None):
+    """Return normalized scores (approximated probabilities) for the entire beam."""
+    if duplicates is not None:
+        scores = scores.masked_fill(duplicates, float('-inf'))
+    return scores.log_softmax(dim='beam').exp()
 
 
 class LstmDecoder(nn.Module, BaseBeamSearcher):

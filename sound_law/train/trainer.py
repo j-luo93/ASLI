@@ -11,6 +11,7 @@ from dev_misc.trainlib.base_trainer import BaseTrainer
 from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
 from sound_law.evaluate.edit_dist import edit_dist_batch
+from sound_law.model.decoder import get_beam_probs
 
 
 def _get_ce_loss(log_probs: FT, batch: OnePairBatch, mean='all') -> FT:
@@ -101,15 +102,18 @@ class Trainer(BaseTrainer):
         duplicates = get_tensor(duplicates)
 
         # Assemble all scores together.
+        # if 'ablʊt̪ɪjɔ' in batch.src_seqs.forms:
+        #     breakpoint()  # BREAKPOINT(j_luo)
+        # breakpoint()  # BREAKPOINT(j_luo)
         scores = torch.cat([tgt_scores.align_as(hyps.scores), hyps.scores], dim='beam')
-        weighted_scores = scores / g.concentration_scale + duplicates.float() * (-9999.9)
-        probs = weighted_scores.log_softmax(dim='beam').exp()
+        probs = get_beam_probs(scores, duplicates=duplicates)
         target = np.tile(batch.tgt_seqs.forms.reshape(-1, 1), [1, g.beam_size + 1])
         preds = np.concatenate([target[:, 0:1], preds], axis=-1)
         dists = edit_dist_batch(preds.reshape(-1), target.reshape(-1), 'ed')
         lengths = batch.tgt_seqs.lengths.align_to('batch', 'beam')
         dists = get_tensor(dists.reshape(-1, g.beam_size + 1)).float() / lengths
-        risk = (probs * dists).sum(dim='beam')
+        risk = (probs * (dists ** 2)).sum(dim='beam')
+        # risk = (probs * dists).sum(dim='beam')
         risk = Metric('risk', risk.sum(), len(batch))
         return Metrics(risk)
 

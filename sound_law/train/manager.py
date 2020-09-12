@@ -131,7 +131,8 @@ class OnePairManager:
                                   save_interval=g.save_interval,
                                   metric_writer=metric_writer)
                 if g.saved_model_path is None:
-                    trainer.init_params('uniform', -0.1, 0.1)
+                    # trainer.init_params('uniform', -0.1, 0.1)
+                    trainer.init_params('xavier_uniform')
                 optim_cls = Adam if g.optim_cls == 'adam' else SGD
                 trainer.set_optimizer(optim_cls, lr=g.learning_rate)
                 trainer.train(self.dl_reg)
@@ -245,7 +246,8 @@ class OneToManyManager:
                                    save_interval=g.save_interval,
                                    metric_writer=metric_writer)
             if g.saved_model_path is None:
-                self.trainer.init_params('uniform', -0.1, 0.1)
+                # self.trainer.init_params('uniform', -0.1, 0.1)
+                self.trainer.init_params('xavier_uniform')
             optim_cls = Adam if g.optim_cls == 'adam' else SGD
             self.trainer.set_optimizer(optim_cls, lr=g.learning_rate)
 

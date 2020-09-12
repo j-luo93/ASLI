@@ -57,6 +57,12 @@ class Size440:
 
 
 @dataclass
+class Size880:
+    char_emb_size: int = 880
+    hidden_size: int = 880
+
+
+@dataclass
 class UsePhono:
     use_phono_features: bool = True
     share_src_tgt_abc: bool = True
@@ -76,6 +82,11 @@ class ZSLatSpaPhono(ZSLatSpa, UsePhono, Size220):
 @reg
 class OPLatSpaPhono(ZSLatSpaPhono, Size220):  # "OP" stands for one-pair.
     task: str = 'one_pair'
+
+
+@reg
+class OPLatSpaPhono880(Size880, OPLatSpaPhono):
+    pass
 
 
 @reg
