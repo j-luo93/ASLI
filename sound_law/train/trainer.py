@@ -85,6 +85,7 @@ class Trainer(BaseTrainer):
         """Train for one step using minimum risk training (MRT)."""
         # Get scores for top predictions and the target sequence.
         assert g.comp_mode == 'str'
+        assert g.dropout == 0.0, 'Might have some issue due to the fact that ground truth is fed through the normal forward call whereas hyps are not, resulting in discrepant dropout applications.'
         hyps = self.model.predict(batch)
         log_probs, _ = self.model(batch)
         tgt_scores = -_get_ce_loss(log_probs, batch, mean='batch')
