@@ -102,18 +102,15 @@ class Trainer(BaseTrainer):
         duplicates = get_tensor(duplicates)
 
         # Assemble all scores together.
-        # if 'ablʊt̪ɪjɔ' in batch.src_seqs.forms:
-        #     breakpoint()  # BREAKPOINT(j_luo)
-        # breakpoint()  # BREAKPOINT(j_luo)
         scores = torch.cat([tgt_scores.align_as(hyps.scores), hyps.scores], dim='beam')
         probs = get_beam_probs(scores, duplicates=duplicates)
         target = np.tile(batch.tgt_seqs.forms.reshape(-1, 1), [1, g.beam_size + 1])
         preds = np.concatenate([target[:, 0:1], preds], axis=-1)
         dists = edit_dist_batch(preds.reshape(-1), target.reshape(-1), 'ed')
         lengths = batch.tgt_seqs.lengths.align_to('batch', 'beam')
-        dists = get_tensor(dists.reshape(-1, g.beam_size + 1)).float() / lengths
-        risk = (probs * (dists ** 2)).sum(dim='beam')
-        # risk = (probs * dists).sum(dim='beam')
+        dists = get_tensor(dists.reshape(-1, g.beam_size + 1)).float()  # / lengths
+        # risk = (probs * (dists ** 2)).sum(dim='beam')
+        risk = (probs * dists).sum(dim='beam')
         risk = Metric('risk', risk.sum(), len(batch))
         return Metrics(risk)
 

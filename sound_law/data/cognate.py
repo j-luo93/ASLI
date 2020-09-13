@@ -1,4 +1,5 @@
 import logging
+import random
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
@@ -21,6 +22,7 @@ add_argument('use_duration', dtype=bool, default=True, msg='Flag to use duration
 add_argument('use_diacritics', dtype=bool, default=True, msg='Flag to use diacritics.')
 add_argument('use_duplicate_phono', dtype=bool, default=True,
              msg='Whether to keep duplicate symbols based on their phonological features.')
+add_argument('noise_level', dtype=float, default=0.0, msg='Noise level on the target side.')
 add_check(
     (Arg('use_duplicate_phono') == False) | (Arg('separate_output') == True) | (Arg('use_phono_features') == False))
 
@@ -95,6 +97,22 @@ class CognateRegistry:
                 df = df.copy()
                 df['tokens'] = df['tokens'].str.split('|')
                 df = df.explode('tokens')
+            # In-place to add a unit_seq column to store preprocessed data.
+            col = 'tokens' if g.input_format == 'wikt' else 'parsed_tokens'  # Use parsed tokens if possible.
+            df['pre_unit_seq'] = df[col].str.split().apply(_preprocess)
+            # NOTE(j_luo) Add noise to the target tokens by randomly duplicating one character.
+            if g.noise_level > 0.0:
+                logging.imp(f'Adding noise to the target tokens with level {g.noise_level}.')
+                random.seed(g.random_seed)
+
+                def add_noise(token):
+                    if random.random() < g.noise_level:
+                        pos = random.randint(0, len(token) - 1)
+                        token = token[:pos] + [token[pos]] + token[pos:]
+                    return token
+
+                df['pre_unit_seq'] = df['pre_unit_seq'].apply(add_noise)
+
             df = df.set_index('cognate_id')
             self._lang2dfs[lang][path] = df
             logging.info(f'File at {path} has been added for language {lang}.')
@@ -108,11 +126,8 @@ class CognateRegistry:
             raise TypeError(f'Some lang in {langs} has been prepared.')
         # Get all relevant data frames.
         dfs = list()
-        col = 'tokens' if g.input_format == 'wikt' else 'parsed_tokens'  # Use parsed tokens if possible.
         for lang in langs:
             for source, df in self._lang2dfs[lang].items():
-                # In-place to add a unit_seq column to store preprocessed data.
-                df['pre_unit_seq'] = df[col].str.split().apply(_preprocess)
                 df['source'] = source
                 dfs.append(df)
         df = pd.concat(dfs)
