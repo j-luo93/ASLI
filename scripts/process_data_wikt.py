@@ -3,6 +3,7 @@ import unicodedata
 from argparse import ArgumentParser
 from functools import lru_cache
 from pathlib import Path
+from typing import Callable, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -13,7 +14,7 @@ from ipapy.ipastring import IPAString
 from lingpy.sequence.sound_classes import ipa2tokens
 
 
-# IPA tokenization including removing leading * (reconstructed terms) and normalizing symbols.
+# IPA tokenization including removing leading * (reconstructed terms) and normalizing symbols (done by ipapy).
 @lru_cache(maxsize=None)
 def i2t(ipa):
     ipa = unicodedata.normalize('NFD', ipa)
@@ -29,6 +30,15 @@ def i2t(ipa):
     return ret
 
 
+def read_dict(path: str):
+    df = pd.read_csv(path, sep='\t', keep_default_na=True, header=None)
+    df.columns = ['lang', 'system', 'grapheme', 'tokens', 'phoneme']
+    ret = dict()
+    for lang, grapheme, tokens in zip(df['lang'], df['grapheme'], df['tokens']):
+        ret[(lang, grapheme)] = tokens
+    return ret
+
+
 lookup = pycountry.languages.lookup
 
 
@@ -38,7 +48,7 @@ def has_cyrillic(text):
 
 
 @lru_cache(maxsize=None)
-def PGmc_ipa_trans(word):  # only for latin-transliterated Gothic and Greek without diacritics
+def PGmc_ipa_trans(word: str) -> str:  # only for latin-transliterated Gothic and Greek without diacritics
     # NOTE(j_luo) Based on Frederik's code, with minor modifications.
     word = word.lower()
     # vowels
@@ -82,15 +92,13 @@ def PGmc_ipa_trans(word):  # only for latin-transliterated Gothic and Greek with
     return word
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
-    parser.add_argument('--data_path', type=str, help='Path to the Wiktionary cognate data file.')
-    parser.add_argument('--source', type=str, help='Source language.')
-    parser.add_argument('--targets', type=str, nargs='+', help='Target language.')
-    parser.add_argument('--random_seed', type=str, help='Random seed.')
-    args = parser.parse_args()
+G2P_func = Callable[[str], str]  # Grapheme-to-phoneme.
+G2T_func = Callable[[str], List[str]]  # Grapheme-to-tokenized phoneme
 
-    if args.source == 'lat':
+
+def get_src_header_and_transcriber(source: str) -> Tuple[str, G2P_func]:
+    """Return the column name for the output csv header, and a transcriber for the source language."""
+    if source == 'lat':
         try:
             src_transcriber = Transcriber(dialect="Classical", reconstruction="Allen")
             src = 'Latin'
@@ -116,33 +124,50 @@ if __name__ == "__main__":
     else:
         src = 'Proto-Germanic'
         src_func = PGmc_ipa_trans
+    return src, src_func
 
+
+def get_tgt_code_and_transcriber(target) -> Tuple[str, G2P_func]:
+    if target == 'roa-opt':
+        tgt_code = 'roa_opt'
+    else:
+        tgt_code = lookup(target).alpha_3
+
+    if tgt_code in ['ita', 'spa', 'por', 'fra', 'cat', 'ron', 'deu', 'nld', 'swe']:
+        epi_code = f'{tgt_code}-Latn'
+    else:
+        raise ValueError(f'language {target} not supported.')
+
+    tgt_g2p = Epitran(epi_code).transliterate
+    return tgt_code, tgt_g2p
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument('--data_path', type=str, help='Path to the Wiktionary cognate data file.')
+    parser.add_argument('--source', type=str, help='Source language.')
+    parser.add_argument('--targets', type=str, nargs='+', help='Target language.')
+    parser.add_argument('--random_seed', type=str, help='Random seed.')
+    parser.add_argument('--dict_path', type=str, help='Path to the provided pronunciation dictionary.')
+    args = parser.parse_args()
+
+    src_header, src_g2p = get_src_header_and_transcriber(args.source)
+
+    all_df = pd.read_csv(args.data_path, sep='\t', keep_default_na=False)
     for target in args.targets:
-        if target == 'roa-opt':
-            tgt = 'roa_opt'
-        else:
-            tgt = lookup(target).alpha_3
+        tgt_code, tgt_g2p = get_tgt_code_and_transcriber(target)
+        df = all_df[all_df['Language'] == target]
 
-        if tgt in ['ita', 'spa', 'por', 'fra', 'cat', 'ron', 'deu', 'nld', 'swe']:
-            epi_code = f'{tgt}-Latn'
-        else:
-            raise ValueError(f'language {target} not supported.')
+        src_cogs = list()  # This stores the transcriptions for src.
+        src_ipas = list()  # This stores the phonemes for src.
+        src_tokens = list()  # This stores the tokenized phonemes for src.
 
-        tgt_transcriber = Epitran(epi_code)
-
-        np.random.seed(args.random_seed)
-        df = pd.read_csv(args.data_path, sep='\t', keep_default_na=False)
-
-        df = df[df['Language'] == target]
-        src_cogs = list()
-        src_ipas = list()
-        src_tokens = list()
         tgt_cogs = list()
         tgt_ipas = list()
         tgt_tokens = list()
 
         weird_chars = set("[] #/'")  # Quotation marks in words (not IPA transcriptions) are used for contractions.
-        for src_token, group in df.groupby(src)['Token']:
+        for src_token, group in df.groupby(src_header)['Token']:
             group = [t for t in group if t]
             if len(src_token) == 0 or len(group) == 0:
                 continue
@@ -152,17 +177,19 @@ if __name__ == "__main__":
             if has_cyrillic(src_token) or any(has_cyrillic(t) for t in group):
                 continue
 
-            ipa = src_func(src_token)
+            ipa = src_g2p(src_token)
             src_cogs.append(src_token)
-            src_ipas.append(ipa)
-            src_tokens.append(' '.join(i2t(ipa)))
+            tokens = i2t(ipa)
+            src_tokens.append(' '.join(tokens))
+            src_ipas.append(''.join(tokens))
 
-            ipas = [tgt_transcriber.transliterate(t) for t in group]
+            ipas = [tgt_g2p(t) for t in group]
             tokens = [i2t(i) for i in ipas]
             tgt_cogs.append('|'.join(group))
-            tgt_ipas.append('|'.join(ipas))
             tgt_tokens.append('|'.join([' '.join(token) for token in tokens]))
+            tgt_ipas.append('|'.join([''.join(token) for token in tokens]))
 
+        np.random.seed(args.random_seed)
         r = np.random.rand(len(src_cogs))
         splits = list()
         for f in r:
@@ -175,8 +202,8 @@ if __name__ == "__main__":
         src_df = pd.DataFrame({'transcription': src_cogs, 'split': splits, 'ipa': src_ipas, 'tokens': src_tokens})
         tgt_df = pd.DataFrame({'transcription': tgt_cogs, 'split': splits, 'ipa': tgt_ipas, 'tokens': tgt_tokens})
 
-        folder = Path(f'./data/wikt/{args.source}-{tgt}')
+        folder = Path(f'./data/wikt/{args.source}-{tgt_code}')
         folder.mkdir(parents=True, exist_ok=True)
 
         src_df.to_csv(str(folder / f'{args.source}.tsv'), sep='\t', index=None)
-        tgt_df.to_csv(str(folder / f'{tgt}.tsv'), sep='\t', index=None)
+        tgt_df.to_csv(str(folder / f'{tgt_code}.tsv'), sep='\t', index=None)
