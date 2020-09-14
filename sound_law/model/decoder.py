@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from dev_misc import BT, FT, LT, NDA, g, get_zeros
+from dev_misc import BT, FT, LT, NDA, add_argument, g, get_zeros
 from dev_misc.devlib.named_tensor import (NameHelper, NoName, duplicate,
                                           get_named_range)
 from dev_misc.utils import ScopedCache, handle_sequence_inputs
@@ -65,11 +65,11 @@ class Beam:
     accum_scores: FT
     tokens: LT  # Predicted tokens from last step.
     lstm_state: LstmStatesByLayers  # Last LSTM state.
-    prev_att: FT
     constants: BeamConstant
     # For bookkeeping.
     last_beam: Optional[Beam] = None
     beam_ids: Optional[LT] = None
+    prev_att: Optional[FT] = None
     finished: BT = None
 
     def __post_init__(self):
@@ -84,11 +84,13 @@ class Beam:
     def beam_size(self):
         return self.tokens.size('beam')
 
-    def follow(self, finished: BT, accum_scores: FT, tokens: LT, lstm_state: LstmStatesByLayers, att: FT, beam_ids: LT) -> Beam:
+    def follow(self, finished: BT, accum_scores: FT, tokens: LT, lstm_state: LstmStatesByLayers, beam_ids: LT,
+               prev_att: Optional[FT] = None) -> Beam:
         return Beam(self.step + 1, accum_scores, tokens,
-                    lstm_state, att, self.constants,
+                    lstm_state, self.constants,
                     last_beam=self,
                     beam_ids=beam_ids,
+                    prev_att=prev_att,
                     finished=finished)
 
     def trace_back(self, *attr_names: str) -> Dict[str, torch.Tensor]:
@@ -202,6 +204,8 @@ def get_beam_probs(scores: FT, duplicates: Optional[BT] = None):
 class LstmDecoder(nn.Module, BaseBeamSearcher):
     """A decoder that unrolls the LSTM decoding procedure by steps."""
 
+    add_argument('input_feeding', default=False, dtype=bool, msg='Flag to use input feeding.')
+
     def __init__(self,
                  char_emb: CharEmbedding,
                  cell: MultiLayerLSTMCell,
@@ -251,7 +255,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         max_length = self._get_max_length(max_length, target)
         batch_size = mask_src.size('batch')
         input_ = self._prepare_first_input(sot_id, batch_size, mask_src.device)
-        prev_att = get_zeros(batch_size, g.hidden_size)
+        prev_att = get_zeros(batch_size, g.hidden_size) if g.input_feeding else None
         state = LstmStatesByLayers.zero_state(
             self.cell.num_layers,
             batch_size,
@@ -264,8 +268,8 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         with ScopedCache('Wh_s'):
             for l in range(max_length):
                 state, log_prob, almt_distr, prev_att = self._forward_step(
-                    input_, src_emb, state, src_outputs, mask_src, prev_att,
-                    lang_emb=lang_emb)
+                    input_, src_emb, state, src_outputs, mask_src,
+                    lang_emb=lang_emb, prev_att=prev_att)
                 if target is None:
                     input_ = log_prob.max(dim=-1)[1].rename('batch')
                 else:
@@ -299,13 +303,13 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                       state: LstmStatesByLayers,
                       src_states: FT,
                       mask_src: BT,
-                      prev_att: FT,
-                      lang_emb: Optional[FT] = None) -> Tuple[FT, FT, FT, FT]:
+                      lang_emb: Optional[FT] = None,
+                      prev_att: Optional[FT] = None) -> Tuple[FT, FT, FT, FT]:
         emb = self.char_emb(input_)
         if lang_emb is not None:
             emb = emb + lang_emb
-        cat_inp = torch.cat([emb, prev_att], dim=-1)
-        hid_rnn, next_state = self.cell(cat_inp, state)  # hid_rnn has gone through dropout already.
+        inp = torch.cat([emb, prev_att], dim=-1) if g.input_feeding else emb
+        hid_rnn, next_state = self.cell(inp, state)  # hid_rnn has gone through dropout already.
         almt, ctx = self.attn.forward(hid_rnn, src_states, mask_src)  # So has src_states.
         with NoName(hid_rnn, ctx):
             cat = torch.cat([hid_rnn, ctx], dim=-1)
@@ -336,14 +340,15 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                 return orig.apply(wrapped)
             return wrapped(orig)
 
+        prev_att = collapse_beam(beam.prev_att) if g.input_feeding else None
         state, log_probs, almt, att = self._forward_step(
             collapse_beam(beam.tokens),
             beam.constants.src_emb,
             collapse_beam(beam.lstm_state, is_lstm_state=True),
             beam.constants.src_outputs,
             beam.constants.src_paddings,
-            collapse_beam(beam.prev_att),
-            lang_emb=beam.constants.lang_emb)
+            lang_emb=beam.constants.lang_emb,
+            prev_att=prev_att)
 
         def unflatten(orig, is_lstm_state: bool = False):
             def wrapped(tensor):
@@ -387,7 +392,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         next_tokens = tokens.rename(BU='beam')
         next_beam_ids = beam_i.rename(BU='beam')
         next_state = cand.state.apply(retrieve)
-        next_att = retrieve(cand.att, last_name='hidden')
+        next_att = retrieve(cand.att, last_name='hidden') if g.input_feeding else None
         last_finished = retrieve(beam.finished, last_name=None)
         this_ended = next_tokens == EOT_ID
         reached_max = (beam.step + 1 == beam.constants.max_lengths)
@@ -396,8 +401,8 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                                 next_scores,
                                 next_tokens,
                                 next_state,
-                                next_att,
-                                next_beam_ids)
+                                next_beam_ids,
+                                prev_att=next_att)
         return next_beam
 
     def search(self,
@@ -416,7 +421,9 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
             src_emb.device).rename('batch', 'beam')
         accum_scores = torch.full_like(tokens, -9999.9).float()
         accum_scores[:, 0] = 0.0
-        init_att = get_zeros(batch_size, beam_size, g.hidden_size).rename('batch', 'beam', 'hidden')
+        init_att = None
+        if g.input_feeding:
+            init_att = get_zeros(batch_size, beam_size, g.hidden_size).rename('batch', 'beam', 'hidden')
         lstm_state = LstmStatesByLayers.zero_state(
             self.cell.num_layers,
             batch_size,
@@ -440,7 +447,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                                  max_lengths,
                                  lang_emb=lang_emb)
         init_beam = Beam(0, accum_scores, tokens,
-                         lstm_state, init_att, constants)
+                         lstm_state, constants, prev_att=init_att)
         hyps = super().search(init_beam)
         return hyps
 

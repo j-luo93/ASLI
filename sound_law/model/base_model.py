@@ -67,8 +67,9 @@ class BaseModel(nn.Module):
         else:
             dec_emb_params = get_emb_params(num_tgt_chars)
             dec_embedding = None
-        # NOTE(j_luo) Input size is the sum of `g.char_emb_size` and `g.hidden_size` due to input feeding.
-        dec_lstm_params = get_lstm_params(g.char_emb_size + g.hidden_size, False)
+        # NOTE(j_luo) Input size is the sum of `g.char_emb_size` and `g.hidden_size` if input feeding is used.
+        dec_input_size = g.char_emb_size + (g.hidden_size if g.input_feeding else 0)
+        dec_lstm_params = get_lstm_params(dec_input_size, False)
         dec_params = DecParams(dec_lstm_params,
                                g.hidden_size * 2,  # Bidirectional outputs.
                                g.hidden_size,

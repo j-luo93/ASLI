@@ -43,6 +43,12 @@ class ZSPgmcDeu(ZSLatIta):
     train_tgt_langs: Tuple[str, ...] = ('swe', 'nld')
 
 
+@reg
+class ZSPgmcNld(ZSPgmcDeu):
+    tgt_lang: str = 'nld'
+    train_tgt_langs: Tuple[str, ...] = ('swe', 'deu')
+
+
 @dataclass
 class Size220:
     # the char_emb_size and hidden_size must be multiples of 22 since there are 22 phonological features being used (each of which has its own embedding)
@@ -76,6 +82,16 @@ class ZSLatItaPhono(ZSLatIta, UsePhono, Size220):
 
 @reg
 class ZSLatSpaPhono(ZSLatSpa, UsePhono, Size220):
+    pass
+
+
+@reg
+class ZSPgmcDeuPhono(ZSPgmcDeu, UsePhono, Size220):
+    pass
+
+
+@reg
+class ZSPgmcNldPhono(ZSPgmcNld, UsePhono, Size220):
     pass
 
 
