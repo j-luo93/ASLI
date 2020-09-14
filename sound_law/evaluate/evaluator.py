@@ -113,6 +113,7 @@ class Evaluator:
         setting = dl.setting
         out_path = str(out_folder / f'{setting.name}.{stage}.tsv')
         out_df.to_csv(out_path, sep='\t')
+        logging.info(f'Predictions saved to {out_path}.')
 
         num_pred = len(out_df)
         metrics = Metrics()

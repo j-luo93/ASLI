@@ -39,6 +39,8 @@ def has_cyrillic(text):
 
 @lru_cache(maxsize=None)
 def PGmc_ipa_trans(word):  # only for latin-transliterated Gothic and Greek without diacritics
+    # NOTE(j_luo) Based on Frederik's code, with minor modifications.
+    word = word.lower()
     # vowels
     word = re.sub(r"ē", "eː", word)
     word = re.sub(r"ō", "ɔː", word)
@@ -48,6 +50,10 @@ def PGmc_ipa_trans(word):  # only for latin-transliterated Gothic and Greek with
 
     word = re.sub(r"ô", "ɔːː", word)
     word = re.sub(r"ê", "eːː", word)
+
+    word = re.sub(r'ǭ', 'ɔ̃ː', word)
+    word = re.sub(r'ą', 'ã', word)
+    word = re.sub(r'į̄', 'ĩː', word)
 
     # consonants
     word = re.sub(r"h", "x", word)
