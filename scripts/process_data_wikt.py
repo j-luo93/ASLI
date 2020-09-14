@@ -3,7 +3,7 @@ import unicodedata
 from argparse import ArgumentParser
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -31,11 +31,14 @@ def i2t(ipa):
 
 
 def read_dict(path: str):
-    df = pd.read_csv(path, sep='\t', keep_default_na=True, header=None)
+    df = pd.read_csv(path, sep='\t', keep_default_na=False, header=None)
     df.columns = ['lang', 'system', 'grapheme', 'tokens', 'phoneme']
     ret = dict()
+    # Use the `tokens` column instead of the `phoneme` column since the former is more detailed.
+    # However, a joined str is returned in order to make sure it will be processed by the `i2t`
+    # function, for consistency in tokenization.
     for lang, grapheme, tokens in zip(df['lang'], df['grapheme'], df['tokens']):
-        ret[(lang, grapheme)] = tokens
+        ret[(lang, grapheme)] = ''.join(tokens.split())
     return ret
 
 
@@ -127,18 +130,24 @@ def get_src_header_and_transcriber(source: str) -> Tuple[str, G2P_func]:
     return src, src_func
 
 
-def get_tgt_code_and_transcriber(target) -> Tuple[str, G2P_func]:
+def get_tgt_code_and_transcriber(target: str, pron_dict: Optional[dict] = None) -> Tuple[str, G2P_func]:
     if target == 'roa-opt':
         tgt_code = 'roa_opt'
     else:
         tgt_code = lookup(target).alpha_3
 
-    if tgt_code in ['ita', 'spa', 'por', 'fra', 'cat', 'ron', 'deu', 'nld', 'swe']:
-        epi_code = f'{tgt_code}-Latn'
+    # Use epitran.
+    if pron_dict is None:
+        if tgt_code in ['ita', 'spa', 'por', 'fra', 'cat', 'ron', 'deu', 'nld', 'swe']:
+            epi_code = f'{tgt_code}-Latn'
+        else:
+            raise ValueError(f'language {target} not supported.')
+        tgt_g2p = Epitran(epi_code).transliterate
+    # Use pronunciation dictionary.
     else:
-        raise ValueError(f'language {target} not supported.')
+        # Return None if entry not found.
+        tgt_g2p = lambda token: pron_dict.get((tgt_code, token), None)
 
-    tgt_g2p = Epitran(epi_code).transliterate
     return tgt_code, tgt_g2p
 
 
@@ -154,8 +163,9 @@ if __name__ == "__main__":
     src_header, src_g2p = get_src_header_and_transcriber(args.source)
 
     all_df = pd.read_csv(args.data_path, sep='\t', keep_default_na=False)
+    pron_dict = read_dict(args.dict_path) if args.dict_path is not None else None
     for target in args.targets:
-        tgt_code, tgt_g2p = get_tgt_code_and_transcriber(target)
+        tgt_code, tgt_g2p = get_tgt_code_and_transcriber(target, pron_dict=pron_dict)
         df = all_df[all_df['Language'] == target]
 
         src_cogs = list()  # This stores the transcriptions for src.
@@ -177,17 +187,22 @@ if __name__ == "__main__":
             if has_cyrillic(src_token) or any(has_cyrillic(t) for t in group):
                 continue
 
+            # Process target side first to skip some pairs due to nonexistent IPA transcriptions (from pronunciation dictionaries).
+            ipas = [tgt_g2p(t) for t in group]
+            ipas = [ipa for ipa in ipas if ipa is not None]
+            if not ipas:
+                continue
+
+            tokens = [i2t(i) for i in ipas]
+            tgt_cogs.append('|'.join(group))
+            tgt_tokens.append('|'.join([' '.join(token) for token in tokens]))
+            tgt_ipas.append('|'.join([''.join(token) for token in tokens]))
+
             ipa = src_g2p(src_token)
             src_cogs.append(src_token)
             tokens = i2t(ipa)
             src_tokens.append(' '.join(tokens))
             src_ipas.append(''.join(tokens))
-
-            ipas = [tgt_g2p(t) for t in group]
-            tokens = [i2t(i) for i in ipas]
-            tgt_cogs.append('|'.join(group))
-            tgt_tokens.append('|'.join([' '.join(token) for token in tokens]))
-            tgt_ipas.append('|'.join([''.join(token) for token in tokens]))
 
         np.random.seed(args.random_seed)
         r = np.random.rand(len(src_cogs))
