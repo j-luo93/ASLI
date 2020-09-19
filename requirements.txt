@@ -7,3 +7,4 @@ panphon
 ipapy
 lang2vec
 graphviz
+loguru

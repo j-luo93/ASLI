@@ -1,6 +1,7 @@
 import re
 import unicodedata
 from argparse import ArgumentParser
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
@@ -12,6 +13,7 @@ from cltk.phonology.latin.transcription import Transcriber
 from epitran import Epitran
 from ipapy.ipastring import IPAString
 from lingpy.sequence.sound_classes import ipa2tokens
+from loguru import logger
 
 
 # IPA tokenization including removing leading * (reconstructed terms) and normalizing symbols (done by ipapy).
@@ -54,6 +56,7 @@ def has_cyrillic(text):
 def PGmc_ipa_trans(word: str) -> str:  # only for latin-transliterated Gothic and Greek without diacritics
     # NOTE(j_luo) Based on Frederik's code, with minor modifications.
     word = word.lower()
+    word = word.replace('₂', '')
     # vowels
     word = re.sub(r"ē", "eː", word)
     word = re.sub(r"ō", "ɔː", word)
@@ -130,14 +133,18 @@ def get_src_header_and_transcriber(source: str) -> Tuple[str, G2P_func]:
     return src, src_func
 
 
-def get_tgt_code_and_transcriber(target: str, pron_dict: Optional[dict] = None) -> Tuple[str, G2P_func]:
+def get_tgt_code_and_transcriber(target: str,
+                                 pron_dict: Optional[dict] = None,
+                                 need_transcriber: bool = True) -> Tuple[str, G2P_func]:
     if target == 'roa-opt':
         tgt_code = 'roa_opt'
     else:
         tgt_code = lookup(target).alpha_3
 
+    if not need_transcriber:
+        tgt_g2p = None
     # Use epitran.
-    if pron_dict is None:
+    elif pron_dict is None:
         if tgt_code in ['ita', 'spa', 'por', 'fra', 'cat', 'ron', 'deu', 'nld', 'swe']:
             epi_code = f'{tgt_code}-Latn'
         else:
@@ -151,6 +158,46 @@ def get_tgt_code_and_transcriber(target: str, pron_dict: Optional[dict] = None) 
     return tgt_code, tgt_g2p
 
 
+@dataclass
+class Field:
+    form: str
+    _tokens: List[List[str]] = field(repr=False)  # Raw list of tokens.
+    target_side: bool = False
+    tokens: str = field(init=False)  # Joined tokens.
+    ipa: str = field(init=False)
+
+    def __post_init__(self):
+        if self.target_side:
+            self.tokens = '|'.join([' '.join(token) for token in self._tokens])
+            self.ipa = '|'.join([''.join(token) for token in self._tokens])
+        else:
+            self.tokens = ' '.join(self._tokens)
+            self.ipa = ''.join(self._tokens)
+
+    def to_record(self) -> dict:
+        return {
+            'transcription': self.form,
+            'ipa': self.ipa,
+            'tokens': self.tokens
+        }
+
+
+def add_splits(src_df: pd.DataFrame, tgt_df: pd.DataFrame, random_seed: int):
+    """Add split column in-place."""
+    np.random.seed(random_seed)
+    r = np.random.rand(len(src_df))
+    splits = list()
+    for f in r:
+        if f >= 0.8:
+            splits.append('test')
+        elif f >= 0.7:
+            splits.append('dev')
+        else:
+            splits.append('train')
+    src_df['split'] = splits
+    tgt_df['split'] = splits
+
+
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--data_path', type=str, help='Path to the Wiktionary cognate data file.')
@@ -158,67 +205,76 @@ if __name__ == "__main__":
     parser.add_argument('--targets', type=str, nargs='+', help='Target language.')
     parser.add_argument('--random_seed', type=str, help='Random seed.')
     parser.add_argument('--dict_path', type=str, help='Path to the provided pronunciation dictionary.')
+    parser.add_argument('--is_cyrillic', action='store_true', help='Flag to indicate whether it use Cyrillic scripts.')
+    parser.add_argument('--no_need_transcriber', dest='need_transcriber', action='store_false',
+                        help='Flag to indicate whether transcriber is needed.')
     args = parser.parse_args()
 
     src_header, src_g2p = get_src_header_and_transcriber(args.source)
+    if not args.need_transcriber:
+        src_header = args.source
+    weird_chars = set("[] #/'")  # Quotation marks in words (not IPA transcriptions) are used for contractions.
 
     all_df = pd.read_csv(args.data_path, sep='\t', keep_default_na=False)
     pron_dict = read_dict(args.dict_path) if args.dict_path is not None else None
+
+    def gen_pairs(df: pd.DataFrame, src_header: str):
+        if args.need_transcriber:
+            for src_form, tgt_forms in df.groupby(src_header)['Token']:
+                yield src_form, tgt_forms
+        else:
+            for src_form, tgt_df in df.groupby(src_header)[['Word_Form', 'rawIPA']]:
+                yield src_form, tgt_df['Word_Form'].str.strip(), tgt_df['rawIPA'].str.strip()
+
+    lang_col = 'Language' if args.need_transcriber else 'lang_code'
     for target in args.targets:
-        tgt_code, tgt_g2p = get_tgt_code_and_transcriber(target, pron_dict=pron_dict)
-        df = all_df[all_df['Language'] == target]
+        df = all_df[all_df[lang_col] == target]
 
-        src_cogs = list()  # This stores the transcriptions for src.
-        src_ipas = list()  # This stores the phonemes for src.
-        src_tokens = list()  # This stores the tokenized phonemes for src.
-
-        tgt_cogs = list()
-        tgt_ipas = list()
-        tgt_tokens = list()
-
-        weird_chars = set("[] #/'")  # Quotation marks in words (not IPA transcriptions) are used for contractions.
-        for src_token, group in df.groupby(src_header)['Token']:
-            group = [t for t in group if t]
-            if len(src_token) == 0 or len(group) == 0:
+        src_fields: List[Field] = list()
+        tgt_fields: List[Field] = list()
+        tgt_code, tgt_g2p = get_tgt_code_and_transcriber(target,
+                                                         pron_dict=pron_dict,
+                                                         need_transcriber=args.need_transcriber)
+        for src_form, tgt_forms, *tgt_ipas in gen_pairs(df, src_header):
+            if len(src_form) == 0 or len(tgt_forms) == 0:
                 continue
-            if (set(src_token) & weird_chars) or any(set(t) & weird_chars for t in group):
+            if (set(src_form) & weird_chars) or any(set(t) & weird_chars for t in tgt_forms):
                 continue
             # Skip some Cyrillic words.
-            if has_cyrillic(src_token) or any(has_cyrillic(t) for t in group):
-                continue
+            if not args.is_cyrillic:
+                if has_cyrillic(src_form) or any(has_cyrillic(t) for t in tgt_forms):
+                    continue
 
-            # Process target side first to skip some pairs due to nonexistent IPA transcriptions (from pronunciation dictionaries).
-            ipas = [tgt_g2p(t) for t in group]
-            ipas = [ipa for ipa in ipas if ipa is not None]
-            if not ipas:
-                continue
+            if args.need_transcriber:
+                tgt_forms = [form for form in tgt_forms if form]
 
-            tokens = [i2t(i) for i in ipas]
-            tgt_cogs.append('|'.join(group))
-            tgt_tokens.append('|'.join([' '.join(token) for token in tokens]))
-            tgt_ipas.append('|'.join([''.join(token) for token in tokens]))
-
-            ipa = src_g2p(src_token)
-            src_cogs.append(src_token)
-            tokens = i2t(ipa)
-            src_tokens.append(' '.join(tokens))
-            src_ipas.append(''.join(tokens))
-
-        np.random.seed(args.random_seed)
-        r = np.random.rand(len(src_cogs))
-        splits = list()
-        for f in r:
-            if f >= 0.8:
-                splits.append('test')
-            elif f >= 0.7:
-                splits.append('dev')
+                # Process target side first to skip some pairs due to nonexistent IPA transcriptions (from pronunciation dictionaries).
+                tgt_ipas = [tgt_g2p(form) for form in tgt_forms]
+                tgt_ipas = [ipa for ipa in tgt_ipas if ipa is not None]
+                if not tgt_ipas:
+                    continue
             else:
-                splits.append('train')
-        src_df = pd.DataFrame({'transcription': src_cogs, 'split': splits, 'ipa': src_ipas, 'tokens': src_tokens})
-        tgt_df = pd.DataFrame({'transcription': tgt_cogs, 'split': splits, 'ipa': tgt_ipas, 'tokens': tgt_tokens})
+                tgt_ipas = tgt_ipas[0]
+
+            tgt_tokens = [i2t(ipa) for ipa in tgt_ipas]
+            tgt_field = Field('|'.join(tgt_forms), tgt_tokens, target_side=True)
+            tgt_fields.append(tgt_field)
+
+            src_ipa = src_g2p(src_form)
+            src_tokens = i2t(src_ipa)
+            src_field = Field(src_form, src_tokens, target_side=False)
+            src_fields.append(src_field)
+        src_df = pd.DataFrame([field.to_record() for field in src_fields])
+        tgt_df = pd.DataFrame([field.to_record() for field in tgt_fields])
+        add_splits(src_df, tgt_df, args.random_seed)
 
         folder = Path(f'./data/wikt/{args.source}-{tgt_code}')
         folder.mkdir(parents=True, exist_ok=True)
 
-        src_df.to_csv(str(folder / f'{args.source}.tsv'), sep='\t', index=None)
-        tgt_df.to_csv(str(folder / f'{tgt_code}.tsv'), sep='\t', index=None)
+        src_path = str(folder / f'{args.source}.tsv')
+        src_df.to_csv(src_path, sep='\t', index=None)
+        logger.info(f'Data saved to {src_path}.')
+
+        tgt_path = str(folder / f'{tgt_code}.tsv')
+        tgt_df.to_csv(tgt_path, sep='\t', index=None)
+        logger.info(f'Data saved to {tgt_path}.')

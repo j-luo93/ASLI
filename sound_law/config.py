@@ -81,6 +81,11 @@ class ZSLatItaPhono(ZSLatIta, UsePhono, Size220):
 
 
 @reg
+class ZSLatItaPhonoNel(ZSLatItaPhono):
+    src_lang: str = 'la'
+
+
+@reg
 class ZSLatSpaPhono(ZSLatSpa, UsePhono, Size220):
     pass
 
@@ -88,6 +93,12 @@ class ZSLatSpaPhono(ZSLatSpa, UsePhono, Size220):
 @reg
 class ZSPgmcDeuPhono(ZSPgmcDeu, UsePhono, Size220):
     pass
+
+
+@reg
+class ZSPgmcDeuPhonoNel(ZSPgmcDeuPhono):
+    src_lang: str = 'gem-pro'
+    train_tgt_langs: Tuple[str, ...] = ('swe', 'nld', 'isl', 'nor', 'dan', 'eng')
 
 
 @reg
