@@ -8,3 +8,4 @@ ipapy
 lang2vec
 graphviz
 loguru
+inflection
