@@ -9,7 +9,17 @@ from sound_law.train.manager import OnePairManager, OneToManyManager
 add_argument('task', dtype=str, default='one_pair', choices=['one_pair', 'one_to_many'], msg='Which task to execute.')
 
 
-def run():
+def setup():
+    initiate(reg, logger=True, log_level=True, gpus=True, random_seed=True, commit_id=True, log_dir=True)
+    patch_named_tensors()
+    torch.set_printoptions(sci_mode=False)
+
+
+def main():
+    parse_args()
+    show_args()
+    set_random_seeds(g.random_seed)
+
     if g.task == 'one_pair':
         manager = OnePairManager()
     else:
@@ -18,11 +28,4 @@ def run():
 
 
 if __name__ == '__main__':
-    initiate(reg, logger=True, log_level=True, gpus=True, random_seed=True, commit_id=True, log_dir=True)
-    patch_named_tensors()
-    parse_args()
-    show_args()
-    set_random_seeds(g.random_seed)
-
-    torch.set_printoptions(sci_mode=False)
-    run()
+    main()

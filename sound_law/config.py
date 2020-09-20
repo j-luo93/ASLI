@@ -1,3 +1,4 @@
+from dataclasses import make_dataclass
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, List, Tuple
@@ -101,27 +102,29 @@ def iter_tgt_lang(all_langs: List[str]) -> Iterator[Tuple[str, Tuple[str, ...]]]
         yield tgt_lang, train_tgt_langs
 
 
-def register_phono_nel_configs(all_langs: List[str], proto: str, proto_code: str):
+def register_phono_nel_configs(all_langs: List[str], proto: str, proto_code: str) -> list:
     """Register phonological configs with NorthEuraLex dataset.
 
     Note that `proto` is used for the config name, and `proto_code` is the actual language code
     for identifying this language in the dataset.
     """
-    proto = 'pgmc'
+    configs = list()
     for tgt_lang, train_tgt_langs in iter_tgt_lang(all_langs):
         cls_name = f'ZS{camelize(proto)}{camelize(tgt_lang)}PhonoNel'
-        new_cls = type(cls_name, (ZSPgmcDeuPhono, ),
-                       {'src_lang': proto_code,
-                        'tgt_lang': tgt_lang,
-                        'train_tgt_langs': train_tgt_langs})
-        reg(new_cls)
+        new_cls = make_dataclass(cls_name,
+                                 [('src_lang', str, proto_code),
+                                  ('tgt_lang', str, tgt_lang),
+                                  ('train_tgt_langs', Tuple[str, ...], train_tgt_langs)],
+                                 bases=(ZSPgmcDeuPhono, ))
+        configs.append(reg(new_cls))
+    return configs
 
 
 all_germanic_langs = ['deu', 'swe', 'nld', 'isl', 'nor', 'dan', 'eng']
 all_italic_langs = ['por', 'spa', 'ita', 'fra', 'ron', 'cat']
 
-register_phono_nel_configs(all_germanic_langs, 'pgmc', 'gem-pro')
-register_phono_nel_configs(all_italic_langs, 'lat', 'la')
+all_germanic_configs = register_phono_nel_configs(all_germanic_langs, 'pgmc', 'gem-pro')
+all_italic_configs = register_phono_nel_configs(all_italic_langs, 'lat', 'la')
 
 
 @reg
