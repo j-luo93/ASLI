@@ -2,15 +2,18 @@
 A manager class takes care of managing the data loader, the model, and the trainer.
 """
 import logging
+from typing import Optional
 
 import torch
-from torch.optim import Adam
+from torch.optim import SGD, Adam
 
 from dev_misc import add_argument, add_condition, g, get_tensor
 from dev_misc.devlib.helper import has_gpus
 from dev_misc.trainlib.tb_writer import MetricWriter
+from sound_law.data.alphabet import Alphabet
+from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
-from sound_law.data.dataset import Alphabet, Split, get_paths
+from sound_law.data.dataset import Split
 from sound_law.data.setting import Setting
 from sound_law.evaluate.evaluator import Evaluator
 from sound_law.model.one_pair import OnePairModel
@@ -20,15 +23,15 @@ from .trainer import Trainer
 
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
-add_argument('save_interval', default=100, dtype=int, msg='Frequency to save the progress and the model.')
+add_argument('save_interval', dtype=int, msg='Frequency to save the progress and the model.')
+add_argument('learning_rate', default=2e-3, dtype=float, msg='Learning rate.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
-add_argument('train_e_keep_ratio', dtype=float,
-             msg='Ratio of cognate pairs to keep for the training set during evaluation.')
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
 add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle evaluate-only mode.')
 add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
 add_argument('use_phono_features', dtype=bool, default=False, msg='Flag to use phonological features.')
+add_argument('optim_cls', dtype=str, default='adam', choices=['sgd', 'adam'], msg='What optimizer to choose.')
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 
 
@@ -36,31 +39,35 @@ class OnePairManager:
     """A manager for sound law induction on one src-tgt pair."""
 
     def __init__(self):
-        # Prepare alphabets first.
-        src_path, tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
+        # Prepare cognate registry.
+        cr = CognateRegistry()
+        cr.add_pair(g.data_path, g.src_lang, g.tgt_lang)
+
+        # Prepare alphabets now.
         if g.share_src_tgt_abc:
-            self.src_abc = Alphabet.from_tsvs('shared', [src_path, tgt_path], g.input_format)
+            self.src_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang)
             self.tgt_abc = self.src_abc
         else:
-            self.src_abc = Alphabet.from_tsv(g.src_lang, src_path, g.input_format)
-            self.tgt_abc = Alphabet.from_tsv(g.tgt_lang, tgt_path, g.input_format)
+            self.src_abc = cr.prepare_alphabet(g.src_lang)
+            self.tgt_abc = cr.prepare_alphabet(g.tgt_lang)
 
         # Prepare data loaders with different splits.
         self.dl_reg = DataLoaderRegistry()
 
-        def create_setting(name: str, split: Split, for_training: bool) -> Setting:
-            return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, self.src_abc, self.tgt_abc, for_training)
+        def create_setting(name: str, split: Split, for_training: bool, keep_ratio: Optional[float] = None) -> Setting:
+            return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, for_training, keep_ratio=keep_ratio)
 
-        def register_dl(setting: Setting, keep_ratio=None):
-            # NOTE(j_luo) `keep_ratio` should only be used for training set since a smaller pool of candiates for dev/test would inflate the scores.
-            self.dl_reg.register_data_loader(setting, keep_ratio=keep_ratio)
+        def register_dl(setting: Setting):
+            self.dl_reg.register_data_loader(setting, cr)
 
         if g.input_format == 'wikt':
-            train_setting = create_setting('train', Split('train'), True)
-            train_e_setting = create_setting('train_e', Split('train'), False)  # For evaluation.
+            train_setting = create_setting('train', Split('train'), True,
+                                           keep_ratio=g.keep_ratio)
+            train_e_setting = create_setting('train_e', Split('train'), False,
+                                             keep_ratio=g.keep_ratio)  # For evaluation.
             dev_setting = create_setting('dev', Split('dev'), False)
-            register_dl(train_setting, keep_ratio=g.keep_ratio)
-            register_dl(train_e_setting, keep_ratio=g.keep_ratio)
+            register_dl(train_setting)
+            register_dl(train_e_setting)
             register_dl(dev_setting)
         else:
             for fold in range(5):
@@ -68,11 +75,15 @@ class OnePairManager:
                 train_folds = list(range(1, 6))
                 train_folds.remove(dev_fold)
 
-                train_setting = create_setting(f'train@{fold}', Split('train', train_folds), True)
-                train_e_setting = create_setting(f'train@{fold}_e', Split('train', train_folds), False)
+                train_setting = create_setting(
+                    f'train@{fold}', Split('train', train_folds), True,
+                    keep_ratio=g.keep_ratio)
+                train_e_setting = create_setting(
+                    f'train@{fold}_e', Split('train', train_folds), False,
+                    keep_ratio=g.keep_ratio)
                 dev_setting = create_setting(f'dev@{fold}', Split('dev', [dev_fold]), False)
-                register_dl(train_setting, keep_ratio=g.keep_ratio)
-                register_dl(train_e_setting, keep_ratio=g.train_e_keep_ratio)
+                register_dl(train_setting)
+                register_dl(train_e_setting)
                 register_dl(dev_setting)
 
         test_setting = create_setting('test', Split('test'), False)
@@ -98,7 +109,7 @@ class OnePairManager:
 
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
-                logging.info(f'Loaded from {g.saved_model_path}.')
+                logging.imp(f'Loaded from {g.saved_model_path}.')
             if has_gpus():
                 model.cuda()
             logging.info(model)
@@ -119,8 +130,11 @@ class OnePairManager:
                                   eval_interval=g.eval_interval,
                                   save_interval=g.save_interval,
                                   metric_writer=metric_writer)
-                trainer.init_params('uniform', -0.1, 0.1)
-                trainer.set_optimizer(Adam, lr=0.002)
+                if g.saved_model_path is None:
+                    # trainer.init_params('uniform', -0.1, 0.1)
+                    trainer.init_params('xavier_uniform')
+                optim_cls = Adam if g.optim_cls == 'adam' else SGD
+                trainer.set_optimizer(optim_cls, lr=g.learning_rate)
                 trainer.train(self.dl_reg)
 
         if g.input_format == 'wikt':
@@ -137,21 +151,21 @@ class OneToManyManager:
     add_argument('train_tgt_langs', dtype=str, nargs='+', msg='Target languages used for training.')
 
     def __init__(self):
-        # Get alphabets from tsvs. Note that the target alphabet is based on the union of all target languages, i.e., a shared alphabet for all.
-        src_paths = list()
-        tgt_paths = list()
+        # Prepare cognate registry first.
+        cr = CognateRegistry()
         all_tgt = sorted([g.tgt_lang] + list(g.train_tgt_langs))
         for tgt in all_tgt:
-            src_path, tgt_path = get_paths(g.data_path, g.src_lang, tgt)
-            src_paths.append(src_path)
-            tgt_paths.append(tgt_path)
+            cr.add_pair(g.data_path, g.src_lang, tgt)
+
+        # Get alphabets. Note that the target alphabet is based on the union of all target languages, i.e., a shared alphabet for all.
         if g.share_src_tgt_abc:
-            self.src_abc = Alphabet.from_tsvs('shared', src_paths + tgt_paths, g.input_format)
+            self.src_abc = cr.prepare_alphabet(*(all_tgt + [g.src_lang]))
             self.tgt_abc = self.src_abc
         else:
-            self.src_abc = Alphabet.from_tsvs(g.src_lang, src_paths, g.input_format)
-            self.tgt_abc = Alphabet.from_tsvs('all_targets', tgt_paths, g.input_format)
+            self.src_abc = cr.prepare_alphabet(g.src_lang)
+            self.tgt_abc = cr.prepare_alphabet(*all_tgt)
 
+        # Get stats for unseen units.
         stats = self.tgt_abc.stats
         _, test_tgt_path = get_paths(g.data_path, g.src_lang, g.tgt_lang)
         mask = (stats.sum() == stats.loc[test_tgt_path])
@@ -165,14 +179,15 @@ class OneToManyManager:
         # Get all data loaders.
         self.dl_reg = DataLoaderRegistry()
 
-        def create_setting(name: str, tgt_lang: str, split: Split, for_training: bool) -> Setting:
-            return Setting(name, 'one_pair', split, g.src_lang, tgt_lang, self.src_abc, self.tgt_abc, for_training)
+        def create_setting(name: str, tgt_lang: str, split: Split, for_training: bool, keep_ratio: Optional[float] = None) -> Setting:
+            return Setting(name, 'one_pair', split, g.src_lang, tgt_lang, for_training, keep_ratio=keep_ratio)
 
-        def register_dl(setting: Setting, keep_ratio=None):
-            self.dl_reg.register_data_loader(setting, lang2id=lang2id, keep_ratio=keep_ratio)
+        def register_dl(setting: Setting):
+            self.dl_reg.register_data_loader(setting, cr, lang2id=lang2id)
 
-        test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'), False)
-        register_dl(test_setting, keep_ratio=g.test_keep_ratio)
+        test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'), False,
+                                      keep_ratio=g.test_keep_ratio)
+        register_dl(test_setting)
 
         # Get the training languages.
         for train_tgt_lang in g.train_tgt_langs:
@@ -182,13 +197,15 @@ class OneToManyManager:
             else:
                 train_split = Split('train')
                 dev_split = Split('dev')
-            train_setting = create_setting(f'train@{train_tgt_lang}', train_tgt_lang, train_split, True)
-            train_e_setting = create_setting(f'train@{train_tgt_lang}_e', train_tgt_lang, train_split, False)
+            train_setting = create_setting(f'train@{train_tgt_lang}', train_tgt_lang,
+                                           train_split, True, keep_ratio=g.keep_ratio)
+            train_e_setting = create_setting(
+                f'train@{train_tgt_lang}_e', train_tgt_lang, train_split, False, keep_ratio=g.keep_ratio)
             dev_setting = create_setting(f'dev@{train_tgt_lang}', train_tgt_lang, dev_split, False)
             test_setting = create_setting(f'test@{train_tgt_lang}', train_tgt_lang, Split('test'), False)
 
-            register_dl(train_setting, keep_ratio=g.keep_ratio)
-            register_dl(train_e_setting, keep_ratio=g.train_e_keep_ratio)
+            register_dl(train_setting)
+            register_dl(train_e_setting)
             register_dl(dev_setting)
             register_dl(test_setting)
 
@@ -205,7 +222,7 @@ class OneToManyManager:
 
         if g.saved_model_path is not None:
             self.model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
-            logging.info(f'Loaded from {g.saved_model_path}.')
+            logging.imp(f'Loaded from {g.saved_model_path}.')
         if has_gpus():
             self.model.cuda()
         logging.info(self.model)
@@ -228,8 +245,11 @@ class OneToManyManager:
                                    eval_interval=g.eval_interval,
                                    save_interval=g.save_interval,
                                    metric_writer=metric_writer)
-            self.trainer.init_params('uniform', -0.1, 0.1)
-            self.trainer.set_optimizer(Adam, lr=0.002)
+            if g.saved_model_path is None:
+                # self.trainer.init_params('uniform', -0.1, 0.1)
+                self.trainer.init_params('xavier_uniform')
+            optim_cls = Adam if g.optim_cls == 'adam' else SGD
+            self.trainer.set_optimizer(optim_cls, lr=g.learning_rate)
 
     def run(self):
         if g.evaluate_only:

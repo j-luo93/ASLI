@@ -19,10 +19,11 @@ LstmOutputTuple = Tuple[FT, LstmStateTuple]
 
 class LstmEncoder(nn.Module):
 
-    def __init__(self, embedding: nn.Module, lstm: nn.LSTM):
+    def __init__(self, embedding: nn.Module, lstm: nn.LSTM, dropout: float = 0.0):
         super().__init__()
         self.embedding = embedding
         self.lstm = lstm
+        self.drop = nn.Dropout(dropout)
 
     @classmethod
     def from_params(cls, emb_params: EmbParams, lstm_params: LstmParams) -> LstmEncoder:
@@ -33,7 +34,7 @@ class LstmEncoder(nn.Module):
             lstm_params.num_layers,
             bidirectional=lstm_params.bidirectional,
             dropout=lstm_params.dropout)
-        return cls(embedding, lstm)
+        return cls(embedding, lstm, lstm_params.dropout)
 
     def forward(self, input_: LT, lengths: LT) -> Tuple[FT, LstmOutputTuple]:
         emb = self.embedding(input_)
@@ -41,6 +42,7 @@ class LstmEncoder(nn.Module):
             packed_emb = pack_padded_sequence(emb, lengths, enforce_sorted=False)
             output, state = self.lstm(packed_emb)
             output = pad_packed_sequence(output)[0]
+            output = self.drop(output)  # Dropout after last output, different from the behavior for nn.LSTM.
         return emb, (output, LstmStateTuple(state, bidirectional=self.lstm.bidirectional))
 
 

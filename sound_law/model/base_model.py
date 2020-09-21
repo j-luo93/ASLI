@@ -48,14 +48,14 @@ class BaseModel(nn.Module):
                              special_ids=special_ids,
                              separate_output=g.separate_output)
 
-        def get_lstm_params(bidirectional: bool) -> LstmParams:
-            return LstmParams(g.char_emb_size, g.hidden_size,
+        def get_lstm_params(input_size: int, bidirectional: bool) -> LstmParams:
+            return LstmParams(input_size, g.hidden_size,
                               g.num_layers, g.dropout,
                               bidirectional=bidirectional)
 
         enc_emb_params = get_emb_params(num_src_chars)
         if g.model_encoder_type == 'lstm':
-            enc_lstm_params = get_lstm_params(True)
+            enc_lstm_params = get_lstm_params(g.char_emb_size, True)
             self.encoder = LstmEncoder.from_params(enc_emb_params, enc_lstm_params)
         else:
             cnn_params = CnnParams(g.hidden_size, g.kernel_sizes, g.dropout)
@@ -67,7 +67,9 @@ class BaseModel(nn.Module):
         else:
             dec_emb_params = get_emb_params(num_tgt_chars)
             dec_embedding = None
-        dec_lstm_params = get_lstm_params(False)
+        # NOTE(j_luo) Input size is the sum of `g.char_emb_size` and `g.hidden_size` if input feeding is used.
+        dec_input_size = g.char_emb_size + (g.hidden_size if g.input_feeding else 0)
+        dec_lstm_params = get_lstm_params(dec_input_size, False)
         dec_params = DecParams(dec_lstm_params,
                                g.hidden_size * 2,  # Bidirectional outputs.
                                g.hidden_size,
@@ -87,17 +89,6 @@ class BaseModel(nn.Module):
                                               target=target,
                                               lang_emb=lang_emb)
         return log_probs, almt_distrs
-
-    # def old_get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs) -> FT:
-    #     """Given a batch and a list of target tokens (provided as id sequences), return scores produced by the model."""
-    #     assert not self.training
-    #     max_length = tgt_vocab_seqs.ids.size('pos')
-    #     log_probs, _ = self.forward(batch, use_target=False, max_length=max_length)
-    #     with Rename(tgt_vocab_seqs.ids, batch='tgt_vocab'), Rename(tgt_vocab_seqs.paddings, batch='tgt_vocab'):
-    #         unit_scores = log_probs.gather('unit', tgt_vocab_seqs.ids)
-    #         unit_scores = unit_scores * tgt_vocab_seqs.paddings.float().align_as(unit_scores)
-    #     scores = unit_scores.sum('pos')
-    #     return scores
 
     def get_scores(self, batch: OnePairBatch, tgt_vocab_seqs: PaddedUnitSeqs, chunk_size: int = 100) -> FT:
         """Given a batch and a list of target tokens (provided as id sequences), return scores produced by the model."""

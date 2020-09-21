@@ -2,21 +2,20 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple, Union, Dict
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
-
+import lang2vec.lang2vec as l2v
 import numpy
 import torch
 import torch.nn as nn
 import torch.nn.init
 from torch.nn.functional import normalize
 
-from dev_misc import BT, FT, LT, get_zeros, add_argument, g
+from dev_misc import BT, FT, LT, add_argument, g, get_zeros
 from dev_misc.devlib.named_tensor import NameHelper, NoName
 from dev_misc.utils import cacheable
-from sound_law.data.dataset import PAD_ID
+from sound_law.data.alphabet import PAD_ID
 from sound_law.model.lstm_state import LstmStatesByLayers, LstmStateTuple
-import lang2vec.lang2vec as l2v
 
 LstmOutputsByLayers = Tuple[FT, LstmStatesByLayers]
 
@@ -50,7 +49,6 @@ class MultiLayerLSTMCell(nn.Module):
             cells.append(nn.LSTMCell(hidden_size, hidden_size))
         self.cells = nn.ModuleList(cells)
 
-    # IDEA(j_luo) write a function to generate simple `from_params` classmethods?
     @classmethod
     def from_params(cls, lstm_params: LstmParams) -> MultiLayerLSTMCell:
         return cls(lstm_params.input_size,
@@ -70,9 +68,8 @@ class MultiLayerLSTMCell(nn.Module):
             new_c.rename_(*c.names)
             new_states.append((new_h, new_c))
             input_ = new_h.refine_names('batch', ...)
-            # Note that the last layer doesn't use dropout, following nn.LSTM.
-            if i < self.num_layers - 1:
-                input_ = self.drop(input_)
+            # Note that the last layer also uses dropout, which is different from nn.LSTM.
+            input_ = self.drop(input_)
         return input_, LstmStatesByLayers(new_states)
 
     def extra_repr(self):
@@ -188,8 +185,7 @@ class GlobalAttention(nn.Module):
 
     def __init__(self,
                  input_src_size: int,
-                 input_tgt_size: int,
-                 dropout: float = 0.0):
+                 input_tgt_size: int):
         super(GlobalAttention, self).__init__()
 
         self.input_src_size = input_src_size
@@ -197,13 +193,12 @@ class GlobalAttention(nn.Module):
 
         self.Wa = nn.Parameter(torch.Tensor(input_src_size, input_tgt_size))
         torch.nn.init.xavier_normal_(self.Wa)
-        self.drop = nn.Dropout(dropout)
 
     @cacheable(switch='Wh_s')
     def _get_Wh_s(self, h_s: FT) -> FT:
         sl, bs, ds = h_s.size()
         with NoName(h_s):
-            Wh_s = self.drop(h_s).reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
+            Wh_s = h_s.reshape(sl * bs, -1).mm(self.Wa).view(sl, bs, -1)
         return Wh_s
 
     def forward(self,
@@ -306,7 +301,7 @@ class LanguageEmbedding(nn.Embedding):
             # initialize the learned embedding with a smaller dimension than g.char_emb_size so that after concatenation with the lang2vec feature embedding, the total embedding is g.char_emb_size
             embedding_dim -= l2v_emb_len
             assert l2v_emb_len + embedding_dim == g.char_emb_size
-        
+
         super().__init__(num_embeddings, embedding_dim, **kwargs)
         self.drop = nn.Dropout(dropout)
 
@@ -325,7 +320,7 @@ class LanguageEmbedding(nn.Embedding):
                 emb = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
         else:
             emb = self.weight[index]
-        
+
         if self.mode == 'mean_lang2vec':
             l2v_emb = getattr(self, 'lang2vec_' + self.id2lang[index])
             emb = torch.cat([emb, l2v_emb], dim=0)

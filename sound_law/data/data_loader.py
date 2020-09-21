@@ -16,9 +16,11 @@ from dev_misc.trainlib import BaseSetting
 from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
                                                 BaseDataLoaderRegistry)
 from dev_misc.utils import cached_property
-from sound_law.data.dataset import OnePairDataset
+from sound_law.data.dataset import OnePairDataset, Vocabulary
 
-from .dataset import Alphabet, Split
+from .alphabet import Alphabet
+from .cognate import CognateRegistry
+from .dataset import Split
 from .setting import Setting
 
 
@@ -26,6 +28,7 @@ from .setting import Setting
 class PaddedUnitSeqs(BaseBatch):
     """`units` should not be transposed, but the others are."""
     lang: str
+    forms: NDA
     units: NDA
     ids: LT
     paddings: BT  # If a position is a padding, we mark it as False. Otherwise True.
@@ -54,7 +57,8 @@ class PaddedUnitSeqs(BaseBatch):
         for ids, paddings in zip(ids_lst, paddings_lst):
             length = ids.size(1)
             units = self.units[start: start + length]
-            split = PaddedUnitSeqs(self.lang, units, ids, paddings,
+            forms = self.forms[start: start + length]
+            split = PaddedUnitSeqs(self.lang, forms, units, ids, paddings,
                                    lang_id=self.lang_id)
             ret.append(split)
             start += length
@@ -62,7 +66,7 @@ class PaddedUnitSeqs(BaseBatch):
         return ret
 
 
-@ batch_class
+@batch_class
 class OnePairBatch(BaseBatch):
     src_seqs: PaddedUnitSeqs
     tgt_seqs: PaddedUnitSeqs
@@ -108,12 +112,14 @@ def one_pair_collate_fn(batches: List[Dict]) -> OnePairBatch:
     tgt_ids, tgt_paddings = _gather_from_batches(batches, 'tgt_id_seq')
     src_units = _gather_from_batches(batches, 'src_unit_seq', is_tensor=False)
     tgt_units = _gather_from_batches(batches, 'tgt_unit_seq', is_tensor=False)
+    src_forms = _gather_from_batches(batches, 'src_form', is_seq=False, is_tensor=False)
+    tgt_forms = _gather_from_batches(batches, 'tgt_form', is_seq=False, is_tensor=False)
     indices = _gather_from_batches(batches, 'index', is_seq=False)
 
     src_lang = batches[0]['src_lang']
     tgt_lang = batches[0]['tgt_lang']
-    src_seqs = PaddedUnitSeqs(src_lang, src_units, src_ids, src_paddings)
-    tgt_seqs = PaddedUnitSeqs(tgt_lang, tgt_units, tgt_ids, tgt_paddings)
+    src_seqs = PaddedUnitSeqs(src_lang, src_forms, src_units, src_ids, src_paddings)
+    tgt_seqs = PaddedUnitSeqs(tgt_lang, tgt_forms, tgt_units, tgt_ids, tgt_paddings)
 
     return OnePairBatch(src_seqs, tgt_seqs, indices)
 
@@ -126,20 +132,17 @@ class OnePairDataLoader(BaseDataLoader):
 
     def __init__(self,
                  setting: Setting,
-                 data_path: Path,
-                 input_format: str,
-                 lang2id: Dict[str, int] = None,
-                 keep_ratio: Optional[float] = None):
-        dataset = OnePairDataset(data_path, setting.split,
-                                 setting.src_lang, setting.tgt_lang,
-                                 setting.src_abc, setting.tgt_abc,
-                                 input_format, keep_ratio=keep_ratio)
+                 cog_reg: CognateRegistry,
+                 lang2id: Dict[str, int] = None):
+        dataset = cog_reg.prepare_dataset(setting)
         self.lang2id = lang2id
         self.src_lang = setting.src_lang
         self.tgt_lang = setting.tgt_lang
+        self.src_abc = cog_reg.get_alphabet(setting.src_lang)
+        self.tgt_abc = cog_reg.get_alphabet(setting.tgt_lang)
 
         sampler = None
-        if setting.for_training and dataset.sample_weights is not None:
+        if setting.for_training:
             sampler = WeightedRandomSampler(dataset.sample_weights, len(dataset))
         super().__init__(dataset, setting,
                          batch_size=g.batch_size,
@@ -158,25 +161,25 @@ class OnePairDataLoader(BaseDataLoader):
 
     @cached_property
     def tgt_seqs(self) -> PaddedUnitSeqs:
+        vocab = self.tgt_vocabulary
         items = list()
-        for i in range(len(self.dataset)):
-            items.append(self.dataset[i])
-        ids, paddings = (_gather_from_batches(items, 'tgt_id_seq'))
-        units = _gather_from_batches(items, 'tgt_unit_seq', is_tensor=False)
-        ret = PaddedUnitSeqs(self.tgt_lang, units, ids, paddings)
+        for i in range(len(vocab)):
+            items.append(vocab[i])
+        ids, paddings = (_gather_from_batches(items, 'id_seq'))
+        units = _gather_from_batches(items, 'unit_seq', is_tensor=False)
+        forms = _gather_from_batches(items, 'form', is_tensor=False, is_seq=False)
+        ret = PaddedUnitSeqs(self.tgt_lang, forms, units, ids, paddings)
         if has_gpus():
             ret.cuda()
         return ret
 
     @property
-    def tgt_vocab(self):
-        return self.dataset.tgt_vocab
+    def src_vocabulary(self) -> Vocabulary:
+        return self.dataset.src_vocabulary
 
-    def get_token_from_index(self, index: int, side: str):
-        assert side in ['src', 'tgt']
-
-        vocab = self.dataset.src_vocab if side == 'src' else self.dataset.tgt_vocab
-        return vocab[index]
+    @property
+    def tgt_vocabulary(self) -> Vocabulary:
+        return self.dataset.tgt_vocabulary
 
 
 class DataLoaderRegistry(BaseDataLoaderRegistry):
@@ -186,10 +189,10 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
     add_argument('tgt_lang', dtype=str, msg='ISO code for the target language.')
     add_argument('input_format', dtype=str, choices=['wikt', 'ielex'], default='ielex', msg='Input format.')
 
-    def get_data_loader(self, setting: BaseSetting, **kwargs) -> BaseDataLoader:
+    def get_data_loader(self, setting: BaseSetting, cog_reg: CognateRegistry, **kwargs) -> BaseDataLoader:
         if setting.task == 'one_pair':
             # TODO(j_luo) The options can all be part of setting.
-            dl = OnePairDataLoader(setting, g.data_path, g.input_format, **kwargs)
+            dl = OnePairDataLoader(setting, cog_reg, **kwargs)
         else:
             raise ValueError(f'Cannot understand this task "{setting.task}".')
         return dl
