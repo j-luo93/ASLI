@@ -9,3 +9,4 @@ lang2vec
 graphviz
 loguru
 inflection
+altair

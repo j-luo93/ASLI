@@ -118,4 +118,6 @@ overleaf/*
 grid/*
 figs/*
 model_ret/*
-plot/*
+plots/*
+dask-worker-space/*
+ini/*
