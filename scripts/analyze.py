@@ -79,7 +79,7 @@ def make_line(df, out_name: str, width=1000, height=700):
 
     selected_color = alt.condition(selection, 'tgt_lang:N', alt.value('lightgray'))
     selected_opacity = alt.condition(selection, alt.value(1.0), alt.value(0.0))
-    line = chart.mark_line().encode(
+    line = chart.mark_line(point=True).encode(
         x='step:N',
         y=encode_y('mean(value):Q'),
         color=selected_color,

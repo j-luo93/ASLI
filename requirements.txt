@@ -10,3 +10,4 @@ graphviz
 loguru
 inflection
 altair
+prefect
