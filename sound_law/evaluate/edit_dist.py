@@ -16,6 +16,7 @@ Number = Union[int, float]
 
 def translate(token_ids: Sequence[int], abc: Alphabet) -> Tuple[str, int]:
     ret = list()
+    properly_ended = False  # This indicates whether an EOT has been predicted, as opposed to truncation due to length.
     for tid in token_ids:
         if tid != EOT_ID:
             if g.comp_mode in ['units', 'str', 'ids_gpu']:
@@ -23,12 +24,13 @@ def translate(token_ids: Sequence[int], abc: Alphabet) -> Tuple[str, int]:
             else:
                 ret.append(tid)
         else:
+            properly_ended = True
             break
 
     if g.comp_mode in ['units', 'ids']:
-        return ret, len(ret)
+        return ret, len(ret) + properly_ended
     else:
-        return ''.join(ret), len(ret)
+        return ''.join(ret), len(ret) + properly_ended
 
 
 def edit_dist(seq_0: str, seq_1: str, mode: str) -> Number:

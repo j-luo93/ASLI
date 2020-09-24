@@ -11,3 +11,5 @@ loguru
 inflection
 altair
 prefect
+gradio
+prompt_toolkit

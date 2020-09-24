@@ -174,7 +174,7 @@ class OneToManyManager:
         logging.info(f'Unseen units ({len(unseen)}/{total}) for {g.tgt_lang} are: {unseen}.')
 
         # Get language-to-id mappings. Used only for the targets (i.e., decoder side).
-        lang2id = {tgt: i for i, tgt in enumerate(all_tgt)}
+        self.lang2id = lang2id = {tgt: i for i, tgt in enumerate(all_tgt)}
 
         # Get all data loaders.
         self.dl_reg = DataLoaderRegistry()

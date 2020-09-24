@@ -1,10 +1,10 @@
-from typing import Optional, Sequence, Tuple, Dict
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
 
 from dev_misc import FT, LT, add_argument, g
-from sound_law.data.data_loader import OnePairBatch
+from sound_law.data.data_loader import OnePairBatch, SourceOnlyBatch
 from sound_law.data.dataset import SOT_ID
 
 from .base_model import BaseModel
@@ -30,5 +30,5 @@ class OneToManyModel(BaseModel):
                                           mode=g.lang_emb_mode,
                                           dropout=g.dropout)
 
-    def _prepare_lang_emb(self, batch: OnePairBatch) -> FT:
-        return self.lang_emb(batch.tgt_seqs.lang_id)
+    def _prepare_lang_emb(self, batch: Union[OnePairBatch, SourceOnlyBatch]) -> FT:
+        return self.lang_emb(batch.tgt_lang_id)

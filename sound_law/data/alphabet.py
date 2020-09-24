@@ -68,6 +68,7 @@ class Alphabet:
         self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
+        self.lang = lang
 
     @property
     def pfm(self) -> LT:

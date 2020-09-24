@@ -3,7 +3,7 @@ This file contains models for one pair of src-tgt languags.
 """
 
 from abc import abstractmethod
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -11,7 +11,8 @@ import torch.nn as nn
 from dev_misc import FT, LT, add_argument, add_condition, g, get_zeros
 from dev_misc.devlib.named_tensor import NoName, Rename
 from dev_misc.utils import pbar
-from sound_law.data.data_loader import OnePairBatch, PaddedUnitSeqs
+from sound_law.data.data_loader import (OnePairBatch, PaddedUnitSeqs,
+                                        SourceOnlyBatch)
 from sound_law.data.dataset import SOT_ID
 
 from .decoder import DecParams, Hypotheses, LstmDecoder
@@ -131,7 +132,7 @@ class BaseModel(nn.Module):
         scores = torch.cat(scores, dim='tgt_vocab')
         return scores
 
-    def predict(self, batch: OnePairBatch) -> Hypotheses:
+    def predict(self, batch: Union[SourceOnlyBatch, OnePairBatch]) -> Hypotheses:
         src_emb, (output, state) = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         src_emb = src_emb.refine_names('pos', 'batch', 'src_emb')
         output = output.refine_names('pos', 'batch', 'output')

@@ -15,11 +15,11 @@ from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import BaseSetting
 from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
                                                 BaseDataLoaderRegistry)
-from dev_misc.utils import cached_property
-from sound_law.data.dataset import OnePairDataset, Vocabulary
+from dev_misc.utils import cached_property, handle_sequence_inputs
+from sound_law.data.dataset import OnePairDataset, Vocabulary, pad
 
 from .alphabet import Alphabet
-from .cognate import CognateRegistry
+from .cognate import CognateRegistry, postprocess
 from .dataset import Split
 from .setting import Setting
 
@@ -67,6 +67,37 @@ class PaddedUnitSeqs(BaseBatch):
 
 
 @batch_class
+class SourceOnlyBatch(BaseBatch):
+    """This class only has source sequences."""
+    src_seqs: PaddedUnitSeqs
+    tgt_lang_id: int
+
+    def __len__(self):
+        return len(self.src_seqs)
+
+    @classmethod
+    def from_ipa_tokens(cls, ipa_tokens: str, abc: Alphabet, tgt_lang_id: int) -> SourceOnlyBatch:
+        """Prepare a `SourceOnlyBatch object from just ipa tokens."""
+        std_func = handle_sequence_inputs(lambda s: abc.standardize(s))
+        record = postprocess(ipa_tokens.split(), std_func, abc)
+        record['id_seq'] = pad(record['id_seq'], 'src', False)
+        record['post_unit_seq'] = pad(record['post_unit_seq'], 'src', True)
+
+        batches = [record]
+        ids, paddings = _gather_from_batches(batches, 'id_seq')
+        units = _gather_from_batches(batches, 'post_unit_seq', is_tensor=False)
+        forms = _gather_from_batches(batches, 'form', is_seq=False, is_tensor=False)
+
+        seqs = PaddedUnitSeqs(abc.lang, forms, units, ids, paddings)
+        return cls(seqs, tgt_lang_id)
+
+    def cuda(self):
+        super().cuda()
+        self.src_seqs.cuda()
+        return self
+
+
+@batch_class
 class OnePairBatch(BaseBatch):
     src_seqs: PaddedUnitSeqs
     tgt_seqs: PaddedUnitSeqs
@@ -79,7 +110,7 @@ class OnePairBatch(BaseBatch):
     def __len__(self):
         return len(self.src_seqs)
 
-    @ property
+    @property
     def num_tgt_units(self) -> int:
         return self.tgt_seqs.num_units
 
@@ -88,6 +119,10 @@ class OnePairBatch(BaseBatch):
         self.src_seqs.cuda()
         self.tgt_seqs.cuda()
         return self
+
+    @property
+    def tgt_lang_id(self) -> int:
+        return self.tgt_seqs.lang_id
 
 
 def _gather_from_batches(batches: List[Dict], item_name: str, is_seq: bool = True, is_tensor: bool = True):
@@ -129,6 +164,7 @@ class OnePairDataLoader(BaseDataLoader):
     add_argument('batch_size', default=32, dtype=int, msg='Batch size.')
 
     collate_fn = one_pair_collate_fn
+    dataset: OnePairDataset
 
     def __init__(self,
                  setting: Setting,

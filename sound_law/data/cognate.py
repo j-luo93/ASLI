@@ -2,8 +2,9 @@ import logging
 import random
 import unicodedata
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, NewType, Set, Tuple
+from typing import Callable, Dict, List, NewType, Set, Tuple
 
 import pandas as pd
 
@@ -53,6 +54,22 @@ def get_paths(data_path: Path, src_lang: Lang, tgt_lang: Lang) -> Tuple[Path, Pa
     src_path = f'{prefix / src_lang}.tsv'
     tgt_path = f'{prefix / tgt_lang}.tsv'
     return Path(src_path).resolve(), Path(tgt_path).resolve()
+
+
+def postprocess(pre_unit_seq: List[str], std_func: Callable[[str], str], abc: Alphabet) -> dict:
+    """Postprocess the unit sequence by applying a standardization function and indexing every unit."""
+    if g.use_duplicate_phono:
+        post_unit_seq = pre_unit_seq
+    else:
+        post_unit_seq = std_func(pre_unit_seq)
+    id_seq = [abc[u] for u in post_unit_seq]
+    form = ''.join(post_unit_seq)
+    ret = {
+        'post_unit_seq': post_unit_seq,
+        'id_seq': id_seq,
+        'form': form
+    }
+    return ret
 
 
 class CognateRegistry:
@@ -141,18 +158,13 @@ class CognateRegistry:
 
         # Post-progress the unit seqs if needed.
         std_func = handle_sequence_inputs(lambda s: abc.standardize(s))
+        cols = ['post_unit_seq', 'id_seq', 'form']  # These are the columns to add.
         for lang in langs:
             for df in self._lang2dfs[lang].values():
-                if g.use_duplicate_phono:
-                    df['post_unit_seq'] = df['pre_unit_seq']
-                else:
-                    df['post_unit_seq'] = df['pre_unit_seq'].apply(std_func)
-                df['form'] = df['post_unit_seq'].apply(''.join)
-
-        # Indexify every data frame.
-        for lang in langs:
-            for df in self._lang2dfs[lang].values():
-                df['id_seq'] = df['post_unit_seq'].apply(lambda seq: [abc[u] for u in seq])
+                records = df['pre_unit_seq'].apply(postprocess, std_func=std_func, abc=abc).tolist()
+                # NOTE(j_luo) Make sure to use the same index as the original `df` since duplicate indices indicate multiple references.
+                post = pd.DataFrame(records).set_index(df.index)
+                df[cols] = post[cols]
 
         return abc
 

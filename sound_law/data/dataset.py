@@ -17,6 +17,17 @@ from .alphabet import EOT, EOT_ID, SOT, SOT_ID
 DF = pd.DataFrame
 
 
+def pad(seq: list, side: str, raw: str):
+    if side == 'src':
+        if raw:
+            return [SOT] + seq + [EOT]
+        return [SOT_ID] + seq + [EOT_ID]
+    else:
+        if raw:
+            return seq + [EOT]
+        return seq + [EOT_ID]
+
+
 @dataclass
 class Split:
     """A class representing a split configuration."""
@@ -42,7 +53,7 @@ class Split:
 class Vocabulary:
     """This is different from a dataset in that every form can occur exactly once."""
 
-    def __init__(self, forms: NDA, unit_seqs: NDA, id_seqs: NDA):
+    def __init__(self, forms: NDA, unit_seqs: NDA, id_seqs: NDA, side: Optional[str] = 'tgt'):
         df = pd.DataFrame({'form': forms, 'unit_seq': unit_seqs, 'id_seq': id_seqs})
         mask = df.duplicated(subset='form')
         df = df[~mask]
@@ -50,12 +61,13 @@ class Vocabulary:
         self._form2id = {form: i for i, form in enumerate(self.forms)}
         self.unit_seqs = df['unit_seq'].values
         self.id_seqs = df['id_seq'].values
+        self.side = side
 
     def __getitem__(self, idx: int) -> dict:
         return {
             'form': self.forms[idx],
-            'unit_seq': self.unit_seqs[idx] + [EOT],
-            'id_seq': self.id_seqs[idx] + [EOT_ID]
+            'unit_seq': pad(self.unit_seqs[idx], self.side, True),
+            'id_seq': pad(self.id_seqs[idx], self.side, False)
         }
 
     def get_id_by_form(self, form: str) -> int:
@@ -100,10 +112,10 @@ class OnePairDataset(Dataset):
 
     def __getitem__(self, index: int):
         return {
-            'src_id_seq': [SOT_ID] + self.src_id_seqs[index] + [EOT_ID],
-            'src_unit_seq': [SOT] + self.src_unit_seqs[index] + [EOT],
-            'tgt_id_seq': self.tgt_id_seqs[index] + [EOT_ID],
-            'tgt_unit_seq': self.tgt_unit_seqs[index] + [EOT],
+            'src_id_seq': pad(self.src_id_seqs[index], 'src', False),
+            'src_unit_seq': pad(self.src_unit_seqs[index], 'src', True),
+            'tgt_id_seq': pad(self.tgt_id_seqs[index], 'tgt', False),
+            'tgt_unit_seq': pad(self.tgt_unit_seqs[index], 'tgt', True),
             'index': index,
             'src_lang': self.src_lang,
             'tgt_lang': self.tgt_lang,

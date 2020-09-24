@@ -53,9 +53,13 @@ class BeamConstant:
     lang_emb: Optional[FT] = None
 
 
-def _stack_beam(lst: List[torch.Tensor]):
+def _stack_beam(lst: List[torch.Tensor], last_name=None):
+    new_names = ('batch', 'beam', 'pos')
+    if last_name:
+        new_names += (last_name,)
     with NoName(*lst):
-        ret = torch.stack(lst, dim=-1).refine_names('batch', 'beam', 'pos')
+        # NOTE(j_luo) Set dim = 2 instead of -1 since some tensors might have an extra dimension.
+        ret = torch.stack(lst, dim=2).refine_names(*new_names)
     return ret
 
 
@@ -69,6 +73,7 @@ class Beam:
     # For bookkeeping.
     last_beam: Optional[Beam] = None
     beam_ids: Optional[LT] = None
+    almt: Optional[FT] = None
     prev_att: Optional[FT] = None
     finished: BT = None
 
@@ -84,12 +89,13 @@ class Beam:
     def beam_size(self):
         return self.tokens.size('beam')
 
-    def follow(self, finished: BT, accum_scores: FT, tokens: LT, lstm_state: LstmStatesByLayers, beam_ids: LT,
+    def follow(self, finished: BT, accum_scores: FT, tokens: LT, lstm_state: LstmStatesByLayers, beam_ids: LT, almt: FT,
                prev_att: Optional[FT] = None) -> Beam:
         return Beam(self.step + 1, accum_scores, tokens,
                     lstm_state, self.constants,
                     last_beam=self,
                     beam_ids=beam_ids,
+                    almt=almt,
                     prev_att=prev_att,
                     finished=finished)
 
@@ -104,13 +110,14 @@ class Beam:
                 for attr_name in attr_names:
                     attr = getattr(beam, attr_name)
                     with NoName(attr):
-                        ret[attr_name].insert(0, attr[batch_i, beam_i])
+                        ret[attr_name].append(attr[batch_i, beam_i])
                 beam_i = beam.beam_ids[batch_i, beam_i]
-                # beam_i = beam_i[batch_i, beam_i]
-                # beam_i = beam_i[batch_i, beam.beam_ids]
             beam = beam.last_beam
         for attr_name in attr_names:
-            ret[attr_name] = _stack_beam(ret[attr_name])
+            # NOTE(j_luo) Reverse the list since we are going backwards.
+            last_name = 'src_pos' if attr_name == 'almt' else None
+            ret[attr_name] = _stack_beam(ret[attr_name][::-1],
+                                         last_name=last_name)
         return ret
 
     def to_traceback(self) -> BeamTraceback:
@@ -173,12 +180,14 @@ class BeamTraceback:
 class Candidates:
     log_probs: FT
     state: LstmStatesByLayers  # The LSTM state that is mapped to `log_probs`.
+    almt: FT
     att: FT
 
 
 @dataclass
 class Hypotheses:
     tokens: LT
+    almt: FT
     scores: FT
 
     def translate(self, abc: Alphabet) -> Tuple[NDA, NDA]:
@@ -360,8 +369,9 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
 
         log_probs = unflatten(log_probs)
         state = unflatten(state, is_lstm_state=True)
+        almt = unflatten(almt)
         att = unflatten(att)
-        return Candidates(log_probs, state, att)
+        return Candidates(log_probs, state, almt, att)
 
     def get_next_beam(self, beam: Beam, cand: Candidates) -> Beam:
         nh = NameHelper()
@@ -392,6 +402,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         next_tokens = tokens.rename(BU='beam')
         next_beam_ids = beam_i.rename(BU='beam')
         next_state = cand.state.apply(retrieve)
+        next_almt = retrieve(cand.almt, last_name='tgt_pos')
         next_att = retrieve(cand.att, last_name='hidden') if g.input_feeding else None
         last_finished = retrieve(beam.finished, last_name=None)
         this_ended = next_tokens == EOT_ID
@@ -402,6 +413,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
                                 next_tokens,
                                 next_state,
                                 next_beam_ids,
+                                next_almt,
                                 prev_att=next_att)
         return next_beam
 
@@ -452,5 +464,7 @@ class LstmDecoder(nn.Module, BaseBeamSearcher):
         return hyps
 
     def get_hypotheses(self, final_beam: Beam) -> Hypotheses:
-        tokens = final_beam.trace_back('tokens')['tokens']
-        return Hypotheses(tokens, final_beam.accum_scores)
+        btb = final_beam.trace_back('tokens', 'almt')
+        tokens = btb['tokens']
+        almt = btb['almt']
+        return Hypotheses(tokens, almt, final_beam.accum_scores)
