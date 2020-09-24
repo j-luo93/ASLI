@@ -77,6 +77,7 @@ class Vocabulary:
         return len(self.forms)
 
 
+
 class OnePairDataset(Dataset):
 
     def __init__(self,

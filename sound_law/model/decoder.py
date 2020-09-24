@@ -190,24 +190,27 @@ class Hypotheses:
     almt: FT
     scores: FT
 
-    def translate(self, abc: Alphabet) -> Tuple[NDA, NDA]:
+    def translate(self, abc: Alphabet) -> Tuple[NDA, NDA, NDA]:
         beam_translate = handle_sequence_inputs(lambda token_ids: translate(token_ids, abc=abc))
         pred_lengths = list()
         preds = list()
+        properly_ended = list()
         for tokens in self.tokens.cpu().numpy():
-            p, l = zip(*beam_translate(tokens))
+            p, l, e = zip(*beam_translate(tokens))
             preds.append(p)
             pred_lengths.append(l)
+            properly_ended.append(e)
         preds = np.asarray(preds)
         pred_lengths = np.asarray(pred_lengths)
-        return preds, pred_lengths
+        properly_ended = np.asarray(properly_ended)
+        return preds, pred_lengths, properly_ended
 
 
 def get_beam_probs(scores: FT, duplicates: Optional[BT] = None):
     """Return normalized scores (approximated probabilities) for the entire beam."""
     if duplicates is not None:
         scores = scores.masked_fill(duplicates, float('-inf'))
-    return scores.log_softmax(dim='beam').exp()
+    return (scores / g.concentration_scale).log_softmax(dim='beam').exp()
 
 
 class LstmDecoder(nn.Module, BaseBeamSearcher):

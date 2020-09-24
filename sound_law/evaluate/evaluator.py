@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from dev_misc import add_argument, g, get_tensor
+from dev_misc import FT, LT, add_argument, g, get_tensor
 from dev_misc.devlib import get_array
 from dev_misc.devlib.dp import EditDist
 from dev_misc.devlib.tensor_x import TensorX as Tx
@@ -30,6 +30,76 @@ add_argument('use_phono_edit_dist', dtype=str, default=True,
 add_argument('phono_edit_dist_scale', dtype=float, default=1.0,
              msg='Scaling factor for phonological edit distance.')
 add_argument('num_threads', default=8, dtype=int, msg='Number of threads used for computing edit distance.')
+
+
+# FIXME(j_luo) This can be refactored. Also, there are too many edit-dist methods.
+def compute_edit_dist(comp_mode: str,
+                      pred_ids: Optional[LT] = None,
+                      lengths: Optional[LT] = None,
+                      gold_ids: Optional[LT] = None,
+                      forms: Optional[np.ndarray] = None,
+                      predictions=None,
+                      pred_lengths: Optional[np.ndarray] = None,
+                      units: Optional[np.ndarray] = None,
+                      pfm=None) -> FT:
+    if comp_mode == 'ids_gpu':
+        # Prepare tensorx.
+        pred_lengths = Tx(get_tensor(pred_lengths), ['pred_batch', 'beam'])
+        pred_tokens = Tx(pred_ids, ['pred_batch', 'beam', 'l'])
+        # NOTE(j_luo) -1 for removing EOT's.
+        tgt_lengths = Tx(lengths, ['tgt_batch']) - 1
+        tgt_tokens = Tx(gold_ids, ['tgt_batch', 'l'])
+
+        # Align them to the same names.
+        new_names = ['pred_batch', 'beam', 'tgt_batch']
+        pred_lengths = pred_lengths.align_to(*new_names)
+        pred_tokens = pred_tokens.align_to(*(new_names + ['l']))
+        tgt_lengths = tgt_lengths.align_to(*new_names)
+        tgt_tokens = tgt_tokens.align_to(*(new_names + ['l']))
+
+        # Expand them to have the same size.
+        pred_bs = pred_tokens.size('pred_batch')
+        tgt_bs = tgt_tokens.size('tgt_batch')
+        pred_lengths = pred_lengths.expand({'tgt_batch': tgt_bs})
+        pred_tokens = pred_tokens.expand({'tgt_batch': tgt_bs})
+        tgt_tokens = tgt_tokens.expand({'pred_batch': pred_bs, 'beam': g.beam_size})
+        tgt_lengths = tgt_lengths.expand({'pred_batch': pred_bs, 'beam': g.beam_size})
+
+        # Flatten names, preparing for DP.
+        def flatten(tx):
+            return tx.flatten(['pred_batch', 'beam', 'tgt_batch'], 'batch')
+
+        pred_lengths = flatten(pred_lengths)
+        pred_tokens = flatten(pred_tokens)
+        tgt_lengths = flatten(tgt_lengths)
+        tgt_tokens = flatten(tgt_tokens)
+
+        penalty = None
+        if g.use_phono_edit_dist:
+            x = pfm.rename('src_unit', 'phono_feat')
+            y = pfm.rename('tgt_unit', 'phono_feat')
+            names = ('src_unit', 'tgt_unit', 'phono_feat')
+            diff = x.align_to(*names) - y.align_to(*names)
+            penalty = (diff != 0).sum('phono_feat').cuda().float() / g.phono_edit_dist_scale
+        dp = EditDist(pred_tokens, tgt_tokens, pred_lengths, tgt_lengths, penalty=penalty)
+        dp.run()
+        dists = dp.get_results().data
+        dists = dists.view(pred_bs, g.beam_size, tgt_bs)
+    else:
+        eval_all = lambda seqs_0, seqs_1: edit_dist_all(seqs_0, seqs_1, mode='ed')
+        flat_preds = predictions.reshape(-1)
+        if comp_mode == 'units':
+            # NOTE(j_luo) Remove EOT's.
+            flat_golds = [u[:-1] for u in units]
+        elif comp_mode == 'ids':
+            tgt_ids = gold_ids.cpu().numpy()
+            # NOTE(j_luo) -1 for EOT's.
+            tgt_lengths = lengths - 1
+            flat_golds = [ids[: l] for ids, l in zip(tgt_ids, tgt_lengths)]
+        elif comp_mode == 'str':
+            flat_golds = forms
+        dists = get_tensor(eval_all(flat_preds, flat_golds)).view(-1, g.beam_size, len(flat_golds))
+    return dists
 
 
 class Evaluator:
@@ -127,67 +197,18 @@ class Evaluator:
 
     def _get_batch_records(self, dl: OnePairDataLoader, batch: OnePairBatch, K: int) -> List[Dict[str, Any]]:
         hyps = self.model.predict(batch)
-        # NOTE(j_luo) EOT's have been removed from translations.
-        preds, pred_lengths = hyps.translate(self.tgt_abc)
-
-        if g.comp_mode == 'ids_gpu':
-            # Prepare tensorx.
-            pred_lengths = Tx(get_tensor(pred_lengths), ['pred_batch', 'beam'])
-            pred_tokens = Tx(hyps.tokens, ['pred_batch', 'beam', 'l'])
-            # NOTE(j_luo) -1 for removing EOT's.
-            tgt_lengths = Tx(dl.tgt_seqs.lengths, ['tgt_batch']) - 1
-            tgt_tokens = Tx(dl.tgt_seqs.ids.t(), ['tgt_batch', 'l'])
-
-            # Align them to the same names.
-            new_names = ['pred_batch', 'beam', 'tgt_batch']
-            pred_lengths = pred_lengths.align_to(*new_names)
-            pred_tokens = pred_tokens.align_to(*(new_names + ['l']))
-            tgt_lengths = tgt_lengths.align_to(*new_names)
-            tgt_tokens = tgt_tokens.align_to(*(new_names + ['l']))
-
-            # Expand them to have the same size.
-            pred_bs = pred_tokens.size('pred_batch')
-            tgt_bs = tgt_tokens.size('tgt_batch')
-            pred_lengths = pred_lengths.expand({'tgt_batch': tgt_bs})
-            pred_tokens = pred_tokens.expand({'tgt_batch': tgt_bs})
-            tgt_tokens = tgt_tokens.expand({'pred_batch': pred_bs, 'beam': g.beam_size})
-            tgt_lengths = tgt_lengths.expand({'pred_batch': pred_bs, 'beam': g.beam_size})
-
-            # Flatten names, preparing for DP.
-            def flatten(tx):
-                return tx.flatten(['pred_batch', 'beam', 'tgt_batch'], 'batch')
-
-            pred_lengths = flatten(pred_lengths)
-            pred_tokens = flatten(pred_tokens)
-            tgt_lengths = flatten(tgt_lengths)
-            tgt_tokens = flatten(tgt_tokens)
-
-            penalty = None
-            if g.use_phono_edit_dist:
-                pfm = self.tgt_abc.pfm
-                x = pfm.rename('src_unit', 'phono_feat')
-                y = pfm.rename('tgt_unit', 'phono_feat')
-                names = ('src_unit', 'tgt_unit', 'phono_feat')
-                diff = x.align_to(*names) - y.align_to(*names)
-                penalty = (diff != 0).sum('phono_feat').cuda().float() / g.phono_edit_dist_scale
-            dp = EditDist(pred_tokens, tgt_tokens, pred_lengths, tgt_lengths, penalty=penalty)
-            dp.run()
-            dists = dp.get_results().data
-            dists = dists.view(pred_bs, g.beam_size, tgt_bs)
-        else:
-            eval_all = lambda seqs_0, seqs_1: edit_dist_all(seqs_0, seqs_1, mode='ed')
-            flat_preds = preds.reshape(-1)
-            if g.comp_mode == 'units':
-                # NOTE(j_luo) Remove EOT's.
-                flat_golds = [units[:-1] for units in dl.tgt_seqs.units]
-            elif g.comp_mode == 'ids':
-                tgt_ids = dl.tgt_seqs.ids.t().cpu().numpy()
-                # NOTE(j_luo) -1 for EOT's.
-                tgt_lengths = dl.tgt_seqs.lengths - 1
-                flat_golds = [ids[: l] for ids, l in zip(tgt_ids, tgt_lengths)]
-            elif g.comp_mode == 'str':
-                flat_golds = dl.tgt_vocabulary.forms
-            dists = get_tensor(eval_all(flat_preds, flat_golds)).view(-1, g.beam_size, len(dl.tgt_vocabulary))
+        # NOTE(j_luo) EOT's have been removed from translations since they don't matter in edit distance computation.
+        preds, pred_lengths, _ = hyps.translate(self.tgt_abc)
+        # HACK(j_luo) Pretty ugly here.
+        dists = compute_edit_dist(g.comp_mode,
+                                  pred_ids=hyps.tokens,
+                                  lengths=dl.tgt_seqs.lengths,
+                                  gold_ids=dl.tgt_seqs.ids.t(),
+                                  forms=dl.tgt_vocabulary.forms,
+                                  units=dl.tgt_seqs.units,
+                                  predictions=preds,
+                                  pred_lengths=pred_lengths,
+                                  pfm=self.tgt_abc.pfm)
 
         weights = get_beam_probs(hyps.scores)
         w_dists = weights.align_to(..., 'tgt_vocab') * dists
@@ -207,7 +228,7 @@ class Evaluator:
         normalized_top_dists = top_dists.float() / (batch.tgt_seqs.lengths - 1)
         top_dists = top_dists.cpu().numpy()
         normalized_top_dists = normalized_top_dists.cpu().numpy()
-        for pss, pis, src, gold, pbis, pbss, top_dist, n_top_dist in zip(top_s, top_i, batch.src_seqs.forms, batch.tgt_seqs.forms, preds, hyps.scores, top_dists, normalized_top_dists):
+        for pss, pis, src, gold, pbis, pbss, top_dist, n_top_dist in zip(top_s, top_i, batch.src_seqs.forms, batch.tgt_seqs.forms, preds, weights, top_dists, normalized_top_dists):
             record = {'source': src, 'gold_target': gold, 'edit_dist': top_dist, 'normalized_edit_dist': n_top_dist}
             for i, (pbs, pbi) in enumerate(zip(pbss, pbis), 1):
                 record[f'pred_target_beam@{i}'] = pbi

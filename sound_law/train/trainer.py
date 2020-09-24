@@ -30,7 +30,7 @@ class Trainer(BaseTrainer):
     add_argument('num_steps', default=1000, dtype=int, msg='Number of steps for training.')
     add_argument('save_model', dtype=bool, default=True, msg='Flag to save model.')
     add_argument('almt_reg_hyper', dtype=float, default=0.0, msg='Hyperparameter for alignment regularization.')
-    add_argument('concentration_scale', dtype=float, default=10.0, msg='Hyperparameter for concentration scale.')
+    add_argument('concentration_scale', dtype=float, default=1.0, msg='Hyperparameter for concentration scale.')
     add_argument('train_mode', dtype=str, default='mle',
                  choices=['mle', 'mrt'], msg='Training mode: either MRT or MLE.')
 
@@ -91,7 +91,7 @@ class Trainer(BaseTrainer):
         tgt_scores = -_get_ce_loss(log_probs, batch, mean='batch')
 
         # Mark which ones are duplicates.
-        preds, _ = hyps.translate(abc)
+        preds, _, _ = hyps.translate(abc)
         duplicates = list()
         for beam_preds, tgt_form in zip(preds, batch.tgt_seqs.forms):
             duplicates.append([False] + [p == tgt_form for p in beam_preds])

@@ -53,9 +53,10 @@ def translate_kernel(ipa_tokens: str, tgt_lang: str):
     manager.model.eval()
     with torch.no_grad():
         hyps = manager.model.predict(batch)
-    preds, pred_lengths = hyps.translate(manager.tgt_abc)
+    preds, pred_lengths, ended = hyps.translate(manager.tgt_abc)
     preds = preds[0]
-    pred_lengths = pred_lengths[0]
+    # NOTE(j_luo) Add back EOT if needed.
+    pred_lengths = pred_lengths[0] + ended[0]
 
     def get_pred_unit(pred: List[str], ind: int) -> str:
         if ind < len(pred):
