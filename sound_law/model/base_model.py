@@ -20,6 +20,15 @@ from .encoder import CnnEncoder, CnnParams, LstmEncoder
 from .module import EmbParams, LstmParams
 
 
+def get_emb_params(num_chars: int,
+                   phono_feat_mat: Optional[LT],
+                   special_ids: Optional[Sequence[int]]) -> EmbParams:
+    return EmbParams(num_chars, g.char_emb_size, g.dropout,
+                     phono_feat_mat=phono_feat_mat,
+                     special_ids=special_ids,
+                     separate_output=g.separate_output)
+
+
 class BaseModel(nn.Module):
 
     add_argument('char_emb_size', default=256, dtype=int, msg='Embedding size for characters (as input).')
@@ -43,18 +52,15 @@ class BaseModel(nn.Module):
 
         super().__init__()
 
-        def get_emb_params(num_chars: int) -> EmbParams:
-            return EmbParams(num_chars, g.char_emb_size, g.dropout,
-                             phono_feat_mat=phono_feat_mat,
-                             special_ids=special_ids,
-                             separate_output=g.separate_output)
-
         def get_lstm_params(input_size: int, bidirectional: bool) -> LstmParams:
             return LstmParams(input_size, g.hidden_size,
                               g.num_layers, g.dropout,
                               bidirectional=bidirectional)
 
-        enc_emb_params = get_emb_params(num_src_chars)
+        def get_emb_params_inner(num_chars: int):
+            return get_emb_params(num_chars, phono_feat_mat, special_ids)
+
+        enc_emb_params = get_emb_params_inner(num_src_chars)
         if g.model_encoder_type == 'lstm':
             enc_lstm_params = get_lstm_params(g.char_emb_size, True)
             self.encoder = LstmEncoder.from_params(enc_emb_params, enc_lstm_params)
@@ -66,7 +72,7 @@ class BaseModel(nn.Module):
             dec_emb_params = None
             dec_embedding = self.encoder.embedding
         else:
-            dec_emb_params = get_emb_params(num_tgt_chars)
+            dec_emb_params = get_emb_params_inner(num_tgt_chars)
             dec_embedding = None
         # NOTE(j_luo) Input size is the sum of `g.char_emb_size` and `g.hidden_size` if input feeding is used.
         dec_input_size = g.char_emb_size + (g.hidden_size if g.input_feeding else 0)

@@ -112,3 +112,6 @@ class Alphabet:
 
     def __len__(self):
         return len(self._unit2id)
+
+    def __iter__(self):
+        yield from self._id2unit

@@ -2,7 +2,7 @@
 A manager class takes care of managing the data loader, the model, and the trainer.
 """
 import logging
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import torch
 from torch.optim import SGD, Adam
@@ -150,7 +150,9 @@ class OneToManyManager:
 
     add_argument('train_tgt_langs', dtype=str, nargs='+', msg='Target languages used for training.')
 
-    def __init__(self):
+    @staticmethod
+    def prepare_raw_data() -> Tuple[List[str], CognateRegistry, Alphabet, Alphabet]:
+        """Prepare raw data, including the cognates and the alphabets."""
         # Prepare cognate registry first.
         cr = CognateRegistry()
         all_tgt = sorted([g.tgt_lang] + list(g.train_tgt_langs))
@@ -159,11 +161,16 @@ class OneToManyManager:
 
         # Get alphabets. Note that the target alphabet is based on the union of all target languages, i.e., a shared alphabet for all.
         if g.share_src_tgt_abc:
-            self.src_abc = cr.prepare_alphabet(*(all_tgt + [g.src_lang]))
-            self.tgt_abc = self.src_abc
+            src_abc = cr.prepare_alphabet(*(all_tgt + [g.src_lang]))
+            tgt_abc = src_abc
         else:
-            self.src_abc = cr.prepare_alphabet(g.src_lang)
-            self.tgt_abc = cr.prepare_alphabet(*all_tgt)
+            src_abc = cr.prepare_alphabet(g.src_lang)
+            tgt_abc = cr.prepare_alphabet(*all_tgt)
+
+        return all_tgt, cr, src_abc, tgt_abc
+
+    def __init__(self):
+        all_tgt, cr, self.src_abc, self.tgt_abc = self.prepare_raw_data()
 
         # Get stats for unseen units.
         stats = self.tgt_abc.stats
