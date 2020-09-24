@@ -1,3 +1,4 @@
+import random
 import re
 import unicodedata
 from argparse import ArgumentParser
@@ -182,18 +183,24 @@ class Field:
         }
 
 
+@lru_cache(maxsize=None)
+def _get_split(src_word: str) -> str:
+    r = random.random()
+    if r >= 0.8:
+        return 'test'
+    elif r >= 0.7:
+        return 'dev'
+    else:
+        return 'train'
+
+
 def add_splits(src_df: pd.DataFrame, tgt_df: pd.DataFrame, random_seed: int):
-    """Add split column in-place."""
-    np.random.seed(random_seed)
-    r = np.random.rand(len(src_df))
+    """Add split column in-place. To make sure that splits are consistent for the same source word, we use the cached random seed (keyed by the source word) if possible."""
+    random.seed(random_seed)
     splits = list()
-    for f in r:
-        if f >= 0.8:
-            splits.append('test')
-        elif f >= 0.7:
-            splits.append('dev')
-        else:
-            splits.append('train')
+    for src_word in src_df['ipa']:
+        split = _get_split(src_word)
+        splits.append(split)
     src_df['split'] = splits
     tgt_df['split'] = splits
 
