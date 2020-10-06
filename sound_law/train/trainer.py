@@ -14,15 +14,22 @@ from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.model.decoder import get_beam_probs
 
 
-def _get_ce_loss(log_probs: FT, batch: OnePairBatch, mean='all') -> FT:
+def get_ce_loss(log_probs: FT, batch: OnePairBatch, agg='all') -> FT:
     ce_losses = -log_probs.gather('unit', batch.tgt_seqs.ids)
-    ce_losses = ce_losses * batch.tgt_seqs.paddings.float()
-    if mean == 'batch':
+    weights = batch.tgt_seqs.paddings.float()
+    ce_losses = ce_losses * weights
+    if agg == 'batch':
         return ce_losses.sum(dim='pos')
-    elif mean == 'all':
+    elif agg == 'batch_mean':
+        return ce_losses.sum(dim='pos') / weights.sum(dim='pos')
+    elif agg == 'all':
         return ce_losses.sum()
+    elif agg == 'char':
+        return ce_losses
+    elif agg == 'char_mean':
+        return ce_losses.sum() / weights.sum()
     else:
-        raise ValueError(f'Unrecognized value "{mean}" for mean.')
+        raise ValueError(f'Unrecognized value "{agg}" for agg.')
 
 
 class Trainer(BaseTrainer):
@@ -52,7 +59,7 @@ class Trainer(BaseTrainer):
 
         metrics = Metrics()
         # Cross-entropy loss.
-        ce_loss = _get_ce_loss(log_probs, batch, mean='all')
+        ce_loss = get_ce_loss(log_probs, batch, agg='all')
         ce_loss = Metric('ce_loss', ce_loss, len(batch))
         metrics += ce_loss
 
@@ -88,7 +95,7 @@ class Trainer(BaseTrainer):
         assert g.dropout == 0.0, 'Might have some issue due to the fact that ground truth is fed through the normal forward call whereas hyps are not, resulting in discrepant dropout applications.'
         hyps = self.model.predict(batch)
         log_probs, _ = self.model(batch)
-        tgt_scores = -_get_ce_loss(log_probs, batch, mean='batch')
+        tgt_scores = -get_ce_loss(log_probs, batch, agg='batch')
 
         # Mark which ones are duplicates.
         preds, _, _ = hyps.translate(abc)

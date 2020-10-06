@@ -20,6 +20,7 @@ from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
 from sound_law.evaluate.edit_dist import edit_dist_all
 from sound_law.model.decoder import get_beam_probs
 from sound_law.model.one_pair import OnePairModel
+from sound_law.train.trainer import get_ce_loss
 
 add_argument('eval_mode', dtype=str, default='edit_dist', choices=[
              'prob', 'edit_dist'], msg='Evaluation mode using probabilities or edit distance.')
@@ -160,10 +161,12 @@ class Evaluator:
         if g.eval_mode == 'edit_dist':
             values.extend([f'pred_target_beam@{i}' for i in range(1, g.beam_size + 1)])
             values.extend([f'pred_target_beam@{i}_score' for i in range(1, g.beam_size + 1)])
-            values.extend(['edit_dist', 'normalized_edit_dist'])
+            values.extend(['edit_dist', 'normalized_edit_dist', 'ppx'])
             aggfunc.update({f'pred_target_beam@{i}': 'last' for i in range(1, g.beam_size + 1)})
             aggfunc.update({f'pred_target_beam@{i}_score': 'last' for i in range(1, g.beam_size + 1)})
-            aggfunc.update({'edit_dist': min, 'normalized_edit_dist': min})
+            aggfunc.update({'edit_dist': min,
+                            'normalized_edit_dist': min,
+                            'ppx': min})
         out_df = out_df.pivot_table(index='source', values=values,
                                     aggfunc=aggfunc)
 
@@ -193,6 +196,7 @@ class Evaluator:
             metrics += correct
         metrics += Metric('edit_dist', out_df['edit_dist'].sum(), weight=num_pred)
         metrics += Metric('normalized_edit_dist', out_df['normalized_edit_dist'].sum(), weight=num_pred)
+        metrics += Metric('ppx', out_df['ppx'].sum(), weight=num_pred)
         return metrics
 
     def _get_batch_records(self, dl: OnePairDataLoader, batch: OnePairBatch, K: int) -> List[Dict[str, Any]]:
@@ -228,8 +232,13 @@ class Evaluator:
         normalized_top_dists = top_dists.float() / (batch.tgt_seqs.lengths - 1)
         top_dists = top_dists.cpu().numpy()
         normalized_top_dists = normalized_top_dists.cpu().numpy()
-        for pss, pis, src, gold, pbis, pbss, top_dist, n_top_dist in zip(top_s, top_i, batch.src_seqs.forms, batch.tgt_seqs.forms, preds, weights, top_dists, normalized_top_dists):
-            record = {'source': src, 'gold_target': gold, 'edit_dist': top_dist, 'normalized_edit_dist': n_top_dist}
+        # We also report the perplexity scores.
+        log_probs, _ = self.model(batch)
+        ppxs = get_ce_loss(log_probs, batch, agg='batch_mean')
+        ppxs = ppxs.cpu().numpy()
+        for pss, pis, src, gold, pbis, pbss, top_dist, n_top_dist, ppx in zip(top_s, top_i, batch.src_seqs.forms, batch.tgt_seqs.forms, preds, weights, top_dists, normalized_top_dists, ppxs):
+            record = {'source': src, 'gold_target': gold, 'edit_dist': top_dist,
+                      'normalized_edit_dist': n_top_dist, 'ppx': ppx}
             for i, (pbs, pbi) in enumerate(zip(pbss, pbis), 1):
                 record[f'pred_target_beam@{i}'] = pbi
                 record[f'pred_target_beam@{i}_score'] = f'{pbs.item():.3f}'
