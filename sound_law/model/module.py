@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import lang2vec.lang2vec as l2v
+import pickle
+import gzip
+
 import numpy
 import torch
 import torch.nn as nn
@@ -277,52 +280,66 @@ class NormControlledResidual(nn.Module):
 
 class LanguageEmbedding(nn.Embedding):
 
-    def __init__(self, num_embeddings: int, embedding_dim: int,
+    def __init__(self, num_langs: int, embedding_dim: int,
                  unseen_idx: Optional[int] = None,
                  lang2id: Optional[Dict[str, int]] = None,
                  mode: str = 'random',
                  dropout: float = 0.0, **kwargs):
         self.unseen_idx = unseen_idx
-        assert mode in ['random', 'mean', 'mean_lang2vec']
+        assert mode in ['random', 'mean', 'lang2vec', 'wals']
         self.mode = mode
 
-        if self.mode == 'mean_lang2vec':
+        if self.mode == 'lang2vec' or self.mode == 'wals':
+            self.tgt_langs = list(g.train_tgt_langs) + [g.tgt_lang]
             self.id2lang = {id_: lang for lang, id_ in lang2id.items()}
-            # a lot of the feature sets are missing entries/values — we use phonology_knn as the default feature set since it's guaranteed to produce values
-            # TODO(derek) try out 'learned' embeddings — see what bug is preventing you from using them
-            self.feature_set = g.l2v_feature_set if g.l2v_feature_set is not None else 'phonology_knn'
 
-            tgt_langs = list(g.train_tgt_langs) + [g.tgt_lang]
-            lang2emb = l2v.get_features(tgt_langs, self.feature_set, minimal=False)
-            # check that all these languages have the same embedding size
+            if self.mode == 'lang2vec':
+                # FIXME() a lot of the feature sets are missing entries/values — we use phonology_knn as the default feature set since it's guaranteed to produce values
+                feature_set = g.l2v_feature_set if g.l2v_feature_set is not None else 'phonology_knn'
+                lang2emb = l2v.get_features(self.tgt_langs, feature_set, minimal=False)
+            elif self.mode == 'wals':
+                # the wals data uses 2-letter ISO codes instead of 3-letter codes, so we have to convert. luckily, lang2vec implements this conversion, and we are already importing lang2vec
+                iso_lengthener = l2v.LETTER_CODES # maps 2 letter ISO codes to 3 letter ISO codes (ISO 639-3)
+                iso_shortener = {iso3: iso2 for iso2, iso3 in iso_lengthener.items()}
+
+                with gzip.open('data/wals_udv1.pkl.gz', 'rb') as f: # fix path
+                    wals_emb = pickle.load(f) # maps 2 letter ISO codes to WALS embeddings
+
+                # can't do a direct dict comprehension since WALS data contains non iso-codes as well, so we limit to our target langs
+                lang2emb = {iso3: wals_emb[iso_shortener[iso3]] for iso3 in self.tgt_langs} # maps 3 letter codes to WALS embeddings
+            
+            # check that all these languages have the same embedding size (unfortunately not true for some of the lang2vec feature sets)
             assert len(set([len(emb) for emb in lang2emb.values()])) == 1
-            l2v_emb_len = len(next(iter(lang2emb.values())))
+            emb_len = len(next(iter(lang2emb.values())))
 
-            # initialize the learned embedding with a smaller dimension than g.char_emb_size so that after concatenation with the lang2vec feature embedding, the total embedding is g.char_emb_size
-            embedding_dim -= l2v_emb_len
-            assert l2v_emb_len + embedding_dim == g.char_emb_size
+            # we learn smaller embeddings than g.char_emb_size since some portion of the embedding is not learned, coming from an outside source. Aftter concatenation, the total embedding is g.char_emb_size
+            embedding_dim -= emb_len
+            assert emb_len + embedding_dim == g.char_emb_size
 
-        super().__init__(num_embeddings, embedding_dim, **kwargs)
+        super().__init__(num_langs, embedding_dim, **kwargs)
         self.drop = nn.Dropout(dropout)
 
-        if self.mode == 'mean_lang2vec':
-            for lang in tgt_langs:
+        if self.mode == 'lang2vec' or self.mode == 'wals':
+            for lang in self.tgt_langs:
                 index = lang2id[lang]
-                # dtype is set to float32 so that the resulting Tensor is a FloatTensor instead of a DoubleTensor
+                # set dtype to float32 so that the resulting Tensor is a FloatTensor instead of a DoubleTensor and can be concatenated
                 embedding = torch.from_numpy(numpy.array(lang2emb[lang], dtype=numpy.float32))
-                self.register_buffer('lang2vec_' + lang, embedding)
+                # must register this embedding as a buffer since it is non-trainable. embedding is named after the embedding type and what lang it's for, e.g. 'lang2vec_de'
+                self.register_buffer(self.mode + '_' + lang, embedding)
 
     def forward(self, index: int) -> FT:
         if index == self.unseen_idx:
             if self.mode == 'random':
                 emb = self.weight[index]
-            elif self.mode == 'mean' or self.mode == 'mean_lang2vec':
-                emb = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
+            elif self.mode == 'mean' or self.mode == 'lang2vec' or self.mode == 'wals':
+                # lang2vec and wals use mean for the non-fixed portion of the unseen lang's embedding, though this could be changed
+                emb = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_langs - 1)
         else:
             emb = self.weight[index]
 
-        if self.mode == 'mean_lang2vec':
-            l2v_emb = getattr(self, 'lang2vec_' + self.id2lang[index])
-            emb = torch.cat([emb, l2v_emb], dim=0)
+        if self.mode == 'lang2vec' or self.mode == 'wals':
+            # get the portion of the lang's embedding that is not learned and comes from an outside source (lang2vec or WALS data) and concatenate it to the learned portion
+            fixed_emb = getattr(self, self.mode + '_' + self.id2lang[index])
+            emb = torch.cat([emb, fixed_emb], dim=0)
 
         return self.drop(emb)
