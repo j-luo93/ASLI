@@ -1,3 +1,4 @@
+import json
 from typing import Optional
 
 import torch
@@ -10,7 +11,6 @@ from sound_law.train.manager import OnePairManager, OneToManyManager
 
 add_argument('task', dtype=str, default='one_pair', choices=['one_pair', 'one_to_many'], msg='Which task to execute.')
 
-import json
 
 def setup() -> Initiator:
     initiator = Initiator(reg, logger=True, log_level=True, gpus=True, random_seed=True, commit_id=True, log_dir=True)

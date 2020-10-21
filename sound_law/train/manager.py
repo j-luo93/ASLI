@@ -170,7 +170,7 @@ class OneToManyManager:
         return all_tgt, cr, src_abc, tgt_abc
 
     def __init__(self):
-        all_tgt, cr, self.src_abc, self.tgt_abc = self.prepare_raw_data()
+        all_tgt, self.cog_reg, self.src_abc, self.tgt_abc = self.prepare_raw_data()
 
         # Get stats for unseen units.
         stats = self.tgt_abc.stats
@@ -190,7 +190,7 @@ class OneToManyManager:
             return Setting(name, 'one_pair', split, g.src_lang, tgt_lang, for_training, keep_ratio=keep_ratio)
 
         def register_dl(setting: Setting):
-            self.dl_reg.register_data_loader(setting, cr, lang2id=lang2id)
+            self.dl_reg.register_data_loader(setting, self.cog_reg, lang2id=lang2id)
 
         test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'), False,
                                       keep_ratio=g.test_keep_ratio)

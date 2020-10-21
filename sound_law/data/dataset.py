@@ -62,6 +62,8 @@ class Vocabulary:
         self.unit_seqs = df['unit_seq'].values
         self.id_seqs = df['id_seq'].values
         self.side = side
+        # HACK(j_luo)
+        self.side = 'src'
 
     def __getitem__(self, idx: int) -> dict:
         return {
@@ -75,7 +77,6 @@ class Vocabulary:
 
     def __len__(self):
         return len(self.forms)
-
 
 
 class OnePairDataset(Dataset):
@@ -112,11 +113,14 @@ class OnePairDataset(Dataset):
                    df['sample_weight'].values)
 
     def __getitem__(self, index: int):
+        # HACK(j_luo)
         return {
             'src_id_seq': pad(self.src_id_seqs[index], 'src', False),
             'src_unit_seq': pad(self.src_unit_seqs[index], 'src', True),
-            'tgt_id_seq': pad(self.tgt_id_seqs[index], 'tgt', False),
-            'tgt_unit_seq': pad(self.tgt_unit_seqs[index], 'tgt', True),
+            'tgt_id_seq': pad(self.tgt_id_seqs[index], 'src', False),
+            'tgt_unit_seq': pad(self.tgt_unit_seqs[index], 'src', True),
+            # 'tgt_id_seq': pad(self.tgt_id_seqs[index], 'tgt', False),
+            # 'tgt_unit_seq': pad(self.tgt_unit_seqs[index], 'tgt', True),
             'index': index,
             'src_lang': self.src_lang,
             'tgt_lang': self.tgt_lang,
