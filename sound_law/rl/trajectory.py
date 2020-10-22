@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Iterator, List, Sequence, Tuple
 
 from dev_misc import FT, LT
-from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
-                                        PaddedUnitSeqs)
+import sound_law.data.data_loader as dl
 
 from .action import SoundChangeAction
 
@@ -16,7 +15,7 @@ class VocabState:
         self.ids = ids
 
     @classmethod
-    def from_seqs(cls, seqs: PaddedUnitSeqs) -> VocabState:
+    def from_seqs(cls, seqs: dl.PaddedUnitSeqs) -> VocabState:
         return cls(seqs.units, seqs.ids)
 
     def __eq__(self, other: VocabState):

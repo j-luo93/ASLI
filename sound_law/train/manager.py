@@ -15,10 +15,16 @@ from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.setting import Setting, Split
 from sound_law.evaluate.evaluator import Evaluator
+from sound_law.model.base_model import get_emb_params
+from sound_law.model.module import CharEmbedding, EmbParams, PhonoEmbedding
 from sound_law.model.one_pair import OnePairModel
 from sound_law.model.one_to_many import OneToManyModel
+from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
+from sound_law.rl.agent import VanillaPolicyGradient
+from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
+from sound_law.rl.trajectory import VocabState
 
-from .trainer import Trainer
+from .trainer import PolicyGradientTrainer, Trainer
 
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
@@ -53,25 +59,29 @@ class OnePairManager:
         # Prepare data loaders with different splits.
         self.dl_reg = DataLoaderRegistry()
 
-        def create_setting(name: str, split: Split, for_training: bool, keep_ratio: Optional[float] = None) -> Setting:
+        def create_setting(name: str, split: Split, for_training: bool,
+                           keep_ratio: Optional[float] = None,
+                           tgt_sot: bool = False) -> Setting:
             # If using RL, we append SOT's on the target side.
             return Setting(name, 'one_pair', split,
                            g.src_lang, g.tgt_lang, for_training,
                            keep_ratio=keep_ratio,
-                           tgt_sot=g.use_rl)
+                           tgt_sot=tgt_sot)
 
-        def register_dl(setting: Setting):
-            self.dl_reg.register_data_loader(setting, cr)
-
-        if g.input_format == 'wikt':
+        # Register all settings and data loaders.
+        settings: List[Setting] = list()
+        # For RL, we only need one data loader.
+        if g.use_rl:
+            # NOTE(j_luo) `for_training` is set to False since weighted sampling is not needed. SOT's are added on the target side.
+            rl_setting = create_setting('rl', Split('all'), False, tgt_sot=True)
+            settings.append(rl_setting)
+        elif g.input_format == 'wikt':
             train_setting = create_setting('train', Split('train'), True,
                                            keep_ratio=g.keep_ratio)
             train_e_setting = create_setting('train_e', Split('train'), False,
                                              keep_ratio=g.keep_ratio)  # For evaluation.
             dev_setting = create_setting('dev', Split('dev'), False)
-            register_dl(train_setting)
-            register_dl(train_e_setting)
-            register_dl(dev_setting)
+            settings.extend([train_setting, train_e_setting, dev_setting])
         else:
             for fold in range(5):
                 dev_fold = fold + 1
@@ -85,12 +95,13 @@ class OnePairManager:
                     f'train@{fold}_e', Split('train', train_folds), False,
                     keep_ratio=g.keep_ratio)
                 dev_setting = create_setting(f'dev@{fold}', Split('dev', [dev_fold]), False)
-                register_dl(train_setting)
-                register_dl(train_e_setting)
-                register_dl(dev_setting)
+                settings.extend([train_setting, train_e_setting, dev_setting])
+        if not g.use_rl:
+            test_setting = create_setting('test', Split('test'), False)
+            settings.append(test_setting)
 
-        test_setting = create_setting('test', Split('test'), False)
-        register_dl(test_setting)
+        for setting in settings:
+            self.dl_reg.register_data_loader(setting, cr)
 
     def run(self):
         phono_feat_mat = special_ids = None
@@ -100,22 +111,49 @@ class OnePairManager:
 
         metric_writer = MetricWriter(g.log_dir, flush_secs=5)
 
-        def run_once(train_name, dev_name, test_name):
-            train_dl = self.dl_reg[train_name]
-            train_e_dl = self.dl_reg[f'{train_name}_e']
-            dev_dl = self.dl_reg[dev_name]
-            test_dl = self.dl_reg[test_name]
-
-            model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
-                                 phono_feat_mat=phono_feat_mat,
-                                 special_ids=special_ids)
-
+        def get_model(rl: bool = False, dl=None):
+            if rl:
+                end_state = dl.end_state
+                action_space = SoundChangeActionSpace(self.tgt_abc)
+                emb_params = get_emb_params(len(self.tgt_abc), phono_feat_mat, special_ids)
+                emb = PhonoEmbedding.from_params(emb_params)
+                model = VanillaPolicyGradient(emb, action_space, end_state)
+            else:
+                model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
+                                     phono_feat_mat=phono_feat_mat,
+                                     special_ids=special_ids)
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
                 logging.imp(f'Loaded from {g.saved_model_path}.')
             if has_gpus():
                 model.cuda()
             logging.info(model)
+            return model
+
+        def get_trainer(model, train_name, evaluator, metric_writer, rl: bool = False, **kwargs):
+            trainer_cls = PolicyGradientTrainer if rl else Trainer
+            trainer = trainer_cls(model, [self.dl_reg.get_setting_by_name(train_name)],
+                                  [1.0], 'step',
+                                  stage_tnames=['step'],
+                                  check_interval=g.check_interval,
+                                  evaluator=evaluator,
+                                  eval_interval=g.eval_interval,
+                                  save_interval=g.save_interval,
+                                  metric_writer=metric_writer,
+                                  **kwargs)
+            if g.saved_model_path is None:
+                # trainer.init_params('uniform', -0.1, 0.1)
+                trainer.init_params('xavier_uniform')
+            optim_cls = Adam if g.optim_cls == 'adam' else SGD
+            trainer.set_optimizer(optim_cls, lr=g.learning_rate)
+            return trainer
+
+        def run_once(train_name, dev_name, test_name):
+            train_e_dl = self.dl_reg[f'{train_name}_e']
+            dev_dl = self.dl_reg[dev_name]
+            test_dl = self.dl_reg[test_name]
+
+            model = get_model()
 
             evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl},
                                   self.tgt_abc,
@@ -125,22 +163,17 @@ class OnePairManager:
                 # FIXME(j_luo) load global_step from saved model.
                 evaluator.evaluate('evaluate_only', 0)
             else:
-                trainer = Trainer(model, [self.dl_reg.get_setting_by_name(train_name)],
-                                  [1.0], 'step',
-                                  stage_tnames=['step'],
-                                  check_interval=g.check_interval,
-                                  evaluator=evaluator,
-                                  eval_interval=g.eval_interval,
-                                  save_interval=g.save_interval,
-                                  metric_writer=metric_writer)
-                if g.saved_model_path is None:
-                    # trainer.init_params('uniform', -0.1, 0.1)
-                    trainer.init_params('xavier_uniform')
-                optim_cls = Adam if g.optim_cls == 'adam' else SGD
-                trainer.set_optimizer(optim_cls, lr=g.learning_rate)
+                trainer = get_trainer(model, train_name, evaluator, metric_writer)
                 trainer.train(self.dl_reg)
 
-        if g.input_format == 'wikt':
+        if g.use_rl:
+            dl = self.dl_reg.get_loaders_by_name('rl')
+            env = SoundChangeEnv(dl.end_state)
+            collector = TrajectoryCollector(512, max_rollout_length=50, truncate_last=True)
+            model = get_model(rl=True, dl=dl)
+            trainer = get_trainer(model, 'rl', None, None, rl=True, env=env, collector=collector)
+            trainer.train(self.dl_reg)
+        elif g.input_format == 'wikt':
             run_once('train', 'dev', 'test')
         else:
             for fold in range(5):
@@ -189,18 +222,17 @@ class OneToManyManager:
         # Get all data loaders.
         self.dl_reg = DataLoaderRegistry()
 
-        def create_setting(name: str, tgt_lang: str, split: Split, for_training: bool, keep_ratio: Optional[float] = None) -> Setting:
+        def create_setting(name: str, tgt_lang: str, split: Split, for_training: bool,
+                           keep_ratio: Optional[float] = None,
+                           tgt_sot: bool = False) -> Setting:
             return Setting(name, 'one_pair', split,
                            g.src_lang, tgt_lang, for_training,
                            keep_ratio=keep_ratio,
-                           tgt_sot=g.use_rl)
-
-        def register_dl(setting: Setting):
-            self.dl_reg.register_data_loader(setting, self.cog_reg, lang2id=lang2id)
+                           tgt_sot=tgt_sot)
 
         test_setting = create_setting(f'test@{g.tgt_lang}', g.tgt_lang, Split('all'), False,
                                       keep_ratio=g.test_keep_ratio)
-        register_dl(test_setting)
+        settings: List[Setting] = [test_setting]
 
         # Get the training languages.
         for train_tgt_lang in g.train_tgt_langs:
@@ -212,15 +244,14 @@ class OneToManyManager:
                 dev_split = Split('dev')
             train_setting = create_setting(f'train@{train_tgt_lang}', train_tgt_lang,
                                            train_split, True, keep_ratio=g.keep_ratio)
-            train_e_setting = create_setting(
-                f'train@{train_tgt_lang}_e', train_tgt_lang, train_split, False, keep_ratio=g.keep_ratio)
+            train_e_setting = create_setting(f'train@{train_tgt_lang}_e',
+                                             train_tgt_lang, train_split, False, keep_ratio=g.keep_ratio)
             dev_setting = create_setting(f'dev@{train_tgt_lang}', train_tgt_lang, dev_split, False)
             test_setting = create_setting(f'test@{train_tgt_lang}', train_tgt_lang, Split('test'), False)
 
-            register_dl(train_setting)
-            register_dl(train_e_setting)
-            register_dl(dev_setting)
-            register_dl(test_setting)
+            settings.extend([train_setting, train_e_setting, dev_setting, test_setting])
+        for setting in settings:
+            self.dl_reg.register_data_loader(setting, self.cog_reg, lang2id=lang2id)
 
         phono_feat_mat = special_ids = None
         if g.use_phono_features:

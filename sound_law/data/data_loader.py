@@ -9,6 +9,7 @@ import torch
 from torch.utils.data import BatchSampler, SequentialSampler
 from torch.utils.data.sampler import WeightedRandomSampler
 
+import sound_law.rl.trajectory as tr
 from dev_misc import BT, LT, NDA, add_argument, g
 from dev_misc.devlib import BaseBatch, batch_class, pad_to_dense
 from dev_misc.devlib.helper import get_array, get_tensor, has_gpus
@@ -232,7 +233,7 @@ class OnePairDataLoader(BaseOnePairDataLoader):
         return self.dataset.tgt_vocabulary
 
 
-class EntireBatchOnePairDataLoader(BaseOnePairDataLoader):
+class VSOnePairDataLoader(BaseOnePairDataLoader):  # VS stands for vocab state.
     # FIXME(j_luo) Need to handle duplicates.
     """This data loader always return the entire dataset as one fixed batch."""
 
@@ -240,6 +241,11 @@ class EntireBatchOnePairDataLoader(BaseOnePairDataLoader):
                  setting: Setting,
                  cog_reg: CognateRegistry,
                  lang2id: Dict[str, int] = None):
+        if setting.src_sot != setting.tgt_sot:
+            raise ValueError(f'Expect equal values, but got {setting.src_sot} and {setting.tgt_sot}.')
+        if setting.src_eot != setting.tgt_eot:
+            raise ValueError(f'Expect equal values, but got {setting.src_eot} and {setting.tgt_eot}.')
+
         dataset = self._base_init(setting, cog_reg, lang2id)
         ds = len(dataset)  # Data size.
         # A batch sampler that samples the entire dataset in a fixed order.
@@ -257,8 +263,19 @@ class EntireBatchOnePairDataLoader(BaseOnePairDataLoader):
             if len(lst) != 1:
                 raise RuntimeError(f"Expecting exactly one batch but got {len(lst)} instead.")
             self._entire_batch = lst[0]
+            # HACK(j_luo) weird names
+            self._entire_batch.src_seqs.ids.rename_(batch='word')
+            self._entire_batch.tgt_seqs.ids.rename_(batch='word')
 
         return self._entire_batch
+
+    @cached_property
+    def init_state(self) -> tr.VocabState:
+        return tr.VocabState.from_seqs(self.entire_batch.src_seqs)
+
+    @cached_property
+    def end_state(self) -> tr.VocabState:
+        return tr.VocabState.from_seqs(self.entire_batch.tgt_seqs)
 
     def __iter__(self) -> Iterator[OnePairBatch]:
         yield self._postprocess_batch(self.entire_batch)
@@ -274,7 +291,8 @@ class DataLoaderRegistry(BaseDataLoaderRegistry):
     def get_data_loader(self, setting: BaseSetting, cog_reg: CognateRegistry, **kwargs) -> BaseDataLoader:
         if setting.task == 'one_pair':
             # TODO(j_luo) The options can all be part of setting.
-            dl = OnePairDataLoader(setting, cog_reg, **kwargs)
+            dl_cls = VSOnePairDataLoader if g.use_rl else OnePairDataLoader
+            dl = dl_cls(setting, cog_reg, **kwargs)
         else:
             raise ValueError(f'Cannot understand this task "{setting.task}".')
         return dl

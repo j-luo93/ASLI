@@ -84,4 +84,5 @@ class VanillaPolicyGradient(nn.Module):
 
         losses = (-log_probs * rtgs)
         loss = Metric('loss', losses.sum(), agent_inputs.batch_size)
-        return Metrics(loss)
+        tr_rew = Metric('reward', rews.sum(), len(agent_inputs.trajectories))
+        return Metrics(loss, tr_rew)

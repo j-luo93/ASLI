@@ -9,7 +9,7 @@ from dev_misc.devlib.named_tensor import get_named_range
 from dev_misc.trainlib import Metric, Metrics, init_params
 from dev_misc.trainlib.base_trainer import BaseTrainer as BaseTrainerDev
 from sound_law.data.alphabet import Alphabet
-from sound_law.data.data_loader import (EntireBatchOnePairDataLoader,
+from sound_law.data.data_loader import (VSOnePairDataLoader,
                                         OnePairBatch, OnePairDataLoader,
                                         PaddedUnitSeqs)
 from sound_law.evaluate.edit_dist import edit_dist_batch
@@ -174,10 +174,9 @@ class PolicyGradientTrainer(BaseTrainer):
     def agent(self) -> VanillaPolicyGradient:
         return self.model
 
-    def train_one_step(self, dl: EntireBatchOnePairDataLoader) -> Metrics:
-        batch: OnePairBatch = dl.get_next_batch()
-        init_state = VocabState.from_seqs(batch.src_seqs)
-        end_state = VocabState.from_seqs(batch.tgt_seqs)
+    def train_one_step(self, dl: VSOnePairDataLoader) -> Metrics:
+        init_state = dl.init_state
+        end_state = dl.end_state
 
         self.agent.train()
         self.optimizer.zero_grad()

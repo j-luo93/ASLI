@@ -24,6 +24,16 @@ class Fronting:
         return x.replace('ɑ', 'æ').replace('o', 'ø').replace('u', 'y')
 
 
+@register
+class E2I:
+
+    def form_change(self, x) -> str:
+        return x.replace('e', 'i')
+
+    def ipa_change(self, x) -> str:
+        return x.replace('e', 'i')
+
+
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('src_path', type=str, help='Path to the src tsv file.')

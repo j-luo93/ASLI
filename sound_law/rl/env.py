@@ -12,7 +12,7 @@ from dev_misc.devlib.named_tensor import NoName
 from dev_misc.utils import handle_sequence_inputs
 
 from .action import SoundChangeAction
-from .model import AgentInputs, VanillaPolicyGradient
+from .agent import AgentInputs, VanillaPolicyGradient
 from .trajectory import Trajectory, VocabState
 
 
@@ -62,7 +62,6 @@ class TrajectoryCollector:
         trajectories = [trajectory]
         n_samples = 0
         while True:
-            print(n_samples, trajectory.latest_state.units)
             # Whether we have collected enough samples for the last trajectory (which might not have a reasonably long action sequence).
             collected_enough_last = self._truncate_last and n_samples >= self._max_sample_size
             if collected_enough_last:
@@ -71,7 +70,6 @@ class TrajectoryCollector:
             # Whether the current rollout is long enough to be truncated (regardless of whether the trajectory is done or not).
             long_rollout = self._max_rollout_length is not None and len(trajectory) >= self._max_rollout_length
             if trajectory.done or long_rollout:
-                print('Finished one.', trajectory.done)
                 trajectory = get_new_trajectory()
                 trajectories.append(trajectory)
                 # Stop when we have collected enough samples (either done or with properly long rollouts).
@@ -94,7 +92,7 @@ class TrajectoryCollector:
                 id_seqs.append(s0.ids)
                 action_ids.append(a.action_id)
                 rewards.append(r)
-        id_seqs = torch.stack(id_seqs, new_name='batch').align_to('batch', 'word', 'pos')
+        id_seqs = torch.stack(id_seqs, new_name='batch').align_to('batch', 'pos', 'word')
         action_ids = get_tensor(action_ids).rename('batch')
         rewards = get_tensor(rewards).rename('batch')
         agent_inputs = AgentInputs(trajectories, id_seqs, action_ids, rewards)

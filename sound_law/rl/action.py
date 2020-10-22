@@ -36,16 +36,16 @@ class SoundChangeAction:
     def __post_init__(self):
         # HACK(j_luo) expand this later
         idx2before_after = {
-            0: ('a', 'b'),
-            1: ('a', 'e'),
-            2: ('b', 'a'),
-            3: ('b', 'd'),
+            0: ('l', 'b'),
+            1: ('l', 'e'),
+            2: ('b', 'l'),
+            3: ('e', 'i'),
             4: ('e', 'd'),
             5: ('d', 'e'),
-            6: ('eː', 'e'),
-            7: ('f', 'e'),
-            8: ('ʊ', 'w'),
-            9: ('n̪', 'n')
+            6: ('l', 'e'),
+            7: ('l', 's'),
+            8: ('s', 'l'),
+            9: ('t', 'l')
         }
         self.before, self.after = idx2before_after[self.action_id]
 

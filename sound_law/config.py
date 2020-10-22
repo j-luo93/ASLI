@@ -1,5 +1,4 @@
-from dataclasses import make_dataclass
-from dataclasses import dataclass
+from dataclasses import dataclass, make_dataclass
 from pathlib import Path
 from typing import Iterator, List, Tuple
 
@@ -39,6 +38,7 @@ class ZSLatSpa(ZSLatIta):
 @reg
 class OPLatSpa(ZSLatSpa):  # "OP" stands for one-pair.
     task: str = 'one_pair'
+    train_tgt_langs: Tuple[str, ...] = None
 
 
 @reg
@@ -137,6 +137,12 @@ class ZSPgmcNldPhono(ZSPgmcNld, UsePhono, Size220):
 @reg
 class OPLatSpaPhono(ZSLatSpaPhono, Size220):  # "OP" stands for one-pair.
     task: str = 'one_pair'
+
+@reg
+class OPRLEngFakePhono(OPLatSpaPhono):
+    use_rl: bool = True
+    src_lang: str = 'eng'
+    tgt_lang: str = 'fake'
 
 
 @reg
