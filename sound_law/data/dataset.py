@@ -13,47 +13,21 @@ from dev_misc.devlib.helper import get_array
 from dev_misc.utils import cached_property, handle_sequence_inputs
 
 from .alphabet import EOT, EOT_ID, SOT, SOT_ID
+from .setting import Setting
 
 DF = pd.DataFrame
 
 
-def pad(seq: list, side: str, raw: str):
-    if side == 'src':
-        if raw:
-            return [SOT] + seq + [EOT]
-        return [SOT_ID] + seq + [EOT_ID]
-    else:
-        if raw:
-            return seq + [EOT]
-        return seq + [EOT_ID]
-
-
-@dataclass
-class Split:
-    """A class representing a split configuration."""
-    main_split: str
-    folds: List[int] = None
-
-    def __post_init__(self):
-        assert self.main_split in ['train', 'dev', 'test', 'all']
-
-    def select(self, df: DF) -> DF:
-        if self.main_split == 'all':
-            return df
-
-        ret = df.copy()
-        if self.folds is None:
-            values = {self.main_split}
-        else:
-            values = {str(f) for f in self.folds}
-        # NOTE(j_luo) Do not call `reset_index` here.
-        return ret[ret['split'].isin(values)]
+def pad(seq: list, sot: bool, eot: bool, raw: str) -> list:
+    before = [SOT if raw else SOT_ID] * sot
+    after = [EOT if raw else EOT_ID] * eot
+    return before + seq + after
 
 
 class Vocabulary:
     """This is different from a dataset in that every form can occur exactly once."""
 
-    def __init__(self, forms: NDA, unit_seqs: NDA, id_seqs: NDA, side: Optional[str] = 'tgt'):
+    def __init__(self, forms: NDA, unit_seqs: NDA, id_seqs: NDA, sot: bool, eot: bool):
         df = pd.DataFrame({'form': forms, 'unit_seq': unit_seqs, 'id_seq': id_seqs})
         mask = df.duplicated(subset='form')
         df = df[~mask]
@@ -61,15 +35,14 @@ class Vocabulary:
         self._form2id = {form: i for i, form in enumerate(self.forms)}
         self.unit_seqs = df['unit_seq'].values
         self.id_seqs = df['id_seq'].values
-        self.side = side
-        # HACK(j_luo)
-        self.side = 'src'
+        self.sot = sot
+        self.eot = eot
 
     def __getitem__(self, idx: int) -> dict:
         return {
             'form': self.forms[idx],
-            'unit_seq': pad(self.unit_seqs[idx], self.side, True),
-            'id_seq': pad(self.id_seqs[idx], self.side, False)
+            'unit_seq': pad(self.unit_seqs[idx], self.sot, self.eot, True),
+            'id_seq': pad(self.id_seqs[idx], self.sot, self.eot, False)
         }
 
     def get_id_by_form(self, form: str) -> int:
@@ -82,48 +55,34 @@ class Vocabulary:
 class OnePairDataset(Dataset):
 
     def __init__(self,
-                 src_lang: str,
-                 tgt_lang: str,
-                 src_unit_seqs: NDA,
-                 tgt_unit_seqs: NDA,
-                 src_id_seqs: NDA,
-                 tgt_id_seqs: NDA,
-                 src_forms: NDA,
-                 tgt_forms: NDA,
-                 sample_weights: NDA):
-        self.src_lang = src_lang
-        self.tgt_lang = tgt_lang
-        self.src_unit_seqs = src_unit_seqs
-        self.tgt_unit_seqs = tgt_unit_seqs
-        self.src_id_seqs = src_id_seqs
-        self.tgt_id_seqs = tgt_id_seqs
-        self.src_forms = src_forms
-        self.tgt_forms = tgt_forms
-        self.sample_weights = sample_weights
-
-    @classmethod
-    def from_dataframe(cls, src_lang: str, tgt_lang: str, df: DF) -> OnePairDataset:
-        return cls(src_lang, tgt_lang,
-                   df['post_unit_seq_src'].values,
-                   df['post_unit_seq_tgt'].values,
-                   df['id_seq_src'].values,
-                   df['id_seq_tgt'].values,
-                   df['form_src'].values,
-                   df['form_tgt'].values,
-                   df['sample_weight'].values)
+                 setting: Setting,
+                 df: DF):
+        self.setting = setting
+        self.src_unit_seqs = df['post_unit_seq_src'].values
+        self.tgt_unit_seqs = df['post_unit_seq_tgt'].values
+        self.src_id_seqs = df['id_seq_src'].values
+        self.tgt_id_seqs = df['id_seq_tgt'].values
+        self.src_forms = df['form_src'].values
+        self.tgt_forms = df['form_tgt'].values
+        self.sample_weights = df['sample_weight'].values
 
     def __getitem__(self, index: int):
-        # HACK(j_luo)
         return {
-            'src_id_seq': pad(self.src_id_seqs[index], 'src', False),
-            'src_unit_seq': pad(self.src_unit_seqs[index], 'src', True),
-            'tgt_id_seq': pad(self.tgt_id_seqs[index], 'src', False),
-            'tgt_unit_seq': pad(self.tgt_unit_seqs[index], 'src', True),
-            # 'tgt_id_seq': pad(self.tgt_id_seqs[index], 'tgt', False),
-            # 'tgt_unit_seq': pad(self.tgt_unit_seqs[index], 'tgt', True),
+            'src_id_seq': pad(self.src_id_seqs[index],
+                              self.setting.src_sot,
+                              self.setting.src_eot, False),
+            'src_unit_seq': pad(self.src_unit_seqs[index],
+                                self.setting.src_sot,
+                                self.setting.src_eot, True),
+            'tgt_id_seq': pad(self.tgt_id_seqs[index],
+                              self.setting.tgt_sot,
+                              self.setting.tgt_eot, False),
+            'tgt_unit_seq': pad(self.tgt_unit_seqs[index],
+                                self.setting.tgt_sot,
+                                self.setting.tgt_eot, True),
             'index': index,
-            'src_lang': self.src_lang,
-            'tgt_lang': self.tgt_lang,
+            'src_lang': self.setting.src_lang,
+            'tgt_lang': self.setting.tgt_lang,
             'src_form': self.src_forms[index],
             'tgt_form': self.tgt_forms[index],
         }
@@ -138,8 +97,8 @@ class OnePairDataset(Dataset):
 
     @cached_property
     def src_vocabulary(self) -> Vocabulary:
-        return Vocabulary(self.src_forms, self.src_unit_seqs, self.src_id_seqs)
+        return Vocabulary(self.src_forms, self.src_unit_seqs, self.src_id_seqs, self.setting.src_sot, self.setting.src_eot)
 
     @cached_property
     def tgt_vocabulary(self) -> Vocabulary:
-        return Vocabulary(self.tgt_forms, self.tgt_unit_seqs, self.tgt_id_seqs)
+        return Vocabulary(self.tgt_forms, self.tgt_unit_seqs, self.tgt_id_seqs, self.setting.tgt_sot, self.setting.tgt_eot)

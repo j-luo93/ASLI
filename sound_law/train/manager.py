@@ -13,8 +13,7 @@ from dev_misc.trainlib.tb_writer import MetricWriter
 from sound_law.data.alphabet import Alphabet
 from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
-from sound_law.data.dataset import Split
-from sound_law.data.setting import Setting
+from sound_law.data.setting import Setting, Split
 from sound_law.evaluate.evaluator import Evaluator
 from sound_law.model.one_pair import OnePairModel
 from sound_law.model.one_to_many import OneToManyModel
@@ -55,7 +54,11 @@ class OnePairManager:
         self.dl_reg = DataLoaderRegistry()
 
         def create_setting(name: str, split: Split, for_training: bool, keep_ratio: Optional[float] = None) -> Setting:
-            return Setting(name, 'one_pair', split, g.src_lang, g.tgt_lang, for_training, keep_ratio=keep_ratio)
+            # If using RL, we append SOT's on the target side.
+            return Setting(name, 'one_pair', split,
+                           g.src_lang, g.tgt_lang, for_training,
+                           keep_ratio=keep_ratio,
+                           tgt_sot=g.use_rl)
 
         def register_dl(setting: Setting):
             self.dl_reg.register_data_loader(setting, cr)
@@ -187,7 +190,10 @@ class OneToManyManager:
         self.dl_reg = DataLoaderRegistry()
 
         def create_setting(name: str, tgt_lang: str, split: Split, for_training: bool, keep_ratio: Optional[float] = None) -> Setting:
-            return Setting(name, 'one_pair', split, g.src_lang, tgt_lang, for_training, keep_ratio=keep_ratio)
+            return Setting(name, 'one_pair', split,
+                           g.src_lang, tgt_lang, for_training,
+                           keep_ratio=keep_ratio,
+                           tgt_sot=g.use_rl)
 
         def register_dl(setting: Setting):
             self.dl_reg.register_data_loader(setting, self.cog_reg, lang2id=lang2id)

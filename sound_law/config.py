@@ -9,6 +9,8 @@ from dev_misc.arglib import Registry
 
 reg = Registry('config')
 
+# TODO(j_luo) Break each config into some smaller independent configs?
+
 
 @reg
 class ZSLatIta:  # "ZS" stands for zero-shot.

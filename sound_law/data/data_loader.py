@@ -6,6 +6,7 @@ from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
+from torch.utils.data import BatchSampler, SequentialSampler
 from torch.utils.data.sampler import WeightedRandomSampler
 
 from dev_misc import BT, LT, NDA, add_argument, g
@@ -16,12 +17,13 @@ from dev_misc.trainlib import BaseSetting
 from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
                                                 BaseDataLoaderRegistry)
 from dev_misc.utils import cached_property, handle_sequence_inputs
+from sound_law.data.cognate import CognateRegistry
 from sound_law.data.dataset import OnePairDataset, Vocabulary, pad
+from sound_law.data.setting import Setting
 
 from .alphabet import Alphabet
 from .cognate import CognateRegistry, postprocess
-from .dataset import Split
-from .setting import Setting
+from .setting import Setting, Split
 
 
 @batch_class
@@ -76,12 +78,12 @@ class SourceOnlyBatch(BaseBatch):
         return len(self.src_seqs)
 
     @classmethod
-    def from_ipa_tokens(cls, ipa_tokens: str, abc: Alphabet, tgt_lang_id: int) -> SourceOnlyBatch:
+    def from_ipa_tokens(cls, ipa_tokens: str, abc: Alphabet, tgt_lang_id: int, sot: bool, eot: bool) -> SourceOnlyBatch:
         """Prepare a `SourceOnlyBatch object from just ipa tokens."""
         std_func = handle_sequence_inputs(lambda s: abc.standardize(s))
         record = postprocess(ipa_tokens.split(), std_func, abc)
-        record['id_seq'] = pad(record['id_seq'], 'src', False)
-        record['post_unit_seq'] = pad(record['post_unit_seq'], 'src', True)
+        record['id_seq'] = pad(record['id_seq'], sot, eot, False)
+        record['post_unit_seq'] = pad(record['post_unit_seq'], sot, eot, True)
 
         batches = [record]
         ids, paddings = _gather_from_batches(batches, 'id_seq')
@@ -159,23 +161,42 @@ def one_pair_collate_fn(batches: List[Dict]) -> OnePairBatch:
     return OnePairBatch(src_seqs, tgt_seqs, indices)
 
 
-class OnePairDataLoader(BaseDataLoader):
-
-    add_argument('batch_size', default=32, dtype=int, msg='Batch size.')
+class BaseOnePairDataLoader(BaseDataLoader):
 
     collate_fn = one_pair_collate_fn
     dataset: OnePairDataset
 
-    def __init__(self,
-                 setting: Setting,
-                 cog_reg: CognateRegistry,
-                 lang2id: Dict[str, int] = None):
+    def _base_init(self,
+                   setting: Setting,
+                   cog_reg: CognateRegistry,
+                   lang2id: Dict[str, int] = None):
+        """Perform initialization for base class. and return dataset."""
         dataset = cog_reg.prepare_dataset(setting)
         self.lang2id = lang2id
         self.src_lang = setting.src_lang
         self.tgt_lang = setting.tgt_lang
         self.src_abc = cog_reg.get_alphabet(setting.src_lang)
         self.tgt_abc = cog_reg.get_alphabet(setting.tgt_lang)
+        return dataset
+
+    def _postprocess_batch(self, batch: OnePairBatch) -> OnePairBatch:
+        if self.lang2id is not None:
+            # NOTE(j_luo) Source lang id not needed for now.
+            batch.tgt_seqs.lang_id = self.lang2id[batch.tgt_seqs.lang]
+        if has_gpus():
+            return batch.cuda()
+        return batch
+
+
+class OnePairDataLoader(BaseOnePairDataLoader):
+
+    add_argument('batch_size', default=32, dtype=int, msg='Batch size.')
+
+    def __init__(self,
+                 setting: Setting,
+                 cog_reg: CognateRegistry,
+                 lang2id: Dict[str, int] = None):
+        dataset = self._base_init(setting, cog_reg, lang2id)
 
         sampler = None
         if setting.for_training:
@@ -184,16 +205,9 @@ class OnePairDataLoader(BaseDataLoader):
                          batch_size=g.batch_size,
                          sampler=sampler)
 
-    # IDEA(j_luo) Move this to core?
     def __iter__(self) -> Iterator[OnePairBatch]:
         for batch in super().__iter__():
-            if self.lang2id is not None:
-                # NOTE(j_luo) Source lang id not needed for now.
-                batch.tgt_seqs.lang_id = self.lang2id[batch.tgt_seqs.lang]
-            if has_gpus():
-                yield batch.cuda()
-            else:
-                yield batch
+            yield self._postprocess_batch(batch)
 
     @cached_property
     def tgt_seqs(self) -> PaddedUnitSeqs:
@@ -216,6 +230,38 @@ class OnePairDataLoader(BaseDataLoader):
     @property
     def tgt_vocabulary(self) -> Vocabulary:
         return self.dataset.tgt_vocabulary
+
+
+class EntireBatchOnePairDataLoader(BaseOnePairDataLoader):
+    # FIXME(j_luo) Need to handle duplicates.
+    """This data loader always return the entire dataset as one fixed batch."""
+
+    def __init__(self,
+                 setting: Setting,
+                 cog_reg: CognateRegistry,
+                 lang2id: Dict[str, int] = None):
+        dataset = self._base_init(setting, cog_reg, lang2id)
+        ds = len(dataset)  # Data size.
+        # A batch sampler that samples the entire dataset in a fixed order.
+        batch_sampler = BatchSampler(SequentialSampler(range(ds)), batch_size=ds, drop_last=False)
+        super().__init__(dataset, setting,
+                         batch_sampler=batch_sampler)
+        # This is used to cache the entire batch.
+        self._entire_batch: OnePairBatch = None
+
+    @property
+    def entire_batch(self) -> OnePairBatch:
+        # Obtain the entire batch for the first time only.
+        if self._entire_batch is None:
+            lst = list(super().__iter__())
+            if len(lst) != 1:
+                raise RuntimeError(f"Expecting exactly one batch but got {len(lst)} instead.")
+            self._entire_batch = lst[0]
+
+        return self._entire_batch
+
+    def __iter__(self) -> Iterator[OnePairBatch]:
+        yield self._postprocess_batch(self.entire_batch)
 
 
 class DataLoaderRegistry(BaseDataLoaderRegistry):

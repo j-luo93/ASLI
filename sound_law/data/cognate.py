@@ -199,4 +199,4 @@ class CognateRegistry:
 
         logging.info(f'Total number of cognate pairs for {pair} for {setting.split}: {len(pair_df)}.')
 
-        return OnePairDataset.from_dataframe(setting.src_lang, setting.tgt_lang, pair_df)
+        return OnePairDataset(setting, pair_df)

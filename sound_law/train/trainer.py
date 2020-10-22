@@ -6,12 +6,17 @@ from torch.nn.utils import clip_grad_norm_
 
 from dev_misc import FT, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import get_named_range
-from dev_misc.trainlib import Metric, Metrics
-from dev_misc.trainlib.base_trainer import BaseTrainer
+from dev_misc.trainlib import Metric, Metrics, init_params
+from dev_misc.trainlib.base_trainer import BaseTrainer as BaseTrainerDev
 from sound_law.data.alphabet import Alphabet
-from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
+from sound_law.data.data_loader import (EntireBatchOnePairDataLoader,
+                                        OnePairBatch, OnePairDataLoader,
+                                        PaddedUnitSeqs)
 from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.model.decoder import get_beam_probs
+from sound_law.rl.agent import VanillaPolicyGradient
+from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
+from sound_law.rl.trajectory import VocabState
 
 
 def get_ce_loss(log_probs: FT, batch: OnePairBatch, agg='all') -> FT:
@@ -32,11 +37,11 @@ def get_ce_loss(log_probs: FT, batch: OnePairBatch, agg='all') -> FT:
         raise ValueError(f'Unrecognized value "{agg}" for agg.')
 
 
-class Trainer(BaseTrainer):
+class BaseTrainer(BaseTrainerDev):
 
     add_argument('num_steps', default=1000, dtype=int, msg='Number of steps for training.')
     add_argument('save_model', dtype=bool, default=True, msg='Flag to save model.')
-    add_argument('almt_reg_hyper', dtype=float, default=0.0, msg='Hyperparameter for alignment regularization.')
+    add_argument('almt_reg_hyper', dtype=float, default=0.0, msg='Hypagentgularization.')
     add_argument('concentration_scale', dtype=float, default=1.0, msg='Hyperparameter for concentration scale.')
     add_argument('train_mode', dtype=str, default='mle',
                  choices=['mle', 'mrt'], msg='Training mode: either MRT or MLE.')
@@ -52,6 +57,9 @@ class Trainer(BaseTrainer):
             logging.info(f'Model saved to {path}.')
         else:
             logging.info('No model is saved.')
+
+
+class Trainer(BaseTrainer):
 
     def _train_one_step_mle(self, batch: OnePairBatch) -> Metrics:
         """Train for one step using maximum likelihood."""
@@ -138,6 +146,49 @@ class Trainer(BaseTrainer):
         # Clip gradient norm.
         grad_norm = clip_grad_norm_(self.model.parameters(), 5.0)
         grad_norm = Metric('grad_norm', grad_norm, len(batch))
+        metrics += grad_norm
+
+        # Update.
+        self.optimizer.step()
+
+        metrics = metrics.with_prefix('check')
+        return metrics
+
+
+class PolicyGradientTrainer(BaseTrainer):
+
+    model: VanillaPolicyGradient
+    collector: TrajectoryCollector
+
+    def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
+        if collector is None:
+            raise TypeError(f'Must pass a trajectory collector to initialize this trainer.')
+        if env is None:
+            raise TypeError(f'Must pass an environment to initialize this trainer.')
+
+        self.collector = collector
+        self.env = env
+        super().__init__(*args, **kwargs)
+
+    @property
+    def agent(self) -> VanillaPolicyGradient:
+        return self.model
+
+    def train_one_step(self, dl: EntireBatchOnePairDataLoader) -> Metrics:
+        batch: OnePairBatch = dl.get_next_batch()
+        init_state = VocabState.from_seqs(batch.src_seqs)
+        end_state = VocabState.from_seqs(batch.tgt_seqs)
+
+        self.agent.train()
+        self.optimizer.zero_grad()
+
+        agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
+        metrics = self.model(agent_inputs)
+        metrics.loss.mean.backward()
+
+        # Clip gradient norm.
+        grad_norm = clip_grad_norm_(self.model.parameters(), 5.0)
+        grad_norm = Metric('grad_norm', grad_norm, agent_inputs.batch_size)
         metrics += grad_norm
 
         # Update.

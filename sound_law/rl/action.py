@@ -14,7 +14,7 @@ class SoundChangeActionSpace:
         self.abc = abc
 
     def __len__(self):
-        # HACK(j_luo)
+        # HACK(j_luo) expand this later
         return 10
 
     def get_action(self, idx: int) -> SoundChangeAction:
@@ -34,7 +34,7 @@ class SoundChangeAction:
     after_id: int = field(init=False)
 
     def __post_init__(self):
-        # HACK(j_luo)
+        # HACK(j_luo) expand this later
         idx2before_after = {
             0: ('a', 'b'),
             1: ('a', 'e'),

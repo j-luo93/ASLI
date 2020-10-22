@@ -12,7 +12,7 @@ from dev_misc.devlib.named_tensor import NoName
 from dev_misc.utils import handle_sequence_inputs
 
 from .action import SoundChangeAction
-from .model import ActorCritic, AgentInputs
+from .model import AgentInputs, VanillaPolicyGradient
 from .trajectory import Trajectory, VocabState
 
 
@@ -47,13 +47,13 @@ class TrajectoryCollector:
         self._truncate_last = truncate_last
 
     def collect(self,
-                model: ActorCritic,
+                agent: VanillaPolicyGradient,
                 env: SoundChangeEnv,
                 init_state: VocabState,
                 end_state: VocabState) -> AgentInputs:
         """Collect a batch of states, actions and rewards."""
         # Collect in eval mode.
-        model.eval()
+        agent.eval()
 
         def get_new_trajectory() -> Trajectory:
             return Trajectory(init_state, end_state)
@@ -79,8 +79,8 @@ class TrajectoryCollector:
                     break
 
             state = trajectory.latest_state
-            policy = model.get_policy(state)
-            action = model.sample_action(policy)
+            policy = agent.get_policy(state)
+            action = agent.sample_action(policy)
             next_state, done, next_reward = env(state, action)
             trajectory.append(action, next_state, done, next_reward)
             n_samples += 1

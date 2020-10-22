@@ -26,7 +26,7 @@ class AgentInputs:
         return self.action_ids.size('batch')
 
 
-class ActorCritic(nn.Module):
+class VanillaPolicyGradient(nn.Module):
 
     def __init__(self, char_emb: CharEmbedding, action_space: SoundChangeActionSpace, end_state: VocabState):
         super().__init__()
