@@ -20,7 +20,7 @@ from sound_law.model.module import CharEmbedding, EmbParams, PhonoEmbedding
 from sound_law.model.one_pair import OnePairModel
 from sound_law.model.one_to_many import OneToManyModel
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
-from sound_law.rl.agent import VanillaPolicyGradient
+from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.trajectory import VocabState
 
@@ -117,7 +117,8 @@ class OnePairManager:
                 action_space = SoundChangeActionSpace(self.tgt_abc)
                 emb_params = get_emb_params(len(self.tgt_abc), phono_feat_mat, special_ids)
                 emb = PhonoEmbedding.from_params(emb_params)
-                model = VanillaPolicyGradient(emb, action_space, end_state)
+                agent_cls = VanillaPolicyGradient if g.agent == 'vpg' else A2C
+                model = agent_cls(emb, action_space, end_state)
             else:
                 model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
                                      phono_feat_mat=phono_feat_mat,

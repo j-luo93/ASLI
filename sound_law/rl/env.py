@@ -85,15 +85,18 @@ class TrajectoryCollector:
 
         # Make a batch out of all the states and actions in the list of trajectories. Note that only starting states are batched.
         id_seqs = list()
+        next_id_seqs = list()
         action_ids = list()
         rewards = list()
         for t in trajectories:
             for s0, a, s1, r in t:
                 id_seqs.append(s0.ids)
+                next_id_seqs.append(s1.ids)
                 action_ids.append(a.action_id)
                 rewards.append(r)
         id_seqs = torch.stack(id_seqs, new_name='batch').align_to('batch', 'pos', 'word')
+        next_id_seqs = torch.stack(next_id_seqs, new_name='batch').align_to('batch', 'pos', 'word')
         action_ids = get_tensor(action_ids).rename('batch')
         rewards = get_tensor(rewards).rename('batch')
-        agent_inputs = AgentInputs(trajectories, id_seqs, action_ids, rewards)
+        agent_inputs = AgentInputs(trajectories, id_seqs, next_id_seqs, action_ids, rewards)
         return agent_inputs

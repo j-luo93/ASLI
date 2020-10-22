@@ -9,9 +9,8 @@ from dev_misc.devlib.named_tensor import get_named_range
 from dev_misc.trainlib import Metric, Metrics, init_params
 from dev_misc.trainlib.base_trainer import BaseTrainer as BaseTrainerDev
 from sound_law.data.alphabet import Alphabet
-from sound_law.data.data_loader import (VSOnePairDataLoader,
-                                        OnePairBatch, OnePairDataLoader,
-                                        PaddedUnitSeqs)
+from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
+                                        PaddedUnitSeqs, VSOnePairDataLoader)
 from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.model.decoder import get_beam_probs
 from sound_law.rl.agent import VanillaPolicyGradient
@@ -182,7 +181,25 @@ class PolicyGradientTrainer(BaseTrainer):
         self.optimizer.zero_grad()
 
         agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
-        metrics = self.model(agent_inputs)
+        bs = agent_inputs.batch_size
+        if g.agent == 'vpg':
+            log_probs, rews = self.model(agent_inputs)
+        else:
+            # HACK(j_luo)
+            log_probs, (rews, values, expected_rews) = self.model(agent_inputs)
+            diff = ((values - expected_rews) ** 2)
+            v_regress_loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(values))
+        pg_losses = (-log_probs * rews)
+        pg_loss = Metric('pg_loss', pg_losses.sum(), bs)
+        tr_rew = Metric('reward', agent_inputs.rewards.sum(), len(agent_inputs.trajectories))
+        metrics = Metrics(pg_loss, tr_rew)
+        if g.agent == 'vpg':
+            loss = Metric('loss', pg_loss.total, bs)
+        else:
+            metrics += v_regress_loss
+            loss = Metric('loss', pg_loss.total + v_regress_loss.total, bs)
+        metrics += loss
+
         metrics.loss.mean.backward()
 
         # Clip gradient norm.
