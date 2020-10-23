@@ -46,6 +46,21 @@ def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT) -> FT:
     return state_repr
 
 
+def _get_rewards_to_go(agent_inputs: AgentInputs) -> FT:
+    rews = agent_inputs.rewards.rename(None)
+    tr_lengths = get_tensor([len(tr) for tr in agent_inputs.trajectories])
+    cum_lengths = tr_lengths.cumsum(dim=0)
+    assert cum_lengths[-1].item() == len(rews)
+    start_new = get_zeros(len(rews)).long()
+    start_new.scatter_(0, cum_lengths[:-1], 1)
+    which_tr = start_new.cumsum(dim=0)
+    up_to_ids = cum_lengths[which_tr] - 1
+    cum_rews = rews.cumsum(dim=0)
+    up_to = cum_rews[up_to_ids]
+    rtgs = up_to - cum_rews + rews
+    return rtgs
+
+
 class VanillaPolicyGradient(nn.Module):
 
     def __init__(self, emb_params: EmbParams, action_space: SoundChangeActionSpace, end_state: VocabState):
@@ -76,18 +91,7 @@ class VanillaPolicyGradient(nn.Module):
 
     def _get_rewards(self, agent_inputs: AgentInputs) -> FT:
         """Obtain rewards that will be multiplied with log_probs."""
-        rews = agent_inputs.rewards.rename(None)
-        tr_lengths = get_tensor([len(tr) for tr in agent_inputs.trajectories])
-        cum_lengths = tr_lengths.cumsum(dim=0)
-        assert cum_lengths[-1].item() == len(rews)
-        start_new = get_zeros(len(rews)).long()
-        start_new.scatter_(0, cum_lengths[:-1], 1)
-        which_tr = start_new.cumsum(dim=0)
-        up_to_ids = cum_lengths[which_tr] - 1
-        cum_rews = rews.cumsum(dim=0)
-        up_to = cum_rews[up_to_ids]
-        rtgs = up_to - cum_rews + rews
-        return rtgs
+        return _get_rewards_to_go(agent_inputs)
 
     def forward(self, agent_inputs: AgentInputs) -> Tuple[FT, FT]:
         with ScopedCache('word_embedding'):
@@ -114,33 +118,16 @@ class A2C(VanillaPolicyGradient):
         else:
             self.char_emb_value = self.char_emb
 
-    def get_values(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
-        """Get policy evaluation. If `done` is provided, we assume this refers to s1 instead s0. In that case,
-        values should be set to 0 for end states.
-        """
+    def get_values(self, curr_ids: LT, end_ids: LT) -> FT:
+        """Get policy evaluation."""
         state_repr = _get_state_repr(self.char_emb_value, curr_ids, end_ids)
         with NoName(state_repr):
             values = self.value_predictor(state_repr)
-        # NOTE(j_luo) For end states, values are set to 0.
-        if done is not None:
-            values = torch.where(done, torch.zeros_like(values), values)
         return values
 
     def _get_rewards(self, agent_inputs: AgentInputs) -> Tuple[FT, FT, FT]:
         end_ids = self.end_state.ids
         values = self.get_values(agent_inputs.id_seqs, end_ids)
-        # next_values = self.get_values(agent_inputs.next_id_seqs, end_ids, agent_inputs.done)
-        # expected_rews = agent_inputs.rewards + next_values
-        # advantages = expected_rews - values
-        rtgs = super()._get_rewards(agent_inputs)
+        rtgs = _get_rewards_to_go(agent_inputs)
         advantages = rtgs - values.detach()
-        # advantages = rtgs
-        try:
-            self._cnt += 1
-        except:
-            self._cnt = 1
-        if self._cnt % 300 == 0:
-            breakpoint()  # BREAKPOINT(j_luo)
         return advantages, values, rtgs
-
-        # return rtgs, values, expected_rews
