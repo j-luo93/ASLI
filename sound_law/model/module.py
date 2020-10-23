@@ -299,16 +299,13 @@ class LanguageEmbedding(nn.Embedding):
                 lang2emb = l2v.get_features(self.tgt_langs, feature_set, minimal=False)
             elif self.mode == 'wals':
                 # the wals data uses 2-letter ISO codes instead of 3-letter codes, so we have to convert. luckily, lang2vec implements this conversion, and we are already importing lang2vec
-                iso_lengthener = l2v.LETTER_CODES # maps 2 letter ISO codes to 3 letter ISO codes (ISO 639-3)
-                iso_shortener = {iso3: iso2 for iso2, iso3 in iso_lengthener.items()}
-                iso_shortener['rum'] = 'ro' # hardcoded; Romanian uses both 'rum' and 'ron' depending on standard
+                iso_correcter = l2v.LETTER_CODES # maps ISO 639-1 and -2 codes to ISO 639-3 codes. That is, it maps 2 letter -> 3 letter codes, and deprecated 3 letter -> 3 letter
 
                 with gzip.open('data/wals_udv1.pkl.gz', 'rb') as f: # fix path
                     wals_emb = pickle.load(f) # maps 2 letter ISO codes to WALS embeddings
+                # the WALS data contains some non-iso-codes: we simply ignore those, as they're not in our target langs anyway
+                lang2emb = {iso_correcter[iso2]: emb for iso2,emb in wals_emb.items() if iso_correcter[iso2] in self.tgt_langs} # good place to use walrus operator but I'm on python 3.7
 
-                # can't do a direct dict comprehension since WALS data contains non iso-codes as well, so we limit to our target langs
-                lang2emb = {iso3: wals_emb[iso_shortener[iso3]] for iso3 in self.tgt_langs} # maps 3 letter codes to WALS embeddings
-            
             # check that all these languages have the same embedding size (unfortunately not true for some of the lang2vec feature sets)
             assert len(set([len(emb) for emb in lang2emb.values()])) == 1
             emb_len = len(next(iter(lang2emb.values())))
