@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 from torch.distributions.distribution import Distribution
 
-from dev_misc import FT, LT, get_tensor, get_zeros
+from dev_misc import BT, FT, LT, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import Metric, Metrics, init_params
 from dev_misc.utils import ScopedCache, cacheable
@@ -22,34 +24,37 @@ class AgentInputs:
     next_id_seqs: LT
     action_ids: LT
     rewards: FT
+    done: BT
 
     @property
     def batch_size(self) -> int:
         return self.action_ids.size('batch')
 
 
+@cacheable(switch='word_embedding')
+def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT) -> FT:
+    """Get word embeddings based on ids."""
+    names = ids.names + ('emb',)
+    return char_emb(ids).rename(*names).mean(dim='pos')
+
+
+def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT) -> FT:
+    """Get state representation used for action prediction."""
+    word_repr = _get_word_embedding(char_emb, curr_ids)
+    end_word_repr = _get_word_embedding(char_emb, end_ids)
+    state_repr = (word_repr - end_word_repr).mean(dim='word')
+    return state_repr
+
+
 class VanillaPolicyGradient(nn.Module):
 
-    def __init__(self, char_emb: CharEmbedding, action_space: SoundChangeActionSpace, end_state: VocabState):
+    def __init__(self, emb_params: EmbParams, action_space: SoundChangeActionSpace, end_state: VocabState):
         super().__init__()
-        self.char_emb = char_emb
+        self.char_emb = PhonoEmbedding.from_params(emb_params)
         self.action_space = action_space
         num_actions = len(action_space)
-        self.action_predictor = nn.Linear(char_emb.embedding_dim, num_actions)
+        self.action_predictor = nn.Linear(self.char_emb.embedding_dim, num_actions)
         self.end_state = end_state
-
-    @cacheable(switch='word_embedding')
-    def get_word_embedding(self, ids: LT) -> FT:
-        """Get word embeddings based on ids."""
-        names = ids.names + ('emb',)
-        return self.char_emb(ids).rename(*names).mean(dim='pos')
-
-    def get_state_repr(self, curr_ids: LT, end_ids: LT) -> FT:
-        """Get state representation used for action prediction."""
-        word_repr = self.get_word_embedding(curr_ids)
-        end_word_repr = self.get_word_embedding(end_ids)
-        state_repr = (word_repr - end_word_repr).mean(dim='word')
-        return state_repr
 
     def get_policy(self, state_or_ids: Union[VocabState, LT]) -> Distribution:
         """Get policy distribution based on current state (and end state)."""
@@ -57,7 +62,7 @@ class VanillaPolicyGradient(nn.Module):
             ids = state_or_ids.ids
         else:
             ids = state_or_ids
-        state_repr = self.get_state_repr(ids, self.end_state.ids)
+        state_repr = _get_state_repr(self.char_emb, ids, self.end_state.ids)
 
         action_logits = self.action_predictor(state_repr)
 
@@ -96,30 +101,46 @@ class VanillaPolicyGradient(nn.Module):
 
 class A2C(VanillaPolicyGradient):
 
-    def __init__(self, char_emb: CharEmbedding, action_space: SoundChangeActionSpace, end_state: VocabState):
-        super().__init__(char_emb, action_space, end_state)
+    def __init__(self, emb_params: EmbParams,
+                 action_space: SoundChangeActionSpace,
+                 end_state: VocabState,
+                 separate_emb: bool = False):
+        super().__init__(emb_params, action_space, end_state)
         self.value_predictor = nn.Sequential(
-            nn.Linear(char_emb.embedding_dim, 1),
+            nn.Linear(self.char_emb.embedding_dim, 1),
             nn.Flatten(-2, -1))
+        if separate_emb:
+            self.char_emb_value = PhonoEmbedding.from_params(emb_params)
+        else:
+            self.char_emb_value = self.char_emb
 
-    def get_values(self, curr_ids: LT, end_ids: LT) -> FT:
-        state_repr = self.get_state_repr(curr_ids, end_ids)
+    def get_values(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
+        """Get policy evaluation. If `done` is provided, we assume this refers to s1 instead s0. In that case,
+        values should be set to 0 for end states.
+        """
+        state_repr = _get_state_repr(self.char_emb_value, curr_ids, end_ids)
         with NoName(state_repr):
             values = self.value_predictor(state_repr)
+        # NOTE(j_luo) For end states, values are set to 0.
+        if done is not None:
+            values = torch.where(done, torch.zeros_like(values), values)
         return values
 
     def _get_rewards(self, agent_inputs: AgentInputs) -> Tuple[FT, FT, FT]:
         end_ids = self.end_state.ids
         values = self.get_values(agent_inputs.id_seqs, end_ids)
-        next_values = self.get_values(agent_inputs.next_id_seqs, end_ids)
-        expected_rews = agent_inputs.rewards + next_values
-        advantages = expected_rews - values
+        # next_values = self.get_values(agent_inputs.next_id_seqs, end_ids, agent_inputs.done)
+        # expected_rews = agent_inputs.rewards + next_values
+        # advantages = expected_rews - values
         rtgs = super()._get_rewards(agent_inputs)
+        advantages = rtgs - values.detach()
+        # advantages = rtgs
         try:
             self._cnt += 1
         except:
             self._cnt = 1
-        if self._cnt == 300:
+        if self._cnt % 300 == 0:
             breakpoint()  # BREAKPOINT(j_luo)
-        # return advantages, values, expected_rews
-        return rtgs, values, expected_rews
+        return advantages, values, rtgs
+
+        # return rtgs, values, expected_rews

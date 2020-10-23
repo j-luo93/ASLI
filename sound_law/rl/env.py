@@ -88,15 +88,19 @@ class TrajectoryCollector:
         next_id_seqs = list()
         action_ids = list()
         rewards = list()
+        done = list()
         for t in trajectories:
             for s0, a, s1, r in t:
                 id_seqs.append(s0.ids)
                 next_id_seqs.append(s1.ids)
                 action_ids.append(a.action_id)
                 rewards.append(r)
+            done.extend([False] * (len(t) - 1))
+            done.append(t.done)
         id_seqs = torch.stack(id_seqs, new_name='batch').align_to('batch', 'pos', 'word')
         next_id_seqs = torch.stack(next_id_seqs, new_name='batch').align_to('batch', 'pos', 'word')
         action_ids = get_tensor(action_ids).rename('batch')
         rewards = get_tensor(rewards).rename('batch')
-        agent_inputs = AgentInputs(trajectories, id_seqs, next_id_seqs, action_ids, rewards)
+        done = get_tensor(done).rename('batch')
+        agent_inputs = AgentInputs(trajectories, id_seqs, next_id_seqs, action_ids, rewards, done)
         return agent_inputs

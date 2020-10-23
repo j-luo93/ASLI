@@ -113,12 +113,16 @@ class OnePairManager:
 
         def get_model(rl: bool = False, dl=None):
             if rl:
+                if not g.share_src_tgt_abc:
+                    raise RuntimeError(f'Must use a shared alphabet for RL.')
+
                 end_state = dl.end_state
                 action_space = SoundChangeActionSpace(self.tgt_abc)
                 emb_params = get_emb_params(len(self.tgt_abc), phono_feat_mat, special_ids)
-                emb = PhonoEmbedding.from_params(emb_params)
-                agent_cls = VanillaPolicyGradient if g.agent == 'vpg' else A2C
-                model = agent_cls(emb, action_space, end_state)
+                if g.agent == 'vpg':
+                    model = VanillaPolicyGradient(emb_params, action_space, end_state)
+                else:
+                    model = A2C(emb_params, action_space, end_state, separate_emb=True)
             else:
                 model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
                                      phono_feat_mat=phono_feat_mat,
@@ -170,7 +174,7 @@ class OnePairManager:
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
             env = SoundChangeEnv(dl.end_state)
-            collector = TrajectoryCollector(512, max_rollout_length=50, truncate_last=True)
+            collector = TrajectoryCollector(512, max_rollout_length=10, truncate_last=True)
             model = get_model(rl=True, dl=dl)
             trainer = get_trainer(model, 'rl', None, None, rl=True, env=env, collector=collector)
             trainer.train(self.dl_reg)
