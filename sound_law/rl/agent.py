@@ -31,6 +31,14 @@ class AgentInputs:
         return self.action_ids.size('batch')
 
 
+@dataclass
+class RewardOutputs:
+    """This stores all relevant outputs related to rewards, including advantages and policy evaluations."""
+    rtgs: FT  # rewards-to-go
+    values: Optional[FT] = None
+    advantages: Optional[FT] = None
+
+
 @cacheable(switch='word_embedding')
 def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT) -> FT:
     """Get word embeddings based on ids."""
@@ -89,18 +97,19 @@ class VanillaPolicyGradient(nn.Module):
         action_id = policy.sample().item()
         return self.action_space.get_action(action_id)
 
-    def _get_rewards(self, agent_inputs: AgentInputs) -> FT:
-        """Obtain rewards that will be multiplied with log_probs."""
-        return _get_rewards_to_go(agent_inputs)
+    def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
+        """Obtain outputs related to reward."""
+        rtgs = _get_rewards_to_go(agent_inputs)
+        return RewardOutputs(rtgs)
 
-    def forward(self, agent_inputs: AgentInputs) -> Tuple[FT, FT]:
+    def forward(self, agent_inputs: AgentInputs) -> Tuple[FT, RewardOutputs]:
         with ScopedCache('word_embedding'):
             policy = self.get_policy(agent_inputs.id_seqs)
             with NoName(agent_inputs.action_ids):
                 log_probs = policy.log_prob(agent_inputs.action_ids)
             # Compute rewards to go.
-            rews = self._get_rewards(agent_inputs)
-        return log_probs, rews
+            rew_outputs = self._get_reward_outputs(agent_inputs)
+        return log_probs, rew_outputs
 
 
 class A2C(VanillaPolicyGradient):
@@ -125,9 +134,9 @@ class A2C(VanillaPolicyGradient):
             values = self.value_predictor(state_repr)
         return values
 
-    def _get_rewards(self, agent_inputs: AgentInputs) -> Tuple[FT, FT, FT]:
+    def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
         end_ids = self.end_state.ids
         values = self.get_values(agent_inputs.id_seqs, end_ids)
         rtgs = _get_rewards_to_go(agent_inputs)
         advantages = rtgs - values.detach()
-        return advantages, values, rtgs
+        return RewardOutputs(rtgs, values=values, advantages=advantages)

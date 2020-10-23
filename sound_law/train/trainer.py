@@ -182,13 +182,11 @@ class PolicyGradientTrainer(BaseTrainer):
 
         agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
         bs = agent_inputs.batch_size
-        if g.agent == 'vpg':
-            log_probs, rews = self.model(agent_inputs)
-        else:
-            # HACK(j_luo)
-            log_probs, (rews, values, expected_rews) = self.model(agent_inputs)
-            diff = ((values - expected_rews) ** 2)
-            v_regress_loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(values))
+        log_probs, rew_outputs = self.model(agent_inputs)
+        rews = rew_outputs.rtgs
+        if g.agent == 'a2c':
+            diff = (rew_outputs.values - rew_outputs.rtgs) ** 2
+            v_regress_loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(rew_outputs.values))
         pg_losses = (-log_probs * rews)
         pg_loss = Metric('pg_loss', pg_losses.sum(), bs)
         tr_rew = Metric('reward', agent_inputs.rewards.sum(), len(agent_inputs.trajectories))

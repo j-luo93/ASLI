@@ -37,7 +37,10 @@ add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle eva
 add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
 add_argument('use_phono_features', dtype=bool, default=False, msg='Flag to use phonological features.')
 add_argument('optim_cls', dtype=str, default='adam', choices=['sgd', 'adam'], msg='What optimizer to choose.')
+add_argument('separate_emb', dtype=bool, default=True,
+             msg='Flag to use a separate embedding layer for value network. Used in RL.')
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
+add_condition('use_rl', True, 'share_src_tgt_abc', True)
 
 
 class OnePairManager:
@@ -113,16 +116,13 @@ class OnePairManager:
 
         def get_model(rl: bool = False, dl=None):
             if rl:
-                if not g.share_src_tgt_abc:
-                    raise RuntimeError(f'Must use a shared alphabet for RL.')
-
                 end_state = dl.end_state
                 action_space = SoundChangeActionSpace(self.tgt_abc)
                 emb_params = get_emb_params(len(self.tgt_abc), phono_feat_mat, special_ids)
                 if g.agent == 'vpg':
                     model = VanillaPolicyGradient(emb_params, action_space, end_state)
                 else:
-                    model = A2C(emb_params, action_space, end_state, separate_emb=True)
+                    model = A2C(emb_params, action_space, end_state, separate_emb=g.separate_emb)
             else:
                 model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
                                      phono_feat_mat=phono_feat_mat,
