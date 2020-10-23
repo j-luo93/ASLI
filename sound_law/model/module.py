@@ -301,6 +301,7 @@ class LanguageEmbedding(nn.Embedding):
                 # the wals data uses 2-letter ISO codes instead of 3-letter codes, so we have to convert. luckily, lang2vec implements this conversion, and we are already importing lang2vec
                 iso_lengthener = l2v.LETTER_CODES # maps 2 letter ISO codes to 3 letter ISO codes (ISO 639-3)
                 iso_shortener = {iso3: iso2 for iso2, iso3 in iso_lengthener.items()}
+                iso_shortener['rum'] = 'ro' # hardcoded; Romanian uses both 'rum' and 'ron' depending on standard
 
                 with gzip.open('data/wals_udv1.pkl.gz', 'rb') as f: # fix path
                     wals_emb = pickle.load(f) # maps 2 letter ISO codes to WALS embeddings
