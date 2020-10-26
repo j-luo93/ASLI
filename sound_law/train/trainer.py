@@ -189,8 +189,10 @@ class PolicyGradientTrainer(BaseTrainer):
             v_regress_loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(rew_outputs.values))
         pg_losses = (-log_probs * rews)
         pg_loss = Metric('pg_loss', pg_losses.sum(), bs)
-        tr_rew = Metric('reward', agent_inputs.rewards.sum(), len(agent_inputs.trajectories))
-        metrics = Metrics(pg_loss, tr_rew)
+        n_tr = len(agent_inputs.trajectories)
+        tr_rew = Metric('reward', agent_inputs.rewards.sum(), n_tr)
+        success = Metric('success', agent_inputs.done.sum(), n_tr)
+        metrics = Metrics(pg_loss, tr_rew, success)
         if g.agent == 'vpg':
             loss = Metric('loss', pg_loss.total, bs)
         else:

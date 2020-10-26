@@ -26,6 +26,7 @@ from sound_law.rl.trajectory import VocabState
 
 from .trainer import PolicyGradientTrainer, Trainer
 
+add_argument('batch_size', default=32, dtype=int, msg='Batch size.')
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
 add_argument('save_interval', dtype=int, msg='Frequency to save the progress and the model.')
@@ -41,6 +42,7 @@ add_argument('separate_emb', dtype=bool, default=True,
              msg='Flag to use a separate embedding layer for value network. Used in RL.')
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
+add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of rollout')
 
 
 class OnePairManager:
@@ -174,7 +176,7 @@ class OnePairManager:
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
             env = SoundChangeEnv(dl.end_state)
-            collector = TrajectoryCollector(512, max_rollout_length=10, truncate_last=True)
+            collector = TrajectoryCollector(g.batch_size, max_rollout_length=g.max_rollout_length, truncate_last=True)
             model = get_model(rl=True, dl=dl)
             trainer = get_trainer(model, 'rl', None, None, rl=True, env=env, collector=collector)
             trainer.train(self.dl_reg)

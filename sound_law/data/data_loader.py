@@ -191,8 +191,6 @@ class BaseOnePairDataLoader(BaseDataLoader):
 
 class OnePairDataLoader(BaseOnePairDataLoader):
 
-    add_argument('batch_size', default=32, dtype=int, msg='Batch size.')
-
     def __init__(self,
                  setting: Setting,
                  cog_reg: CognateRegistry,

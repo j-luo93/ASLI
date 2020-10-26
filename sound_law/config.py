@@ -138,11 +138,25 @@ class ZSPgmcNldPhono(ZSPgmcNld, UsePhono, Size220):
 class OPLatSpaPhono(ZSLatSpaPhono, Size220):  # "OP" stands for one-pair.
     task: str = 'one_pair'
 
+
 @reg
-class OPRLEngFakePhono(OPLatSpaPhono):
+class OPRLFakePhono(OPLatSpaPhono):
     use_rl: bool = True
-    src_lang: str = 'eng'
-    tgt_lang: str = 'fake'
+    batch_size: int = 512
+    src_lang: str = 'fake1'
+    tgt_lang: str = 'fake2'
+
+
+@reg
+class OPRLFake50Phono(OPRLFakePhono):
+    src_lang: str = 'fake1-50'
+    tgt_lang: str = 'fake2-50'
+
+
+@reg
+class OPRLFakeR2Phono(OPRLFakePhono):
+    src_lang: str = 'fake1-r2'
+    tgt_lang: str = 'fake2-r2'
 
 
 @reg
