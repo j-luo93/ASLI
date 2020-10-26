@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch.distributions.distribution import Distribution
 
-from dev_misc import BT, FT, LT, get_tensor, get_zeros
+from dev_misc import BT, FT, LT, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import Metric, Metrics, init_params
 from dev_misc.utils import ScopedCache, cacheable
@@ -114,6 +114,10 @@ class VanillaPolicyGradient(nn.Module):
 
 class A2C(VanillaPolicyGradient):
 
+    add_argument('a2c_mode', dtype=str, default='baseline', choices=[
+                 'baseline', 'mc'], msg='How to use policy evaluations.')
+    # add_argument('gae_lambda', dtype=float, default=0.95, msg='Lambda value for GAE.')
+
     def __init__(self, emb_params: EmbParams,
                  action_space: SoundChangeActionSpace,
                  end_state: VocabState,
@@ -127,16 +131,24 @@ class A2C(VanillaPolicyGradient):
         else:
             self.char_emb_value = self.char_emb
 
-    def get_values(self, curr_ids: LT, end_ids: LT) -> FT:
-        """Get policy evaluation."""
+    def get_values(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
+        """Get policy evaluation. if `done` is provided, we get values for s1 instead of s0. In that case, end states should have values set to 0."""
         state_repr = _get_state_repr(self.char_emb_value, curr_ids, end_ids)
         with NoName(state_repr):
             values = self.value_predictor(state_repr)
+        if done is not None:
+            values = torch.where(done, torch.zeros_like(values), values)
         return values
 
     def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
         end_ids = self.end_state.ids
         values = self.get_values(agent_inputs.id_seqs, end_ids)
-        rtgs = _get_rewards_to_go(agent_inputs)
+        if g.a2c_mode == 'baseline':
+            rtgs = _get_rewards_to_go(agent_inputs)
+        else:
+            next_values = self.get_values(agent_inputs.next_id_seqs, end_ids, agent_inputs.done)
+            # This computes the expected rewards-to-go.
+            rtgs = (agent_inputs.rewards + next_values).detach()
         advantages = rtgs - values.detach()
+
         return RewardOutputs(rtgs, values=values, advantages=advantages)
