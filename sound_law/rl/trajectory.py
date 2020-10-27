@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Iterator, List, Sequence, Tuple
+from functools import lru_cache
+from typing import Iterator, List, Optional, Sequence, Tuple
 
-from dev_misc import FT, LT
 import sound_law.data.data_loader as dl
+from dev_misc import FT, LT
+from sound_law.evaluate.edit_dist import ed_eval_batch
 
 from .action import SoundChangeAction
 
@@ -20,6 +22,14 @@ class VocabState:
 
     def __eq__(self, other: VocabState):
         return len(self.units) == len(other.units) and all(s == o for s, o in zip(self.units, other.units))
+
+    # HACK(j_luo)
+    def __hash__(self):
+        return id(self)
+
+    @lru_cache(maxsize=None)
+    def dist_from(self, other: VocabState) -> float:
+        return float(ed_eval_batch(self.units, other.units, 4).sum())
 
 
 class Trajectory:

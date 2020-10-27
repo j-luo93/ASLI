@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -18,9 +19,11 @@ from .trajectory import Trajectory, VocabState
 
 class SoundChangeEnv(nn.Module):
 
-    def __init__(self, end_state: VocabState):
+    def __init__(self, init_state: VocabState, end_state: VocabState):
         super().__init__()
+        self._init_state = init_state
         self._end_state = end_state
+        self._starting_dist = init_state.dist_from(end_state)
 
     def forward(self, state: VocabState, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
         replace_func = handle_sequence_inputs(lambda s: s.replace(action.before, action.after))
@@ -31,7 +34,13 @@ class SoundChangeEnv(nn.Module):
         new_ids.rename_(*state.ids.names)
         new_state = VocabState(new_units, new_ids)
         done = new_state == self._end_state
-        return new_state, done, 1.0 if done else 0.0
+
+        final_reward = 1.0 if done else 0.0
+        old_dist = state.dist_from(self._end_state)
+        new_dist = new_state.dist_from(self._end_state)
+        incremental_reward = (old_dist - new_dist) / self._starting_dist * 0.02
+        reward = final_reward + incremental_reward
+        return new_state, done, reward
 
 
 class TrajectoryCollector:

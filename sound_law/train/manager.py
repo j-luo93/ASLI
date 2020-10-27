@@ -175,7 +175,7 @@ class OnePairManager:
 
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
-            env = SoundChangeEnv(dl.end_state)
+            env = SoundChangeEnv(dl.init_state, dl.end_state)
             collector = TrajectoryCollector(g.batch_size, max_rollout_length=g.max_rollout_length, truncate_last=True)
             model = get_model(rl=True, dl=dl)
             trainer = get_trainer(model, 'rl', None, None, rl=True, env=env, collector=collector)

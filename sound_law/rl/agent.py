@@ -40,16 +40,29 @@ class RewardOutputs:
 
 
 @cacheable(switch='word_embedding')
-def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT) -> FT:
+def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT, cnn: nn.Conv1d = None) -> FT:
     """Get word embeddings based on ids."""
     names = ids.names + ('emb',)
-    return char_emb(ids).rename(*names).mean(dim='pos')
+    emb = char_emb(ids).rename(*names)
+    # HACK(j_luo) ugly names.
+    if cnn is not None:
+        if emb.ndim == 4:
+            emb = emb.align_to('batch', 'word', 'emb', 'pos')
+            bs, ws, hs, l = emb.shape
+            ret = cnn(emb.rename(None).reshape(bs * ws, hs, l)).view(bs, ws, hs, -1).max(dim=-1)[0]
+            return ret.rename('batch', 'word', 'emb')
+        else:
+            emb = emb.align_to('word', 'emb', 'pos')
+            ret = cnn(emb.rename(None)).max(dim=-1)[0]
+            return ret.rename('word', 'emb')
+
+    return emb.mean(dim='pos')
 
 
-def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT) -> FT:
+def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT, cnn: nn.Conv1d = None) -> FT:
     """Get state representation used for action prediction."""
-    word_repr = _get_word_embedding(char_emb, curr_ids)
-    end_word_repr = _get_word_embedding(char_emb, end_ids)
+    word_repr = _get_word_embedding(char_emb, curr_ids, cnn=cnn)
+    end_word_repr = _get_word_embedding(char_emb, end_ids, cnn=cnn)
     state_repr = (word_repr - end_word_repr).mean(dim='word')
     return state_repr
 
@@ -74,6 +87,8 @@ class VanillaPolicyGradient(nn.Module):
     def __init__(self, emb_params: EmbParams, action_space: SoundChangeActionSpace, end_state: VocabState):
         super().__init__()
         self.char_emb = PhonoEmbedding.from_params(emb_params)
+        # HACK(j_luo)
+        self.cnn = nn.Conv1d(self.char_emb.embedding_dim, self.char_emb.embedding_dim, 3)
         self.action_space = action_space
         num_actions = len(action_space)
         self.action_predictor = nn.Linear(self.char_emb.embedding_dim, num_actions)
@@ -85,7 +100,7 @@ class VanillaPolicyGradient(nn.Module):
             ids = state_or_ids.ids
         else:
             ids = state_or_ids
-        state_repr = _get_state_repr(self.char_emb, ids, self.end_state.ids)
+        state_repr = _get_state_repr(self.char_emb, ids, self.end_state.ids, cnn=self.cnn)
 
         action_logits = self.action_predictor(state_repr)
 
@@ -123,8 +138,9 @@ class A2C(VanillaPolicyGradient):
                  end_state: VocabState,
                  separate_emb: bool = False):
         super().__init__(emb_params, action_space, end_state)
+        input_size = self.char_emb.embedding_dim
         self.value_predictor = nn.Sequential(
-            nn.Linear(self.char_emb.embedding_dim, 1),
+            nn.Linear(input_size, 1),
             nn.Flatten(-2, -1))
         if separate_emb:
             self.char_emb_value = PhonoEmbedding.from_params(emb_params)
@@ -133,7 +149,7 @@ class A2C(VanillaPolicyGradient):
 
     def get_values(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
         """Get policy evaluation. if `done` is provided, we get values for s1 instead of s0. In that case, end states should have values set to 0."""
-        state_repr = _get_state_repr(self.char_emb_value, curr_ids, end_ids)
+        state_repr = _get_state_repr(self.char_emb_value, curr_ids, end_ids, cnn=self.cnn)
         with NoName(state_repr):
             values = self.value_predictor(state_repr)
         if done is not None:

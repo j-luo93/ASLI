@@ -91,6 +91,7 @@ def compute_edit_dist(comp_mode: str,
         flat_preds = predictions.reshape(-1)
         if comp_mode == 'units':
             # NOTE(j_luo) Remove EOT's.
+            breakpoint()  # BREAKPOINT(j_luo)
             flat_golds = [u[:-1] for u in units]
         elif comp_mode == 'ids':
             tgt_ids = gold_ids.cpu().numpy()
