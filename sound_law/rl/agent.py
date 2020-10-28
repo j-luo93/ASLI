@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -11,6 +11,7 @@ from dev_misc import BT, FT, LT, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import Metric, Metrics, init_params
 from dev_misc.utils import ScopedCache, cacheable
+from sound_law.model.base_model import get_emb_params
 from sound_law.model.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                     get_embedding)
 
@@ -84,35 +85,53 @@ def _get_rewards_to_go(agent_inputs: AgentInputs) -> FT:
     return rtgs
 
 
-class VanillaPolicyGradient(nn.Module):
+@dataclass
+class Cnn1dParams:
+    input_size: int
+    hidden_size: int
+    kernel_size: int
 
-    add_argument('discount', dtype=float, default=1.0, msg='Discount for computing rewards.')
 
-    def __init__(self, emb_params: EmbParams, action_space: SoundChangeActionSpace, end_state: VocabState):
+def get_cnn1d(cnn1d_params: Cnn1dParams) -> nn.Conv1d:
+    return nn.Conv1d(cnn1d_params.input_size,
+                     cnn1d_params.hidden_size,
+                     cnn1d_params.kernel_size)
+
+
+class PolicyNetwork(nn.Module):
+
+    def __init__(self, char_emb: CharEmbedding,
+                 cnn: nn.Conv1d,
+                 proj: nn.Module,
+                 action_space: SoundChangeActionSpace):
         super().__init__()
-        self.char_emb = get_embedding(emb_params)
-        # HACK(j_luo)
-        self.cnn = nn.Conv1d(self.char_emb.embedding_dim, self.char_emb.embedding_dim, 3)
+        self.char_emb = char_emb
+        self.cnn = cnn
+        self.proj = proj
         self.action_space = action_space
+
+    @classmethod
+    def from_params(cls, emb_params: EmbParams,
+                    cnn1d_params: Cnn1dParams,
+                    action_space: SoundChangeActionSpace) -> PolicyNetwork:
+        char_emb = get_embedding(emb_params)
+        cnn = get_cnn1d(cnn1d_params)
+        input_size = cnn1d_params.hidden_size
         num_actions = len(action_space)
-        input_size = self.char_emb.embedding_dim
-        # self.action_predictor = nn.Sequential(nn.Linear(input_size, num_actions))
-        self.action_predictor = nn.Sequential(
+        proj = nn.Sequential(
             nn.Linear(input_size, input_size // 2),
             nn.Tanh(),
             nn.Linear(input_size // 2, num_actions))
-        self.end_state = end_state
+        return cls(char_emb, cnn, proj, action_space)
 
-    def get_policy(self, state_or_ids: Union[VocabState, LT], action_masks: BT) -> Distribution:
+    def forward(self,
+                curr_ids: LT,
+                end_ids: LT,
+                action_masks: BT) -> Distribution:
         """Get policy distribution based on current state (and end state). If ids are passed, we have to specify action masks directly."""
-        if isinstance(state_or_ids, VocabState):
-            ids = state_or_ids.ids
-        else:
-            ids = state_or_ids
+        state_repr = _get_state_repr(self.char_emb, curr_ids, end_ids, cnn=self.cnn)
 
-        state_repr = _get_state_repr(self.char_emb, ids, self.end_state.ids, cnn=self.cnn)
-
-        action_logits = self.action_predictor(state_repr)
+        action_logits = self.proj(state_repr)
         action_logits = torch.where(action_masks, action_logits,
                                     torch.full_like(action_logits, -999.9))
 
@@ -120,9 +139,34 @@ class VanillaPolicyGradient(nn.Module):
             policy = torch.distributions.Categorical(logits=action_logits)
         return policy
 
+
+class VanillaPolicyGradient(nn.Module):
+
+    # add_argument('discount', dtype=float, default=1.0, msg='Discount for computing rewards.')
+
+    def __init__(self, num_chars: int,
+                 action_space: SoundChangeActionSpace,
+                 end_state: VocabState,
+                 phono_feat_mat: Optional[LT] = None,
+                 special_ids: Optional[Sequence[int]] = None):
+        super().__init__()
+        emb_params = get_emb_params(num_chars, phono_feat_mat, special_ids)
+        cnn1d_params = Cnn1dParams(g.char_emb_size, g.hidden_size, 3)
+        self.policy_net = PolicyNetwork.from_params(emb_params, cnn1d_params, action_space)
+        self.end_state = end_state
+
+    def get_policy(self, state_or_ids: Union[VocabState, LT], action_masks: BT) -> Distribution:
+        """Get policy distribution based on current state (and end state). If ids are passed, we have to specify action masks directly."""
+        if isinstance(state_or_ids, VocabState):
+            curr_ids = state_or_ids.ids
+        else:
+            curr_ids = state_or_ids
+        end_ids = self.end_state.ids
+        return self.policy_net(curr_ids, end_ids, action_masks)
+
     def sample_action(self, policy: Distribution) -> SoundChangeAction:
         action_id = policy.sample().item()
-        return self.action_space.get_action(action_id)
+        return self.policy_net.action_space.get_action(action_id)
 
     def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
         """Obtain outputs related to reward."""
@@ -140,41 +184,64 @@ class VanillaPolicyGradient(nn.Module):
         return log_probs, entropy, rew_outputs
 
 
-class A2C(VanillaPolicyGradient):
+class ValueNetwork(nn.Module):
 
-    add_argument('a2c_mode', dtype=str, default='baseline', choices=[
-                 'baseline', 'mc'], msg='How to use policy evaluations.')
-    # add_argument('gae_lambda', dtype=float, default=0.95, msg='Lambda value for GAE.')
+    def __init__(self, char_emb: CharEmbedding, cnn: nn.Conv1d, regressor: nn.Module):
+        super().__init__()
+        self.char_emb = char_emb
+        self.cnn = cnn
+        self.regressor = regressor
 
-    def __init__(self, emb_params: EmbParams,
-                 action_space: SoundChangeActionSpace,
-                 end_state: VocabState,
-                 separate_emb: bool = False):
-        super().__init__(emb_params, action_space, end_state)
-        input_size = self.char_emb.embedding_dim
-        self.value_predictor = nn.Sequential(
+    @classmethod
+    def from_params(cls,
+                    emb_params: EmbParams,
+                    cnn1d_params: Cnn1dParams,
+                    char_emb: Optional[CharEmbedding] = None,
+                    cnn: Optional[nn.Conv1d] = None) -> ValueNetwork:
+        char_emb = char_emb or get_embedding(emb_params)
+        cnn = cnn or get_cnn1d(cnn1d_params)
+        input_size = cnn1d_params.hidden_size
+        regressor = nn.Sequential(
             nn.Linear(input_size, input_size // 2),
             nn.Tanh(),
             nn.Linear(input_size // 2, 1),
             nn.Flatten(-2, -1))
-        if separate_emb:
-            # HACK(j_luo)
-            self.char_emb_value = get_embedding(emb_params)
-            # self.char_emb_value = self.char_emb
-            self.cnn_value = nn.Conv1d(self.char_emb.embedding_dim, self.char_emb.embedding_dim, 3)
-            # self.cnn_value = self.cnn
-        else:
-            self.char_emb_value = self.char_emb
-            self.cnn_value = self.cnn
+        return ValueNetwork(char_emb, cnn, regressor)
 
-    def get_values(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
+    def forward(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
         """Get policy evaluation. if `done` is provided, we get values for s1 instead of s0. In that case, end states should have values set to 0."""
-        state_repr = _get_state_repr(self.char_emb_value, curr_ids, end_ids, cnn=self.cnn_value)
+        state_repr = _get_state_repr(self.char_emb, curr_ids, end_ids, cnn=self.cnn)
         with NoName(state_repr):
-            values = self.value_predictor(state_repr)
+            values = self.regressor(state_repr)
         if done is not None:
             values = torch.where(done, torch.zeros_like(values), values)
         return values
+
+
+class A2C(VanillaPolicyGradient):
+
+    add_argument('a2c_mode', dtype=str, default='baseline',
+                 choices=['baseline', 'mc'], msg='How to use policy evaluations.')
+    # add_argument('gae_lambda', dtype=float, default=0.95, msg='Lambda value for GAE.')
+
+    def __init__(self, num_chars: int,
+                 action_space: SoundChangeActionSpace,
+                 end_state: VocabState,
+                 phono_feat_mat: Optional[LT] = None,
+                 special_ids: Optional[Sequence[int]] = None):
+        super().__init__(num_chars, action_space, end_state,
+                         phono_feat_mat=phono_feat_mat,
+                         special_ids=special_ids)
+        emb_params = get_emb_params(num_chars, phono_feat_mat, special_ids)
+        cnn1d_params = Cnn1dParams(g.char_emb_size, g.hidden_size, 3)
+        char_emb = cnn = None
+        if g.separate_value:
+            char_emb = self.policy_net.char_emb
+            cnn = self.policy_net.cnn
+        self.value_net = ValueNetwork.from_params(emb_params, cnn1d_params, char_emb=char_emb, cnn=cnn)
+
+    def get_values(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
+        return self.value_net(curr_ids, end_ids, done=done)
 
     def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
         end_ids = self.end_state.ids

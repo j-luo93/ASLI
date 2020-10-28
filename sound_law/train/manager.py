@@ -15,7 +15,6 @@ from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.setting import Setting, Split
 from sound_law.evaluate.evaluator import Evaluator
-from sound_law.model.base_model import get_emb_params
 from sound_law.model.module import CharEmbedding, EmbParams, PhonoEmbedding
 from sound_law.model.one_pair import OnePairModel
 from sound_law.model.one_to_many import OneToManyModel
@@ -38,8 +37,8 @@ add_argument('evaluate_only', dtype=bool, default=False, msg='Flag to toggle eva
 add_argument('share_src_tgt_abc', dtype=bool, default=False, msg='Flag to share the alphabets for source and target.')
 add_argument('use_phono_features', dtype=bool, default=False, msg='Flag to use phonological features.')
 add_argument('optim_cls', dtype=str, default='adam', choices=['sgd', 'adam'], msg='What optimizer to choose.')
-add_argument('separate_emb', dtype=bool, default=True,
-             msg='Flag to use a separate embedding layer for value network. Used in RL.')
+add_argument('separate_value', dtype=bool, default=True,
+             msg='Flag to use a separate model for value network. Used in RL.')
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
 add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of rollout')
@@ -120,17 +119,16 @@ class OnePairManager:
             action_space = SoundChangeActionSpace(self.tgt_abc)
 
         def get_model(rl: bool = False, dl=None):
+            phono_kwargs = {
+                'phono_feat_mat': phono_feat_mat,
+                'special_ids': special_ids
+            }
             if rl:
                 end_state = dl.end_state
-                emb_params = get_emb_params(len(self.tgt_abc), phono_feat_mat, special_ids)
-                if g.agent == 'vpg':
-                    model = VanillaPolicyGradient(emb_params, action_space, end_state)
-                else:
-                    model = A2C(emb_params, action_space, end_state, separate_emb=g.separate_emb)
+                agent_cls = VanillaPolicyGradient if g.agent == 'vpg' else A2C
+                model = agent_cls(len(self.tgt_abc), action_space, end_state, **phono_kwargs)
             else:
-                model = OnePairModel(len(self.src_abc), len(self.tgt_abc),
-                                     phono_feat_mat=phono_feat_mat,
-                                     special_ids=special_ids)
+                model = OnePairModel(len(self.src_abc), len(self.tgt_abc), **phono_kwargs)
             if g.saved_model_path is not None:
                 model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
                 logging.imp(f'Loaded from {g.saved_model_path}.')
