@@ -182,25 +182,32 @@ class PolicyGradientTrainer(BaseTrainer):
 
         agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
         bs = agent_inputs.batch_size
-        log_probs, rew_outputs = self.model(agent_inputs)
+        log_probs, entropy, rew_outputs = self.model(agent_inputs)
         rews = rew_outputs.rtgs
         if g.agent == 'a2c':
             diff = (rew_outputs.values - rew_outputs.rtgs) ** 2
             v_regress_loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(rew_outputs.values))
         pg_losses = (-log_probs * rews)
         pg_loss = Metric('pg_loss', pg_losses.sum(), bs)
+        entropy = Metric('entropy', entropy.sum(), bs)
+
         n_tr = len(agent_inputs.trajectories)
         tr_rew = Metric('reward', agent_inputs.rewards.sum(), n_tr)
         success = Metric('success', agent_inputs.done.sum(), n_tr)
-        metrics = Metrics(pg_loss, tr_rew, success)
+        metrics = Metrics(pg_loss, tr_rew, success, entropy)
+        # scale = abs(pg_loss.total / (1e-8 + entropy.total)).detach().item()
+        total_loss = pg_loss.total - 0.01 * entropy.total  # * scale
         if g.agent == 'vpg':
-            loss = Metric('loss', pg_loss.total, bs)
+            total_loss = Metric('total_loss', total_loss, bs)
         else:
+            abs_advs = Metric('abs_advantage', rew_outputs.advantages.abs().sum(), bs)
+            metrics += abs_advs
             metrics += v_regress_loss
-            loss = Metric('loss', pg_loss.total + v_regress_loss.total, bs)
-        metrics += loss
+            total_loss = Metric('total_loss', total_loss + v_regress_loss.total, bs)
+        metrics += total_loss
+        # metrics += Metric('scale', scale * bs, bs)
 
-        metrics.loss.mean.backward()
+        metrics.total_loss.mean.backward()
 
         # Clip gradient norm.
         grad_norm = clip_grad_norm_(self.model.parameters(), 5.0)

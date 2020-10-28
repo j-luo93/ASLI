@@ -1,11 +1,11 @@
 """This file defines methods and classes useful for representing sound change rules in the form of actions.
 """
 from __future__ import annotations
-import logging
 
+import logging
 from dataclasses import dataclass, field
 from itertools import product
-from typing import List
+from typing import Iterator, List
 
 from sound_law.data.alphabet import Alphabet
 
@@ -28,6 +28,9 @@ class SoundChangeActionSpace:
 
     def get_action(self, idx: int) -> SoundChangeAction:
         return self._actions[idx]
+
+    def __iter__(self) -> Iterator[SoundChangeAction]:
+        yield from self._actions
 
 
 @dataclass
