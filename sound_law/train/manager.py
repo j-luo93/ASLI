@@ -116,10 +116,12 @@ class OnePairManager:
 
         metric_writer = MetricWriter(g.log_dir, flush_secs=5)
 
+        if g.use_rl:
+            action_space = SoundChangeActionSpace(self.tgt_abc)
+
         def get_model(rl: bool = False, dl=None):
             if rl:
                 end_state = dl.end_state
-                action_space = SoundChangeActionSpace(self.tgt_abc)
                 emb_params = get_emb_params(len(self.tgt_abc), phono_feat_mat, special_ids)
                 if g.agent == 'vpg':
                     model = VanillaPolicyGradient(emb_params, action_space, end_state)
@@ -175,7 +177,7 @@ class OnePairManager:
 
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
-            env = SoundChangeEnv(dl.init_state, dl.end_state)
+            env = SoundChangeEnv(action_space, dl.init_state, dl.end_state)
             collector = TrajectoryCollector(g.batch_size, max_rollout_length=g.max_rollout_length, truncate_last=True)
             model = get_model(rl=True, dl=dl)
             trainer = get_trainer(model, 'rl', None, None, rl=True, env=env, collector=collector)

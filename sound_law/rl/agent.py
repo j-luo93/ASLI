@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from sound_law.model.module import get_embedding
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union
 
@@ -12,7 +11,8 @@ from dev_misc import BT, FT, LT, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import Metric, Metrics, init_params
 from dev_misc.utils import ScopedCache, cacheable
-from sound_law.model.module import CharEmbedding, EmbParams, PhonoEmbedding
+from sound_law.model.module import (CharEmbedding, EmbParams, PhonoEmbedding,
+                                    get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .trajectory import Trajectory, VocabState
@@ -26,6 +26,7 @@ class AgentInputs:
     action_ids: LT
     rewards: FT
     done: BT
+    action_masks: BT
 
     @property
     def batch_size(self) -> int:
@@ -102,19 +103,18 @@ class VanillaPolicyGradient(nn.Module):
             nn.Linear(input_size // 2, num_actions))
         self.end_state = end_state
 
-    def get_policy(self, state_or_ids: Union[VocabState, LT]) -> Distribution:
-        """Get policy distribution based on current state (and end state)."""
+    def get_policy(self, state_or_ids: Union[VocabState, LT], action_masks: BT) -> Distribution:
+        """Get policy distribution based on current state (and end state). If ids are passed, we have to specify action masks directly."""
         if isinstance(state_or_ids, VocabState):
             ids = state_or_ids.ids
         else:
             ids = state_or_ids
-        with NoName(ids):
-            possible_before_ids = set(ids.unique().cpu().numpy())
-            mask = get_tensor([action.before_id in possible_before_ids for action in self.action_space])
+
         state_repr = _get_state_repr(self.char_emb, ids, self.end_state.ids, cnn=self.cnn)
 
         action_logits = self.action_predictor(state_repr)
-        # action_logits = torch.where(mask.view(1, -1), action_logits, torch.full_like(action_logits, -999.9))
+        action_logits = torch.where(action_masks, action_logits,
+                                    torch.full_like(action_logits, -999.9))
 
         with NoName(action_logits):
             policy = torch.distributions.Categorical(logits=action_logits)
@@ -131,7 +131,7 @@ class VanillaPolicyGradient(nn.Module):
 
     def forward(self, agent_inputs: AgentInputs) -> Tuple[FT, FT, RewardOutputs]:
         with ScopedCache('word_embedding'):
-            policy = self.get_policy(agent_inputs.id_seqs)
+            policy = self.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks)
             entropy = policy.entropy()
             with NoName(agent_inputs.action_ids):
                 log_probs = policy.log_prob(agent_inputs.action_ids)

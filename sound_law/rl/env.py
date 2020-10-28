@@ -2,6 +2,7 @@
 """
 from __future__ import annotations
 
+from dev_misc import get_zeros
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -12,15 +13,16 @@ from dev_misc import FT, LT, get_tensor
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.utils import handle_sequence_inputs
 
-from .action import SoundChangeAction
+from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, VanillaPolicyGradient
 from .trajectory import Trajectory, VocabState
 
 
 class SoundChangeEnv(nn.Module):
 
-    def __init__(self, init_state: VocabState, end_state: VocabState):
+    def __init__(self, action_space: SoundChangeActionSpace, init_state: VocabState, end_state: VocabState):
         super().__init__()
+        self.action_space = action_space
         self._init_state = init_state
         self._end_state = end_state
         self._starting_dist = init_state.dist_from(end_state)
@@ -86,10 +88,16 @@ class TrajectoryCollector:
                     break
 
             state = trajectory.latest_state
-            policy = agent.get_policy(state)
+
+            permissible_actions = env.action_space.get_permissible_actions(state)
+            action_ids = [action.action_id for action in permissible_actions]
+            action_masks = get_zeros(len(env.action_space)).bool()
+            action_masks[action_ids] = True
+
+            policy = agent.get_policy(state, action_masks)
             action = agent.sample_action(policy)
             next_state, done, next_reward = env(state, action)
-            trajectory.append(action, next_state, done, next_reward)
+            trajectory.append(action, next_state, done, next_reward, action_masks)
             n_samples += 1
 
         # Make a batch out of all the states and actions in the list of trajectories. Note that only starting states are batched.
@@ -98,18 +106,21 @@ class TrajectoryCollector:
         action_ids = list()
         rewards = list()
         done = list()
+        action_masks = list()
         for t in trajectories:
-            for s0, a, s1, r in t:
+            for s0, a, s1, r, am in t:
                 id_seqs.append(s0.ids)
                 next_id_seqs.append(s1.ids)
                 action_ids.append(a.action_id)
                 rewards.append(r)
+                action_masks.append(am)
             done.extend([False] * (len(t) - 1))
             done.append(t.done)
         id_seqs = torch.stack(id_seqs, new_name='batch').align_to('batch', 'pos', 'word')
         next_id_seqs = torch.stack(next_id_seqs, new_name='batch').align_to('batch', 'pos', 'word')
         action_ids = get_tensor(action_ids).rename('batch')
         rewards = get_tensor(rewards).rename('batch')
+        action_masks = torch.stack(action_masks, dim=0).rename('batch', 'action')
         done = get_tensor(done).rename('batch')
-        agent_inputs = AgentInputs(trajectories, id_seqs, next_id_seqs, action_ids, rewards, done)
+        agent_inputs = AgentInputs(trajectories, id_seqs, next_id_seqs, action_ids, rewards, done, action_masks)
         return agent_inputs

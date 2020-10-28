@@ -159,6 +159,8 @@ class PolicyGradientTrainer(BaseTrainer):
     model: VanillaPolicyGradient
     collector: TrajectoryCollector
 
+    add_argument('entropy_reg', dtype=float, default=0.0, msg='Entropy regularization hyperparameter.')
+
     def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
         if collector is None:
             raise TypeError(f'Must pass a trajectory collector to initialize this trainer.')
@@ -195,8 +197,7 @@ class PolicyGradientTrainer(BaseTrainer):
         tr_rew = Metric('reward', agent_inputs.rewards.sum(), n_tr)
         success = Metric('success', agent_inputs.done.sum(), n_tr)
         metrics = Metrics(pg_loss, tr_rew, success, entropy)
-        # scale = abs(pg_loss.total / (1e-8 + entropy.total)).detach().item()
-        total_loss = pg_loss.total - 0.01 * entropy.total  # * scale
+        total_loss = pg_loss.total - g.entropy_reg * entropy.total
         if g.agent == 'vpg':
             total_loss = Metric('total_loss', total_loss, bs)
         else:
@@ -205,7 +206,6 @@ class PolicyGradientTrainer(BaseTrainer):
             metrics += v_regress_loss
             total_loss = Metric('total_loss', total_loss + v_regress_loss.total, bs)
         metrics += total_loss
-        # metrics += Metric('scale', scale * bs, bs)
 
         metrics.total_loss.mean.backward()
 

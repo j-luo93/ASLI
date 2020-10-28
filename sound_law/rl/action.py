@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from functools import lru_cache
 from itertools import product
-from typing import Iterator, List
+from typing import Iterator, List, Set
 
+import sound_law.rl.trajectory as tr
 from sound_law.data.alphabet import Alphabet
 
 
@@ -32,6 +34,19 @@ class SoundChangeActionSpace:
     def __iter__(self) -> Iterator[SoundChangeAction]:
         yield from self._actions
 
+    @lru_cache(maxsize=100000)
+    def get_permissible_actions(self, state: tr.VocabState) -> Set[SoundChangeAction]:
+        ret = set()
+        for word in state.words:
+            action_set = self._get_permissible_word_actions(word)
+            ret.update(action_set)
+        return ret
+
+    @lru_cache(maxsize=10000)
+    def _get_permissible_word_actions(self, word: tr.Word) -> Set[SoundChangeAction]:
+        units = set(word.units)
+        return set(action for action in self._actions if action.before in units)
+
 
 @dataclass
 class SoundChangeAction:
@@ -45,3 +60,9 @@ class SoundChangeAction:
 
     def __str__(self):
         return f'{self.before} > {self.after}'
+
+    def __hash__(self):
+        return hash(str(self))
+
+    def __eq__(self, other: SoundChangeAction):
+        return str(self) == str(other)

@@ -140,39 +140,44 @@ class OPLatSpaPhono(ZSLatSpaPhono, Size220):  # "OP" stands for one-pair.
 
 
 @reg
-class OPRLFakePhono(OPLatSpaPhono):
+class OPRLFake(OPLatSpaPhono):
     use_rl: bool = True
+    agent: str = 'a2c'
+    a2c_mode: str = 'baseline'
+    learning_rate: float = 5e-3
+    check_interval: int = 10
+    use_phono_features: False
     batch_size: int = 512
     src_lang: str = 'fake1'
     tgt_lang: str = 'fake2'
 
 
 @reg
-class OPRLFake50Phono(OPRLFakePhono):
+class OPRLFake50(OPRLFake):
     src_lang: str = 'fake1-50'
     tgt_lang: str = 'fake2-50'
 
 
 @reg
-class OPRLFakeR2Phono(OPRLFakePhono):
+class OPRLFakeR2(OPRLFake):
     src_lang: str = 'fake1-r2'
     tgt_lang: str = 'fake2-r2'
 
 
 @reg
-class OPRLFakeR3Phono(OPRLFakePhono):
+class OPRLFakeR3(OPRLFake):
     src_lang: str = 'fake1-r3'
     tgt_lang: str = 'fake2-r3'
 
 
 @reg
-class OPRLFakeR4Phono(OPRLFakePhono):
+class OPRLFakeR4(OPRLFake):
     src_lang: str = 'fake1-r4'
     tgt_lang: str = 'fake2-r4'
 
 
 @reg
-class OPRLFakeR5Phono(OPRLFakePhono):
+class OPRLFakeR5(OPRLFake):
     src_lang: str = 'fake1-r5'
     tgt_lang: str = 'fake2-r5'
 
