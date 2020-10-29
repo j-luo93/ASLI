@@ -13,7 +13,7 @@ from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
                                         PaddedUnitSeqs, VSOnePairDataLoader)
 from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.model.decoder import get_beam_probs
-from sound_law.rl.agent import VanillaPolicyGradient
+from sound_law.rl.agent import AgentOutputs, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.trajectory import VocabState
 
@@ -160,6 +160,13 @@ class PolicyGradientTrainer(BaseTrainer):
     collector: TrajectoryCollector
 
     add_argument('entropy_reg', dtype=float, default=0.0, msg='Entropy regularization hyperparameter.')
+    add_argument('value_steps', dtype=int, default=0, msg='How many inner loops to fit value net.')
+
+    def add_trackables(self):
+        super().add_trackables()
+        if g.value_steps:
+            self.tracker.add_trackable('value_step', total=g.value_steps, endless=True)
+            self.tracker.add_trackable('policy_step', total=1, endless=True)
 
     def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
         if collector is None:
@@ -179,43 +186,97 @@ class PolicyGradientTrainer(BaseTrainer):
         init_state = dl.init_state
         end_state = dl.end_state
 
-        self.agent.train()
-        self.optimizer.zero_grad()
-
+        # Collect episodes first.
         agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
         bs = agent_inputs.batch_size
-        log_probs, entropy, rew_outputs = self.model(agent_inputs)
-        rews = rew_outputs.rtgs
-        if g.agent == 'a2c':
-            diff = (rew_outputs.values - rew_outputs.rtgs) ** 2
-            v_regress_loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(rew_outputs.values))
-        pg_losses = (-log_probs * rews)
-        pg_loss = Metric('pg_loss', pg_losses.sum(), bs)
-        entropy = Metric('entropy', entropy.sum(), bs)
-
         n_tr = len(agent_inputs.trajectories)
-        tr_rew = Metric('reward', agent_inputs.rewards.sum(), n_tr)
-        success = Metric('success', agent_inputs.done.sum(), n_tr)
-        metrics = Metrics(pg_loss, tr_rew, success, entropy)
-        total_loss = pg_loss.total - g.entropy_reg * entropy.total
-        if g.agent == 'vpg':
-            total_loss = Metric('total_loss', total_loss, bs)
+
+        # ---------------------------- main ---------------------------- #
+
+        def get_v_loss(agent_outputs: AgentOutputs) -> Metric:
+            rew_outputs = agent_outputs.rew_outputs
+            diff = (rew_outputs.values - rew_outputs.rtgs) ** 2
+            loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(rew_outputs.values))
+            return loss
+
+        def get_pi_losses(agent_outputs: AgentOutputs) -> Metrics:
+            log_probs = agent_outputs.log_probs
+            entropy = agent_outputs.entropy
+            rtgs = agent_outputs.rew_outputs.rtgs
+            pg_losses = (-log_probs * rtgs)
+            pg = Metric('pg', pg_losses.sum(), bs)
+            entropy_loss = Metric('entropy', entropy.sum(), bs)
+            pi_loss = Metric('pi_loss', pg.total - g.entropy_reg * entropy_loss.total, bs)
+            return Metrics(pg, entropy_loss, pi_loss)
+
+        def get_optim_params(optim):
+            for param_group in optim.param_groups:
+                yield from param_group['params']
+
+        def update(name: str) -> Metrics:
+            self.model.train()
+            if name == 'all':
+                # Use the default optimizer that optimize the entire model.
+                optim = self.optimizer
+            else:
+                optim = self.optimizers[name]
+            optim.zero_grad()
+
+            ret_log_probs = ret_entropy = (name != 'value')
+            agent_outputs: AgentOutputs = self.model(agent_inputs,
+                                                     ret_log_probs=ret_log_probs,
+                                                     ret_entropy=ret_entropy)
+
+            # Some common metrics.
+            tr_rew = Metric('reward', agent_inputs.rewards.sum(), n_tr)
+            success = Metric('success', agent_inputs.done.sum(), n_tr)
+            step_metrics = Metrics(tr_rew, success)
+
+            # Compute losses depending on the name.
+            if name in ['value', 'all'] and g.agent == 'a2c':
+                step_metrics += get_v_loss(agent_outputs)
+            if name in ['policy', 'all']:
+                step_metrics += get_pi_losses(agent_outputs)
+                if g.agent == 'a2c':
+                    abs_advs = agent_outputs.rew_outputs.advantages.abs()
+                    step_metrics += Metric('abs_advantage', abs_advs.sum(), bs)
+
+            # Backprop depending on the name.
+            if name == 'value':
+                step_metrics.v_regress_loss.mean.backward()
+            elif name == 'policy':
+                step_metrics.pi_loss.mean.backward()
+            else:
+                total_loss = step_metrics.pi_loss.total + step_metrics.v_regress_loss.total
+                total_loss = Metric('total_loss', total_loss, bs)
+                step_metrics += total_loss
+                step_metrics.total_loss.mean.backward()
+
+            # Clip gradient norm.
+            grad_norm = clip_grad_norm_(get_optim_params(optim), 5.0)
+            grad_norm = Metric('grad_norm', grad_norm, bs)
+            step_metrics += grad_norm
+
+            # Update.
+            optim.step()
+
+            return step_metrics
+
+        # Gather metrics.
+        metrics = Metrics()
+        if g.value_steps and g.agent == 'a2c':
+            with self.model.policy_grad(True), self.model.value_grad(False):
+                metrics += update('policy')
+                self.tracker.update('policy_step')
+
+            with self.model.policy_grad(False), self.model.value_grad(True):
+                for _ in range(g.value_steps):
+                    metrics += update('value')
+                    self.tracker.update('value_step')
         else:
-            abs_advs = Metric('abs_advantage', rew_outputs.advantages.abs().sum(), bs)
-            metrics += abs_advs
-            metrics += v_regress_loss
-            total_loss = Metric('total_loss', total_loss + v_regress_loss.total, bs)
-        metrics += total_loss
-
-        metrics.total_loss.mean.backward()
-
-        # Clip gradient norm.
-        grad_norm = clip_grad_norm_(self.model.parameters(), 5.0)
-        grad_norm = Metric('grad_norm', grad_norm, agent_inputs.batch_size)
-        metrics += grad_norm
-
-        # Update.
-        self.optimizer.step()
+            name = 'all' if g.agent == 'a2c' else 'policy'
+            with self.model.policy_grad(True), self.model.value_grad(True):
+                metrics += update(name)
 
         metrics = metrics.with_prefix('check')
         return metrics

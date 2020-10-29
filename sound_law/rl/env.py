@@ -57,6 +57,7 @@ class TrajectoryCollector:
         # Whether to truncate the last trajectory if enough samples have been collected.
         self._truncate_last = truncate_last
 
+    @torch.no_grad()
     def collect(self,
                 agent: VanillaPolicyGradient,
                 env: SoundChangeEnv,

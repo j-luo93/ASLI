@@ -146,7 +146,7 @@ class OPRLFake(OPLatSpaPhono):
     a2c_mode: str = 'baseline'
     learning_rate: float = 5e-3
     check_interval: int = 10
-    use_phono_features: False
+    use_phono_features: bool = False
     batch_size: int = 512
     src_lang: str = 'fake1'
     tgt_lang: str = 'fake2'
