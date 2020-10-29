@@ -157,10 +157,10 @@ class OnePairManager:
                 trainer.set_optimizer(optim_cls, lr=g.learning_rate)
             else:
                 trainer.set_optimizer(optim_cls, name='policy', mod=model.policy_net,
-                                      lr=g.learning_rate)#, weight_decay=1e-3)
+                                      lr=g.learning_rate)#, weight_decay=1e-4)
                 if g.agent == 'a2c':
                     trainer.set_optimizer(optim_cls, name='value', mod=model.value_net,
-                                          lr=g.value_learning_rate)#, weight_decay=1e-3)
+                                          lr=g.value_learning_rate)#, weight_decay=1e-4)
             return trainer
 
         def run_once(train_name, dev_name, test_name):

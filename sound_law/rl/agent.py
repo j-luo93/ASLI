@@ -39,7 +39,8 @@ class AgentInputs:
 @dataclass
 class RewardOutputs:
     """This stores all relevant outputs related to rewards, including advantages and policy evaluations."""
-    rtgs: FT  # rewards-to-go
+    rtgs: Optional[FT] = None  # rewards-to-go
+    expected: Optional[FT] = None
     values: Optional[FT] = None
     advantages: Optional[FT] = None
 
@@ -284,7 +285,9 @@ class VanillaPolicyGradient(BasePG):
 class A2C(BasePG):
 
     add_argument('critic_target', dtype=str, default='expected',
-                 choices=['rtg', 'expected'], msg='How to use policy evaluations.')
+                 choices=['rtg', 'expected'], msg='What is the target for value net.')
+    add_argument('critic_mode', dtype=str, default='ac',
+                 choices=['ac', 'mc'], msg='How to use the critic.')
     # add_argument('gae_lambda', dtype=float, default=0.95, msg='Lambda value for GAE.')
 
     def _get_value_net(self, emb_params, cnn1d_params):
@@ -297,12 +300,28 @@ class A2C(BasePG):
     def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
         end_ids = self.end_state.ids
         values = self.get_values(agent_inputs.id_seqs, end_ids)
-        if g.a2c_mode == 'rtg':
+        rtgs = expected = None
+        if g.critic_target == 'rtg' or g.critic_mode == 'mc':
             rtgs = _get_rewards_to_go(agent_inputs)
-        else:
+        if g.critic_target == 'expected' or g.critic_mode == 'ac':
             next_values = self.get_values(agent_inputs.next_id_seqs, end_ids, agent_inputs.done)
             # This computes the expected rewards-to-go.
-            rtgs = (agent_inputs.rewards + next_values).detach()
-        advantages = rtgs - values.detach()
+            expected = (agent_inputs.rewards + next_values).detach()
 
-        return RewardOutputs(rtgs, values=values, advantages=advantages)
+        if g.critic_mode == 'mc':
+            advantages = rtgs - values.detach()
+        else:
+            advantages = expected - values.detach()
+
+        return RewardOutputs(rtgs=rtgs, expected=expected, values=values, advantages=advantages)
+
+        # rtgs = _get_rewards_to_go(agent_inputs)
+        # if g.critic_target == 'rtg':
+        #     ...
+        # else:
+        #     next_values = self.get_values(agent_inputs.next_id_seqs, end_ids, agent_inputs.done)
+        #     # This computes the expected rewards-to-go.
+        #     rtgs = (agent_inputs.rewards + next_values).detach()
+        # advantages = rtgs - values.detach()
+
+        # return RewardOutputs(rtgs, expected=expected, values=values, advantages=advantages)

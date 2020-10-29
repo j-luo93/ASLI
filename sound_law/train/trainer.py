@@ -203,24 +203,42 @@ class PolicyGradientTrainer(BaseTrainer):
         # ---------------------------- main ---------------------------- #
 
         def get_v_loss(agent_outputs: AgentOutputs, tgt_agent_outputs: AgentOutputs) -> Metric:
-            rew_outputs = agent_outputs.rew_outputs
-            diff = (rew_outputs.values - tgt_agent_outputs.rew_outputs.rtgs) ** 2
-            loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(rew_outputs.values))
+            if g.critic_target == 'rtg':
+                tgt = tgt_agent_outputs.rew_outputs.rtgs
+            else:
+                tgt = tgt_agent_outputs.rew_outputs.expected
+            try:
+                self._cnt += 1
+            except:
+                self._cnt = 1
+            diff = (agent_outputs.rew_outputs.values - tgt) ** 2
+            loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(tgt))
             return loss
 
         def get_pi_losses(agent_outputs: AgentOutputs) -> Metrics:
+            ret = Metrics()
+
             log_probs = agent_outputs.log_probs
             entropy = agent_outputs.entropy
+            # if g.agent == 'vpg':
+            #     rtgs = agent_outputs.rew_outputs.rtgs
+            #     pg_losses = (-log_probs * rtgs)
+            # else:
+            #     advs = agent_outputs.rew_outputs.advantages
+            #     # pg_losses = (-log_probs * advs)
+            #     pg_losses = (-log_probs * advs)
             if g.agent == 'vpg':
-                rtgs = agent_outputs.rew_outputs.rtgs
-                pg_losses = (-log_probs * rtgs)
+                pg_losses = -log_probs * agent_outputs.rew_outputs.rtgs
             else:
-                advs = agent_outputs.rew_outputs.advantages
-                pg_losses = (-log_probs * advs)
+                pg_losses = -log_probs * agent_outputs.rew_outputs.advantages
+                abs_advs = agent_outputs.rew_outputs.advantages.abs()
+                ret += Metric('abs_advantage', abs_advs.sum(), bs)
+
             pg = Metric('pg', pg_losses.sum(), bs)
             entropy_loss = Metric('entropy', entropy.sum(), bs)
             pi_loss = Metric('pi_loss', pg.total - g.entropy_reg * entropy_loss.total, bs)
-            return Metrics(pg, entropy_loss, pi_loss)
+            ret += Metrics(pg, entropy_loss, pi_loss)
+            return ret
 
         def get_optim_params(optim):
             for param_group in optim.param_groups:
@@ -250,9 +268,6 @@ class PolicyGradientTrainer(BaseTrainer):
                 step_metrics += get_v_loss(agent_outputs, tgt_agent_outputs)
             if name in ['policy', 'all']:
                 step_metrics += get_pi_losses(agent_outputs)
-                if g.agent == 'a2c':
-                    abs_advs = agent_outputs.rew_outputs.advantages.abs()
-                    step_metrics += Metric('abs_advantage', abs_advs.sum(), bs)
 
             # Backprop depending on the name.
             if name == 'value':
