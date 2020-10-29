@@ -194,6 +194,7 @@ class PolicyGradientTrainer(BaseTrainer):
 
         # Collect episodes first.
         agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
+        # FIXME(j_luo) a bit ugly here.
         self.add_callback('check', 'log_tr', lambda: log_trajectories(agent_inputs))
         bs = agent_inputs.batch_size
         n_tr = len(agent_inputs.trajectories)
@@ -209,8 +210,12 @@ class PolicyGradientTrainer(BaseTrainer):
         def get_pi_losses(agent_outputs: AgentOutputs) -> Metrics:
             log_probs = agent_outputs.log_probs
             entropy = agent_outputs.entropy
-            rtgs = agent_outputs.rew_outputs.rtgs
-            pg_losses = (-log_probs * rtgs)
+            if g.agent == 'vpg':
+                rtgs = agent_outputs.rew_outputs.rtgs
+                pg_losses = (-log_probs * rtgs)
+            else:
+                advs = agent_outputs.rew_outputs.advantages
+                pg_losses = (-log_probs * advs)
             pg = Metric('pg', pg_losses.sum(), bs)
             entropy_loss = Metric('entropy', entropy.sum(), bs)
             pi_loss = Metric('pi_loss', pg.total - g.entropy_reg * entropy_loss.total, bs)

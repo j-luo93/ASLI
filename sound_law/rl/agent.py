@@ -74,7 +74,7 @@ def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT, cnn: nn
     """Get state representation used for action prediction."""
     word_repr = _get_word_embedding(char_emb, curr_ids, cnn=cnn)
     end_word_repr = _get_word_embedding(char_emb, end_ids, cnn=cnn)
-    state_repr = (word_repr - end_word_repr).mean(dim='word')
+    state_repr = (word_repr - end_word_repr).max(dim='word')[0]
     return state_repr
 
 
@@ -297,6 +297,7 @@ class A2C(BasePG):
     def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
         end_ids = self.end_state.ids
         values = self.get_values(agent_inputs.id_seqs, end_ids)
+        # FIXME(j_luo) misnomer
         if g.a2c_mode == 'baseline':
             rtgs = _get_rewards_to_go(agent_inputs)
         else:
