@@ -261,6 +261,8 @@ class VSOnePairDataLoader(BaseOnePairDataLoader):  # VS stands for vocab state.
             if len(lst) != 1:
                 raise RuntimeError(f"Expecting exactly one batch but got {len(lst)} instead.")
             self._entire_batch = lst[0]
+            if has_gpus():
+                self._entire_batch = self._entire_batch.cuda()
             # Rename `batch` to `word`.
             self._entire_batch.src_seqs.ids.rename_(batch='word')
             self._entire_batch.tgt_seqs.ids.rename_(batch='word')

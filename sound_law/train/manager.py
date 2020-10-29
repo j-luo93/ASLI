@@ -152,12 +152,12 @@ class OnePairManager:
                 # trainer.init_params('uniform', -0.1, 0.1)
                 trainer.init_params('xavier_uniform')
             optim_cls = Adam if g.optim_cls == 'adam' else SGD
-            if rl:
+            if not rl or (g.agent == 'a2c' and g.value_steps == 0):
+                trainer.set_optimizer(optim_cls, lr=g.learning_rate)
+            else:
                 trainer.set_optimizer(optim_cls, name='policy', mod=model.policy_net, lr=g.learning_rate)
                 if g.agent == 'a2c':
                     trainer.set_optimizer(optim_cls, name='value', mod=model.value_net, lr=g.learning_rate)
-            else:
-                trainer.set_optimizer(optim_cls, lr=g.learning_rate)
             return trainer
 
         def run_once(train_name, dev_name, test_name):
