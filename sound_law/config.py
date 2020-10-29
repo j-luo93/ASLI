@@ -143,10 +143,15 @@ class OPLatSpaPhono(ZSLatSpaPhono, Size220):  # "OP" stands for one-pair.
 class OPRLFake(OPLatSpaPhono):
     use_rl: bool = True
     agent: str = 'a2c'
-    a2c_mode: str = 'baseline'
-    learning_rate: float = 5e-3
+    critic_target: str = 'expected'
+    learning_rate: float = 5e-4
+    value_learning_rate: float = 2e-3
+    value_steps: int = 50
+    num_layers: int = 1
     check_interval: int = 10
     use_phono_features: bool = False
+    entropy_reg: float = 0.02
+
     batch_size: int = 512
     src_lang: str = 'fake1'
     tgt_lang: str = 'fake2'

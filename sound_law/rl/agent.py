@@ -51,7 +51,7 @@ class AgentOutputs:
     rew_outputs: Optional[RewardOutputs] = None
 
 
-@cacheable(switch='word_embedding')
+# @cacheable(switch='word_embedding')
 def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT, cnn: nn.Module = None) -> FT:
     """Get word embeddings based on ids."""
     names = ids.names + ('emb',)
@@ -74,7 +74,7 @@ def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT, cnn: nn
     """Get state representation used for action prediction."""
     word_repr = _get_word_embedding(char_emb, curr_ids, cnn=cnn)
     end_word_repr = _get_word_embedding(char_emb, end_ids, cnn=cnn)
-    state_repr = (word_repr - end_word_repr).max(dim='word')[0]
+    state_repr = (word_repr - end_word_repr).mean(dim='word')
     return state_repr
 
 
@@ -253,16 +253,16 @@ class BasePG(nn.Module, metaclass=ABCMeta):
         to specify which outputs to return.
         """
         log_probs = entropy = rew_outputs = None
-        with ScopedCache('word_embedding'):
-            if ret_log_probs or ret_entropy:
-                policy = self.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks)
-                if ret_entropy:
-                    entropy = policy.entropy()
-            if ret_log_probs:
-                with NoName(agent_inputs.action_ids), torch.set_grad_enabled(self._policy_grad):
-                    log_probs = policy.log_prob(agent_inputs.action_ids)
-            if ret_rewards:
-                rew_outputs = self._get_reward_outputs(agent_inputs)
+        # with ScopedCache('word_embedding'):
+        if ret_log_probs or ret_entropy:
+            policy = self.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks)
+            if ret_entropy:
+                entropy = policy.entropy()
+        if ret_log_probs:
+            with NoName(agent_inputs.action_ids), torch.set_grad_enabled(self._policy_grad):
+                log_probs = policy.log_prob(agent_inputs.action_ids)
+        if ret_rewards:
+            rew_outputs = self._get_reward_outputs(agent_inputs)
         return AgentOutputs(log_probs, entropy, rew_outputs)
 
     @abstractmethod
@@ -283,8 +283,8 @@ class VanillaPolicyGradient(BasePG):
 
 class A2C(BasePG):
 
-    add_argument('a2c_mode', dtype=str, default='baseline',
-                 choices=['baseline', 'mc'], msg='How to use policy evaluations.')
+    add_argument('critic_target', dtype=str, default='expected',
+                 choices=['rtg', 'expected'], msg='How to use policy evaluations.')
     # add_argument('gae_lambda', dtype=float, default=0.95, msg='Lambda value for GAE.')
 
     def _get_value_net(self, emb_params, cnn1d_params):
@@ -297,8 +297,7 @@ class A2C(BasePG):
     def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
         end_ids = self.end_state.ids
         values = self.get_values(agent_inputs.id_seqs, end_ids)
-        # FIXME(j_luo) misnomer
-        if g.a2c_mode == 'baseline':
+        if g.a2c_mode == 'rtg':
             rtgs = _get_rewards_to_go(agent_inputs)
         else:
             next_values = self.get_values(agent_inputs.next_id_seqs, end_ids, agent_inputs.done)

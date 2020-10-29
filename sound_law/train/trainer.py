@@ -1,4 +1,5 @@
 import logging
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -201,9 +202,9 @@ class PolicyGradientTrainer(BaseTrainer):
 
         # ---------------------------- main ---------------------------- #
 
-        def get_v_loss(agent_outputs: AgentOutputs) -> Metric:
+        def get_v_loss(agent_outputs: AgentOutputs, tgt_agent_outputs: AgentOutputs) -> Metric:
             rew_outputs = agent_outputs.rew_outputs
-            diff = (rew_outputs.values - rew_outputs.rtgs) ** 2
+            diff = (rew_outputs.values - tgt_agent_outputs.rew_outputs.rtgs) ** 2
             loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(rew_outputs.values))
             return loss
 
@@ -225,7 +226,7 @@ class PolicyGradientTrainer(BaseTrainer):
             for param_group in optim.param_groups:
                 yield from param_group['params']
 
-        def update(name: str) -> Metrics:
+        def update(name: str, tgt_agent_outputs: Optional[AgentOutputs] = None) -> Tuple[Metrics, AgentOutputs]:
             self.model.train()
             if name == 'all':
                 # Use the default optimizer that optimize the entire model.
@@ -246,7 +247,7 @@ class PolicyGradientTrainer(BaseTrainer):
 
             # Compute losses depending on the name.
             if name in ['value', 'all'] and g.agent == 'a2c':
-                step_metrics += get_v_loss(agent_outputs)
+                step_metrics += get_v_loss(agent_outputs, tgt_agent_outputs)
             if name in ['policy', 'all']:
                 step_metrics += get_pi_losses(agent_outputs)
                 if g.agent == 'a2c':
@@ -272,23 +273,24 @@ class PolicyGradientTrainer(BaseTrainer):
             # Update.
             optim.step()
 
-            return step_metrics
+            return step_metrics, agent_outputs
 
         # Gather metrics.
         metrics = Metrics()
         if g.value_steps and g.agent == 'a2c':
             with self.model.policy_grad(True), self.model.value_grad(False):
-                metrics += update('policy')
+                step_metrics, tgt_agent_outputs = update('policy')
+                metrics += step_metrics
                 self.tracker.update('policy_step')
 
             with self.model.policy_grad(False), self.model.value_grad(True):
                 for _ in range(g.value_steps):
-                    metrics += update('value')
+                    metrics += update('value', tgt_agent_outputs=tgt_agent_outputs)[0]
                     self.tracker.update('value_step')
         else:
             name = 'all' if g.agent == 'a2c' else 'policy'
             with self.model.policy_grad(True), self.model.value_grad(True):
-                metrics += update(name)
+                metrics += update(name)[0]
 
         metrics = metrics.with_prefix('check')
         return metrics
