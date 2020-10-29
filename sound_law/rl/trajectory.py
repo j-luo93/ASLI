@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from dev_misc import BT
 from functools import lru_cache
 from typing import (ClassVar, Dict, Iterator, List, NewType, Optional,
                     Sequence, Set, Tuple)
 
 import sound_law.data.data_loader as dl
 import sound_law.rl.action as a
-from dev_misc import FT, LT
+from dev_misc import BT, FT, LT
 from dev_misc.utils import Singleton, cached_property
 from sound_law.evaluate.edit_dist import ed_eval_batch
 
@@ -91,3 +90,12 @@ class Trajectory:
         for i, (s0, a, r, am) in enumerate(zip(self._states, self._actions, self._rewards, self._action_masks)):
             s1 = self._states[i + 1]
             yield s0, a, s1, r, am
+
+    def __repr__(self):
+        out = list()
+        for s0, a, s1, r, am in self:
+            out.append(f'({a}; {r:.3f})')
+        out = ', '.join(out)
+        if self._done:
+            out += ' DONE'
+        return out

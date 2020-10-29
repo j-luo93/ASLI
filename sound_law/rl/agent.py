@@ -52,7 +52,7 @@ class AgentOutputs:
 
 
 @cacheable(switch='word_embedding')
-def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT, cnn: nn.Conv1d = None) -> FT:
+def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT, cnn: nn.Module = None) -> FT:
     """Get word embeddings based on ids."""
     names = ids.names + ('emb',)
     emb = char_emb(ids).rename(*names)
@@ -70,7 +70,7 @@ def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT, cnn: nn.Conv1d = None
     return emb.mean(dim='pos')
 
 
-def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT, cnn: nn.Conv1d = None) -> FT:
+def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT, cnn: nn.Module = None) -> FT:
     """Get state representation used for action prediction."""
     word_repr = _get_word_embedding(char_emb, curr_ids, cnn=cnn)
     end_word_repr = _get_word_embedding(char_emb, end_ids, cnn=cnn)
@@ -98,18 +98,24 @@ class Cnn1dParams:
     input_size: int
     hidden_size: int
     kernel_size: int
+    num_layers: int
 
 
-def get_cnn1d(cnn1d_params: Cnn1dParams) -> nn.Conv1d:
-    return nn.Conv1d(cnn1d_params.input_size,
-                     cnn1d_params.hidden_size,
-                     cnn1d_params.kernel_size)
+def get_cnn1d(cnn1d_params: Cnn1dParams) -> nn.Module:
+    layers = list()
+    for i in range(cnn1d_params.num_layers):
+        layers.append(nn.Conv1d(cnn1d_params.input_size,
+                                cnn1d_params.hidden_size,
+                                cnn1d_params.kernel_size))
+        if i != cnn1d_params.num_layers - 1:
+            layers.append(nn.LeakyReLU())
+    return nn.Sequential(*layers)
 
 
 class PolicyNetwork(nn.Module):
 
     def __init__(self, char_emb: CharEmbedding,
-                 cnn: nn.Conv1d,
+                 cnn: nn.Module,
                  proj: nn.Module,
                  action_space: SoundChangeActionSpace):
         super().__init__()
@@ -128,7 +134,7 @@ class PolicyNetwork(nn.Module):
         num_actions = len(action_space)
         proj = nn.Sequential(
             nn.Linear(input_size, input_size // 2),
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.Linear(input_size // 2, num_actions))
         return cls(char_emb, cnn, proj, action_space)
 
@@ -150,7 +156,7 @@ class PolicyNetwork(nn.Module):
 
 class ValueNetwork(nn.Module):
 
-    def __init__(self, char_emb: CharEmbedding, cnn: nn.Conv1d, regressor: nn.Module):
+    def __init__(self, char_emb: CharEmbedding, cnn: nn.Module, regressor: nn.Module):
         super().__init__()
         self.char_emb = char_emb
         self.cnn = cnn
@@ -161,7 +167,7 @@ class ValueNetwork(nn.Module):
                     emb_params: EmbParams,
                     cnn1d_params: Cnn1dParams,
                     char_emb: Optional[CharEmbedding] = None,
-                    cnn: Optional[nn.Conv1d] = None) -> ValueNetwork:
+                    cnn: Optional[nn.Module] = None) -> ValueNetwork:
         char_emb = char_emb or get_embedding(emb_params)
         cnn = cnn or get_cnn1d(cnn1d_params)
         input_size = cnn1d_params.hidden_size
@@ -205,7 +211,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
                  special_ids: Optional[Sequence[int]] = None):
         super().__init__()
         emb_params = get_emb_params(num_chars, phono_feat_mat, special_ids)
-        cnn1d_params = Cnn1dParams(g.char_emb_size, g.hidden_size, 3)
+        cnn1d_params = Cnn1dParams(g.char_emb_size, g.hidden_size, 3, g.num_layers)
         self.policy_net = PolicyNetwork.from_params(emb_params, cnn1d_params, action_space)
         self.value_net = self._get_value_net(emb_params, cnn1d_params)
         self.end_state = end_state

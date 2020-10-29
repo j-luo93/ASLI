@@ -30,6 +30,7 @@ add_argument('check_interval', default=10, dtype=int, msg='Frequency to check th
 add_argument('eval_interval', default=100, dtype=int, msg='Frequency to call the evaluator.')
 add_argument('save_interval', dtype=int, msg='Frequency to save the progress and the model.')
 add_argument('learning_rate', default=2e-3, dtype=float, msg='Learning rate.')
+add_argument('value_learning_rate', default=2e-3, dtype=float, msg='Learning rate for value network.')
 add_argument('keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep.')
 add_argument('test_keep_ratio', dtype=float, msg='Ratio of cognate pairs to keep for the test target language.')
 add_argument('saved_model_path', dtype='path', msg='Path to the saved model.')
@@ -155,9 +156,11 @@ class OnePairManager:
             if not rl or (g.agent == 'a2c' and g.value_steps == 0):
                 trainer.set_optimizer(optim_cls, lr=g.learning_rate)
             else:
-                trainer.set_optimizer(optim_cls, name='policy', mod=model.policy_net, lr=g.learning_rate)
+                trainer.set_optimizer(optim_cls, name='policy', mod=model.policy_net,
+                                      lr=g.learning_rate, weight_decay=1e-3)
                 if g.agent == 'a2c':
-                    trainer.set_optimizer(optim_cls, name='value', mod=model.value_net, lr=g.learning_rate)
+                    trainer.set_optimizer(optim_cls, name='value', mod=model.value_net,
+                                          lr=g.value_learning_rate, weight_decay=1e-3)
             return trainer
 
         def run_once(train_name, dev_name, test_name):

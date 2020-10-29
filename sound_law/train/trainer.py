@@ -13,7 +13,7 @@ from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
                                         PaddedUnitSeqs, VSOnePairDataLoader)
 from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.model.decoder import get_beam_probs
-from sound_law.rl.agent import AgentOutputs, VanillaPolicyGradient
+from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.trajectory import VocabState
 
@@ -154,9 +154,15 @@ class Trainer(BaseTrainer):
         return metrics
 
 
+def log_trajectories(agent_inputs: AgentInputs, n: int = 5):
+    for i, tr in enumerate(agent_inputs.trajectories[:n], 1):
+        logging.info(f'Sample trajectory {i}')
+        logging.info(str(tr))
+
+
 class PolicyGradientTrainer(BaseTrainer):
 
-    model: VanillaPolicyGradient
+    model: BasePG
     collector: TrajectoryCollector
 
     add_argument('entropy_reg', dtype=float, default=0.0, msg='Entropy regularization hyperparameter.')
@@ -179,7 +185,7 @@ class PolicyGradientTrainer(BaseTrainer):
         super().__init__(*args, **kwargs)
 
     @property
-    def agent(self) -> VanillaPolicyGradient:
+    def agent(self) -> BasePG:
         return self.model
 
     def train_one_step(self, dl: VSOnePairDataLoader) -> Metrics:
@@ -188,6 +194,7 @@ class PolicyGradientTrainer(BaseTrainer):
 
         # Collect episodes first.
         agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
+        self.add_callback('check', 'log_tr', lambda: log_trajectories(agent_inputs))
         bs = agent_inputs.batch_size
         n_tr = len(agent_inputs.trajectories)
 

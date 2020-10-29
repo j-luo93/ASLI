@@ -183,6 +183,12 @@ class OPRLFakeR5(OPRLFake):
 
 
 @reg
+class OPRLFakeR5i(OPRLFake):
+    src_lang: str = 'fake1-r5i'
+    tgt_lang: str = 'fake2-r5i'
+
+
+@reg
 class OPLatSpaPhono880(Size880, OPLatSpaPhono):
     pass
 
