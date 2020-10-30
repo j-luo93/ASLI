@@ -39,7 +39,7 @@ class SoundChangeEnv(nn.Module):
         final_reward = 1.0 if done else 0.0
         old_dist = state.dist_from(self._end_state)
         new_dist = new_state.dist_from(self._end_state)
-        incremental_reward = (old_dist - new_dist) / self._starting_dist  # * 0.02
+        incremental_reward = (old_dist - new_dist) / self._starting_dist
         reward = final_reward + incremental_reward
         return new_state, done, reward
 

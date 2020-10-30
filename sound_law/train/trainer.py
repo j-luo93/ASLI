@@ -167,13 +167,17 @@ class PolicyGradientTrainer(BaseTrainer):
     collector: TrajectoryCollector
 
     add_argument('entropy_reg', dtype=float, default=0.0, msg='Entropy regularization hyperparameter.')
-    add_argument('value_steps', dtype=int, default=0, msg='How many inner loops to fit value net.')
+    add_argument('value_steps', dtype=int, default=10, msg='How many inner loops to fit value net.')
+    add_argument('use_ppo', dtype=bool, default=False, msg='Flag to use PPO training.')
+    add_argument('policy_steps', dtype=int, default=10, msg='How many inner loops to train policy net. Used for PPO.')
+    add_argument('clip_ratio', dtype=float, default=0.2, msg='Clip ratio used for PPO.')
 
     def add_trackables(self):
         super().add_trackables()
         if g.value_steps:
+            policy_steps = g.policy_steps if g.use_ppo else 1
+            self.tracker.add_trackable('policy_step', total=policy_steps, endless=True)
             self.tracker.add_trackable('value_step', total=g.value_steps, endless=True)
-            self.tracker.add_trackable('policy_step', total=1, endless=True)
 
     def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
         if collector is None:
@@ -215,7 +219,7 @@ class PolicyGradientTrainer(BaseTrainer):
             loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(tgt))
             return loss
 
-        def get_pi_losses(agent_outputs: AgentOutputs) -> Metrics:
+        def get_pi_losses(agent_outputs: AgentOutputs, tgt_agent_outputs: Optional[AgentOutputs] = None) -> Metrics:
             ret = Metrics()
 
             log_probs = agent_outputs.log_probs
@@ -223,7 +227,13 @@ class PolicyGradientTrainer(BaseTrainer):
             if g.agent == 'vpg':
                 pg_losses = -log_probs * agent_outputs.rew_outputs.rtgs
             else:
-                pg_losses = -log_probs * agent_outputs.rew_outputs.advantages
+                if g.use_ppo:
+                    ratio = (log_probs - tgt_agent_outputs.log_probs).exp()
+                    tgt_advs = tgt_agent_outputs.rew_outputs.advantages
+                    clip_adv = ratio.clamp(1 - g.clip_ratio, 1 + g.clip_ratio) * tgt_advs
+                    pg_losses = -torch.min(ratio * tgt_advs, clip_adv)
+                else:
+                    pg_losses = -log_probs * agent_outputs.rew_outputs.advantages
                 abs_advs = agent_outputs.rew_outputs.advantages.abs()
                 ret += Metric('abs_advantage', abs_advs.sum(), bs)
 
@@ -260,7 +270,7 @@ class PolicyGradientTrainer(BaseTrainer):
             if name in ['value', 'all'] and g.agent == 'a2c':
                 step_metrics += get_v_loss(agent_outputs, tgt_agent_outputs)
             if name in ['policy', 'all']:
-                step_metrics += get_pi_losses(agent_outputs)
+                step_metrics += get_pi_losses(agent_outputs, tgt_agent_outputs=tgt_agent_outputs)
 
             # Backprop depending on the name.
             if name == 'value':
@@ -285,11 +295,23 @@ class PolicyGradientTrainer(BaseTrainer):
 
         # Gather metrics.
         metrics = Metrics()
-        if g.value_steps and g.agent == 'a2c':
-            with self.model.policy_grad(True), self.model.value_grad(False):
-                step_metrics, tgt_agent_outputs = update('policy')
-                metrics += step_metrics
-                self.tracker.update('policy_step')
+
+        if g.agent == 'a2c':
+
+            # PPO training.
+            if g.use_ppo:
+                with self.model.policy_grad(False), self.model.value_grad(False):
+                    tgt_agent_outputs = self.model(agent_inputs, ret_entropy=False)
+
+                with self.model.policy_grad(True), self.model.value_grad(False):
+                    for _ in range(g.policy_steps):
+                        metrics += update('policy', tgt_agent_outputs=tgt_agent_outputs)[0]
+                        self.tracker.update('policy_step')
+            else:
+                with self.model.policy_grad(True), self.model.value_grad(False):
+                    step_metrics, tgt_agent_outputs = update('policy')
+                    metrics += step_metrics
+                    self.tracker.update('policy_step')
 
             with self.model.policy_grad(False), self.model.value_grad(True):
                 for _ in range(g.value_steps):
