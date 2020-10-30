@@ -4,9 +4,11 @@ from functools import lru_cache
 from typing import (ClassVar, Dict, Iterator, List, NewType, Optional,
                     Sequence, Set, Tuple)
 
+import numpy as np
+
 import sound_law.data.data_loader as dl
 import sound_law.rl.action as a
-from dev_misc import BT, FT, LT
+from dev_misc import BT, FT, LT, NDA
 from dev_misc.utils import Singleton, cached_property
 from sound_law.evaluate.edit_dist import ed_eval_batch
 
@@ -74,6 +76,10 @@ class Trajectory:
         self._rewards.append(reward)
         self._action_masks.append(action_masks)
         self._done = done
+
+    @property
+    def rewards(self) -> NDA:
+        return np.asarray(self._rewards)
 
     @property
     def done(self) -> bool:

@@ -2,14 +2,13 @@
 """
 from __future__ import annotations
 
-from dev_misc import get_zeros
 from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from dev_misc import FT, LT, get_tensor
+from dev_misc import FT, LT, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.utils import handle_sequence_inputs
 

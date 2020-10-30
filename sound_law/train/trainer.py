@@ -220,13 +220,6 @@ class PolicyGradientTrainer(BaseTrainer):
 
             log_probs = agent_outputs.log_probs
             entropy = agent_outputs.entropy
-            # if g.agent == 'vpg':
-            #     rtgs = agent_outputs.rew_outputs.rtgs
-            #     pg_losses = (-log_probs * rtgs)
-            # else:
-            #     advs = agent_outputs.rew_outputs.advantages
-            #     # pg_losses = (-log_probs * advs)
-            #     pg_losses = (-log_probs * advs)
             if g.agent == 'vpg':
                 pg_losses = -log_probs * agent_outputs.rew_outputs.rtgs
             else:

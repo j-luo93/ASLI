@@ -5,11 +5,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import ClassVar, List, Optional, Sequence, Tuple, Union
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.distributions.distribution import Distribution
 
-from dev_misc import BT, FT, LT, add_argument, g, get_tensor, get_zeros
+from dev_misc import BT, FT, LT, NDA, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import Metric, Metrics, init_params
 from dev_misc.utils import ScopedCache, cacheable
@@ -18,6 +19,7 @@ from sound_law.model.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                     get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
+from .reward import get_rtgs_list
 from .trajectory import Trajectory, VocabState
 
 
@@ -80,18 +82,9 @@ def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT, cnn: nn
 
 
 def _get_rewards_to_go(agent_inputs: AgentInputs) -> FT:
-    rews = agent_inputs.rewards.rename(None)
-    tr_lengths = get_tensor([len(tr) for tr in agent_inputs.trajectories])
-    cum_lengths = tr_lengths.cumsum(dim=0)
-    assert cum_lengths[-1].item() == len(rews)
-    start_new = get_zeros(len(rews)).long()
-    start_new.scatter_(0, cum_lengths[:-1], 1)
-    which_tr = start_new.cumsum(dim=0)
-    up_to_ids = cum_lengths[which_tr] - 1
-    cum_rews = rews.cumsum(dim=0)
-    up_to = cum_rews[up_to_ids]
-    rtgs = up_to - cum_rews + rews
-    return rtgs
+    rewards = [tr.rewards for tr in agent_inputs.trajectories]
+    rtgs = get_rtgs_list(rewards, g.discount)
+    return get_tensor(np.concatenate(rtgs))
 
 
 @dataclass
@@ -203,7 +196,7 @@ def get_bool_context(attr_name: str):
 
 class BasePG(nn.Module, metaclass=ABCMeta):
 
-    # add_argument('discount', dtype=float, default=1.0, msg='Discount for computing rewards.')
+    add_argument('discount', dtype=float, default=1.0, msg='Discount for computing rewards.')
 
     def __init__(self, num_chars: int,
                  action_space: SoundChangeActionSpace,
@@ -306,7 +299,7 @@ class A2C(BasePG):
         if g.critic_target == 'expected' or g.critic_mode == 'ac':
             next_values = self.get_values(agent_inputs.next_id_seqs, end_ids, agent_inputs.done)
             # This computes the expected rewards-to-go.
-            expected = (agent_inputs.rewards + next_values).detach()
+            expected = (agent_inputs.rewards + g.discount * next_values).detach()
 
         if g.critic_mode == 'mc':
             advantages = rtgs - values.detach()
@@ -314,14 +307,3 @@ class A2C(BasePG):
             advantages = expected - values.detach()
 
         return RewardOutputs(rtgs=rtgs, expected=expected, values=values, advantages=advantages)
-
-        # rtgs = _get_rewards_to_go(agent_inputs)
-        # if g.critic_target == 'rtg':
-        #     ...
-        # else:
-        #     next_values = self.get_values(agent_inputs.next_id_seqs, end_ids, agent_inputs.done)
-        #     # This computes the expected rewards-to-go.
-        #     rtgs = (agent_inputs.rewards + next_values).detach()
-        # advantages = rtgs - values.detach()
-
-        # return RewardOutputs(rtgs, expected=expected, values=values, advantages=advantages)

@@ -4,8 +4,8 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
-import lang2vec.lang2vec as l2v
 import numpy
+# import lang2vec.lang2vec as l2v
 import torch
 import torch.nn as nn
 import torch.nn.init

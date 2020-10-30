@@ -121,3 +121,5 @@ model_ret/*
 plots/*
 dask-worker-space/*
 ini/*
+*.c
+*.html
