@@ -6,5 +6,5 @@ ext_modules = [Extension('sound_law.rl.reward',
 setup(
     name='sound_law',
     version='0.1',
-    ext_modules=cythonize(ext_modules, annotate=True),
+    ext_modules=cythonize(ext_modules, annotate=True, language_level='3'),
     packages=find_packages())

@@ -19,7 +19,7 @@ from sound_law.model.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                     get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
-from .reward import get_rtgs_list
+from .reward import get_rtgs_dense, get_rtgs_list
 from .trajectory import Trajectory, VocabState
 
 
@@ -36,6 +36,10 @@ class AgentInputs:
     @property
     def batch_size(self) -> int:
         return self.action_ids.size('batch')
+
+    @property
+    def offsets(self) -> NDA:
+        return np.cumsum(np.asarray([len(tr) for tr in self.trajectories]), dtype='int32')
 
 
 @dataclass
@@ -54,7 +58,7 @@ class AgentOutputs:
     rew_outputs: Optional[RewardOutputs] = None
 
 
-# @cacheable(switch='word_embedding')
+@cacheable(switch='word_embedding')
 def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT, cnn: nn.Module = None) -> FT:
     """Get word embeddings based on ids."""
     names = ids.names + ('emb',)
@@ -247,16 +251,16 @@ class BasePG(nn.Module, metaclass=ABCMeta):
         to specify which outputs to return.
         """
         log_probs = entropy = rew_outputs = None
-        # with ScopedCache('word_embedding'):
-        if ret_log_probs or ret_entropy:
-            policy = self.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks)
-            if ret_entropy:
-                entropy = policy.entropy()
-        if ret_log_probs:
-            with NoName(agent_inputs.action_ids), torch.set_grad_enabled(self._policy_grad):
-                log_probs = policy.log_prob(agent_inputs.action_ids)
-        if ret_rewards:
-            rew_outputs = self._get_reward_outputs(agent_inputs)
+        with ScopedCache('word_embedding'):
+            if ret_log_probs or ret_entropy:
+                policy = self.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks)
+                if ret_entropy:
+                    entropy = policy.entropy()
+            if ret_log_probs:
+                with NoName(agent_inputs.action_ids), torch.set_grad_enabled(self._policy_grad):
+                    log_probs = policy.log_prob(agent_inputs.action_ids)
+            if ret_rewards:
+                rew_outputs = self._get_reward_outputs(agent_inputs)
         return AgentOutputs(log_probs, entropy, rew_outputs)
 
     @abstractmethod
@@ -281,7 +285,8 @@ class A2C(BasePG):
                  choices=['rtg', 'expected'], msg='What is the target for value net.')
     add_argument('critic_mode', dtype=str, default='ac',
                  choices=['ac', 'mc'], msg='How to use the critic.')
-    # add_argument('gae_lambda', dtype=float, default=0.95, msg='Lambda value for GAE.')
+    add_argument('use_gae', dtype=bool, default=False, msg='Flag to use GAE.')
+    add_argument('gae_lambda', dtype=float, default=1.0, msg='Lambda value for GAE.')
 
     def _get_value_net(self, emb_params, cnn1d_params):
         char_emb = cnn = None
@@ -303,6 +308,10 @@ class A2C(BasePG):
 
         if g.critic_mode == 'mc':
             advantages = rtgs - values.detach()
+        elif g.use_gae:
+            deltas = (expected - values.detach()).cpu().numpy()
+            offsets = agent_inputs.offsets
+            advantages = get_tensor(get_rtgs_dense(deltas, offsets, g.discount * g.gae_lambda))
         else:
             advantages = expected - values.detach()
 

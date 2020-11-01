@@ -195,6 +195,7 @@ class PolicyGradientTrainer(BaseTrainer):
     def agent(self) -> BasePG:
         return self.model
 
+    # @profile
     def train_one_step(self, dl: VSOnePairDataLoader) -> Metrics:
         init_state = dl.init_state
         end_state = dl.end_state
