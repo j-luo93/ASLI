@@ -152,6 +152,13 @@ class OPRLFake(OPLatSpaPhono):
     src_lang: str = 'fake1'
     tgt_lang: str = 'fake2'
 
+    use_gae: bool = True
+    gae_lambda: float = 0.1
+    init_entropy_reg: float = 0.0
+    policy_steps: int = 50
+    use_ppo: bool = True
+
+
 
 @reg
 class OPRLFake50(OPRLFake):
