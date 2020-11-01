@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from dev_misc import FT, LT, get_tensor, get_zeros
+from dev_misc import FT, LT, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.utils import handle_sequence_inputs
 
@@ -18,6 +18,8 @@ from .trajectory import Trajectory, VocabState
 
 
 class SoundChangeEnv(nn.Module):
+
+    add_argument(f'final_reward', default=1.0, dtype=float, msg='Final reward for reaching the end.')
 
     def __init__(self, action_space: SoundChangeActionSpace, init_state: VocabState, end_state: VocabState):
         super().__init__()
@@ -36,7 +38,7 @@ class SoundChangeEnv(nn.Module):
         new_state = VocabState(new_units, new_ids)
         done = new_state == self._end_state
 
-        final_reward = 1.0 if done else 0.0
+        final_reward = g.final_reward if done else 0.0
         old_dist = state.dist_from(self._end_state)
         new_dist = new_state.dist_from(self._end_state)
         incremental_reward = (old_dist - new_dist) / self._starting_dist

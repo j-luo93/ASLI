@@ -79,7 +79,7 @@ class Trajectory:
 
     @property
     def rewards(self) -> NDA:
-        return np.asarray(self._rewards)
+        return np.asarray(self._rewards, dtype='float32')
 
     @property
     def done(self) -> bool:

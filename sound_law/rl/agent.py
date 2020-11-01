@@ -128,7 +128,7 @@ class PolicyNetwork(nn.Module):
         num_actions = len(action_space)
         proj = nn.Sequential(
             nn.Linear(input_size, input_size // 2),
-            nn.LeakyReLU(),
+            nn.Tanh(),
             nn.Linear(input_size // 2, num_actions))
         return cls(char_emb, cnn, proj, action_space)
 

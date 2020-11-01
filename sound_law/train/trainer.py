@@ -171,6 +171,8 @@ class PolicyGradientTrainer(BaseTrainer):
     add_argument('use_ppo', dtype=bool, default=False, msg='Flag to use PPO training.')
     add_argument('policy_steps', dtype=int, default=10, msg='How many inner loops to train policy net. Used for PPO.')
     add_argument('clip_ratio', dtype=float, default=0.2, msg='Clip ratio used for PPO.')
+    add_argument('target_kl', dtype=float, default=0.015, msg='Max kl to use.')
+    add_argument('entropy_as_reward', dtype=bool, default=False, msg='Flag to add policy entropy to reward.')
 
     def add_trackables(self):
         super().add_trackables()
@@ -211,10 +213,8 @@ class PolicyGradientTrainer(BaseTrainer):
                 tgt = tgt_agent_outputs.rew_outputs.rtgs
             else:
                 tgt = tgt_agent_outputs.rew_outputs.expected
-            try:
-                self._cnt += 1
-            except:
-                self._cnt = 1
+                if g.entropy_as_reward:
+                    tgt = tgt + g.entropy_reg * tgt_agent_outputs.entropy
             diff = (agent_outputs.rew_outputs.values - tgt) ** 2
             loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(tgt))
             return loss
@@ -228,18 +228,34 @@ class PolicyGradientTrainer(BaseTrainer):
                 pg_losses = -log_probs * agent_outputs.rew_outputs.rtgs
             else:
                 if g.use_ppo:
-                    ratio = (log_probs - tgt_agent_outputs.log_probs).exp()
+                    tgt_log_probs = tgt_agent_outputs.log_probs
+                    ratio = (log_probs - tgt_log_probs).exp()
                     tgt_advs = tgt_agent_outputs.rew_outputs.advantages
-                    clip_adv = ratio.clamp(1 - g.clip_ratio, 1 + g.clip_ratio) * tgt_advs
+                    if g.entropy_as_reward:
+                        tgt_advs = tgt_advs + g.entropy_reg * entropy
+                    low = 1 - g.clip_ratio
+                    high = 1 + g.clip_ratio
+                    clip_adv = ratio.clamp(low, high) * tgt_advs
                     pg_losses = -torch.min(ratio * tgt_advs, clip_adv)
+
+                    # Extra useful info.
+                    with torch.no_grad():
+                        approx_kl = tgt_log_probs - log_probs
+                        clipped = (ratio > high) | (ratio < low)
+                        ret += Metric('clipped', clipped.sum(), bs)
+                        ret += Metric('approx_kl', approx_kl.sum(), bs)
                 else:
                     pg_losses = -log_probs * agent_outputs.rew_outputs.advantages
-                abs_advs = agent_outputs.rew_outputs.advantages.abs()
-                ret += Metric('abs_advantage', abs_advs.sum(), bs)
+                advs = agent_outputs.rew_outputs.advantages
+                ret += Metric('abs_advantage', advs.abs().sum(), bs)
+                ret += Metric('advantage', advs.sum(), bs)
 
             pg = Metric('pg', pg_losses.sum(), bs)
             entropy_loss = Metric('entropy', entropy.sum(), bs)
-            pi_loss = Metric('pi_loss', pg.total - g.entropy_reg * entropy_loss.total, bs)
+            if g.entropy_as_reward:
+                pi_loss = Metric('pi_loss', pg.total, bs)
+            else:
+                pi_loss = Metric('pi_loss', pg.total - g.entropy_reg * entropy_loss.total, bs)
             ret += Metrics(pg, entropy_loss, pi_loss)
             return ret
 
@@ -301,12 +317,18 @@ class PolicyGradientTrainer(BaseTrainer):
             # PPO training.
             if g.use_ppo:
                 with self.model.policy_grad(False), self.model.value_grad(False):
-                    tgt_agent_outputs = self.model(agent_inputs, ret_entropy=False)
+                    tgt_agent_outputs = self.model(agent_inputs, ret_entropy=True)
 
                 with self.model.policy_grad(True), self.model.value_grad(False):
-                    for _ in range(g.policy_steps):
-                        metrics += update('policy', tgt_agent_outputs=tgt_agent_outputs)[0]
+                    self.tracker.reset('policy_step')
+                    for i in range(g.policy_steps):
+                        step_metrics, _ = update('policy', tgt_agent_outputs=tgt_agent_outputs)
+                        metrics += step_metrics
                         self.tracker.update('policy_step')
+                        # Early-stop.
+                        if step_metrics.approx_kl.mean.item() > g.target_kl:
+                            logging.info(f'Early-stopped at step {i + 1}.')
+                            break
             else:
                 with self.model.policy_grad(True), self.model.value_grad(False):
                     step_metrics, tgt_agent_outputs = update('policy')
