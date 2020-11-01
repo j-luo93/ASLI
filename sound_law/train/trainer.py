@@ -1,4 +1,5 @@
 import logging
+import math
 from typing import Optional, Tuple
 
 import numpy as np
@@ -45,9 +46,22 @@ class BaseTrainer(BaseTrainerDev):
     add_argument('concentration_scale', dtype=float, default=1.0, msg='Hyperparameter for concentration scale.')
     add_argument('train_mode', dtype=str, default='mle',
                  choices=['mle', 'mrt'], msg='Training mode: either MRT or MLE.')
+    add_argument('init_entropy_reg', dtype=float, default=0.0, msg='Initial entropy regularization hyperparameter.')
+    add_argument('end_entropy_reg', dtype=float, default=0.0, msg='Bound for entropy regularization hyperparameter.')
+    add_argument('when_entropy_reg', dtype=int, default=100,
+                 msg='When to reach the bound for entropy regularization hyperparameter.')
 
     def add_trackables(self):
+        if g.init_entropy_reg > 0.0:
+            multiplier = math.exp(math.log(g.end_entropy_reg / g.init_entropy_reg) / g.when_entropy_reg)
+            self.tracker.add_anneal_trackable('entropy_reg', g.init_entropy_reg, multiplier, g.end_entropy_reg)
         self.tracker.add_count_trackable('step', g.num_steps)
+
+    @property
+    def entropy_reg(self) -> float:
+        if g.init_entropy_reg > 0.0:
+            return self.tracker.entropy_reg
+        return 0.0
 
     def save(self, eval_metrics: Metrics):
         if g.save_model:
@@ -166,7 +180,6 @@ class PolicyGradientTrainer(BaseTrainer):
     model: BasePG
     collector: TrajectoryCollector
 
-    add_argument('entropy_reg', dtype=float, default=0.0, msg='Entropy regularization hyperparameter.')
     add_argument('value_steps', dtype=int, default=10, msg='How many inner loops to fit value net.')
     add_argument('use_ppo', dtype=bool, default=False, msg='Flag to use PPO training.')
     add_argument('policy_steps', dtype=int, default=10, msg='How many inner loops to train policy net. Used for PPO.')
@@ -215,7 +228,7 @@ class PolicyGradientTrainer(BaseTrainer):
             else:
                 tgt = tgt_agent_outputs.rew_outputs.expected
                 if g.entropy_as_reward:
-                    tgt = tgt + g.entropy_reg * tgt_agent_outputs.entropy
+                    tgt = tgt + self.entropy_reg * tgt_agent_outputs.entropy
             diff = (agent_outputs.rew_outputs.values - tgt) ** 2
             loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(tgt))
             return loss
@@ -233,7 +246,7 @@ class PolicyGradientTrainer(BaseTrainer):
                     ratio = (log_probs - tgt_log_probs).exp()
                     tgt_advs = tgt_agent_outputs.rew_outputs.advantages
                     if g.entropy_as_reward:
-                        tgt_advs = tgt_advs + g.entropy_reg * entropy
+                        tgt_advs = tgt_advs + self.entropy_reg * entropy
                     low = 1 - g.clip_ratio
                     high = 1 + g.clip_ratio
                     clip_adv = ratio.clamp(low, high) * tgt_advs
@@ -256,7 +269,7 @@ class PolicyGradientTrainer(BaseTrainer):
             if g.entropy_as_reward:
                 pi_loss = Metric('pi_loss', pg.total, bs)
             else:
-                pi_loss = Metric('pi_loss', pg.total - g.entropy_reg * entropy_loss.total, bs)
+                pi_loss = Metric('pi_loss', pg.total - self.entropy_reg * entropy_loss.total, bs)
             ret += Metrics(pg, entropy_loss, pi_loss)
             return ret
 
@@ -346,4 +359,6 @@ class PolicyGradientTrainer(BaseTrainer):
                 metrics += update(name)[0]
 
         metrics = metrics.with_prefix('check')
+        if g.init_entropy_reg > 0.0:
+            self.tracker.update('entropy_reg')
         return metrics

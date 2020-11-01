@@ -8,9 +8,6 @@ from dev_misc.arglib import Registry
 
 reg = Registry('config')
 
-# TODO(j_luo) Break each config into some smaller independent configs?
-
-
 @reg
 class ZSLatIta:  # "ZS" stands for zero-shot.
     share_src_tgt_abc: bool = True
@@ -150,7 +147,6 @@ class OPRLFake(OPLatSpaPhono):
     num_layers: int = 1
     check_interval: int = 10
     use_phono_features: bool = False
-    entropy_reg: float = 0.02
 
     batch_size: int = 512
     src_lang: str = 'fake1'
