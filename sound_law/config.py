@@ -8,6 +8,7 @@ from dev_misc.arglib import Registry
 
 reg = Registry('config')
 
+
 @reg
 class ZSLatIta:  # "ZS" stands for zero-shot.
     share_src_tgt_abc: bool = True
@@ -153,11 +154,12 @@ class OPRLFake(OPLatSpaPhono):
     tgt_lang: str = 'fake2'
 
     use_gae: bool = True
-    gae_lambda: float = 0.1
-    init_entropy_reg: float = 0.0
+    gae_lambda: float = 0.2
+    init_entropy_reg: float = 0.01
+    end_entropy_reg: float = 1e-4
+    when_entropy_reg: int = 100
     policy_steps: int = 50
     use_ppo: bool = True
-
 
 
 @reg
@@ -186,6 +188,7 @@ class OPRLFakeR4(OPRLFake):
 
 @reg
 class OPRLFakeR5(OPRLFake):
+    when_entropy_reg: int = 200
     src_lang: str = 'fake1-r5'
     tgt_lang: str = 'fake2-r5'
 

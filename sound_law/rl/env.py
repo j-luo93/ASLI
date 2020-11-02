@@ -20,6 +20,7 @@ from .trajectory import Trajectory, VocabState
 class SoundChangeEnv(nn.Module):
 
     add_argument(f'final_reward', default=1.0, dtype=float, msg='Final reward for reaching the end.')
+    add_argument(f'step_penalty', default=0.02, dtype=float, msg='Penalty for each step if not the end state.')
 
     def __init__(self, action_space: SoundChangeActionSpace, init_state: VocabState, end_state: VocabState):
         super().__init__()
@@ -38,7 +39,7 @@ class SoundChangeEnv(nn.Module):
         new_state = VocabState(new_units, new_ids)
         done = new_state == self._end_state
 
-        final_reward = g.final_reward if done else 0.0
+        final_reward = g.final_reward if done else -g.step_penalty
         old_dist = state.dist_from(self._end_state)
         new_dist = new_state.dist_from(self._end_state)
         incremental_reward = (old_dist - new_dist) / self._starting_dist
