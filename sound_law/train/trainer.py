@@ -180,7 +180,6 @@ class PolicyGradientTrainer(BaseTrainer):
     model: BasePG
     collector: TrajectoryCollector
 
-    add_argument('value_loops', dtype=int, default=0, msg='How many outer loops to fit value net.')
     add_argument('value_steps', dtype=int, default=10, msg='How many inner loops to fit value net.')
     add_argument('use_ppo', dtype=bool, default=False, msg='Flag to use PPO training.')
     add_argument('policy_steps', dtype=int, default=10, msg='How many inner loops to train policy net. Used for PPO.')
@@ -194,8 +193,6 @@ class PolicyGradientTrainer(BaseTrainer):
             policy_steps = g.policy_steps if g.use_ppo else 1
             self.tracker.add_trackable('policy_step', total=policy_steps, endless=True)
             self.tracker.add_trackable('value_step', total=g.value_steps, endless=True)
-        if g.value_loops:
-            self.tracker.add_trackable('value_loop', total=g.value_loops, endless=True)
 
     def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
         if collector is None:
@@ -351,20 +348,11 @@ class PolicyGradientTrainer(BaseTrainer):
                     metrics += step_metrics
                     self.tracker.update('policy_step')
 
-            v_iter = 0
-            while True:
-                with self.model.policy_grad(False), self.model.value_grad(True):
-                    for _ in range(g.value_steps):
-                        metrics += update('value', tgt_agent_outputs=tgt_agent_outputs)[0]
-                        self.tracker.update('value_step')
-                v_iter += 1
-                if g.value_loops:
-                    self.tracker.update('value_loop')
-                if v_iter >= g.value_loops:
-                    break
+            with self.model.policy_grad(False), self.model.value_grad(True):
+                for _ in range(g.value_steps):
+                    metrics += update('value', tgt_agent_outputs=tgt_agent_outputs)[0]
+                    self.tracker.update('value_step')
 
-                with self.model.policy_grad(False), self.model.value_grad(False):
-                    tgt_agent_outputs = self.model(agent_inputs, ret_entropy=True)
         else:
             name = 'all' if g.agent == 'a2c' else 'policy'
             with self.model.policy_grad(True), self.model.value_grad(True):
