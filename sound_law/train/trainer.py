@@ -171,8 +171,8 @@ class Trainer(BaseTrainer):
 
 def log_trajectories(agent_inputs: AgentInputs, n: int = 5):
     for i, tr in enumerate(agent_inputs.trajectories[:n], 1):
-        logging.info(f'Sample trajectory {i}')
-        logging.info(str(tr))
+        logging.debug(f'Sample trajectory {i}')
+        logging.debug(str(tr))
 
 
 class PolicyGradientTrainer(BaseTrainer):
@@ -340,7 +340,7 @@ class PolicyGradientTrainer(BaseTrainer):
                         self.tracker.update('policy_step')
                         # Early-stop.
                         if step_metrics.approx_kl.mean.item() > g.target_kl:
-                            logging.info(f'Early-stopped at step {i + 1}.')
+                            logging.debug(f'Early-stopped at step {i + 1}.')
                             break
             else:
                 with self.model.policy_grad(True), self.model.value_grad(False):

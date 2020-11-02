@@ -9,11 +9,14 @@ from itertools import product
 from typing import Iterator, List, Set
 
 import sound_law.rl.trajectory as tr
+from dev_misc import add_argument, g, get_tensor
 from sound_law.data.alphabet import Alphabet
 
 
 class SoundChangeActionSpace:
     """The action space, i.e., the space of all sound changes."""
+
+    add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
 
     def __init__(self, abc: Alphabet):
         self.abc = abc
@@ -24,6 +27,15 @@ class SoundChangeActionSpace:
                 action = SoundChangeAction(len(self._actions), u1, u2, abc[u1], abc[u2])
                 self._actions.append(action)
         logging.info(f'Number of actions in action space: {len(self._actions)}.')
+
+        if g.factorize_actions:
+            a2b = list()
+            a2a = list()
+            for action in self._actions:
+                a2b.append(action.before_id)
+                a2a.append(action.after_id)
+            self.action2before = get_tensor(a2b)
+            self.action2after = get_tensor(a2a)
 
     def __len__(self):
         return len(self._actions)

@@ -110,6 +110,34 @@ def get_cnn1d(cnn1d_params: Cnn1dParams) -> nn.Module:
     return nn.Sequential(*layers)
 
 
+class FactorizedProjection(nn.Module):
+    """A factorized projection layer that predicts the before ids and the after ids."""
+
+    def __init__(self, input_size: int, action_space: SoundChangeActionSpace):
+        super().__init__()
+        self.hidden = nn.Sequential(nn.Linear(input_size, input_size // 2),
+                                    nn.Tanh())
+        num_ids = len(action_space.abc)
+        self.before_potential = nn.Linear(input_size // 2, num_ids)
+        self.after_potential = nn.Linear(input_size // 2, num_ids)
+        self.action_space = action_space
+
+    def forward(self, input_: FT) -> FT:
+        h = self.hidden(input_)
+        bp = self.before_potential(h)
+        ap = self.after_potential(h)
+        is_2d = input_.ndim == 2
+        with NoName(ap, bp):
+            if is_2d:
+                action_bp = bp[:, self.action_space.action2before]
+                action_ap = ap[:, self.action_space.action2after]
+            else:
+                action_bp = bp[self.action_space.action2before]
+                action_ap = ap[self.action_space.action2after]
+        names = ('batch', ) * is_2d + ('action',)
+        return (action_bp + action_ap).rename(*names)
+
+
 class PolicyNetwork(nn.Module):
 
     def __init__(self, char_emb: CharEmbedding,
@@ -130,10 +158,13 @@ class PolicyNetwork(nn.Module):
         cnn = get_cnn1d(cnn1d_params)
         input_size = cnn1d_params.hidden_size
         num_actions = len(action_space)
-        proj = nn.Sequential(
-            nn.Linear(input_size, input_size // 2),
-            nn.Tanh(),
-            nn.Linear(input_size // 2, num_actions))
+        if g.factorize_actions:
+            proj = FactorizedProjection(input_size, action_space)
+        else:
+            proj = nn.Sequential(
+                nn.Linear(input_size, input_size // 2),
+                nn.Tanh(),
+                nn.Linear(input_size // 2, num_actions))
         return cls(char_emb, cnn, proj, action_space)
 
     def forward(self,
