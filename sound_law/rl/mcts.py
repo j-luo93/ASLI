@@ -41,7 +41,7 @@ class Mcts:
         self.Nsa: Dict[VocabState, FT] = dict()  # State-action visit counts.
 
     @torch.no_grad()
-    def select(self, root: VocabState) -> Tuple[VocabState, List[Tuple[VocabState, SoundChangeAction]]]:
+    def select(self, root: VocabState, depth_limit: int) -> Tuple[VocabState, List[Tuple[VocabState, SoundChangeAction]]]:
         """Select the node to expand."""
         state = root
         path = list()
@@ -58,9 +58,12 @@ class Mcts:
             new_state, done, reward = self.env(state, action)
 
             state = new_state
+            depth_limit -= 1
+            if depth_limit <= 0:
+                break
 
-        logging.debug('Selected the following node:')
-        logging.debug(pad_for_log(state.hash_str))
+        logging.debug(f'Selected the following node (node id {state.s_id}):')
+        logging.debug(pad_for_log(state.s_key))
 
         return state, path
 

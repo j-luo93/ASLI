@@ -10,10 +10,11 @@ from typing import Iterator, List, Set, Union
 
 import sound_law.rl.trajectory as tr
 from dev_misc import BT, add_argument, g, get_tensor, get_zeros
+from dev_misc.utils import Singleton
 from sound_law.data.alphabet import Alphabet
 
 
-class SoundChangeActionSpace:
+class SoundChangeActionSpace(Singleton):
     """The action space, i.e., the space of all sound changes."""
 
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')

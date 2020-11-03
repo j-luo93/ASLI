@@ -14,7 +14,7 @@ from dev_misc.utils import handle_sequence_inputs
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, VanillaPolicyGradient
-from .trajectory import Trajectory, VocabState
+from .trajectory import Trajectory, VocabState, VocabStateSpace, Word
 
 
 class SoundChangeEnv(nn.Module):
@@ -31,12 +31,13 @@ class SoundChangeEnv(nn.Module):
 
     def forward(self, state: VocabState, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
         replace_func = handle_sequence_inputs(lambda s: s.replace(action.before, action.after))
-        new_units = [replace_func(units) for units in state.units]
+        new_words = [Word(replace_func(word.units)) for word in state.words]
         new_ids = state.ids.clone()
         with NoName(new_ids):
             new_ids[new_ids == action.before_id] = action.after_id
         new_ids.rename_(*state.ids.names)
-        new_state = VocabState(new_units, new_ids)
+        vss = VocabStateSpace()
+        new_state = vss.get_state(words=new_words, ids=new_ids)
         done = new_state == self._end_state
 
         final_reward = g.final_reward if done else -g.step_penalty

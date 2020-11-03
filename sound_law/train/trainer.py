@@ -394,10 +394,10 @@ class MctsTrainer(RLTrainer):
             self.mcts.reset()
             history = list()
             # Episodes have max rollout length.
-            for _ in range(g.max_rollout_length):
+            for ri in range(g.max_rollout_length):
                 # Run many simulations before take one action.
                 for _ in range(g.num_mcts_sims):
-                    new_state, path = self.mcts.select(state)
+                    new_state, path = self.mcts.select(state, g.max_rollout_length - ri)
                     value = self.mcts.expand(new_state)
                     self.mcts.backup(path, value)
                     self.tracker.update('mcts')

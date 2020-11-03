@@ -271,11 +271,13 @@ class VSOnePairDataLoader(BaseOnePairDataLoader):  # VS stands for vocab state.
 
     @cached_property
     def init_state(self) -> tr.VocabState:
-        return tr.VocabState.from_seqs(self.entire_batch.src_seqs)
+        vss = tr.VocabStateSpace()
+        return vss.get_state(seqs=self.entire_batch.src_seqs)
 
     @cached_property
     def end_state(self) -> tr.VocabState:
-        return tr.VocabState.from_seqs(self.entire_batch.tgt_seqs)
+        vss = tr.VocabStateSpace()
+        return vss.get_state(seqs=self.entire_batch.tgt_seqs)
 
     def __iter__(self) -> Iterator[OnePairBatch]:
         yield self._postprocess_batch(self.entire_batch)

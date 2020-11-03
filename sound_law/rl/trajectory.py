@@ -29,26 +29,42 @@ class Word:
         return self.key
 
 
+SKey = NewType('SKey', str)  # State key.
+
+
+class VocabStateSpace(Singleton):
+    """The space of all vocab states. This handles the creation of vocab states."""
+
+    _states: ClassVar[SKey, VocabState] = dict()
+
+    def get_state(self, *,
+                  seqs: Optional[dl.PaddedUnitSeqs] = None,
+                  words: Optional[List[Word]] = None,
+                  ids: Optional[LT] = None) -> VocabState:
+        if seqs is not None:
+            words = [Word(u) for u in seqs.units]
+            ids = seqs.ids
+        s_key = '\n'.join([word.key for word in words])
+        if s_key not in self._states:
+            obj = VocabState(len(self._states), s_key, words, ids)
+            self._states[s_key] = obj
+        return self._states[s_key]
+
+
 class VocabState:
 
-    def __init__(self, units: Sequence[List[str]], ids: LT):
-        self.units = units
-        self.words = [Word(u) for u in units]
+    def __init__(self, s_id: int, s_key: SKey, words: List[Word], ids: LT):
+        """This should not be directly called. Use VocabStateSpace to call `get_state` instead."""
+        self.s_id = s_id  # The unique id for this state.
+        self.s_key = s_key  # The unique string (key) for this state.
+        self.words = words
         self.ids = ids
-
-    @classmethod
-    def from_seqs(cls, seqs: dl.PaddedUnitSeqs) -> VocabState:
-        return cls(seqs.units, seqs.ids)
 
     def __eq__(self, other: VocabState):
         return len(self.words) == len(other.words) and all(s == o for s, o in zip(self.words, other.words))
 
-    @cached_property
-    def hash_str(self) -> str:
-        return '\n'.join([word.key for word in self.words])
-
     def __hash__(self):
-        return id(self.hash_str)
+        return self.s_id
 
     @lru_cache(maxsize=None)
     def dist_from(self, other: VocabState) -> float:
