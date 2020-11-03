@@ -6,10 +6,10 @@ import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import product
-from typing import Iterator, List, Set
+from typing import Iterator, List, Set, Union
 
 import sound_law.rl.trajectory as tr
-from dev_misc import add_argument, g, get_tensor
+from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from sound_law.data.alphabet import Alphabet
 
 
@@ -46,18 +46,32 @@ class SoundChangeActionSpace:
     def __iter__(self) -> Iterator[SoundChangeAction]:
         yield from self._actions
 
+    def get_permissible_actions(self, state: tr.VocabState, ret_tensor: bool = False) -> Union[SoundChangeAction, BT]:
+        actions = self._get_permissible_actions(state)
+        if ret_tensor:
+            action_ids = [action.action_id for action in actions]
+            action_masks = get_zeros(len(self._actions)).bool()
+            action_masks[action_ids] = True
+            return action_masks
+        return actions
+
     @lru_cache(maxsize=100000)
-    def get_permissible_actions(self, state: tr.VocabState) -> Set[SoundChangeAction]:
+    def _get_permissible_actions(self, state: tr.VocabState) -> Set[SoundChangeAction]:
         ret = set()
         for word in state.words:
             action_set = self._get_permissible_word_actions(word)
             ret.update(action_set)
+        if not ret:
+            raise RuntimeError(f'No permissible action for this state.')
         return ret
 
     @lru_cache(maxsize=10000)
     def _get_permissible_word_actions(self, word: tr.Word) -> Set[SoundChangeAction]:
         units = set(word.units)
-        return set(action for action in self._actions if action.before in units)
+        ret = set(action for action in self._actions if action.before in units)
+        if not ret:
+            raise RuntimeError(f'No permissible action for this word.')
+        return ret
 
 
 @dataclass

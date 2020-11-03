@@ -11,6 +11,7 @@ from sound_law.train.manager import OnePairManager, OneToManyManager
 
 add_argument('task', dtype=str, default='one_pair', choices=['one_pair', 'one_to_many'], msg='Which task to execute.')
 add_argument('use_rl', dtype=bool, default=False, msg='Flag to use RL framework.')
+add_argument('use_mcts', dtype=bool, default=False, msg='Flag to use MCTS.')
 add_argument('agent', dtype=str, default='vpg', choices=['vpg', 'a2c'], msg='RL agent.')
 
 

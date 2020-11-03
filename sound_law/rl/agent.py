@@ -203,15 +203,14 @@ class ValueNetwork(nn.Module):
         regressor = nn.Sequential(
             nn.Linear(input_size, input_size // 2),
             nn.Tanh(),
-            nn.Linear(input_size // 2, 1),
-            nn.Flatten(-2, -1))
+            nn.Linear(input_size // 2, 1))
         return ValueNetwork(char_emb, cnn, regressor)
 
     def forward(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
         """Get policy evaluation. if `done` is provided, we get values for s1 instead of s0. In that case, end states should have values set to 0."""
         state_repr = _get_state_repr(self.char_emb, curr_ids, end_ids, cnn=self.cnn)
         with NoName(state_repr):
-            values = self.regressor(state_repr)
+            values = self.regressor(state_repr).squeeze(dim=-1)
         if done is not None:
             values = torch.where(done, torch.zeros_like(values), values)
         return values
@@ -253,14 +252,19 @@ class BasePG(nn.Module, metaclass=ABCMeta):
     @abstractmethod
     def _get_value_net(self, emb_params: EmbParams, cnn1d_params: Cnn1dParams) -> Optional[ValueNetwork]: ...
 
-    def get_values(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
+    def get_values(self, curr_state_or_ids: Union[VocabState, LT], done: Optional[BT] = None) -> FT:
         if self.value_net is None:
             raise TypeError(f'There is no value net.')
+        if isinstance(curr_state_or_ids, VocabState):
+            curr_ids = curr_state_or_ids.ids
+        else:
+            curr_ids = curr_state_or_ids
+        end_ids = self.end_state.ids
         with torch.set_grad_enabled(self._value_grad):
             return self.value_net(curr_ids, end_ids, done=done)
 
     def get_policy(self, state_or_ids: Union[VocabState, LT], action_masks: BT) -> Distribution:
-        """Get policy distribution based on current state (and end state). If ids are passed, we have to specify action masks directly."""
+        """Get policy distribution based on current state (and end state)."""
         if isinstance(state_or_ids, VocabState):
             curr_ids = state_or_ids.ids
         else:
@@ -327,13 +331,12 @@ class A2C(BasePG):
         return ValueNetwork.from_params(emb_params, cnn1d_params, char_emb=char_emb, cnn=cnn)
 
     def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
-        end_ids = self.end_state.ids
-        values = self.get_values(agent_inputs.id_seqs, end_ids)
+        values = self.get_values(agent_inputs.id_seqs)
         rtgs = expected = None
         if g.critic_target == 'rtg' or g.critic_mode == 'mc':
             rtgs = _get_rewards_to_go(agent_inputs)
         if g.critic_target == 'expected' or g.critic_mode == 'ac':
-            next_values = self.get_values(agent_inputs.next_id_seqs, end_ids, agent_inputs.done)
+            next_values = self.get_values(agent_inputs.next_id_seqs, done=agent_inputs.done)
             # This computes the expected rewards-to-go.
             expected = (agent_inputs.rewards + g.discount * next_values).detach()
 

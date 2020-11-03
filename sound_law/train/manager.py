@@ -21,9 +21,10 @@ from sound_law.model.one_to_many import OneToManyModel
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
+from sound_law.rl.mcts import Mcts
 from sound_law.rl.trajectory import VocabState
 
-from .trainer import PolicyGradientTrainer, Trainer
+from .trainer import MctsTrainer, PolicyGradientTrainer, Trainer
 
 add_argument('batch_size', default=32, dtype=int, msg='Batch size.')
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
@@ -40,9 +41,11 @@ add_argument('use_phono_features', dtype=bool, default=False, msg='Flag to use p
 add_argument('optim_cls', dtype=str, default='adam', choices=['sgd', 'adam'], msg='What optimizer to choose.')
 add_argument('separate_value', dtype=bool, default=True,
              msg='Flag to use a separate model for value network. Used in RL.')
+add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of rollout')
+
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
-add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of rollout')
+add_condition('use_mcts', True, 'use_rl', True)
 
 
 class OnePairManager:
@@ -119,12 +122,12 @@ class OnePairManager:
         if g.use_rl:
             action_space = SoundChangeActionSpace(self.tgt_abc)
 
-        def get_model(rl: bool = False, dl=None):
+        def get_model(dl=None):
             phono_kwargs = {
                 'phono_feat_mat': phono_feat_mat,
                 'special_ids': special_ids
             }
-            if rl:
+            if g.use_rl:
                 end_state = dl.end_state
                 agent_cls = VanillaPolicyGradient if g.agent == 'vpg' else A2C
                 model = agent_cls(len(self.tgt_abc), action_space, end_state, **phono_kwargs)
@@ -138,8 +141,14 @@ class OnePairManager:
             logging.info(model)
             return model
 
-        def get_trainer(model, train_name, evaluator, metric_writer, rl: bool = False, **kwargs):
-            trainer_cls = PolicyGradientTrainer if rl else Trainer
+        def get_trainer(model, train_name, evaluator, metric_writer, **kwargs):
+            if g.use_rl:
+                if g.use_mcts:
+                    trainer_cls = MctsTrainer
+                else:
+                    trainer_cls = PolicyGradientTrainer
+            else:
+                trainer_cls = Trainer
             trainer = trainer_cls(model, [self.dl_reg.get_setting_by_name(train_name)],
                                   [1.0], 'step',
                                   stage_tnames=['step'],
@@ -153,14 +162,14 @@ class OnePairManager:
                 # trainer.init_params('uniform', -0.1, 0.1)
                 trainer.init_params('xavier_uniform')
             optim_cls = Adam if g.optim_cls == 'adam' else SGD
-            if not rl or (g.agent == 'a2c' and g.value_steps == 0):
+            if not g.use_rl or g.use_mcts or (g.agent == 'a2c' and g.value_steps == 0):
                 trainer.set_optimizer(optim_cls, lr=g.learning_rate)
             else:
                 trainer.set_optimizer(optim_cls, name='policy', mod=model.policy_net,
-                                      lr=g.learning_rate)#, weight_decay=1e-4)
+                                      lr=g.learning_rate)  # , weight_decay=1e-4)
                 if g.agent == 'a2c':
                     trainer.set_optimizer(optim_cls, name='value', mod=model.value_net,
-                                          lr=g.value_learning_rate)#, weight_decay=1e-4)
+                                          lr=g.value_learning_rate)  # , weight_decay=1e-4)
             return trainer
 
         def run_once(train_name, dev_name, test_name):
@@ -184,9 +193,15 @@ class OnePairManager:
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
             env = SoundChangeEnv(action_space, dl.init_state, dl.end_state)
-            collector = TrajectoryCollector(g.batch_size, max_rollout_length=g.max_rollout_length, truncate_last=True)
-            model = get_model(rl=True, dl=dl)
-            trainer = get_trainer(model, 'rl', None, None, rl=True, env=env, collector=collector)
+            model = get_model(dl=dl)
+            if g.use_mcts:
+                mcts = Mcts(action_space, model, env, dl.end_state)
+                trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
+            else:
+                collector = TrajectoryCollector(g.batch_size,
+                                                max_rollout_length=g.max_rollout_length,
+                                                truncate_last=True)
+                trainer = get_trainer(model, 'rl', None, None, env=env, collector=collector)
             trainer.train(self.dl_reg)
         elif g.input_format == 'wikt':
             run_once('train', 'dev', 'test')

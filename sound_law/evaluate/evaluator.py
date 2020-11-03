@@ -14,7 +14,7 @@ from dev_misc.devlib.dp import EditDist
 from dev_misc.devlib.tensor_x import TensorX as Tx
 from dev_misc.trainlib import Metric, Metrics
 from dev_misc.trainlib.tb_writer import MetricWriter
-from dev_misc.utils import pbar
+from dev_misc.utils import pad_for_log, pbar
 from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
 from sound_law.evaluate.edit_dist import edit_dist_all

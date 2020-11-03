@@ -17,6 +17,7 @@ from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.model.decoder import get_beam_probs
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
+from sound_law.rl.mcts import Mcts
 from sound_law.rl.trajectory import VocabState
 
 
@@ -52,16 +53,7 @@ class BaseTrainer(BaseTrainerDev):
                  msg='When to reach the bound for entropy regularization hyperparameter.')
 
     def add_trackables(self):
-        if g.init_entropy_reg > 0.0:
-            multiplier = math.exp(math.log(g.end_entropy_reg / g.init_entropy_reg) / g.when_entropy_reg)
-            self.tracker.add_anneal_trackable('entropy_reg', g.init_entropy_reg, multiplier, g.end_entropy_reg)
         self.tracker.add_count_trackable('step', g.num_steps)
-
-    @property
-    def entropy_reg(self) -> float:
-        if g.init_entropy_reg > 0.0:
-            return self.tracker.entropy_reg
-        return 0.0
 
     def save(self, eval_metrics: Metrics):
         if g.save_model:
@@ -175,10 +167,16 @@ def log_trajectories(agent_inputs: AgentInputs, n: int = 5):
         logging.debug(str(tr))
 
 
-class PolicyGradientTrainer(BaseTrainer):
+class RLTrainer(BaseTrainer):
 
     model: BasePG
-    collector: TrajectoryCollector
+
+    @property
+    def agent(self) -> BasePG:
+        return self.model
+
+
+class PolicyGradientTrainer(RLTrainer):
 
     add_argument('value_steps', dtype=int, default=10, msg='How many inner loops to fit value net.')
     add_argument('use_ppo', dtype=bool, default=False, msg='Flag to use PPO training.')
@@ -187,12 +185,21 @@ class PolicyGradientTrainer(BaseTrainer):
     add_argument('target_kl', dtype=float, default=0.015, msg='Max kl to use.')
     add_argument('entropy_as_reward', dtype=bool, default=False, msg='Flag to add policy entropy to reward.')
 
+    @property
+    def entropy_reg(self) -> float:
+        if g.init_entropy_reg > 0.0:
+            return self.tracker.entropy_reg
+        return 0.0
+
     def add_trackables(self):
-        super().add_trackables()
+        if g.init_entropy_reg > 0.0:
+            multiplier = math.exp(math.log(g.end_entropy_reg / g.init_entropy_reg) / g.when_entropy_reg)
+            self.tracker.add_anneal_trackable('entropy_reg', g.init_entropy_reg, multiplier, g.end_entropy_reg)
         if g.value_steps:
             policy_steps = g.policy_steps if g.use_ppo else 1
             self.tracker.add_trackable('policy_step', total=policy_steps, endless=True)
             self.tracker.add_trackable('value_step', total=g.value_steps, endless=True)
+        super().add_trackables()
 
     def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
         if collector is None:
@@ -203,10 +210,6 @@ class PolicyGradientTrainer(BaseTrainer):
         self.collector = collector
         self.env = env
         super().__init__(*args, **kwargs)
-
-    @property
-    def agent(self) -> BasePG:
-        return self.model
 
     def train_one_step(self, dl: VSOnePairDataLoader) -> Metrics:
         init_state = dl.init_state
@@ -361,4 +364,98 @@ class PolicyGradientTrainer(BaseTrainer):
         metrics = metrics.with_prefix('check')
         if g.init_entropy_reg > 0.0:
             self.tracker.update('entropy_reg')
+        return metrics
+
+
+class MctsTrainer(RLTrainer):
+
+    add_argument('num_mcts_sims', default=100, dtype=int, msg='Number of MCTS simulations to run.')
+    add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
+
+    def __init__(self, *args, mcts: Mcts = None, **kwargs):
+        if mcts is None:
+            raise TypeError(f'Must pass a trajectory collector to initialize this trainer.')
+
+        self.mcts = mcts
+        super().__init__(*args, **kwargs)
+
+    def add_trackables(self):
+        super().add_trackables()
+        self.tracker.add_trackable('episode', total=g.num_episodes, endless=True)
+        self.tracker.add_trackable('rollout', total=g.max_rollout_length, endless=True)
+        self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
+
+    def train_one_step(self, dl: OnePairDataLoader):
+        samples = list()
+        success = 0.0
+        # Collect episodes.
+        for _ in range(g.num_episodes):
+            state = dl.init_state
+            self.mcts.reset()
+            history = list()
+            # Episodes have max rollout length.
+            for _ in range(g.max_rollout_length):
+                # Run many simulations before take one action.
+                for _ in range(g.num_mcts_sims):
+                    new_state, path = self.mcts.select(state)
+                    value = self.mcts.expand(new_state)
+                    self.mcts.backup(path, value)
+                    self.tracker.update('mcts')
+
+                pi, new_state = self.mcts.play(state)
+                history.append((pi, state))
+                state = new_state
+
+                self.tracker.update('rollout')
+                if state == dl.end_state:
+                    break
+
+            reward = int(state == dl.end_state)
+            success += reward
+            samples.extend([(pi, state, reward, False) for pi, state in history[:-1]])
+            samples.append(history[-1] + (reward, state == dl.end_state))
+            self.tracker.update('episode')
+
+        curr_ids = list()
+        action_masks = list()
+        rewards = list()
+        tgt_policies = list()
+        done = list()
+        for pi, state, reward, d in samples:
+            curr_ids.append(state.ids)
+            action_masks.append(self.mcts.action_space.get_permissible_actions(state, ret_tensor=True))
+            tgt_policies.append(pi.probs)
+            rewards.append(reward)
+            done.append(d)
+        curr_ids = torch.stack(curr_ids, new_name='batch').align_to('batch', 'pos', 'word')
+        action_masks = torch.stack(action_masks, dim=0).rename('batch', 'action')
+        tgt_policies = torch.stack(tgt_policies, dim=0).rename('batch', 'action')
+        rewards = get_tensor(rewards).rename('batch')
+        done = get_tensor(done).rename('batch')
+
+        self.agent.train()
+        self.optimizer.zero_grad()
+
+        policy = self.agent.get_policy(curr_ids, action_masks)
+        pi_ce_losses = -tgt_policies * policy.logits
+        values = self.agent.get_values(curr_ids, done=done)
+        v_regress_losses = 0.5 * (values - rewards) ** 2
+
+        bs = done.size('batch')
+
+        pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), bs)
+        v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), bs)
+        total_loss = Metric('total_loss', pi_ce_loss.total + v_regress_loss.total, bs)
+
+        total_loss.mean.backward()
+
+        # FIXME(j_luo) reuse this.
+        # Clip gradient norm.
+        grad_norm = clip_grad_norm_(self.agent.parameters(), 5.0)
+        grad_norm = Metric('grad_norm', grad_norm, bs)
+        self.optimizer.step()
+
+        success = Metric('success', success, bs)
+        metrics = Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm, success)
+
         return metrics
