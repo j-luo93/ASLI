@@ -381,6 +381,7 @@ class MctsTrainer(RLTrainer):
         self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         self.tracker.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
+    @profile
     def train_one_step(self, dl: OnePairDataLoader):
         samples = list()
         success = 0.0
@@ -409,8 +410,8 @@ class MctsTrainer(RLTrainer):
                     self.mcts.backup(path, value)
                     self.tracker.update('mcts')
 
-                pi, new_state = self.mcts.play(state)
-                history.append((pi, state))
+                probs, new_state = self.mcts.play(state)
+                history.append((probs, state))
                 state = new_state
 
                 self.tracker.update('rollout')
@@ -419,21 +420,21 @@ class MctsTrainer(RLTrainer):
 
             reward = int(state == dl.end_state)
             success += reward
-            samples.extend([(pi, state, reward) for pi, state in history])
+            samples.extend([(probs, state, reward) for probs, state in history])
             self.tracker.update('episode')
 
         curr_ids = list()
         action_masks = list()
         rewards = list()
         tgt_policies = list()
-        for pi, state, reward in samples:
+        for probs, state, reward in samples:
             curr_ids.append(state.ids)
-            action_masks.append(self.mcts.action_space.get_permissible_actions(state, ret_tensor=True))
-            tgt_policies.append(pi.probs)
+            action_masks.append(self.mcts.action_space.get_permissible_actions(state, return_type='tensor'))
+            tgt_policies.append(probs)
             rewards.append(reward)
         curr_ids = torch.stack(curr_ids, new_name='batch').align_to('batch', 'pos', 'word')
         action_masks = torch.stack(action_masks, dim=0).rename('batch', 'action')
-        tgt_policies = torch.stack(tgt_policies, dim=0).rename('batch', 'action')
+        tgt_policies = get_tensor(np.stack(tgt_policies, axis=0)).rename('batch', 'action')
         rewards = get_tensor(rewards).rename('batch')
 
         bs = rewards.size('batch')

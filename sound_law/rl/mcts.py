@@ -7,11 +7,11 @@ import logging
 import math
 from typing import Dict, List, Set, Tuple
 
+import numpy as np
 import torch
 from torch.distributions.categorical import Categorical
-from torch.distributions.distribution import Distribution
 
-from dev_misc import FT, add_argument, g, get_zeros
+from dev_misc import NDA, add_argument, g, get_zeros
 from dev_misc.utils import pad_for_log
 
 from .action import SoundChangeAction, SoundChangeActionSpace
@@ -19,8 +19,15 @@ from .agent import AgentInputs, AgentOutputs, BasePG
 from .env import SoundChangeEnv
 from .trajectory import VocabState
 
+# from torch.distributions.distribution import Distribution
+
 
 class Mcts:
+
+    """Monte Carlo Tree Search class. Everything should be done on cpu except for evaluation.
+    Use numpy arrays by default since we can potentially speed up some process through cython
+    and parallel processing.
+    """
 
     add_argument('puct_c', default=5.0, dtype=float, msg='Exploration constant.')
 
@@ -36,29 +43,30 @@ class Mcts:
         self.reset()
 
     def reset(self):
-        self.Psa: Dict[VocabState, Distribution] = dict()  # Initial policy.
-        self.Wsa: Dict[VocabState, FT] = dict()
-        self.Nsa: Dict[VocabState, FT] = dict()  # State-action visit counts.
+        self.Psa: Dict[VocabState, NDA] = dict()  # Initial policy.
+        self.Wsa: Dict[VocabState, NDA] = dict()
+        self.Nsa: Dict[VocabState, NDA] = dict()  # State-action visit counts.
 
     @torch.no_grad()
+    @profile
     def select(self, root: VocabState, depth_limit: int) -> Tuple[VocabState, List[Tuple[VocabState, SoundChangeAction]]]:
         """Select the node to expand."""
         state = root
         last_state = action = None
         path = list()
         while state != self.end_state and state in self.Psa:
-            p = self.Psa[state].probs
+            p = self.Psa[state]
             n_s_a = self.Nsa[state]
             n_s = n_s_a.sum()
             w = self.Wsa[state]
             q = w / (n_s_a + 1e-8)
             u = g.puct_c * p * (math.sqrt(n_s) / (1 + n_s_a))
 
-            action_masks = self.action_space.get_permissible_actions(state, ret_tensor=True)
-            scores = torch.where(action_masks, q + u, torch.full_like(q, -9999.9))
-            _, best_a = scores.max(dim=-1)
+            action_masks = self.action_space.get_permissible_actions(state, return_type='numpy')
+            scores = np.where(action_masks, q + u, np.full_like(q, -9999.9, dtype='float32'))
+            best_a = scores.argmax(axis=-1)
 
-            action = self.action_space.get_action(best_a.item())
+            action = self.action_space.get_action(best_a)
             path.append((state, action))
             new_state, done, reward = self.env(state, action)
 
@@ -84,31 +92,33 @@ class Mcts:
         return state, path
 
     @torch.no_grad()
+    @profile
     def expand(self, state: VocabState) -> float:
         """Expand and evaluate the leaf node."""
         if state == self.end_state:
             return 1.0
-        action_masks = self.action_space.get_permissible_actions(state, ret_tensor=True)
+        action_masks = self.action_space.get_permissible_actions(state, return_type='tensor')
         policy = self.agent.get_policy(state, action_masks)
         value = self.agent.get_values(state)
-        self.Psa[state] = policy
-        self.Wsa[state] = get_zeros(len(self.action_space))
-        self.Nsa[state] = get_zeros(len(self.action_space))
+        self.Psa[state] = policy.probs.cpu().numpy()
+        self.Wsa[state] = np.zeros([len(self.action_space)])
+        self.Nsa[state] = np.zeros([len(self.action_space)])
 
         return value.item()
 
     @torch.no_grad()
+    @profile
     def backup(self, path: List[Tuple[VocabState, SoundChangeAction]], value: float):
         for s, a in path:
             self.Nsa[s][a.action_id] += 1
             self.Wsa[s][a.action_id] += value
 
     @torch.no_grad()
-    def play(self, state: VocabState) -> Tuple[Distribution, VocabState]:
-        exp = self.Nsa[state].pow(1.0)
-        probs = exp / (exp.sum(dim=-1, keepdims=True) + 1e-8)
-        pi = Categorical(probs=probs)
-        action_id = pi.sample().item()
+    @profile
+    def play(self, state: VocabState) -> Tuple[NDA, VocabState]:
+        exp = np.power(self.Nsa[state], 1.0)
+        probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)
+        action_id = np.random.choice(range(len(probs)), p=probs)
         action = self.action_space.get_action(action_id)
         new_state, done, reward = self.env(state, action)
-        return pi, new_state
+        return probs, new_state

@@ -8,6 +8,8 @@ from functools import lru_cache
 from itertools import product
 from typing import Iterator, List, Set, Union
 
+import numpy as np
+
 import sound_law.rl.trajectory as tr
 from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import Singleton
@@ -47,13 +49,21 @@ class SoundChangeActionSpace(Singleton):
     def __iter__(self) -> Iterator[SoundChangeAction]:
         yield from self._actions
 
-    def get_permissible_actions(self, state: tr.VocabState, ret_tensor: bool = False) -> Union[SoundChangeAction, BT]:
+    def get_permissible_actions(self, state: tr.VocabState, return_type: str = 'set') -> Union[SoundChangeAction, BT]:
+        if return_type not in ['set', 'tensor', 'numpy']:
+            raise ValueError(f'Uncognized return type "{return_type}".')
+
         actions = self._get_permissible_actions(state)
-        if ret_tensor:
+        if return_type != 'set':
             action_ids = [action.action_id for action in actions]
-            action_masks = get_zeros(len(self._actions)).bool()
-            action_masks[action_ids] = True
+            if return_type == 'tensor':
+                action_masks = get_zeros(len(self._actions)).bool()
+                action_masks[action_ids] = True
+            else:
+                action_masks = np.zeros([len(self._actions)], dtype=bool)
+                action_masks[action_ids] = True
             return action_masks
+
         return actions
 
     @lru_cache(maxsize=100000)

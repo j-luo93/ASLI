@@ -93,7 +93,7 @@ class TrajectoryCollector:
 
             state = trajectory.latest_state
 
-            action_masks = env.action_space.get_permissible_actions(state, ret_tensor=True)
+            action_masks = env.action_space.get_permissible_actions(state, return_type='tensor')
             policy = agent.get_policy(state, action_masks)
             action = agent.sample_action(policy)
             next_state, done, next_reward = env(state, action)
