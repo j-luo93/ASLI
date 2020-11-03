@@ -4,11 +4,11 @@ from typing import Optional, Tuple
 
 import numpy as np
 import torch
-from torch.nn.utils import clip_grad_norm_
 
 from dev_misc import FT, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import get_named_range
-from dev_misc.trainlib import Metric, Metrics, init_params
+from dev_misc.trainlib import (Metric, Metrics, clip_grad, get_optim_params,
+                               init_params)
 from dev_misc.trainlib.base_trainer import BaseTrainer as BaseTrainerDev
 from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
@@ -150,8 +150,7 @@ class Trainer(BaseTrainer):
             metrics.loss.mean.backward()
 
         # Clip gradient norm.
-        grad_norm = clip_grad_norm_(self.model.parameters(), 5.0)
-        grad_norm = Metric('grad_norm', grad_norm, len(batch))
+        grad_norm = clip_grad(self.model.parameters(), len(batch))
         metrics += grad_norm
 
         # Update.
@@ -275,10 +274,6 @@ class PolicyGradientTrainer(RLTrainer):
             ret += Metrics(pg, entropy_loss, pi_loss)
             return ret
 
-        def get_optim_params(optim):
-            for param_group in optim.param_groups:
-                yield from param_group['params']
-
         def update(name: str, tgt_agent_outputs: Optional[AgentOutputs] = None) -> Tuple[Metrics, AgentOutputs]:
             self.model.train()
             if name == 'all':
@@ -316,8 +311,7 @@ class PolicyGradientTrainer(RLTrainer):
                 step_metrics.total_loss.mean.backward()
 
             # Clip gradient norm.
-            grad_norm = clip_grad_norm_(get_optim_params(optim), 5.0)
-            grad_norm = Metric('grad_norm', grad_norm, bs)
+            grad_norm = clip_grad(get_optim_params(optim), bs)
             step_metrics += grad_norm
 
             # Update.
@@ -371,6 +365,7 @@ class MctsTrainer(RLTrainer):
 
     add_argument('num_mcts_sims', default=100, dtype=int, msg='Number of MCTS simulations to run.')
     add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
+    add_argument('num_inner_steps', default=10, dtype=int, msg='Number of optimization step per batch.')
 
     def __init__(self, *args, mcts: Mcts = None, **kwargs):
         if mcts is None:
@@ -384,16 +379,28 @@ class MctsTrainer(RLTrainer):
         self.tracker.add_trackable('episode', total=g.num_episodes, endless=True)
         self.tracker.add_trackable('rollout', total=g.max_rollout_length, endless=True)
         self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
+        self.tracker.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
     def train_one_step(self, dl: OnePairDataLoader):
         samples = list()
         success = 0.0
+
+        # self.mcts.on = False
+        # try:
+        #     self._cnt += 1
+        # except:
+        #     self._cnt = 1
+        # if self._cnt >= 6:
+        #     self.mcts.on = True
+        #     breakpoint()  # BREAKPOINT(j_luo)
+
         # Collect episodes.
-        for _ in range(g.num_episodes):
+        for ei in range(g.num_episodes):
             state = dl.init_state
             self.mcts.reset()
             history = list()
             # Episodes have max rollout length.
+            # logging.debug(f'Episode {ei + 1}.')
             for ri in range(g.max_rollout_length):
                 # Run many simulations before take one action.
                 for _ in range(g.num_mcts_sims):
@@ -412,50 +419,48 @@ class MctsTrainer(RLTrainer):
 
             reward = int(state == dl.end_state)
             success += reward
-            samples.extend([(pi, state, reward, False) for pi, state in history[:-1]])
-            samples.append(history[-1] + (reward, state == dl.end_state))
+            samples.extend([(pi, state, reward) for pi, state in history])
             self.tracker.update('episode')
 
         curr_ids = list()
         action_masks = list()
         rewards = list()
         tgt_policies = list()
-        done = list()
-        for pi, state, reward, d in samples:
+        for pi, state, reward in samples:
             curr_ids.append(state.ids)
             action_masks.append(self.mcts.action_space.get_permissible_actions(state, ret_tensor=True))
             tgt_policies.append(pi.probs)
             rewards.append(reward)
-            done.append(d)
         curr_ids = torch.stack(curr_ids, new_name='batch').align_to('batch', 'pos', 'word')
         action_masks = torch.stack(action_masks, dim=0).rename('batch', 'action')
         tgt_policies = torch.stack(tgt_policies, dim=0).rename('batch', 'action')
         rewards = get_tensor(rewards).rename('batch')
-        done = get_tensor(done).rename('batch')
 
-        self.agent.train()
-        self.optimizer.zero_grad()
-
-        policy = self.agent.get_policy(curr_ids, action_masks)
-        pi_ce_losses = -tgt_policies * policy.logits
-        values = self.agent.get_values(curr_ids, done=done)
-        v_regress_losses = 0.5 * (values - rewards) ** 2
-
-        bs = done.size('batch')
-
-        pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), bs)
-        v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), bs)
-        total_loss = Metric('total_loss', pi_ce_loss.total + v_regress_loss.total, bs)
-
-        total_loss.mean.backward()
-
-        # FIXME(j_luo) reuse this.
-        # Clip gradient norm.
-        grad_norm = clip_grad_norm_(self.agent.parameters(), 5.0)
-        grad_norm = Metric('grad_norm', grad_norm, bs)
-        self.optimizer.step()
-
+        bs = rewards.size('batch')
         success = Metric('success', success, bs)
-        metrics = Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm, success)
+        metrics = Metrics(success)
+        for _ in range(g.num_inner_steps):
+            self.agent.train()
+            self.optimizer.zero_grad()
+
+            with self.agent.policy_grad(True), self.agent.value_grad(True):
+                policy = self.agent.get_policy(curr_ids, action_masks)
+                values = self.agent.get_values(curr_ids)
+            pi_ce_losses = -tgt_policies * policy.logits
+            v_regress_losses = 0.5 * (values - rewards) ** 2
+
+            pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), bs)
+            v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), bs)
+            print(pi_ce_loss.mean.item(), v_regress_loss.mean.item())
+            total_loss = Metric('total_loss', pi_ce_loss.total + v_regress_loss.total, bs)
+
+            total_loss.mean.backward()
+
+            # FIXME(j_luo) reuse this.
+            # Clip gradient norm.
+            grad_norm = clip_grad(self.agent.parameters(), bs)
+            metrics += Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm)
+            self.optimizer.step()
+            self.tracker.update('inner_step')
 
         return metrics

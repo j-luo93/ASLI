@@ -44,6 +44,7 @@ class Mcts:
     def select(self, root: VocabState, depth_limit: int) -> Tuple[VocabState, List[Tuple[VocabState, SoundChangeAction]]]:
         """Select the node to expand."""
         state = root
+        last_state = action = None
         path = list()
         while state != self.end_state and state in self.Psa:
             p = self.Psa[state].probs
@@ -52,18 +53,33 @@ class Mcts:
             w = self.Wsa[state]
             q = w / (n_s_a + 1e-8)
             u = g.puct_c * p * (math.sqrt(n_s) / (1 + n_s_a))
-            _, best_a = (q + u).max(dim=-1)
+
+            action_masks = self.action_space.get_permissible_actions(state, ret_tensor=True)
+            scores = torch.where(action_masks, q + u, torch.full_like(q, -9999.9))
+            _, best_a = scores.max(dim=-1)
+
             action = self.action_space.get_action(best_a.item())
             path.append((state, action))
             new_state, done, reward = self.env(state, action)
 
-            state = new_state
+            last_state, state = state, new_state
             depth_limit -= 1
             if depth_limit <= 0:
                 break
 
-        logging.debug(f'Selected the following node (node id {state.s_id}):')
-        logging.debug(pad_for_log(state.s_key))
+        # if self.on:
+        #     if last_state is None:
+        #         logging.debug(f'Selected the root (id {state.s_id}):')
+        #         logging.debug(pad_for_log(state.s_key))
+        #     else:
+        #         logging.debug(f'Path {[state.s_id for state, _ in path]}')
+        #         logging.debug(f'Selected the following node (id {state.s_id} from {last_state.s_id}):')
+        #         to_log = str(action) + '\n\n'
+        #         paddings = max(map(len, last_state.s_key.split('\n'))) + 8
+        #         for w0, w1 in zip(last_state.s_key.split('\n'), state.s_key.split('\n')):
+        #             to_log += w0 + ' ' * (paddings - len(w0)) + w1 + '\n'
+        #         logging.debug(pad_for_log(to_log.strip()))
+        #     import time; time.sleep(0.01)
 
         return state, path
 
@@ -89,7 +105,7 @@ class Mcts:
 
     @torch.no_grad()
     def play(self, state: VocabState) -> Tuple[Distribution, VocabState]:
-        exp = self.Nsa[state].pow(0.2)
+        exp = self.Nsa[state].pow(1.0)
         probs = exp / (exp.sum(dim=-1, keepdims=True) + 1e-8)
         pi = Categorical(probs=probs)
         action_id = pi.sample().item()
