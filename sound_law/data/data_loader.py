@@ -18,6 +18,7 @@ from dev_misc.trainlib import BaseSetting
 from dev_misc.trainlib.base_data_loader import (BaseDataLoader,
                                                 BaseDataLoaderRegistry)
 from dev_misc.utils import cached_property, handle_sequence_inputs
+from sound_law.data.alphabet import PAD_ID
 from sound_law.data.cognate import CognateRegistry
 from sound_law.data.dataset import OnePairDataset, Vocabulary, pad
 from sound_law.data.setting import Setting
@@ -138,7 +139,7 @@ def _gather_from_batches(batches: List[Dict], item_name: str, is_seq: bool = Tru
         ids = torch.from_numpy(np.asarray(orig_lst))
         return ids
 
-    ids, paddings = pad_to_dense(orig_lst, dtype='l')
+    ids, paddings = pad_to_dense(orig_lst, dtype='l', pad_idx=PAD_ID)
     ids = torch.from_numpy(ids.T)
     paddings = torch.from_numpy(paddings.T)
     return ids, paddings

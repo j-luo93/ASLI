@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import (ClassVar, Dict, Iterator, List, NewType, Optional,
-                    Sequence, Set, Tuple)
+                    Sequence, Set, Tuple, Union)
 
 import numpy as np
 
 import sound_law.data.data_loader as dl
 import sound_law.rl.action as a
-from dev_misc import BT, FT, LT, NDA
+from dev_misc import BT, FT, LT, NDA, g
 from dev_misc.utils import Singleton, cached_property
 from sound_law.evaluate.edit_dist import ed_eval_batch
 
@@ -40,10 +40,13 @@ class VocabStateSpace(Singleton):
     def get_state(self, *,
                   seqs: Optional[dl.PaddedUnitSeqs] = None,
                   words: Optional[List[Word]] = None,
-                  ids: Optional[LT] = None) -> VocabState:
+                  ids: Optional[Union[NDA, LT]] = None) -> VocabState:
         if seqs is not None:
             words = [Word(u) for u in seqs.units]
             ids = seqs.ids
+            # NOTE(j_luo) For MCTS, we use numpy arrays for ids.
+            if g.use_mcts:
+                ids = np.ascontiguousarray(ids.cpu().numpy())
         s_key = '\n'.join([word.key for word in words])
         if s_key not in self._states:
             obj = VocabState(len(self._states), s_key, words, ids)
@@ -53,7 +56,7 @@ class VocabStateSpace(Singleton):
 
 class VocabState:
 
-    def __init__(self, s_id: int, s_key: SKey, words: List[Word], ids: LT):
+    def __init__(self, s_id: int, s_key: SKey, words: List[Word], ids: Union[NDA, LT]):
         """This should not be directly called. Use VocabStateSpace to call `get_state` instead."""
         self.s_id = s_id  # The unique id for this state.
         self.s_key = s_key  # The unique string (key) for this state.

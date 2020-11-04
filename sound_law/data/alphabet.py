@@ -60,8 +60,8 @@ class Alphabet:
             self._u2u = u2u
 
         units = sorted(cnt.keys())
-        self.special_units = [SOT, EOT]
-        self.special_ids = [SOT_ID, EOT_ID]
+        self.special_units = [SOT, EOT, PAD]
+        self.special_ids = [SOT_ID, EOT_ID, PAD_ID]
         self._id2unit = self.special_units + units
         self._unit2id = dict(zip(self.special_units, self.special_ids))
         self._unit2id.update({c: i for i, c in enumerate(units, len(self.special_units))})

@@ -432,7 +432,7 @@ class MctsTrainer(RLTrainer):
             action_masks.append(self.mcts.action_space.get_permissible_actions(state, return_type='tensor'))
             tgt_policies.append(probs)
             rewards.append(reward)
-        curr_ids = torch.stack(curr_ids, new_name='batch').align_to('batch', 'pos', 'word')
+        curr_ids = get_tensor(np.stack(curr_ids, axis=0)).rename('batch', 'pos', 'word')
         action_masks = torch.stack(action_masks, dim=0).rename('batch', 'action')
         tgt_policies = get_tensor(np.stack(tgt_policies, axis=0)).rename('batch', 'action')
         rewards = get_tensor(rewards).rename('batch')

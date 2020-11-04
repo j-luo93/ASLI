@@ -14,6 +14,7 @@ from dev_misc.utils import handle_sequence_inputs
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, VanillaPolicyGradient
+from .env_step import env_step_ids, env_step_words
 from .trajectory import Trajectory, VocabState, VocabStateSpace, Word
 
 
@@ -30,22 +31,33 @@ class SoundChangeEnv(nn.Module):
         self._starting_dist = init_state.dist_from(end_state)
 
     def forward(self, state: VocabState, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
-        replace_func = handle_sequence_inputs(lambda s: s.replace(action.before, action.after))
-        new_words = [Word(replace_func(word.units)) for word in state.words]
-        new_ids = state.ids.clone()
-        with NoName(new_ids):
-            new_ids[new_ids == action.before_id] = action.after_id
-        new_ids.rename_(*state.ids.names)
-        vss = VocabStateSpace()
-        new_state = vss.get_state(words=new_words, ids=new_ids)
-        done = new_state == self._end_state
+        if g.use_mcts:
+            new_state = self._forward_mcts(state, action)
+        else:
+            replace_func = handle_sequence_inputs(lambda s: action.after if s == action.before else s)
+            new_words = [Word(replace_func(word.units)) for word in state.words]
+            new_ids = state.ids.clone()
+            with NoName(new_ids):
+                new_ids[new_ids == action.before_id] = action.after_id
+            new_ids.rename_(*state.ids.names)
+            vss = VocabStateSpace()
+            new_state = vss.get_state(words=new_words, ids=new_ids)
 
+        done = new_state == self._end_state
         final_reward = g.final_reward if done else -g.step_penalty
         old_dist = state.dist_from(self._end_state)
         new_dist = new_state.dist_from(self._end_state)
         incremental_reward = (old_dist - new_dist) / self._starting_dist
         reward = final_reward + incremental_reward
         return new_state, done, reward
+
+    def _forward_mcts(self, state: VocabState, action: SoundChangeAction) -> VocabState:
+        new_units = env_step_words([word.units for word in state.words], action.before, action.after)
+        new_words = [Word(units) for units in new_units]
+        new_ids = env_step_ids(state.ids, action.before_id, action.after_id)
+        vss = VocabStateSpace()
+        new_state = vss.get_state(words=new_words, ids=new_ids)
+        return new_state
 
 
 class TrajectoryCollector:

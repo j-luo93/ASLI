@@ -257,9 +257,13 @@ class BasePG(nn.Module, metaclass=ABCMeta):
             raise TypeError(f'There is no value net.')
         if isinstance(curr_state_or_ids, VocabState):
             curr_ids = curr_state_or_ids.ids
+            if g.use_mcts:
+                curr_ids = get_tensor(curr_ids).rename('pos', 'word')
         else:
             curr_ids = curr_state_or_ids
         end_ids = self.end_state.ids
+        if g.use_mcts:
+            end_ids = get_tensor(end_ids).rename('pos', 'word')
         with torch.set_grad_enabled(self._value_grad):
             return self.value_net(curr_ids, end_ids, done=done)
 
@@ -267,9 +271,13 @@ class BasePG(nn.Module, metaclass=ABCMeta):
         """Get policy distribution based on current state (and end state)."""
         if isinstance(state_or_ids, VocabState):
             curr_ids = state_or_ids.ids
+            if g.use_mcts:
+                curr_ids = get_tensor(curr_ids).rename('pos', 'word')
         else:
             curr_ids = state_or_ids
         end_ids = self.end_state.ids
+        if g.use_mcts:
+            end_ids = get_tensor(end_ids).rename('pos', 'word')
         with torch.set_grad_enabled(self._policy_grad):
             return self.policy_net(curr_ids, end_ids, action_masks)
 
