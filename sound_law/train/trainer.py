@@ -409,12 +409,16 @@ class MctsTrainer(RLTrainer):
                 if g.use_wu_uct:
                     num_batches = g.num_mcts_sims // g.expansion_batch_size  # FIXME(j_luo) check this?
                     for _ in range(num_batches):
+                        # if ei + 1 == 6 and ri == 8 and _ == 9:
+                        #     breakpoint()  # BREAKPOINT(j_luo)
                         expand_buffer = list()
+                        # if _ == 2:
+                        #     breakpoint()  # BREAKPOINT(j_luo)
                         for _ in range(g.expansion_batch_size):
                             new_state, path = self.mcts.select(state, g.max_rollout_length - ri)
                             self.mcts.backup(path, complete=False)
                             expand_buffer.append((new_state, path))
-                        values = self.mcts.expand([state for state, _ in expand_buffer])
+                        values = self.mcts.expand([s for s, _ in expand_buffer])
                         for path, value in zip([path for _, path in expand_buffer], values):
                             self.mcts.backup(path, value=value, complete=True)
                         self.tracker.update('mcts', incr=g.expansion_batch_size)
@@ -425,7 +429,12 @@ class MctsTrainer(RLTrainer):
                         self.mcts.backup(path, value=value)
                         self.tracker.update('mcts')
 
-                probs, new_state = self.mcts.play(state)
+                probs, action, new_state = self.mcts.play(state)
+                # from dev_misc.utils import pad_for_log
+                # logging.debug(pad_for_log(state.s_key))
+                # logging.debug(action)
+                # logging.debug(pad_for_log(new_state.s_key))
+                # logging.debug('-' * 100)
                 history.append((probs, state))
                 state = new_state
 

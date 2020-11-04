@@ -77,19 +77,21 @@ class Mcts:
             if depth_limit <= 0:
                 break
 
+        # self.on = True
         # if self.on:
         #     if last_state is None:
         #         logging.debug(f'Selected the root (id {state.s_id}):')
         #         logging.debug(pad_for_log(state.s_key))
         #     else:
         #         logging.debug(f'Path {[state.s_id for state, _ in path]}')
-        #         logging.debug(f'Selected the following node (id {state.s_id} from {last_state.s_id}):')
+        #         logging.debug(
+        #             f'Selected the following node (id {state.s_id} from {last_state.s_id}, action {action.action_id}):')
         #         to_log = str(action) + '\n\n'
         #         paddings = max(map(len, last_state.s_key.split('\n'))) + 8
         #         for w0, w1 in zip(last_state.s_key.split('\n'), state.s_key.split('\n')):
         #             to_log += w0 + ' ' * (paddings - len(w0)) + w1 + '\n'
         #         logging.debug(pad_for_log(to_log.strip()))
-        #     import time; time.sleep(0.01)
+        #     import time; time.sleep(0.1)
 
         return state, path
 
@@ -134,11 +136,15 @@ class Mcts:
             agent_values = self.agent.get_values(ids).cpu().numpy()
 
             for i, state, p, v in zip(outstanding_idx, outstanding_states, probs, agent_values):
-                # FIXME(j_luo) Might want to take the mean  if there are duplicates state in here.
+                # NOTE(j_luo) Values should be returned even if states are duplicates or have been visited.
+                values[i] = v
+                # NOTE(j_luo) Skip duplicate states (due to exploration collapse) or visited states (due to rollout truncation).
+                if state in self.Psa:
+                    continue
+
                 self.Psa[state] = p
                 self.Wsa[state] = np.zeros([len(self.action_space)])
                 self.Nsa[state] = np.zeros([len(self.action_space)])
-                values[i] = v
 
         if ret_lst:
             return values
@@ -170,10 +176,10 @@ class Mcts:
 
     @torch.no_grad()
     # @profile
-    def play(self, state: VocabState) -> Tuple[NDA, VocabState]:
+    def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, VocabState]:
         exp = np.power(self.Nsa[state], 1.0)
         probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)
         action_id = np.random.choice(range(len(probs)), p=probs)
         action = self.action_space.get_action(action_id)
         new_state, done, reward = self.env(state, action)
-        return probs, new_state
+        return probs, action, new_state
