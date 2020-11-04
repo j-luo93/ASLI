@@ -50,7 +50,7 @@ class Mcts:
         self.Nsa: Dict[VocabState, NDA] = dict()  # State-action visit counts.
 
     @torch.no_grad()
-    # @profile
+    @profile
     def select(self, root: VocabState, depth_limit: int) -> Tuple[VocabState, List[Tuple[VocabState, SoundChangeAction]]]:
         """Select the node to expand."""
         state = root
@@ -160,7 +160,7 @@ class Mcts:
         # return value.item()
 
     @torch.no_grad()
-    # @profile
+    @profile
     def backup(self,
                path: List[Tuple[VocabState, SoundChangeAction]],
                value: Optional[float] = None,
@@ -175,7 +175,7 @@ class Mcts:
                 self.Wsa[s][a.action_id] += value
 
     @torch.no_grad()
-    # @profile
+    @profile
     def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, VocabState]:
         exp = np.power(self.Nsa[state], 1.0)
         probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)

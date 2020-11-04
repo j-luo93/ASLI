@@ -64,7 +64,8 @@ class VocabState:
         self.ids = ids
 
     def __eq__(self, other: VocabState):
-        return len(self.words) == len(other.words) and all(s == o for s, o in zip(self.words, other.words))
+        return self.s_id == other.s_id
+        # return len(self.words) == len(other.words) and all(s == o for s, o in zip(self.words, other.words))
 
     def __hash__(self):
         return self.s_id
