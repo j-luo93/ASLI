@@ -1,10 +1,16 @@
 from Cython.Build import cythonize
 from setuptools import Extension, find_packages, setup
 
-ext_modules = [Extension('sound_law.rl.reward',
-                         ['sound_law/rl/reward.pyx']),
-               Extension('sound_law.rl.env_step',
-                         ['sound_law/rl/env_step.pyx'])]
+
+def get_ext(*args, **kwargs):
+    return Extension(*args,
+                     extra_link_args=['-L/usr/lib/x86_64-linux-gnu/'],
+                     **kwargs)
+
+
+ext_modules = [get_ext('sound_law.rl.reward', ['sound_law/rl/reward.pyx']),
+               get_ext('sound_law.rl.env_step', ['sound_law/rl/env_step.pyx'])]
+
 setup(
     name='sound_law',
     version='0.1',
