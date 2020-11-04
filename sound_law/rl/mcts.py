@@ -5,13 +5,13 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union, overload
 
 import numpy as np
 import torch
 from torch.distributions.categorical import Categorical
 
-from dev_misc import NDA, add_argument, g, get_zeros
+from dev_misc import NDA, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import pad_for_log
 
 from .action import SoundChangeAction, SoundChangeActionSpace
@@ -20,6 +20,8 @@ from .env import SoundChangeEnv
 from .trajectory import VocabState
 
 # from torch.distributions.distribution import Distribution
+
+MISSING = object()
 
 
 class Mcts:
@@ -48,7 +50,7 @@ class Mcts:
         self.Nsa: Dict[VocabState, NDA] = dict()  # State-action visit counts.
 
     @torch.no_grad()
-    @profile
+    # @profile
     def select(self, root: VocabState, depth_limit: int) -> Tuple[VocabState, List[Tuple[VocabState, SoundChangeAction]]]:
         """Select the node to expand."""
         state = root
@@ -91,30 +93,83 @@ class Mcts:
 
         return state, path
 
+    @overload
+    def expand(self, state: VocabState) -> float: ...
+
+    @overload
+    def expand(self, states: List[VocabState]) -> List[float]: ...
+
     @torch.no_grad()
-    @profile
-    def expand(self, state: VocabState) -> float:
+    # @profile
+    def expand(self, states):
         """Expand and evaluate the leaf node."""
-        if state == self.end_state:
-            return 1.0
-        action_masks = self.action_space.get_permissible_actions(state, return_type='tensor')
-        policy = self.agent.get_policy(state, action_masks)
-        value = self.agent.get_values(state)
-        self.Psa[state] = policy.probs.cpu().numpy()
-        self.Wsa[state] = np.zeros([len(self.action_space)])
-        self.Nsa[state] = np.zeros([len(self.action_space)])
+        ret_lst = True
+        if isinstance(states, VocabState):
+            states = [states]
+            ret_lst = False
 
-        return value.item()
+        values = [None] * len(states)
+        outstanding_idx = list()
+        outstanding_states = list()
+        # Deal with end states first.
+        for i, state in enumerate(states):
+            if state == self.end_state:
+                values[i] = 1.0
+            else:
+                outstanding_idx.append(i)
+                outstanding_states.append(state)
+
+        # Collect states that need evaluation.
+        # FIXME(j_luo) Add no_grad
+        if outstanding_states:
+            action_masks = [
+                self.action_space.get_permissible_actions(state, return_type='tensor')
+                for state in outstanding_states
+            ]
+            action_masks = torch.stack(action_masks, new_name='batch').align_to('batch', 'action')
+            ids = get_tensor(np.stack([state.ids for state in outstanding_states], axis=0))
+            ids.rename_('batch', 'pos', 'word')
+            # FIXME(j_luo) Maybe gpu is still faster?
+            probs = self.agent.get_policy(ids, action_masks).probs.cpu().numpy()
+            agent_values = self.agent.get_values(ids).cpu().numpy()
+
+            for i, state, p, v in zip(outstanding_idx, outstanding_states, probs, agent_values):
+                # FIXME(j_luo) Might want to take the mean  if there are duplicates state in here.
+                self.Psa[state] = p
+                self.Wsa[state] = np.zeros([len(self.action_space)])
+                self.Nsa[state] = np.zeros([len(self.action_space)])
+                values[i] = v
+
+        if ret_lst:
+            return values
+        return values[0]
+
+        # action_masks = self.action_space.get_permissible_actions(state, return_type='tensor')
+        # policy = self.agent.get_policy(state, action_masks)
+        # value = self.agent.get_values(state)
+        # self.Psa[state] = policy.probs.cpu().numpy()  # FIXME(j_luo) Maybe gpu is still faster?
+        # self.Wsa[state] = np.zeros([len(self.action_space)])
+        # self.Nsa[state] = np.zeros([len(self.action_space)])
+
+        # return value.item()
 
     @torch.no_grad()
-    @profile
-    def backup(self, path: List[Tuple[VocabState, SoundChangeAction]], value: float):
+    # @profile
+    def backup(self,
+               path: List[Tuple[VocabState, SoundChangeAction]],
+               value: Optional[float] = None,
+               complete: Optional[bool] = MISSING):
+        if g.use_wu_uct and complete is MISSING:
+            raise ValueError(f'Missing `incomplete` value for WU-UCT.')
+
         for s, a in path:
-            self.Nsa[s][a.action_id] += 1
-            self.Wsa[s][a.action_id] += value
+            if not g.use_wu_uct or not complete:
+                self.Nsa[s][a.action_id] += 1
+            if not g.use_wu_uct or complete:
+                self.Wsa[s][a.action_id] += value
 
     @torch.no_grad()
-    @profile
+    # @profile
     def play(self, state: VocabState) -> Tuple[NDA, VocabState]:
         exp = np.power(self.Nsa[state], 1.0)
         probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)

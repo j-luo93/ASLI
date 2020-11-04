@@ -59,6 +59,7 @@ class SoundChangeActionSpace(Singleton):
             if return_type == 'tensor':
                 action_masks = get_zeros(len(self._actions)).bool()
                 action_masks[action_ids] = True
+                action_masks.rename_('action')
             else:
                 action_masks = np.zeros([len(self._actions)], dtype=bool)
                 action_masks[action_ids] = True

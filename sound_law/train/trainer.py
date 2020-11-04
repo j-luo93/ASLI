@@ -364,6 +364,8 @@ class PolicyGradientTrainer(RLTrainer):
 class MctsTrainer(RLTrainer):
 
     add_argument('num_mcts_sims', default=100, dtype=int, msg='Number of MCTS simulations to run.')
+    add_argument('use_wu_uct', default=False, dtype=bool, msg='Flag to use WU-UCT.')
+    add_argument('expansion_batch_size', default=10, dtype=int, msg='Batch size for WU-UCT expansion steps.')
     add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
     add_argument('num_inner_steps', default=10, dtype=int, msg='Number of optimization step per batch.')
 
@@ -381,7 +383,7 @@ class MctsTrainer(RLTrainer):
         self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         self.tracker.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
-    @profile
+    # @profile
     def train_one_step(self, dl: OnePairDataLoader):
         samples = list()
         success = 0.0
@@ -404,11 +406,24 @@ class MctsTrainer(RLTrainer):
             # logging.debug(f'Episode {ei + 1}.')
             for ri in range(g.max_rollout_length):
                 # Run many simulations before take one action.
-                for _ in range(g.num_mcts_sims):
-                    new_state, path = self.mcts.select(state, g.max_rollout_length - ri)
-                    value = self.mcts.expand(new_state)
-                    self.mcts.backup(path, value)
-                    self.tracker.update('mcts')
+                if g.use_wu_uct:
+                    num_batches = g.num_mcts_sims // g.expansion_batch_size  # FIXME(j_luo) check this?
+                    for _ in range(num_batches):
+                        expand_buffer = list()
+                        for _ in range(g.expansion_batch_size):
+                            new_state, path = self.mcts.select(state, g.max_rollout_length - ri)
+                            self.mcts.backup(path, complete=False)
+                            expand_buffer.append((new_state, path))
+                        values = self.mcts.expand([state for state, _ in expand_buffer])
+                        for path, value in zip([path for _, path in expand_buffer], values):
+                            self.mcts.backup(path, value=value, complete=True)
+                        self.tracker.update('mcts', incr=g.expansion_batch_size)
+                else:
+                    for _ in range(g.num_mcts_sims):
+                        new_state, path = self.mcts.select(state, g.max_rollout_length - ri)
+                        value = self.mcts.expand(new_state)
+                        self.mcts.backup(path, value=value)
+                        self.tracker.update('mcts')
 
                 probs, new_state = self.mcts.play(state)
                 history.append((probs, state))
@@ -433,7 +448,7 @@ class MctsTrainer(RLTrainer):
             tgt_policies.append(probs)
             rewards.append(reward)
         curr_ids = get_tensor(np.stack(curr_ids, axis=0)).rename('batch', 'pos', 'word')
-        action_masks = torch.stack(action_masks, dim=0).rename('batch', 'action')
+        action_masks = torch.stack(action_masks, new_name='batch').align_to('batch', 'action')
         tgt_policies = get_tensor(np.stack(tgt_policies, axis=0)).rename('batch', 'action')
         rewards = get_tensor(rewards).rename('batch')
 
