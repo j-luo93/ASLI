@@ -70,7 +70,7 @@ class VocabState:
     def __hash__(self):
         return self.s_id
 
-    @lru_cache(maxsize=None)
+    # @lru_cache(maxsize=None)
     def dist_from(self, other: VocabState) -> float:
         units_1 = [word.units for word in self.words]
         units_2 = [word.units for word in other.words]

@@ -67,7 +67,7 @@ class SoundChangeActionSpace(Singleton):
 
         return actions
 
-    @lru_cache(maxsize=100000)
+    # @lru_cache(maxsize=100000)
     def _get_permissible_actions(self, state: tr.VocabState) -> Set[SoundChangeAction]:
         ret = set()
         for word in state.words:
@@ -77,7 +77,7 @@ class SoundChangeActionSpace(Singleton):
             raise RuntimeError(f'No permissible action for this state.')
         return ret
 
-    @lru_cache(maxsize=10000)
+    # @lru_cache(maxsize=10000)
     def _get_permissible_word_actions(self, word: tr.Word) -> Set[SoundChangeAction]:
         units = set(word.units)
         ret = set(action for action in self._actions if action.before in units)

@@ -5,10 +5,14 @@ from __future__ import annotations
 
 import logging
 import math
+from contextlib import contextmanager
+from threading import Lock
 from typing import Dict, List, Optional, Set, Tuple, Union, overload
 
 import numpy as np
 import torch
+from multiprocessing import Pool
+# from pathos.multiprocessing import Pool
 from torch.distributions.categorical import Categorical
 
 from dev_misc import NDA, add_argument, g, get_tensor, get_zeros
@@ -19,7 +23,22 @@ from .agent import AgentInputs, AgentOutputs, BasePG
 from .env import SoundChangeEnv
 from .trajectory import VocabState
 
-# from torch.distributions.distribution import Distribution
+
+def select_work(inputs: Tuple[int, VocabState, int, NDA, NDA, NDA, SoundChangeEnv]):
+    i, s0, d, p, n_s_a, w, env = inputs
+    n_s = n_s_a.sum()
+    q = w / (n_s_a + 1e-8)
+    u = g.puct_c * p * (math.sqrt(n_s) / (1 + n_s_a))
+
+    action_masks = env.action_space.get_permissible_actions(s0, return_type='numpy')
+    scores = np.where(action_masks, q + u, np.full_like(q, -9999.9, dtype='float32'))
+    best_a = scores.argmax(axis=-1)
+
+    action = env.action_space.get_action(best_a)
+    s1, done, reward = env(s0, action)
+
+    return i, s0, s1, action, d - 1
+
 
 MISSING = object()
 
@@ -42,6 +61,11 @@ class Mcts:
         self.agent = agent
         self.env = env
         self.end_state = end_state
+
+        # Prepare workers if needed.
+        if g.use_virtual_loss:
+            self.workers = Pool(g.num_workers)
+
         self.reset()
 
     def reset(self):
@@ -50,7 +74,7 @@ class Mcts:
         self.Nsa: Dict[VocabState, NDA] = dict()  # State-action visit counts.
 
     @torch.no_grad()
-    @profile
+    # @profile
     def select(self, root: VocabState, depth_limit: int) -> Tuple[VocabState, List[Tuple[VocabState, SoundChangeAction]]]:
         """Select the node to expand."""
         state = root
@@ -94,6 +118,42 @@ class Mcts:
         #     import time; time.sleep(0.1)
 
         return state, path
+
+    @torch.no_grad()
+    # @profile
+    def parallel_select(self, root: VocabState, num_sims: int, depth_limit: int) -> Tuple[List[VocabState], List[List[Tuple[VocabState, SoundChangeAction]]]]:
+        self.Psa[root] = np.zeros([len(self.action_space)])
+        self.Nsa[root] = np.zeros([len(self.action_space)])
+        self.Wsa[root] = np.zeros([len(self.action_space)])
+
+        remaining = [(i, root, depth_limit) for i in range(num_sims)]
+        selected = [None] * num_sims
+        paths = [list() for _ in range(num_sims)]
+        while remaining:
+            unique = set()
+            new_remaining = list()
+            inputs = list()
+            for i, s, d in remaining:
+                if s in unique:
+                    new_remaining.append((i, s, d))
+                else:
+                    unique.add(s)
+                    inputs.append((i, s, d))
+
+            args_iterable = [(i, s, d, self.Psa[s], self.Nsa[s], self.Wsa[s], self.env) for i, s, d in inputs]
+            result = self.workers.map_async(select_work, args_iterable, chunksize=1).get()
+            for i, s0, s1, a, d in result:
+                pair = (s0, a)
+                paths[i].append(pair)
+                self.backup([pair], complete=False)
+                if d == 0 or s1 not in self.Psa:
+                    selected[i] = s1
+                else:
+                    new_remaining.append((i, s1, d))
+
+            remaining = new_remaining
+
+        return selected, paths
 
     @overload
     def expand(self, state: VocabState) -> float: ...
@@ -160,22 +220,31 @@ class Mcts:
         # return value.item()
 
     @torch.no_grad()
-    @profile
+    # @profile
     def backup(self,
                path: List[Tuple[VocabState, SoundChangeAction]],
                value: Optional[float] = None,
                complete: Optional[bool] = MISSING):
-        if g.use_wu_uct and complete is MISSING:
+        two_step = g.use_wu_uct or g.use_virtual_loss
+        if two_step and complete is MISSING:
             raise ValueError(f'Missing `incomplete` value for WU-UCT.')
 
         for s, a in path:
-            if not g.use_wu_uct or not complete:
-                self.Nsa[s][a.action_id] += 1
-            if not g.use_wu_uct or complete:
-                self.Wsa[s][a.action_id] += value
+            if g.use_virtual_loss:
+                if complete:
+                    self.Nsa[s][a.action_id] += -3 + 1
+                    self.Wsa[s][a.action_id] += 3 + value
+                else:
+                    self.Nsa[s][a.action_id] += 3
+                    self.Wsa[s][a.action_id] += -3
+            else:
+                if not g.use_wu_uct or not complete:
+                    self.Nsa[s][a.action_id] += 1
+                if not g.use_wu_uct or complete:
+                    self.Wsa[s][a.action_id] += value
 
     @torch.no_grad()
-    @profile
+    # @profile
     def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, VocabState]:
         exp = np.power(self.Nsa[state], 1.0)
         probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)

@@ -365,6 +365,8 @@ class MctsTrainer(RLTrainer):
 
     add_argument('num_mcts_sims', default=100, dtype=int, msg='Number of MCTS simulations to run.')
     add_argument('use_wu_uct', default=False, dtype=bool, msg='Flag to use WU-UCT.')
+    add_argument('use_virtual_loss', default=False, dtype=bool, msg='Flag to use virtual loss.')
+    add_argument('num_workers', default=4, dtype=int, msg='Number of workers for parallelizing MCTS.')
     add_argument('expansion_batch_size', default=10, dtype=int, msg='Batch size for WU-UCT expansion steps.')
     add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
     add_argument('num_inner_steps', default=10, dtype=int, msg='Number of optimization step per batch.')
@@ -383,7 +385,7 @@ class MctsTrainer(RLTrainer):
         self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         self.tracker.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
-    @profile
+    # @profile
     def train_one_step(self, dl: OnePairDataLoader):
         samples = list()
         success = 0.0
@@ -405,26 +407,27 @@ class MctsTrainer(RLTrainer):
             # Episodes have max rollout length.
             # logging.debug(f'Episode {ei + 1}.')
             for ri in range(g.max_rollout_length):
+                depth_limit = g.max_rollout_length - ri
                 # Run many simulations before take one action.
-                if g.use_wu_uct:
+                if g.use_wu_uct or g.use_virtual_loss:
                     num_batches = g.num_mcts_sims // g.expansion_batch_size  # FIXME(j_luo) check this?
                     for _ in range(num_batches):
-                        # if ei + 1 == 6 and ri == 8 and _ == 9:
-                        #     breakpoint()  # BREAKPOINT(j_luo)
-                        expand_buffer = list()
-                        # if _ == 2:
-                        #     breakpoint()  # BREAKPOINT(j_luo)
-                        for _ in range(g.expansion_batch_size):
-                            new_state, path = self.mcts.select(state, g.max_rollout_length - ri)
-                            self.mcts.backup(path, complete=False)
-                            expand_buffer.append((new_state, path))
+                        if g.use_virtual_loss:
+                            new_states, paths = self.mcts.parallel_select(state, g.expansion_batch_size, depth_limit)
+                            expand_buffer = list(zip(new_states, paths))
+                        else:
+                            expand_buffer = list()
+                            for _ in range(g.expansion_batch_size):
+                                new_state, path = self.mcts.select(state, depth_limit)
+                                self.mcts.backup(path, complete=False)
+                                expand_buffer.append((new_state, path))
                         values = self.mcts.expand([s for s, _ in expand_buffer])
                         for path, value in zip([path for _, path in expand_buffer], values):
                             self.mcts.backup(path, value=value, complete=True)
                         self.tracker.update('mcts', incr=g.expansion_batch_size)
                 else:
                     for _ in range(g.num_mcts_sims):
-                        new_state, path = self.mcts.select(state, g.max_rollout_length - ri)
+                        new_state, path = self.mcts.select(state, depth_limit)
                         value = self.mcts.expand(new_state)
                         self.mcts.backup(path, value=value)
                         self.tracker.update('mcts')
