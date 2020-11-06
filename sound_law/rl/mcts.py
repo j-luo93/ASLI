@@ -7,7 +7,6 @@ import logging
 import math
 from contextlib import contextmanager
 from multiprocessing import Pool, set_start_method
-from threading import Lock
 from typing import Dict, List, Optional, Set, Tuple, Union, overload
 
 import numpy as np
@@ -63,7 +62,6 @@ class Mcts:
 
         # Prepare workers if needed.
         if g.use_virtual_loss:
-            set_start_method('fork', force=True)
             self.workers = Pool(g.num_workers)
 
         self.reset()

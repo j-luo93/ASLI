@@ -1,4 +1,5 @@
 import json
+from multiprocessing import set_start_method
 from typing import Optional
 
 import torch

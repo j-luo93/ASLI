@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dev_misc.utils import is_main_process_and_thread
 from functools import lru_cache
 from typing import (ClassVar, Dict, Iterator, List, NewType, Optional,
                     Sequence, Set, Tuple, Union)
@@ -10,7 +11,7 @@ import sound_law.data.data_loader as dl
 import sound_law.rl.action as a
 from dev_misc import BT, FT, LT, NDA, g
 from dev_misc.utils import Singleton, cached_property
-from sound_law.evaluate.edit_dist import ed_eval_batch
+from editdistance import eval_batch
 
 
 class Word:
@@ -70,11 +71,13 @@ class VocabState:
     def __hash__(self):
         return self.s_id
 
-    # @lru_cache(maxsize=None)
+    @lru_cache(maxsize=None)
     def dist_from(self, other: VocabState) -> float:
         units_1 = [word.units for word in self.words]
         units_2 = [word.units for word in other.words]
-        return float(ed_eval_batch(units_1, units_2, 4).sum())
+        num_threads = 4 if is_main_process_and_thread() else 0
+        res = float(eval_batch(units_1, units_2, num_threads).sum())
+        return res
 
 
 class Trajectory:
