@@ -6,13 +6,12 @@ from __future__ import annotations
 import logging
 import math
 from contextlib import contextmanager
+from multiprocessing import Pool, set_start_method
 from threading import Lock
 from typing import Dict, List, Optional, Set, Tuple, Union, overload
 
 import numpy as np
 import torch
-from multiprocessing import Pool
-# from pathos.multiprocessing import Pool
 from torch.distributions.categorical import Categorical
 
 from dev_misc import NDA, add_argument, g, get_tensor, get_zeros
@@ -64,6 +63,7 @@ class Mcts:
 
         # Prepare workers if needed.
         if g.use_virtual_loss:
+            set_start_method('fork', force=True)
             self.workers = Pool(g.num_workers)
 
         self.reset()
