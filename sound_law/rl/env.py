@@ -30,6 +30,7 @@ class SoundChangeEnv(nn.Module):
         self._end_state = end_state
         self._starting_dist = init_state.dist_from(end_state)
 
+    @profile
     def forward(self, state: VocabState, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
         if g.use_mcts:
             new_state = self._forward_mcts(state, action)

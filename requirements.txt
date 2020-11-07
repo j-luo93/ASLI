@@ -10,6 +10,5 @@ graphviz
 loguru
 inflection
 altair
-prefect
-gradio
 prompt_toolkit
+Cython==3.0a6
