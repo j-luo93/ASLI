@@ -4,8 +4,8 @@ from setuptools import Extension, find_packages, setup
 
 def get_ext(*args, **kwargs):
     return Extension(*args,
-                     extra_link_args=['-L/usr/lib/x86_64-linux-gnu/', '-std=c++11'],
-                     extra_compile_args=['-std=c++11'],
+                     extra_link_args=['-L/usr/lib/x86_64-linux-gnu/', '-std=c++11', '-fopenmp'],
+                     extra_compile_args=['-std=c++11', '-fopenmp'],
                      **kwargs)
 
 
