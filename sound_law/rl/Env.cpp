@@ -20,5 +20,5 @@ TreeNode *Env::step(TreeNode *node, Action *action)
         vocab_i[i] = IdSeq(node->vocab_i[i].size());
         replace_copy(node->vocab_i[i].begin(), node->vocab_i[i].end(), vocab_i[i].begin(), action->before_id, action->after_id);
     };
-    return new TreeNode(vocab_i, node->end_node);
+    return new TreeNode(vocab_i, node->end_node, action->action_id, node);
 };

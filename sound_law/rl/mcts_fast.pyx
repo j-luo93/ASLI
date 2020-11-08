@@ -35,11 +35,17 @@ cdef extern from "TreeNode.h":
         void lock()
         void unlock()
         bool is_leaf()
+        long get_best_action_id(float)
+        void expand(vector[float])
+        void virtual_backup(long, long, float)
+        void backup(float, long, float)
 
         VocabIdSeq vocab_i
         unsigned long dist_to_end
         unordered_map[long, TreeNode *] edges
         vector[float] prior
+        vector[long] action_count
+        long visit_count
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
@@ -146,16 +152,20 @@ cdef class PyTreeNode:
     def prior(self):
         return np.asarray(self.ptr.prior)
 
-    @prior.setter
-    def prior(self, float[::1] value):
-        cdef long n = value.shape[0]
-        self.ptr.prior = np2vector(value, n)
-
     def __str__(self):
         out = list()
         for i in range(self.ptr.vocab_i.size()):
             out.append(' '.join(map(str, self.ptr.vocab_i[i])))
         return '\n'.join(out)
+
+    def expand(self, float[::1] prior):
+        cdef long n = prior.shape[0]
+        cdef vector[float] prior_vec = np2vector(prior, n)
+        self.ptr.expand(prior_vec)
+
+    def backup(self, float value, long game_count, float virtual_loss):
+        self.ptr.backup(value, game_count, virtual_loss)
+
 
 
 # @cython.boundscheck(False)
@@ -179,15 +189,15 @@ cdef class PyTreeNode:
 #             best_i = i
 #     return best_i
 
-cdef inline long vector_argmax(vector[float] vec) nogil:
-    cdef long best_i, i
-    best_i = 0
-    cdef float best_v = vec[0]
-    for i in range(1, vec.size()):
-        if best_v < vec[i]:
-            best_v = vec[i]
-            best_i = i
-    return best_i
+# cdef inline long vector_argmax(vector[float] vec) nogil:
+#     cdef long best_i, i
+#     best_i = 0
+#     cdef float best_v = vec[0]
+#     for i in range(1, vec.size()):
+#         if best_v < vec[i]:
+#             best_v = vec[i]
+#             best_i = i
+#     return best_i
 
 
 # # FIXME(j_luo) rename node to state?
@@ -195,7 +205,10 @@ cpdef object parallel_select(PyTreeNode py_root,
                              PyTreeNode py_end,
                              long num_sims,
                              long num_threads,
-                             long depth_limit):
+                             long depth_limit,
+                             float puct_c,
+                             long game_count,
+                             float virtual_loss):
     cdef TreeNode *end = py_end.ptr
     cdef TreeNode *root = py_root.ptr
     # FIXME(j_luo) This could be saved?
@@ -217,10 +230,11 @@ cpdef object parallel_select(PyTreeNode py_root,
             n_steps_left = depth_limit
             while n_steps_left > 0 and not node.is_leaf() and node.vocab_i != end.vocab_i:
                 node.lock()
-                action_id = vector_argmax(node.prior)
+                action_id = node.get_best_action_id(puct_c)
                 action = new Action(action_id, action_id, action_id + 10)
                 next_node = env.step(node, action)
                 n_steps_left = n_steps_left - 1
+                node.virtual_backup(action_id, game_count, virtual_loss)
                 node.unlock()
 
                 node = next_node
