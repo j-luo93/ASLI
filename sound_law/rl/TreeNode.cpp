@@ -2,14 +2,18 @@
 #include <Env.h>
 #include <iostream>
 
-TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node = nullptr)
+TreeNode::TreeNode(VocabIdSeq vocab_i)
+{
+    this->vocab_i = vocab_i;
+    this->end_node = nullptr;
+    this->dist_to_end = 0;
+};
+
+TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
 {
     this->vocab_i = vocab_i;
     this->end_node = end_node;
-    this->dist_to_end = (end_node == nullptr) ? 0 : node_distance(this, end_node);
-    // Persistent lock attached to this node.
-    this->ulock = unique_lock<mutex>(this->mtx);
-    this->ulock.unlock();
+    this->dist_to_end = node_distance(this, end_node);
 };
 
 void TreeNode::add_edge(uint action_id, TreeNode *child)
@@ -30,7 +34,7 @@ uint TreeNode::size()
 
 void TreeNode::lock()
 {
-    this->ulock.lock();
+    this->ulock = unique_lock<mutex>(this->mtx);
 }
 
 void TreeNode::unlock()

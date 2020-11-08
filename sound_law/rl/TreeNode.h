@@ -13,6 +13,7 @@ using VocabIdSeq = vector<IdSeq>;
 class TreeNode
 {
 public:
+    TreeNode(VocabIdSeq);
     TreeNode(VocabIdSeq, TreeNode *);
 
     void add_edge(uint, TreeNode *);
