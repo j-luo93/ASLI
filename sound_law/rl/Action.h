@@ -11,3 +11,9 @@ public:
     long before_id;
     long after_id;
 };
+
+class ActionSpace
+{
+public:
+    ActionSpace();
+};

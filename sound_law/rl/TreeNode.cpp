@@ -71,27 +71,31 @@ bool TreeNode::is_leaf()
 long TreeNode::get_best_action_id(float puct_c)
 {
     long sqrt_ns = sqrt(this->visit_count);
-    long best_i = 0;
+    long best_i = -1;
     float best_v = NULL;
     for (long i = 0; i < this->prior.size(); ++i)
     {
+        if (not this->action_mask[i])
+            continue;
         long nsa = this->action_count[i];
         float q = this->total_value[i] / (nsa + 1e-8);
         float p = this->prior[i];
         float u = puct_c * p * sqrt_ns / (1 + nsa);
         float score = q + u;
-        if ((best_v == NULL) || (score > best_v))
+        if ((best_v == NULL) or (score > best_v))
         {
             best_v = score;
             best_i = i;
         };
     }
+    assert(best_i != -1);
     return best_i;
 }
 
-void TreeNode::expand(vector<float> prior)
+void TreeNode::expand(vector<float> prior, vector<bool> action_mask)
 {
     this->prior = prior;
+    this->action_mask = action_mask;
     long num_actions = prior.size();
     this->action_count = vector<long>(num_actions, 0);
     this->visit_count = 0;

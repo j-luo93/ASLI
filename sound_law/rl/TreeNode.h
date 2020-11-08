@@ -24,7 +24,7 @@ public:
     void unlock();
     bool is_leaf();
     long get_best_action_id(float);
-    void expand(vector<float>);
+    void expand(vector<float>, vector<bool>);
     void virtual_backup(long, long, float);
     void backup(float, long, float);
 
@@ -35,6 +35,7 @@ public:
     long dist_to_end;
     unordered_map<long, TreeNode *> edges;
     vector<float> prior;
+    vector<bool> action_mask;
     vector<long> action_count;
     long visit_count;
     vector<float> total_value;

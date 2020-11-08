@@ -36,7 +36,7 @@ cdef extern from "TreeNode.h":
         void unlock()
         bool is_leaf()
         long get_best_action_id(float)
-        void expand(vector[float])
+        void expand(vector[float], vector[bool])
         void virtual_backup(long, long, float)
         void backup(float, long, float)
 
@@ -93,9 +93,14 @@ cdef inline long[:, ::1] vocab2np(VocabIdSeq vocab_i) except *:
             arr[i, j] = id_seq[j]
     return arr
 
-cdef inline vector[float] np2vector(float[::1] arr, long n) except *:
+# Convertible types between numpy and c++ template.
+ctypedef fused convertible:
+    float
+    bool
+
+cdef inline vector[convertible] np2vector(convertible[::1] arr, long n) except *:
     cdef long i
-    cdef vector[float] vec = vector[float](n)
+    cdef vector[convertible] vec = vector[convertible](n)
     for i in range(n):
         vec[i] = arr[i]
     return vec
@@ -168,10 +173,11 @@ cdef class PyTreeNode:
         out += '\n'.join(vocab)
         return out
 
-    def expand(self, float[::1] prior):
+    def expand(self, float[::1] prior, bool[::1] action_mask):
         cdef long n = prior.shape[0]
         cdef vector[float] prior_vec = np2vector(prior, n)
-        self.ptr.expand(prior_vec)
+        cdef vector[bool] action_mask_vec = np2vector(action_mask, n)
+        self.ptr.expand(prior_vec, action_mask_vec)
 
     def backup(self, float value, long game_count, float virtual_loss):
         self.ptr.backup(value, game_count, virtual_loss)
@@ -232,11 +238,6 @@ cpdef object parallel_select(PyTreeNode py_root,
     cdef long n_steps_left, i, action_id
     cdef Action *action
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
-    for i in range(5):
-        action = new Action(i, i, i + 10)
-        # FIXME(j_luo) We must make sure that before calling `step`, `root` has an end_node -- see Env.cpp, line 18.
-        node = env.step(root, action)
-        root.add_edge(i, node)
 
     with nogil:
         for i in prange(num_sims, num_threads=num_threads):
@@ -246,6 +247,7 @@ cpdef object parallel_select(PyTreeNode py_root,
                 node.lock()
                 action_id = node.get_best_action_id(puct_c)
                 action = new Action(action_id, action_id, action_id + 10)
+                # FIXME(j_luo) We must make sure that before calling `step`, `root` has an end_node -- see Env.cpp, line 18.
                 next_node = env.step(node, action)
                 n_steps_left = n_steps_left - 1
                 node.virtual_backup(action_id, game_count, virtual_loss)
