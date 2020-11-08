@@ -36,12 +36,16 @@ long TreeNode::size()
 
 void TreeNode::lock()
 {
-    this->ulock = unique_lock<mutex>(this->mtx);
+    // unique_lock<mutex> this->ulock(this->mtx);
+    // FIXME(j_luo) how to use unique_lock?
+    this->mtx.lock();
+    // this->ulock = unique_lock<mutex> lock(this->mtx);
 }
 
 void TreeNode::unlock()
 {
-    this->ulock.unlock();
+    // this->ulock.unlock();
+    this->mtx.unlock();
 }
 
 bool TreeNode::is_leaf()

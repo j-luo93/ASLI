@@ -216,10 +216,13 @@ cpdef object parallel_select(PyTreeNode py_root,
             node = root
             n_steps_left = depth_limit
             while n_steps_left > 0 and not node.is_leaf() and node.vocab_i != end.vocab_i:
+                node.lock()
                 action_id = vector_argmax(node.prior)
                 action = new Action(action_id, action_id, action_id + 10)
                 next_node = env.step(node, action)
                 n_steps_left = n_steps_left - 1
+                node.unlock()
+
                 node = next_node
             selected[i] = node
     return [PyTreeNode.from_ptr(ptr) for ptr in selected]
