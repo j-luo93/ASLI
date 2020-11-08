@@ -92,12 +92,20 @@ ctypedef Action * Aptr
 
 cdef class PyTreeNode:
     cdef TNptr ptr
+    cdef float[::1] prior_view
 
     def __dealloc__(self):
         # # Don't free the memory. Just delete the attribute.
         # del self.ptr
         # free(self.ptr)
+        # FIXME(j_luo) Make sure this is correct
         self.ptr = NULL
+
+    def __init__(self):
+        self.prior_view = None
+
+    def set_action_prior(self, float[::1] prior):
+        self.prior_view = prior
 
     @staticmethod
     cdef PyTreeNode from_ptr(TreeNode *ptr):
@@ -121,6 +129,10 @@ cdef class PyTreeNode:
     @property
     def vocab(self):
         return vocab2np(self.ptr.vocab_i)
+
+    @property
+    def prior(self):
+        return np.asarray(self.prior_view)
 
     def __str__(self):
         out = list()
@@ -150,41 +162,6 @@ cdef inline long np_argmax(float[::1] x, long size) nogil:
             best_i = i
     return best_i
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef bool test(long[:, ::1] arr1, long[:, ::1] arr2):
-    cdef PyTreeNode end = PyTreeNode.from_np(arr2)
-    cdef PyTreeNode start = PyTreeNode.from_np(arr1, end)
-    cdef Env *env = new Env(start.ptr, end.ptr)
-    cdef Action *action0 = new Action(0, 2, 22)
-    cdef Action *action1 = new Action(1, 2, 2222)
-    cdef TreeNode *new_node = env.step(start.ptr, action0)
-    cdef vector[TNptr] queue = vector[TNptr](2)
-    queue[0] = start.ptr
-    queue[1] = start.ptr
-    cdef vector[Aptr] action_queue = vector[Aptr](2)
-    action_queue[0] = action0
-    action_queue[1] = action1
-    cdef long i
-    cdef TreeNode *node
-
-    cdef float[::1] Psa_1 = np.random.randn(5).astype('float32')
-    cdef float[::1] Psa_2 = np.random.randn(5).astype('float32')
-    cdef float[::1] Psa
-    cdef float s = 0.0
-    cdef long num_actions = 5
-
-    with nogil:
-        for i in prange(2, num_threads=2):
-            node = queue[i]
-            action = action_queue[i]
-            node.lock()
-            s += np_sum(Psa_1, num_actions)
-            sleep(1)
-            node.unlock()
-    print(s)
-    print(np.asarray(Psa_1).sum()  * 2)
-    return start.has_acted(0)
 
 cpdef object parallel_select(long[:, ::1] init_arr,
                              long[:, ::1] end_arr,
@@ -201,27 +178,21 @@ cpdef object parallel_select(long[:, ::1] init_arr,
     cdef long n_steps_left, i, action_id, num_actions
     Psa = np.random.randn(5).astype('float32')
     cdef float[::1] Psa_view = Psa
-    print(Psa)
-    print(np_argmax(Psa_view, 5))
     cdef Action *action
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
     for i in range(5):
         action = new Action(i, i, i + 10)
-        # j_luo(FIXME) We must make sure that before calling `step`, `start` has an end_node -- see Env.cpp, line 18.
+        # FIXME(j_luo) We must make sure that before calling `step`, `start` has an end_node -- see Env.cpp, line 18.
         node = env.step(start, action)
         start.add_edge(i, node)
 
     with nogil:
-        for i in range(num_sims):#, num_threads=num_threads):
+        for i in prange(num_sims, num_threads=num_threads):
             node = start
             n_steps_left = depth_limit
             num_actions = 5
-            with gil:
-                print(np.asarray(Psa_view))
             while n_steps_left > 0 and node.vocab_i != end.vocab_i and not node.is_leaf():
                 action_id = np_argmax(Psa_view, num_actions)
-                with gil:
-                    print(action_id)
                 action = new Action(action_id, action_id, action_id + 10)
                 next_node = env.step(node, action)
                 n_steps_left = n_steps_left - 1
