@@ -55,6 +55,11 @@ cdef extern from "Action.h":
         long action_id
         long before_id
         long after_id
+    cdef cppclass ActionSpace nogil:
+        ActionSpace()
+        void register_action(long, long)
+        Action *get_action(long)
+        vector[bool] get_action_mask(TreeNode *)
 
 
 cdef extern from "Env.h":
@@ -186,7 +191,23 @@ cdef class PyTreeNode:
     def prev_action(self):
         return self.ptr.prev_action
 
+ctypedef ActionSpace * ASptr
 
+cdef class PyActionSpace:
+    cdef ASptr ptr
+
+    def __cinit__(self):
+        self.ptr = new ActionSpace()
+
+    def __dealloc__(self):
+        del self.ptr
+
+    def register_action(self, long before_id, long after_id):
+        self.ptr.register_action(before_id, after_id)
+
+    def get_action_mask(self, PyTreeNode py_node):
+        cdef vector[bool] action_mask = self.ptr.get_action_mask(py_node.ptr)
+        return np.asarray(action_mask)
 
 # @cython.boundscheck(False)
 # @cython.wraparound(False)
@@ -223,6 +244,7 @@ cdef class PyTreeNode:
 # # FIXME(j_luo) rename node to state?
 cpdef object parallel_select(PyTreeNode py_root,
                              PyTreeNode py_end,
+                             PyActionSpace py_as,
                              long num_sims,
                              long num_threads,
                              long depth_limit,
@@ -238,6 +260,7 @@ cpdef object parallel_select(PyTreeNode py_root,
     cdef long n_steps_left, i, action_id
     cdef Action *action
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
+    cdef ActionSpace *action_space = py_as.ptr
 
     with nogil:
         for i in prange(num_sims, num_threads=num_threads):
@@ -246,8 +269,7 @@ cpdef object parallel_select(PyTreeNode py_root,
             while n_steps_left > 0 and not node.is_leaf() and node.vocab_i != end.vocab_i:
                 node.lock()
                 action_id = node.get_best_action_id(puct_c)
-                action = new Action(action_id, action_id, action_id + 10)
-                # FIXME(j_luo) We must make sure that before calling `step`, `root` has an end_node -- see Env.cpp, line 18.
+                action = action_space.get_action(action_id)
                 next_node = env.step(node, action)
                 n_steps_left = n_steps_left - 1
                 node.virtual_backup(action_id, game_count, virtual_loss)

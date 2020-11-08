@@ -9,6 +9,7 @@ Env::Env(TreeNode *init_node, TreeNode *end_node)
 
 TreeNode *Env::step(TreeNode *node, Action *action)
 {
+    assert(node->end_node != nullptr);
     if (node->has_acted(action->action_id))
     {
         return node->edges[action->action_id];
@@ -17,8 +18,7 @@ TreeNode *Env::step(TreeNode *node, Action *action)
     VocabIdSeq vocab_i = VocabIdSeq(node->size());
     for (long i = 0; i < node->size(); ++i)
     {
-        vocab_i[i] = IdSeq(node->vocab_i[i].size());
-        replace_copy(node->vocab_i[i].begin(), node->vocab_i[i].end(), vocab_i[i].begin(), action->before_id, action->after_id);
+        vocab_i[i] = action->apply_to(node->vocab_i[i]).second;
     };
     return new TreeNode(vocab_i, node->end_node, action->action_id, node);
 };
