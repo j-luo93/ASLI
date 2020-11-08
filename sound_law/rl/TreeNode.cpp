@@ -29,7 +29,7 @@ bool TreeNode::has_acted(long action_id)
 
 long TreeNode::size()
 {
-    return (long)this->vocab_i.size();
+    return this->vocab_i.size();
 }
 
 void TreeNode::lock()
@@ -40,4 +40,9 @@ void TreeNode::lock()
 void TreeNode::unlock()
 {
     this->ulock.unlock();
+}
+
+bool TreeNode::is_leaf()
+{
+    return this->edges.size() == 0;
 }

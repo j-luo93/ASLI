@@ -25,10 +25,14 @@ long edit_distance(IdSeq seq1, IdSeq seq2)
             long sub_cost = seq1[i] == seq2[j] ? 0 : 1;
             dist[i][j] = min(dist[i - 1][j - 1] + sub_cost, min(dist[i - 1][j], dist[i][j - 1]) + 1);
         }
-    return dist[l1][l2];
+    long ret = dist[l1][l2];
+    for (long i = 0; i < l1 + 1; ++i)
+        free(dist[i]);
+    free(dist);
+    return ret;
 };
 
-unsigned long node_distance(TreeNode *node1, TreeNode *node2)
+long node_distance(TreeNode *node1, TreeNode *node2)
 {
     long l1 = node1->size();
     long l2 = node2->size();

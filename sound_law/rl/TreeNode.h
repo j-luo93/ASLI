@@ -20,10 +20,11 @@ public:
     long size();
     void lock();
     void unlock();
+    bool is_leaf();
 
     VocabIdSeq vocab_i;
     TreeNode *end_node;
-    unsigned long dist_to_end;
+    long dist_to_end;
     unordered_map<long, TreeNode *> edges;
 
 private:

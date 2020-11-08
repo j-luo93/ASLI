@@ -6,6 +6,8 @@ from cython.operator cimport dereference as deref
 from cython.parallel import prange
 from libcpp cimport nullptr
 from typing import List
+from libc.stdlib cimport free
+from libc.stdio cimport printf
 
 from libcpp cimport bool
 import numpy as np
@@ -20,7 +22,6 @@ cdef extern from "Action.cpp":
 cdef extern from "Env.cpp":
     pass
 
-
 cdef extern from "TreeNode.h":
     ctypedef vector[long] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
@@ -33,6 +34,7 @@ cdef extern from "TreeNode.h":
         long size()
         void lock()
         void unlock()
+        bool is_leaf()
 
         VocabIdSeq vocab_i
         unsigned long dist_to_end
@@ -92,8 +94,10 @@ cdef class PyTreeNode:
     cdef TNptr ptr
 
     def __dealloc__(self):
-        # Don't free the memory. Just delete the attribute.
-        del self.ptr
+        # # Don't free the memory. Just delete the attribute.
+        # del self.ptr
+        # free(self.ptr)
+        self.ptr = NULL
 
     @staticmethod
     cdef PyTreeNode from_ptr(TreeNode *ptr):
@@ -114,6 +118,16 @@ cdef class PyTreeNode:
             ptr = new TreeNode(vocab_i, end_node.ptr)
         return PyTreeNode.from_ptr(ptr)
 
+    @property
+    def vocab(self):
+        return vocab2np(self.ptr.vocab_i)
+
+    def __str__(self):
+        out = list()
+        for i in range(self.ptr.vocab_i.size()):
+            out.append(' '.join(map(str, self.ptr.vocab_i[i])))
+        return '\n'.join(out)
+
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -123,6 +137,18 @@ cdef inline float np_sum(float[::1] x, long size) nogil:
     for i in range(size):
         s = s + x[i]
     return s
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef inline long np_argmax(float[::1] x, long size) nogil:
+    cdef long best_i, i
+    best_i = 0
+    cdef float best_v = x[0]
+    for i in range(1, size):
+        if best_v < x[i]:
+            best_v = x[i]
+            best_i = i
+    return best_i
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -160,5 +186,45 @@ cpdef bool test(long[:, ::1] arr1, long[:, ::1] arr2):
     print(np.asarray(Psa_1).sum()  * 2)
     return start.has_acted(0)
 
+cpdef object parallel_select(long[:, ::1] init_arr,
+                             long[:, ::1] end_arr,
+                             long num_sims,
+                             long num_threads,
+                             long depth_limit):
+    cdef PyTreeNode py_end = PyTreeNode.from_np(end_arr)
+    cdef TreeNode *end = py_end.ptr
+    cdef PyTreeNode py_start = PyTreeNode.from_np(init_arr, py_end)
+    cdef TreeNode *start = py_start.ptr
+    cdef Env * env = new Env(start, end)
 
+    cdef TreeNode *node, *next_node
+    cdef long n_steps_left, i, action_id, num_actions
+    Psa = np.random.randn(5).astype('float32')
+    cdef float[::1] Psa_view = Psa
+    print(Psa)
+    print(np_argmax(Psa_view, 5))
+    cdef Action *action
+    cdef vector[TNptr] selected = vector[TNptr](num_sims)
+    for i in range(5):
+        action = new Action(i, i, i + 10)
+        # j_luo(FIXME) We must make sure that before calling `step`, `start` has an end_node -- see Env.cpp, line 18.
+        node = env.step(start, action)
+        start.add_edge(i, node)
 
+    with nogil:
+        for i in range(num_sims):#, num_threads=num_threads):
+            node = start
+            n_steps_left = depth_limit
+            num_actions = 5
+            with gil:
+                print(np.asarray(Psa_view))
+            while n_steps_left > 0 and node.vocab_i != end.vocab_i and not node.is_leaf():
+                action_id = np_argmax(Psa_view, num_actions)
+                with gil:
+                    print(action_id)
+                action = new Action(action_id, action_id, action_id + 10)
+                next_node = env.step(node, action)
+                n_steps_left = n_steps_left - 1
+                node = next_node
+            selected[i] = node
+    return [PyTreeNode.from_ptr(ptr) for ptr in selected]
