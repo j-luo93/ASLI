@@ -102,6 +102,7 @@ void TreeNode::virtual_backup(long action_id, long game_count, float virtual_los
 {
     this->action_count[action_id] += game_count;
     this->total_value[action_id] -= game_count * virtual_loss;
+    this->visit_count += game_count;
 }
 
 void TreeNode::backup(float value, long game_count, float virtual_loss)
@@ -113,5 +114,8 @@ void TreeNode::backup(float value, long game_count, float virtual_loss)
         long action_id = node->prev_action;
         parent_node->action_count[action_id] -= game_count - 1;
         parent_node->total_value[action_id] += game_count * virtual_loss + value;
+        parent_node->visit_count -= game_count - 1;
+        node = parent_node;
+        parent_node = node->parent_node;
     }
 }

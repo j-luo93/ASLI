@@ -41,11 +41,13 @@ cdef extern from "TreeNode.h":
         void backup(float, long, float)
 
         VocabIdSeq vocab_i
-        unsigned long dist_to_end
+        long dist_to_end
+        long prev_action
         unordered_map[long, TreeNode *] edges
         vector[float] prior
         vector[long] action_count
         long visit_count
+        vector[float] total_value
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
@@ -153,10 +155,18 @@ cdef class PyTreeNode:
         return np.asarray(self.ptr.prior)
 
     def __str__(self):
-        out = list()
+        out = f'visit_count: {self.ptr.visit_count}\n'
+        out += f'action_count:\n'
+        out += '[' + ', '.join(map(str, self.ptr.action_count)) + ']\n'
+        out += f'action_prior:\n'
+        out += '[' + ', '.join([f'{p:.3f}' for p in self.ptr.prior]) + ']\n'
+        out += f'total_value:\n'
+        out += '[' + ', '.join([f'{v:.3f}' for v in self.ptr.total_value]) + ']\n'
+        vocab = list()
         for i in range(self.ptr.vocab_i.size()):
-            out.append(' '.join(map(str, self.ptr.vocab_i[i])))
-        return '\n'.join(out)
+            vocab.append(' '.join(map(str, self.ptr.vocab_i[i])))
+        out += '\n'.join(vocab)
+        return out
 
     def expand(self, float[::1] prior):
         cdef long n = prior.shape[0]
@@ -165,6 +175,10 @@ cdef class PyTreeNode:
 
     def backup(self, float value, long game_count, float virtual_loss):
         self.ptr.backup(value, game_count, virtual_loss)
+
+    @property
+    def prev_action(self):
+        return self.ptr.prev_action
 
 
 
