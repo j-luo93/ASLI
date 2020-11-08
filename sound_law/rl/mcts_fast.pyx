@@ -39,6 +39,7 @@ cdef extern from "TreeNode.h":
         VocabIdSeq vocab_i
         unsigned long dist_to_end
         unordered_map[long, TreeNode *] edges
+        vector[float] prior
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
@@ -84,6 +85,13 @@ cdef inline long[:, ::1] vocab2np(VocabIdSeq vocab_i) except *:
             arr[i, j] = id_seq[j]
     return arr
 
+cdef inline vector[float] np2vector(float[::1] arr, long n) except *:
+    cdef long i
+    cdef vector[float] vec = vector[float](n)
+    for i in range(n):
+        vec[i] = arr[i]
+    return vec
+
 cdef extern from "unistd.h" nogil:
     unsigned int sleep(unsigned int seconds)
 
@@ -92,7 +100,7 @@ ctypedef Action * Aptr
 
 cdef class PyTreeNode:
     cdef TNptr ptr
-    cdef float[::1] prior_view
+    cdef public PyTreeNode end_node
 
     def __dealloc__(self):
         # # Don't free the memory. Just delete the attribute.
@@ -101,30 +109,34 @@ cdef class PyTreeNode:
         # FIXME(j_luo) Make sure this is correct
         self.ptr = NULL
 
-    def __init__(self):
-        self.prior_view = None
+    def __cinit__(self,
+                  object arr = None,
+                  PyTreeNode end_node = None,
+                  bool from_ptr = False):
+        """`arr` is converted to `vocab_i`, which is then used to construct a c++ TreeNode object. Use this for creating PyTreeNode in python."""
+        # Skip creating a new c++ TreeNode object since it would be handled by `from_ptr` instead.
+        if arr is None:
+            assert from_ptr, 'You must either construct using `from_ptr` or provide `arr` here.'
+            return
 
-    def set_action_prior(self, float[::1] prior):
-        self.prior_view = prior
-
-    @staticmethod
-    cdef PyTreeNode from_ptr(TreeNode *ptr):
-        cdef PyTreeNode py_tn = PyTreeNode.__new__(PyTreeNode)
-        py_tn.ptr = ptr
-        return py_tn
-
-    @staticmethod
-    cdef PyTreeNode from_np(object arr, PyTreeNode end_node = None):
         cdef long[:, ::1] arr_view = arr
         cdef long n = arr.shape[0]
         cdef long m = arr.shape[1]
         cdef VocabIdSeq vocab_i = np2vocab(arr_view, n, m)
-        cdef TreeNode *ptr
         if end_node is None:
-            ptr = new TreeNode(vocab_i)
+            self.ptr = new TreeNode(vocab_i)
         else:
-            ptr = new TreeNode(vocab_i, end_node.ptr)
-        return PyTreeNode.from_ptr(ptr)
+            self.ptr = new TreeNode(vocab_i, end_node.ptr)
+
+    def __init__(self, arr, end_node=None):
+        self.end_node = end_node
+
+    @staticmethod
+    cdef PyTreeNode from_ptr(TreeNode *ptr):
+        """This is used in cython code to wrap around a c++ TreeNode object."""
+        cdef PyTreeNode py_tn = PyTreeNode.__new__(PyTreeNode, from_ptr=True)
+        py_tn.ptr = ptr
+        return py_tn
 
     @property
     def vocab(self):
@@ -132,7 +144,12 @@ cdef class PyTreeNode:
 
     @property
     def prior(self):
-        return np.asarray(self.prior_view)
+        return np.asarray(self.ptr.prior)
+
+    @prior.setter
+    def prior(self, float[::1] value):
+        cdef long n = value.shape[0]
+        self.ptr.prior = np2vector(value, n)
 
     def __str__(self):
         out = list()
@@ -141,58 +158,65 @@ cdef class PyTreeNode:
         return '\n'.join(out)
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef inline float np_sum(float[::1] x, long size) nogil:
-    cdef float s = 0.0
-    cdef long i
-    for i in range(size):
-        s = s + x[i]
-    return s
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+# cdef inline float np_sum(float[::1] x, long size) nogil:
+#     cdef float s = 0.0
+#     cdef long i
+#     for i in range(size):
+#         s = s + x[i]
+#     return s
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef inline long np_argmax(float[::1] x, long size) nogil:
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+# cdef inline long np_argmax(float[::1] x, long size) nogil:
+#     cdef long best_i, i
+#     best_i = 0
+#     cdef float best_v = x[0]
+#     for i in range(1, size):
+#         if best_v < x[i]:
+#             best_v = x[i]
+#             best_i = i
+#     return best_i
+
+cdef inline long vector_argmax(vector[float] vec) nogil:
     cdef long best_i, i
     best_i = 0
-    cdef float best_v = x[0]
-    for i in range(1, size):
-        if best_v < x[i]:
-            best_v = x[i]
+    cdef float best_v = vec[0]
+    for i in range(1, vec.size()):
+        if best_v < vec[i]:
+            best_v = vec[i]
             best_i = i
     return best_i
 
 
-cpdef object parallel_select(long[:, ::1] init_arr,
-                             long[:, ::1] end_arr,
+# # FIXME(j_luo) rename node to state?
+cpdef object parallel_select(PyTreeNode py_root,
+                             PyTreeNode py_end,
                              long num_sims,
                              long num_threads,
                              long depth_limit):
-    cdef PyTreeNode py_end = PyTreeNode.from_np(end_arr)
     cdef TreeNode *end = py_end.ptr
-    cdef PyTreeNode py_start = PyTreeNode.from_np(init_arr, py_end)
-    cdef TreeNode *start = py_start.ptr
-    cdef Env * env = new Env(start, end)
+    cdef TreeNode *root = py_root.ptr
+    # FIXME(j_luo) This could be saved?
+    cdef Env * env = new Env(root, end)
 
     cdef TreeNode *node, *next_node
-    cdef long n_steps_left, i, action_id, num_actions
-    Psa = np.random.randn(5).astype('float32')
-    cdef float[::1] Psa_view = Psa
+    cdef long n_steps_left, i, action_id
     cdef Action *action
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
     for i in range(5):
         action = new Action(i, i, i + 10)
-        # FIXME(j_luo) We must make sure that before calling `step`, `start` has an end_node -- see Env.cpp, line 18.
-        node = env.step(start, action)
-        start.add_edge(i, node)
+        # FIXME(j_luo) We must make sure that before calling `step`, `root` has an end_node -- see Env.cpp, line 18.
+        node = env.step(root, action)
+        root.add_edge(i, node)
 
     with nogil:
         for i in prange(num_sims, num_threads=num_threads):
-            node = start
+            node = root
             n_steps_left = depth_limit
-            num_actions = 5
-            while n_steps_left > 0 and node.vocab_i != end.vocab_i and not node.is_leaf():
-                action_id = np_argmax(Psa_view, num_actions)
+            while n_steps_left > 0 and not node.is_leaf() and node.vocab_i != end.vocab_i:
+                action_id = vector_argmax(node.prior)
                 action = new Action(action_id, action_id, action_id + 10)
                 next_node = env.step(node, action)
                 n_steps_left = n_steps_left - 1

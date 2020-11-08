@@ -7,6 +7,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i)
     this->vocab_i = vocab_i;
     this->end_node = nullptr;
     this->dist_to_end = 0;
+    this->prior = vector<float>();
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
@@ -14,6 +15,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
     this->vocab_i = vocab_i;
     this->end_node = end_node;
     this->dist_to_end = node_distance(this, end_node);
+    this->prior = vector<float>();
 };
 
 void TreeNode::add_edge(long action_id, TreeNode *child)
@@ -44,5 +46,5 @@ void TreeNode::unlock()
 
 bool TreeNode::is_leaf()
 {
-    return this->edges.size() == 0;
+    return this->prior.empty();
 }

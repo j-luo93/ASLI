@@ -9,6 +9,11 @@ Env::Env(TreeNode *init_node, TreeNode *end_node)
 
 TreeNode *Env::step(TreeNode *node, Action *action)
 {
+    if (node->has_acted(action->action_id))
+    {
+        return node->edges[action->action_id];
+    }
+
     VocabIdSeq vocab_i = VocabIdSeq(node->size());
     for (long i = 0; i < node->size(); ++i)
     {

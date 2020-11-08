@@ -6,6 +6,7 @@
 
 using namespace std;
 
+// FIXME(j_luo) Probably need list for insertion speed.
 using IdSeq = vector<long>;
 using VocabIdSeq = vector<IdSeq>;
 
@@ -26,6 +27,7 @@ public:
     TreeNode *end_node;
     long dist_to_end;
     unordered_map<long, TreeNode *> edges;
+    vector<float> prior;
 
 private:
     mutex mtx;
