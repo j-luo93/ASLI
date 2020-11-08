@@ -5,9 +5,9 @@
 class Action
 {
 public:
-    Action(uint, uint, uint);
+    Action(long, long, long);
 
-    uint action_id;
-    uint before_id;
-    uint after_id;
+    long action_id;
+    long before_id;
+    long after_id;
 };

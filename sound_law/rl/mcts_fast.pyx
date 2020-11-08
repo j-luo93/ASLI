@@ -22,29 +22,28 @@ cdef extern from "Env.cpp":
 
 
 cdef extern from "TreeNode.h":
-    ctypedef unsigned int uint
-    ctypedef vector[uint] IdSeq
+    ctypedef vector[long] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
     cdef cppclass TreeNode nogil:
         TreeNode(VocabIdSeq) except +
         TreeNode(VocabIdSeq, TreeNode *) except +
 
-        void add_edge(uint, TreeNode *)
-        bool has_acted(uint)
-        uint size()
+        void add_edge(long, TreeNode *)
+        bool has_acted(long)
+        long size()
         void lock()
         void unlock()
 
         VocabIdSeq vocab_i
         unsigned long dist_to_end
-        unordered_map[uint, TreeNode *] edges
+        unordered_map[long, TreeNode *] edges
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
-        Action(uint, uint, uint)
-        uint action_id
-        uint before_id
-        uint after_id
+        Action(long, long, long)
+        long action_id
+        long before_id
+        long after_id
 
 
 cdef extern from "Env.h":
@@ -56,8 +55,8 @@ cdef extern from "Env.h":
         TreeNode *init_node
         TreeNode *end_node
 
-cdef inline VocabIdSeq np2vocab(uint[:, ::1] arr, uint n, uint m) except *:
-    cdef uint i, j
+cdef inline VocabIdSeq np2vocab(long[:, ::1] arr, long n, long m) except *:
+    cdef long i, j
     cdef VocabIdSeq vocab_i = VocabIdSeq(n)
     cdef IdSeq id_seq
     for i in range(n):
@@ -67,15 +66,15 @@ cdef inline VocabIdSeq np2vocab(uint[:, ::1] arr, uint n, uint m) except *:
         vocab_i[i] = id_seq
     return vocab_i
 
-cdef inline uint[:, ::1] vocab2np(VocabIdSeq vocab_i) except *:
-    cdef uint n = vocab_i.size()
-    cdef uint m = 0
+cdef inline long[:, ::1] vocab2np(VocabIdSeq vocab_i) except *:
+    cdef long n = vocab_i.size()
+    cdef long m = 0
     # Find the longest sequence.
-    cdef uint i, j
+    cdef long i, j
     for i in range(n):
         m = max(m, vocab_i[i].size())
-    arr = np.zeros([n, m], dtype='uintc')
-    cdef uint[:, ::1] arr_view = arr
+    arr = np.zeros([n, m], dtype='long')
+    cdef long[:, ::1] arr_view = arr
     cdef IdSeq id_seq
     for i in range(n):
         id_seq = vocab_i[i]
@@ -104,9 +103,9 @@ cdef class PyTreeNode:
 
     @staticmethod
     cdef PyTreeNode from_np(object arr, PyTreeNode end_node = None):
-        cdef uint[:, ::1] arr_view = arr
-        cdef uint n = arr.shape[0]
-        cdef uint m = arr.shape[1]
+        cdef long[:, ::1] arr_view = arr
+        cdef long n = arr.shape[0]
+        cdef long m = arr.shape[1]
         cdef VocabIdSeq vocab_i = np2vocab(arr_view, n, m)
         cdef TreeNode *ptr
         if end_node is None:
@@ -118,16 +117,16 @@ cdef class PyTreeNode:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef inline float np_sum(float[::1] x, uint size) nogil:
+cdef inline float np_sum(float[::1] x, long size) nogil:
     cdef float s = 0.0
-    cdef uint i
+    cdef long i
     for i in range(size):
         s = s + x[i]
     return s
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef bool test(uint[:, ::1] arr1, uint[:, ::1] arr2):
+cpdef bool test(long[:, ::1] arr1, long[:, ::1] arr2):
     cdef PyTreeNode end = PyTreeNode.from_np(arr2)
     cdef PyTreeNode start = PyTreeNode.from_np(arr1, end)
     cdef Env *env = new Env(start.ptr, end.ptr)
@@ -140,14 +139,14 @@ cpdef bool test(uint[:, ::1] arr1, uint[:, ::1] arr2):
     cdef vector[Aptr] action_queue = vector[Aptr](2)
     action_queue[0] = action0
     action_queue[1] = action1
-    cdef uint i
+    cdef long i
     cdef TreeNode *node
 
     cdef float[::1] Psa_1 = np.random.randn(5).astype('float32')
     cdef float[::1] Psa_2 = np.random.randn(5).astype('float32')
     cdef float[::1] Psa
     cdef float s = 0.0
-    cdef uint num_actions = 5
+    cdef long num_actions = 5
 
     with nogil:
         for i in prange(2, num_threads=2):

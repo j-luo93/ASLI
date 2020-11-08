@@ -16,20 +16,20 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
     this->dist_to_end = node_distance(this, end_node);
 };
 
-void TreeNode::add_edge(uint action_id, TreeNode *child)
+void TreeNode::add_edge(long action_id, TreeNode *child)
 {
     // This will replace the old edge if it exists. Always call `has_acted` first.
     this->edges[action_id] = child;
 }
 
-bool TreeNode::has_acted(uint action_id)
+bool TreeNode::has_acted(long action_id)
 {
     return this->edges.find(action_id) != this->edges.end();
 }
 
-uint TreeNode::size()
+long TreeNode::size()
 {
-    return (uint)this->vocab_i.size();
+    return (long)this->vocab_i.size();
 }
 
 void TreeNode::lock()
