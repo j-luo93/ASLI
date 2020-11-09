@@ -10,9 +10,9 @@ long edit_distance(IdSeq seq1, IdSeq seq2)
 {
     long l1 = seq1.size();
     long l2 = seq2.size();
-    long **dist = (long **)malloc((l1 + 1) * sizeof(long));
+    long **dist = (long **)malloc((l1 + 1) * sizeof(long **));
     for (long i = 0; i < l1 + 1; ++i)
-        dist[i] = (long *)malloc((l2 + 1));
+        dist[i] = (long *)malloc((l2 + 1) * sizeof(long *));
 
     for (long i = 0; i < l1 + 1; ++i)
         dist[i][0] = i;

@@ -18,7 +18,6 @@ from sound_law.model.decoder import get_beam_probs
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
-from sound_law.rl.trajectory import VocabState
 
 
 def get_ce_loss(log_probs: FT, batch: OnePairBatch, agg='all') -> FT:
@@ -375,6 +374,9 @@ class MctsTrainer(RLTrainer):
         if mcts is None:
             raise TypeError(f'Must pass a trajectory collector to initialize this trainer.')
 
+        if g.num_mcts_sim % g.expansion_batch_size > 0:
+            raise ValueError(f'`expansion_batch_size should divide `num_mcts_sim`.')
+
         self.mcts = mcts
         super().__init__(*args, **kwargs)
 
@@ -390,27 +392,17 @@ class MctsTrainer(RLTrainer):
         samples = list()
         success = 0.0
 
-        # self.mcts.on = False
-        # try:
-        #     self._cnt += 1
-        # except:
-        #     self._cnt = 1
-        # if self._cnt >= 6:
-        #     self.mcts.on = True
-        #     breakpoint()  # BREAKPOINT(j_luo)
-
         # Collect episodes.
         for ei in range(g.num_episodes):
             state = dl.init_state
             self.mcts.reset()
             history = list()
             # Episodes have max rollout length.
-            # logging.debug(f'Episode {ei + 1}.')
             for ri in range(g.max_rollout_length):
                 depth_limit = g.max_rollout_length - ri
                 # Run many simulations before take one action.
                 if g.use_wu_uct or g.use_virtual_loss:
-                    num_batches = g.num_mcts_sims // g.expansion_batch_size  # FIXME(j_luo) check this?
+                    num_batches = g.num_mcts_sims // g.expansion_batch_size
                     for _ in range(num_batches):
                         if g.use_virtual_loss:
                             new_states, paths = self.mcts.parallel_select(state, g.expansion_batch_size, depth_limit)
@@ -433,11 +425,6 @@ class MctsTrainer(RLTrainer):
                         self.tracker.update('mcts')
 
                 probs, action, new_state = self.mcts.play(state)
-                # from dev_misc.utils import pad_for_log
-                # logging.debug(pad_for_log(state.s_key))
-                # logging.debug(action)
-                # logging.debug(pad_for_log(new_state.s_key))
-                # logging.debug('-' * 100)
                 history.append((probs, state))
                 state = new_state
 
@@ -456,6 +443,7 @@ class MctsTrainer(RLTrainer):
         tgt_policies = list()
         for probs, state, reward in samples:
             curr_ids.append(state.ids)
+            # FIXME(j_luo) check this
             action_masks.append(self.mcts.action_space.get_permissible_actions(state, return_type='tensor'))
             tgt_policies.append(probs)
             rewards.append(reward)
@@ -484,7 +472,6 @@ class MctsTrainer(RLTrainer):
 
             total_loss.mean.backward()
 
-            # FIXME(j_luo) reuse this.
             # Clip gradient norm.
             grad_norm = clip_grad(self.agent.parameters(), bs)
             metrics += Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm)

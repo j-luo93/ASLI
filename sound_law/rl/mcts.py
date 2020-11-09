@@ -180,7 +180,6 @@ class Mcts:
                 outstanding_states.append(state)
 
         # Collect states that need evaluation.
-        # FIXME(j_luo) Add no_grad
         if outstanding_states:
             action_masks = [
                 self.action_space.get_permissible_actions(state, return_type='tensor')

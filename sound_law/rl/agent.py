@@ -19,7 +19,8 @@ from sound_law.model.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                     get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
-from .reward import get_rtgs_dense, get_rtgs_list
+from .reward import (get_rtgs_dense,  # pylint: disable=no-name-in-module
+                     get_rtgs_list)
 from .trajectory import Trajectory, VocabState
 
 
@@ -256,28 +257,20 @@ class BasePG(nn.Module, metaclass=ABCMeta):
         if self.value_net is None:
             raise TypeError(f'There is no value net.')
         if isinstance(curr_state_or_ids, VocabState):
-            curr_ids = curr_state_or_ids.ids
-            if g.use_mcts:
-                curr_ids = get_tensor(curr_ids).rename('pos', 'word')
+            curr_ids = curr_state_or_ids.tensor
         else:
             curr_ids = curr_state_or_ids
-        end_ids = self.end_state.ids
-        if g.use_mcts:
-            end_ids = get_tensor(end_ids).rename('pos', 'word')
+        end_ids = self.end_state.tensor
         with torch.set_grad_enabled(self._value_grad):
             return self.value_net(curr_ids, end_ids, done=done)
 
     def get_policy(self, state_or_ids: Union[VocabState, LT], action_masks: BT) -> Distribution:
         """Get policy distribution based on current state (and end state)."""
         if isinstance(state_or_ids, VocabState):
-            curr_ids = state_or_ids.ids
-            if g.use_mcts:
-                curr_ids = get_tensor(curr_ids).rename('pos', 'word')
+            curr_ids = state_or_ids.tensor
         else:
             curr_ids = state_or_ids
-        end_ids = self.end_state.ids
-        if g.use_mcts:
-            end_ids = get_tensor(end_ids).rename('pos', 'word')
+        end_ids = self.end_state.tensor
         with torch.set_grad_enabled(self._policy_grad):
             return self.policy_net(curr_ids, end_ids, action_masks)
 

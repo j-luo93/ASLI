@@ -33,7 +33,7 @@ add_argument('phono_edit_dist_scale', dtype=float, default=1.0,
 add_argument('num_threads', default=8, dtype=int, msg='Number of threads used for computing edit distance.')
 
 
-# FIXME(j_luo) This can be refactored. Also, there are too many edit-dist methods.
+# TODO(j_luo) This can be refactored. Also, there are too many edit-dist methods.
 def compute_edit_dist(comp_mode: str,
                       pred_ids: Optional[LT] = None,
                       lengths: Optional[LT] = None,

@@ -11,7 +11,6 @@ def get_ext(*args, **kwargs):
 
 
 ext_modules = [get_ext('sound_law.rl.reward', ['sound_law/rl/reward.pyx']),
-               get_ext('sound_law.rl.env_step', ['sound_law/rl/env_step.pyx']),
                get_ext('sound_law.rl.mcts_fast', ['sound_law/rl/mcts_fast.pyx'])]
 
 setup(

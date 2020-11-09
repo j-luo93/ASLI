@@ -14,51 +14,31 @@ from dev_misc.utils import handle_sequence_inputs
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, VanillaPolicyGradient
-from .env_step import env_step_ids, env_step_words
-from .trajectory import Trajectory, VocabState, VocabStateSpace, Word
+from .mcts_fast import PyEnv  # pylint: disable=no-name-in-module
+from .trajectory import Trajectory, VocabState
 
 
-class SoundChangeEnv(nn.Module):
+class SoundChangeEnv(nn.Module, PyEnv):
 
     add_argument(f'final_reward', default=1.0, dtype=float, msg='Final reward for reaching the end.')
     add_argument(f'step_penalty', default=0.02, dtype=float, msg='Penalty for each step if not the end state.')
 
-    def __init__(self, action_space: SoundChangeActionSpace, init_state: VocabState, end_state: VocabState):
-        super().__init__()
+    def __init__(self, init_state: VocabState, end_state: VocabState, action_space: SoundChangeActionSpace):
+        nn.Module.__init__(self)
+        self.init_state = init_state
+        self.end_state = end_state
         self.action_space = action_space
-        self._init_state = init_state
-        self._end_state = end_state
-        self._starting_dist = init_state.dist_from(end_state)
+        self._starting_dist = init_state.dist_to_end
 
-    @profile
     def forward(self, state: VocabState, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
-        if g.use_mcts:
-            new_state = self._forward_mcts(state, action)
-        else:
-            replace_func = handle_sequence_inputs(lambda s: action.after if s == action.before else s)
-            new_words = [Word(replace_func(word.units)) for word in state.words]
-            new_ids = state.ids.clone()
-            with NoName(new_ids):
-                new_ids[new_ids == action.before_id] = action.after_id
-            new_ids.rename_(*state.ids.names)
-            vss = VocabStateSpace()
-            new_state = vss.get_state(words=new_words, ids=new_ids)
-
-        done = new_state == self._end_state
+        new_state = self.step(state, action)
+        done = self.is_done(new_state)
         final_reward = g.final_reward if done else -g.step_penalty
-        old_dist = state.dist_from(self._end_state)
-        new_dist = new_state.dist_from(self._end_state)
+        old_dist = state.dist_to_end
+        new_dist = new_state.dist_to_end
         incremental_reward = (old_dist - new_dist) / self._starting_dist
         reward = final_reward + incremental_reward
         return new_state, done, reward
-
-    def _forward_mcts(self, state: VocabState, action: SoundChangeAction) -> VocabState:
-        new_units = env_step_words([word.units for word in state.words], action.before, action.after)
-        new_words = [Word(units) for units in new_units]
-        new_ids = env_step_ids(state.ids, action.before_id, action.after_id)
-        vss = VocabStateSpace()
-        new_state = vss.get_state(words=new_words, ids=new_ids)
-        return new_state
 
 
 class TrajectoryCollector:
@@ -106,7 +86,7 @@ class TrajectoryCollector:
 
             state = trajectory.latest_state
 
-            action_masks = env.action_space.get_permissible_actions(state, return_type='tensor')
+            action_masks = get_tensor(env.action_space.get_action_mask(state))
             policy = agent.get_policy(state, action_masks)
             action = agent.sample_action(policy)
             next_state, done, next_reward = env(state, action)

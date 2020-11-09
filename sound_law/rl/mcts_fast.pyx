@@ -6,12 +6,13 @@ from cython.operator cimport dereference as deref
 from cython.parallel import prange
 from libcpp cimport nullptr
 from typing import List
-from libc.stdlib cimport free
 from libc.stdio cimport printf
 
 from libcpp cimport bool
 import numpy as np
 cimport numpy as np
+
+from sound_law.data.alphabet import PAD_ID
 
 cdef extern from "TreeNode.cpp":
     pass
@@ -60,22 +61,26 @@ cdef extern from "Action.h":
         void register_action(long, long)
         Action *get_action(long)
         vector[bool] get_action_mask(TreeNode *)
+        long size()
 
 
 cdef extern from "Env.h":
     cdef cppclass Env nogil:
         Env(TreeNode *, TreeNode *) except +
 
-        TreeNode *step(TreeNode *, Action *)
+        TreeNode *step(TreeNode *, Action *) except +
 
         TreeNode *init_node
         TreeNode *end_node
 
-cdef inline VocabIdSeq np2vocab(long[:, ::1] arr, long n, long m) except *:
-    cdef long i, j
+cdef inline VocabIdSeq np2vocab(long[:, ::1] arr,
+                                long[::1] lengths,
+                                long n) except *:
+    cdef long i, j, m
     cdef VocabIdSeq vocab_i = VocabIdSeq(n)
     cdef IdSeq id_seq
     for i in range(n):
+        m = lengths[i]
         id_seq = IdSeq(m)
         for j in range(m):
             id_seq[j] = arr[i, j]
@@ -89,13 +94,13 @@ cdef inline long[:, ::1] vocab2np(VocabIdSeq vocab_i) except *:
     cdef long i, j
     for i in range(n):
         m = max(m, vocab_i[i].size())
-    arr = np.zeros([n, m], dtype='long')
+    arr = np.full([n, m], PAD_ID, dtype='long')
     cdef long[:, ::1] arr_view = arr
     cdef IdSeq id_seq
     for i in range(n):
         id_seq = vocab_i[i]
-        for j in range(m):
-            arr[i, j] = id_seq[j]
+        for j in range(id_seq.size()):
+            arr_view[i, j] = id_seq[j]
     return arr
 
 # Convertible types between numpy and c++ template.
@@ -128,25 +133,30 @@ cdef class PyTreeNode:
         self.ptr = NULL
 
     def __cinit__(self,
+                  *args,
                   object arr = None,
+                  object lengths = None,
                   PyTreeNode end_node = None,
-                  bool from_ptr = False):
+                  bool from_ptr = False,
+                  **kwargs):
         """`arr` is converted to `vocab_i`, which is then used to construct a c++ TreeNode object. Use this for creating PyTreeNode in python."""
         # Skip creating a new c++ TreeNode object since it would be handled by `from_ptr` instead.
-        if arr is None:
-            assert from_ptr, 'You must either construct using `from_ptr` or provide `arr` here.'
+        if arr is None or lengths is None:
+            assert from_ptr, 'You must either construct using `from_ptr` or provide `arr` and `lengths` here.'
             return
 
         cdef long[:, ::1] arr_view = arr
         cdef long n = arr.shape[0]
-        cdef long m = arr.shape[1]
-        cdef VocabIdSeq vocab_i = np2vocab(arr_view, n, m)
+        assert n == lengths.shape[0], '`arr` and `lengths` must have the same length.'
+        cdef long[::1] lengths_view = lengths
+
+        cdef VocabIdSeq vocab_i = np2vocab(arr_view, lengths_view, n)
         if end_node is None:
             self.ptr = new TreeNode(vocab_i)
         else:
             self.ptr = new TreeNode(vocab_i, end_node.ptr)
 
-    def __init__(self, arr, end_node=None):
+    def __init__(self, *args, arr=None, end_node=None, **kwargs):
         self.end_node = end_node
 
     @staticmethod
@@ -157,8 +167,12 @@ cdef class PyTreeNode:
         return py_tn
 
     @property
+    def vocab_array(self):
+        return np.asarray(vocab2np(self.ptr.vocab_i))
+
+    @property
     def vocab(self):
-        return vocab2np(self.ptr.vocab_i)
+        return self.ptr.vocab_i
 
     @property
     def prior(self):
@@ -191,6 +205,38 @@ cdef class PyTreeNode:
     def prev_action(self):
         return self.ptr.prev_action
 
+    @property
+    def dist_to_end(self):
+        return self.ptr.dist_to_end
+
+
+cdef class PyAction:
+    """This is a wrapper class for c++ class Action. It should be created by a PyActionSpace object with registered actions."""
+    cdef Aptr ptr
+
+    def __cinit__(self, *args, bool from_ptr=False, **kwargs):
+        assert from_ptr, 'You should only create this object by calling `from_ptr`.'
+
+    def __dealloc__(self):
+        self.ptr = NULL
+        # del self.ptr
+
+    # FIXME(j_luo) check if classmethod is needed here.
+    @staticmethod
+    cdef PyAction from_ptr(Action *ptr):
+        cdef PyAction py_a = PyAction.__new__(PyAction, from_ptr=True)
+        py_a.ptr = ptr
+        return py_a
+
+    @property
+    def before_id(self):
+        return self.ptr.before_id
+
+    @property
+    def after_id(self):
+        return self.ptr.after_id
+
+
 ctypedef ActionSpace * ASptr
 
 cdef class PyActionSpace:
@@ -200,7 +246,8 @@ cdef class PyActionSpace:
         self.ptr = new ActionSpace()
 
     def __dealloc__(self):
-        del self.ptr
+        self.ptr = NULL
+        # del self.ptr
 
     def register_action(self, long before_id, long after_id):
         self.ptr.register_action(before_id, after_id)
@@ -208,6 +255,37 @@ cdef class PyActionSpace:
     def get_action_mask(self, PyTreeNode py_node):
         cdef vector[bool] action_mask = self.ptr.get_action_mask(py_node.ptr)
         return np.asarray(action_mask)
+
+    def get_action(self, long action_id):
+        cdef Action *action = self.ptr.get_action(action_id)
+        return PyAction.from_ptr(action)
+
+    def __len__(self):
+        return self.ptr.size()
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self.get_action(i)
+
+ctypedef Env * Envptr
+
+cdef class PyEnv:
+    cdef Envptr ptr
+
+    def __cinit__(self, PyTreeNode init_node, PyTreeNode end_node, *args, **kwargs):
+        self.ptr = new Env(init_node.ptr, end_node.ptr)
+
+    def __dealloc__(self):
+        self.ptr = NULL
+        # del self.ptr
+
+    def step(self, PyTreeNode node, PyAction action):
+        cdef TreeNode *next_node = self.ptr.step(node.ptr, action.ptr)
+        return PyTreeNode.from_ptr(next_node)
+
+    def is_done(self, PyTreeNode node):
+        return self.ptr.end_node == node.ptr
+
 
 # @cython.boundscheck(False)
 # @cython.wraparound(False)
@@ -245,6 +323,7 @@ cdef class PyActionSpace:
 cpdef object parallel_select(PyTreeNode py_root,
                              PyTreeNode py_end,
                              PyActionSpace py_as,
+                             PyEnv py_env,
                              long num_sims,
                              long num_threads,
                              long depth_limit,
@@ -253,8 +332,7 @@ cpdef object parallel_select(PyTreeNode py_root,
                              float virtual_loss):
     cdef TreeNode *end = py_end.ptr
     cdef TreeNode *root = py_root.ptr
-    # FIXME(j_luo) This could be saved?
-    cdef Env * env = new Env(root, end)
+    cdef Env *env = py_env.ptr
 
     cdef TreeNode *node, *next_node
     cdef long n_steps_left, i, action_id

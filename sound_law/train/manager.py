@@ -22,7 +22,6 @@ from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
-from sound_law.rl.trajectory import VocabState
 
 from .trainer import MctsTrainer, PolicyGradientTrainer, Trainer
 
@@ -192,7 +191,7 @@ class OnePairManager:
 
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
-            env = SoundChangeEnv(action_space, dl.init_state, dl.end_state)
+            env = SoundChangeEnv(dl.init_state, dl.end_state, action_space)
             model = get_model(dl=dl)
             if g.use_mcts:
                 mcts = Mcts(action_space, model, env, dl.end_state)

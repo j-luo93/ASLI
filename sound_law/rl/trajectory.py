@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dev_misc.utils import is_main_process_and_thread
 from functools import lru_cache
 from typing import (ClassVar, Dict, Iterator, List, NewType, Optional,
                     Sequence, Set, Tuple, Union)
@@ -9,75 +8,44 @@ import numpy as np
 
 import sound_law.data.data_loader as dl
 import sound_law.rl.action as a
-from dev_misc import BT, FT, LT, NDA, g
-from dev_misc.utils import Singleton, cached_property
+from dev_misc import BT, FT, LT, NDA, g, get_tensor
+from dev_misc.devlib import pad_to_dense
+from dev_misc.utils import (Singleton, cached_property,
+                            is_main_process_and_thread)
 from editdistance import eval_batch
+from sound_law.data.alphabet import PAD_ID
+
+from .mcts_fast import \
+    PyTreeNode  # pylint: disable=no-name-in-module # FIXME(j_luo) move tree node to another pyx file?
 
 
-class Word:
+class VocabStateSpace:
+    """This is the factory class for creating VocabState."""
 
-    def __init__(self, units: List[str]):
-        self.units = units
-        self.key = ' '.join(units)
-
-    def __hash__(self):
-        return hash(self.key)
-
-    def __eq__(self, other: Word):
-        return self.key == other.key
-
-    def __repr__(self):
-        return self.key
-
-
-SKey = NewType('SKey', str)  # State key.
-
-
-class VocabStateSpace(Singleton):
-    """The space of all vocab states. This handles the creation of vocab states."""
-
-    _states: ClassVar[SKey, VocabState] = dict()
-
-    def get_state(self, *,
+    def get_state(self,
                   seqs: Optional[dl.PaddedUnitSeqs] = None,
-                  words: Optional[List[Word]] = None,
-                  ids: Optional[Union[NDA, LT]] = None) -> VocabState:
+                  #   units: Optional[Sequence[Sequence[str]]] = None, # FIXME(j_luo) units are not used for now.
+                  ids: Optional[NDA] = None,
+                  lengths: Optional[NDA] = None,
+                  end_state: Optional[VocabState] = None) -> VocabState:
         if seqs is not None:
-            words = [Word(u) for u in seqs.units]
-            ids = seqs.ids
-            # NOTE(j_luo) For MCTS, we use numpy arrays for ids.
-            if g.use_mcts:
-                ids = np.ascontiguousarray(ids.cpu().numpy())
-        s_key = '\n'.join([word.key for word in words])
-        if s_key not in self._states:
-            obj = VocabState(len(self._states), s_key, words, ids)
-            self._states[s_key] = obj
-        return self._states[s_key]
+            ids = seqs.ids.t()
+            lengths = seqs.lengths.t()
+        # NOTE(j_luo) Since memoryviews are used in the extension class, we have to make them contiguous.
+        arr = np.ascontiguousarray(ids.cpu().numpy())
+        lengths = np.ascontiguousarray(lengths.cpu().numpy())
+        # breakpoint()  # BREAKPOINT(j_luo)
+
+        return VocabState(arr=arr, lengths=lengths, end_node=end_state)
 
 
-class VocabState:
+class VocabState(PyTreeNode):
+    """State representing the vocab. Use `VocabStateSpace` to create one instance."""
 
-    def __init__(self, s_id: int, s_key: SKey, words: List[Word], ids: Union[NDA, LT]):
-        """This should not be directly called. Use VocabStateSpace to call `get_state` instead."""
-        self.s_id = s_id  # The unique id for this state.
-        self.s_key = s_key  # The unique string (key) for this state.
-        self.words = words
-        self.ids = ids
-
-    def __eq__(self, other: VocabState):
-        return self.s_id == other.s_id
-        # return len(self.words) == len(other.words) and all(s == o for s, o in zip(self.words, other.words))
-
-    def __hash__(self):
-        return self.s_id
-
-    @lru_cache(maxsize=None)
-    def dist_from(self, other: VocabState) -> float:
-        units_1 = [word.units for word in self.words]
-        units_2 = [word.units for word in other.words]
-        num_threads = 4 if is_main_process_and_thread() else 0
-        res = float(eval_batch(units_1, units_2, num_threads).sum())
-        return res
+    @cached_property
+    def tensor(self) -> LT:
+        """Convert the state into a long tensor."""
+        return get_tensor(self.vocab_array).t().contiguous().rename('pos', 'word')
 
 
 class Trajectory:
