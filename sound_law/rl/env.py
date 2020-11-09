@@ -2,6 +2,8 @@
 """
 from __future__ import annotations
 
+from dev_misc.devlib import pad_to_dense
+from sound_law.data.alphabet import PAD_ID
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -102,15 +104,24 @@ class TrajectoryCollector:
         action_masks = list()
         for t in trajectories:
             for s0, a, s1, r, am in t:
-                id_seqs.append(s0.ids)
-                next_id_seqs.append(s1.ids)
+                id_seqs.extend(s0.vocab)
+                next_id_seqs.extend(s1.vocab)
                 action_ids.append(a.action_id)
                 rewards.append(r)
                 action_masks.append(am)
             done.extend([False] * (len(t) - 1))
             done.append(t.done)
-        id_seqs = torch.stack(id_seqs, new_name='batch').align_to('batch', 'pos', 'word')
-        next_id_seqs = torch.stack(next_id_seqs, new_name='batch').align_to('batch', 'pos', 'word')
+        bs = len(done)
+        nw = len(init_state)
+
+        def stack_ids(seqs):
+            seqs = get_tensor(pad_to_dense(seqs, pad_idx=PAD_ID, dtype='long')[0])
+            seqs = seqs.view(bs, nw, -1).rename('batch', 'word', 'pos')
+            seqs = seqs.align_to('batch', 'pos', 'word')
+            return seqs
+
+        id_seqs = stack_ids(id_seqs)
+        next_id_seqs = stack_ids(next_id_seqs)
         action_ids = get_tensor(action_ids).rename('batch')
         rewards = get_tensor(rewards).rename('batch')
         action_masks = torch.stack(action_masks, dim=0).rename('batch', 'action')

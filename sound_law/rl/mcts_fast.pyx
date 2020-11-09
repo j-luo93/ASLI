@@ -155,16 +155,16 @@ cdef class PyTreeNode:
             self.ptr = new TreeNode(vocab_i)
         else:
             self.ptr = new TreeNode(vocab_i, end_node.ptr)
-
-    def __init__(self, *args, arr=None, end_node=None, **kwargs):
         self.end_node = end_node
 
-    @staticmethod
-    cdef PyTreeNode from_ptr(TreeNode *ptr):
-        """This is used in cython code to wrap around a c++ TreeNode object."""
-        cdef PyTreeNode py_tn = PyTreeNode.__new__(PyTreeNode, from_ptr=True)
-        py_tn.ptr = ptr
-        return py_tn
+    # @staticmethod
+    # cdef PyTreeNode from_ptr(TreeNode *ptr):
+    #     """This is used in cython code to wrap around a c++ TreeNode object."""
+    #     cdef PyTreeNode py_tn = PyTreeNode.__new__(PyTreeNode, from_ptr=True)
+    #     py_tn.ptr = ptr
+    #     return py_tn
+    def __len__(self):
+        return self.ptr.size()
 
     @property
     def vocab_array(self):
@@ -221,12 +221,14 @@ cdef class PyAction:
         self.ptr = NULL
         # del self.ptr
 
-    # FIXME(j_luo) check if classmethod is needed here.
-    @staticmethod
-    cdef PyAction from_ptr(Action *ptr):
-        cdef PyAction py_a = PyAction.__new__(PyAction, from_ptr=True)
-        py_a.ptr = ptr
-        return py_a
+    # @staticmethod
+    # cdef PyAction from_ptr(cls, Action *ptr):
+    #     cdef PyAction py_a = cls.__new__(cls, from_ptr=True)
+    #     py_a.ptr = ptr
+    #     return py_a
+    @property
+    def action_id(self):
+        return self.ptr.action_id
 
     @property
     def before_id(self):
@@ -236,11 +238,22 @@ cdef class PyAction:
     def after_id(self):
         return self.ptr.after_id
 
+# NOTE(j_luo) Using staticmethod as the tutorial suggests doesn't work as a flexible factory method -- you might want to control the `cls` in case of subclassing it.
+cdef PyAction wrap_action(cls, Action *ptr):
+    cdef PyAction py_a = cls.__new__(cls, from_ptr=True)
+    py_a.ptr = ptr
+    return py_a
+
+cdef PyTreeNode wrap_node(cls, TreeNode *ptr):
+    cdef PyTreeNode py_tn = cls.__new__(cls, from_ptr=True)
+    py_tn.ptr = ptr
+    return py_tn
 
 ctypedef ActionSpace * ASptr
 
 cdef class PyActionSpace:
     cdef ASptr ptr
+    action_cls = PyAction
 
     def __cinit__(self):
         self.ptr = new ActionSpace()
@@ -258,7 +271,8 @@ cdef class PyActionSpace:
 
     def get_action(self, long action_id):
         cdef Action *action = self.ptr.get_action(action_id)
-        return PyAction.from_ptr(action)
+        action_cls = type(self).action_cls
+        return wrap_action(action_cls, action)
 
     def __len__(self):
         return self.ptr.size()
@@ -281,7 +295,7 @@ cdef class PyEnv:
 
     def step(self, PyTreeNode node, PyAction action):
         cdef TreeNode *next_node = self.ptr.step(node.ptr, action.ptr)
-        return PyTreeNode.from_ptr(next_node)
+        return wrap_node(type(node), next_node)
 
     def is_done(self, PyTreeNode node):
         return self.ptr.end_node == node.ptr
@@ -355,4 +369,5 @@ cpdef object parallel_select(PyTreeNode py_root,
 
                 node = next_node
             selected[i] = node
-    return [PyTreeNode.from_ptr(ptr) for ptr in selected]
+    tn_cls = type(py_root)
+    return [wrap_node(tn_cls, ptr) for ptr in selected]

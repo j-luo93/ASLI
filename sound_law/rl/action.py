@@ -19,8 +19,23 @@ from .mcts_fast import (PyAction,  # pylint: disable=no-name-in-module
                         PyActionSpace)
 
 
+class SoundChangeAction(PyAction):
+    """One sound change rule."""
+
+    # FIXME(j_luo) no unit so far.
+    # action_id: int
+    # before: str
+    # after: str
+    # before_id: int
+    # after_id: int
+
+    def __str__(self):
+        return f'{self.before_id} > {self.after_id}'
+
+
 class SoundChangeActionSpace(PyActionSpace):
     """The action space, i.e., the space of all sound changes."""
+    action_cls = SoundChangeAction
 
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
 
@@ -41,17 +56,3 @@ class SoundChangeActionSpace(PyActionSpace):
                 a2a.append(action.after_id)
             self.action2before = get_tensor(a2b)
             self.action2after = get_tensor(a2a)
-
-
-class SoundChangeAction(PyAction):
-    """One sound change rule."""
-
-    # FIXME(j_luo) no unit so far.
-    # action_id: int
-    # before: str
-    # after: str
-    # before_id: int
-    # after_id: int
-
-    def __str__(self):
-        return f'{self.before_id} > {self.after_id}'
