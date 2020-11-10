@@ -49,10 +49,15 @@ long node_distance(TreeNode *node1, TreeNode *node2)
 class Env
 {
 public:
-    Env(TreeNode *, TreeNode *);
+    Env(TreeNode *, TreeNode *, float, float);
 
-    TreeNode *step(TreeNode *, Action *);
+    Edge step(TreeNode *, Action *);
 
     TreeNode *init_node;
     TreeNode *end_node;
+
+private:
+    float final_reward;
+    float step_penalty;
+    float starting_dist;
 };

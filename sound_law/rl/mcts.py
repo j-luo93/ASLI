@@ -28,6 +28,7 @@ class Mcts:
     add_argument('puct_c', default=5.0, dtype=float, msg='Exploration constant.')
     add_argument('virtual_loss', default=1.0, dtype=float, msg='Virtual loss per game.')
     add_argument('game_count', default=3, dtype=int, msg='How many virtual games lost.')
+    add_argument('mixing', default=0.5, dtype=float, msg='Mixing lambda hyperparameter.')
     add_argument('num_workers', default=4, dtype=int, msg='Number of workers for parallelizing MCTS.')
 
     def __init__(self,
@@ -114,7 +115,7 @@ class Mcts:
     def backup(self,
                state: VocabState,
                value: float):
-        state.backup(value, g.game_count, g.virtual_loss)
+        state.backup(value, g.mixing, g.game_count, g.virtual_loss)
 
     # @profile
     def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, VocabState]:

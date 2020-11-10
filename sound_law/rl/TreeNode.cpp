@@ -12,6 +12,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i)
     this->prev_action = NULL;
     this->parent_node = nullptr;
     this->played = false;
+    this->done = true;
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
@@ -23,6 +24,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
     this->prev_action = NULL;
     this->parent_node = nullptr;
     this->played = false;
+    this->done = (this->vocab_i == end_node->vocab_i);
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeNode *parent_node)
@@ -34,12 +36,13 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeN
     this->prev_action = action_id;
     this->parent_node = parent_node;
     this->played = false;
+    this->done = (this->vocab_i == end_node->vocab_i);
 }
 
-void TreeNode::add_edge(long action_id, TreeNode *child)
+void TreeNode::add_edge(long action_id, Edge edge)
 {
     // This will replace the old edge if it exists. Always call `has_acted` first.
-    this->edges[action_id] = child;
+    this->edges[action_id] = edge;
 }
 
 bool TreeNode::has_acted(long action_id)
@@ -112,15 +115,17 @@ void TreeNode::virtual_backup(long action_id, long game_count, float virtual_los
     this->visit_count += game_count;
 }
 
-void TreeNode::backup(float value, long game_count, float virtual_loss)
+void TreeNode::backup(float value, float mixing, long game_count, float virtual_loss)
 {
     TreeNode *parent_node = this->parent_node;
     TreeNode *node = this;
     while ((parent_node != nullptr) and (!node->played))
     {
         long action_id = node->prev_action;
+        float reward = parent_node->edges[action_id].second;
+        float mixed_value = (1 - mixing) * value + mixing * reward;
         parent_node->action_count[action_id] -= game_count - 1;
-        parent_node->total_value[action_id] += game_count * virtual_loss + value;
+        parent_node->total_value[action_id] += game_count * virtual_loss + mixed_value;
         parent_node->visit_count -= game_count - 1;
         node = parent_node;
         parent_node = node->parent_node;

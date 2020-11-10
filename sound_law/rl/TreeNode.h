@@ -17,7 +17,7 @@ public:
     TreeNode(VocabIdSeq, TreeNode *);
     TreeNode(VocabIdSeq, TreeNode *, long, TreeNode *);
 
-    void add_edge(long, TreeNode *);
+    void add_edge(long, pair<TreeNode *, float>);
     bool has_acted(long);
     long size();
     void lock();
@@ -26,7 +26,7 @@ public:
     long get_best_action_id(float);
     void expand(vector<float>, vector<bool>);
     void virtual_backup(long, long, float);
-    void backup(float, long, float);
+    void backup(float, float, long, float);
     void reset();
     void play();
 
@@ -35,15 +35,18 @@ public:
     TreeNode *parent_node;
     long prev_action;
     long dist_to_end;
-    unordered_map<long, TreeNode *> edges;
+    unordered_map<long, pair<TreeNode *, float>> edges;
     vector<bool> action_mask;
     vector<float> prior;
     vector<long> action_count;
     long visit_count;
     vector<float> total_value;
+    bool done;
 
 private:
     mutex mtx;
     unique_lock<mutex> ulock;
     bool played;
 };
+
+using Edge = pair<TreeNode *, float>;

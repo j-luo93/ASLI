@@ -32,23 +32,18 @@ class SoundChangeEnv(nn.Module, PyEnv):
     add_argument(f'final_reward', default=1.0, dtype=float, msg='Final reward for reaching the end.')
     add_argument(f'step_penalty', default=0.02, dtype=float, msg='Penalty for each step if not the end state.')
 
-    def __init__(self, init_state: VocabState, end_state: VocabState, action_space: SoundChangeActionSpace):
+    # pylint: disable=unused-argument
+    def __init__(self,
+                 init_state: VocabState,
+                 end_state: VocabState,
+                 final_reward: float,
+                 step_penalty: float,
+                 action_space: SoundChangeActionSpace):
         nn.Module.__init__(self)
-        self.init_state = init_state
-        self.end_state = end_state
         self.action_space = action_space
-        self._starting_dist = init_state.dist_to_end
 
     def forward(self, state: VocabState, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
-        # FIXME(j_luo) reward shaping should be part of self.step?
-        new_state = self.step(state, action)
-        done = self.is_done(new_state)
-        final_reward = g.final_reward if done else -g.step_penalty
-        old_dist = state.dist_to_end
-        new_dist = new_state.dist_to_end
-        incremental_reward = (old_dist - new_dist) / self._starting_dist
-        reward = final_reward + incremental_reward
-        return new_state, done, reward
+        return self.step(state, action)
 
 
 class TrajectoryCollector:

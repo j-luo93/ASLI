@@ -419,6 +419,7 @@ class MctsTrainer(RLTrainer):
                 self.tracker.update('rollout')
                 if root == dl.end_state:
                     break
+            print('-' * 10)
 
             reward = int(root == dl.end_state)
             success += reward

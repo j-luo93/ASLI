@@ -191,7 +191,7 @@ class OnePairManager:
 
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
-            env = SoundChangeEnv(dl.init_state, dl.end_state, action_space)
+            env = SoundChangeEnv(dl.init_state, dl.end_state, g.final_reward, g.step_penalty, action_space)
             model = get_model(dl=dl)
             if g.use_mcts:
                 mcts = Mcts(action_space, model, env, dl.end_state)

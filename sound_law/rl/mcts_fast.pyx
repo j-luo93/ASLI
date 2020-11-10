@@ -1,6 +1,7 @@
 # distutils: language = c++
 
 from libcpp.vector cimport vector
+from libcpp.pair cimport pair
 from libcpp.unordered_map cimport unordered_map
 from cython.operator cimport dereference as deref
 from cython.parallel import prange
@@ -30,7 +31,6 @@ cdef extern from "TreeNode.h":
         TreeNode(VocabIdSeq) except +
         TreeNode(VocabIdSeq, TreeNode *) except +
 
-        void add_edge(long, TreeNode *)
         bool has_acted(long)
         long size()
         void lock()
@@ -39,38 +39,42 @@ cdef extern from "TreeNode.h":
         long get_best_action_id(float)
         void expand(vector[float], vector[bool])
         void virtual_backup(long, long, float)
-        void backup(float, long, float)
+        void backup(float, float, long, float)
         void reset()
         void play()
 
         VocabIdSeq vocab_i
         long dist_to_end
         long prev_action
-        unordered_map[long, TreeNode *] edges
         vector[float] prior
         vector[long] action_count
         long visit_count
         vector[float] total_value
+        bool done
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
         Action(long, long, long)
+
         long action_id
         long before_id
         long after_id
     cdef cppclass ActionSpace nogil:
         ActionSpace()
+
         void register_action(long, long)
         Action *get_action(long)
         vector[bool] get_action_mask(TreeNode *)
         long size()
 
+ctypedef TreeNode * TNptr
 
 cdef extern from "Env.h":
+    ctypedef pair[TNptr, float] Edge
     cdef cppclass Env nogil:
-        Env(TreeNode *, TreeNode *) except +
+        Env(TreeNode *, TreeNode *, float, float) except +
 
-        TreeNode *step(TreeNode *, Action *) except +
+        Edge step(TreeNode *, Action *) except +
 
         TreeNode *init_node
         TreeNode *end_node
@@ -120,7 +124,6 @@ cdef inline vector[convertible] np2vector(convertible[::1] arr, long n) except *
 cdef extern from "unistd.h" nogil:
     unsigned int sleep(unsigned int seconds)
 
-ctypedef TreeNode * TNptr
 ctypedef Action * Aptr
 
 cdef class PyTreeNode:
@@ -215,8 +218,8 @@ cdef class PyTreeNode:
         cdef vector[bool] action_mask_vec = np2vector(action_mask, n)
         self.ptr.expand(prior_vec, action_mask_vec)
 
-    def backup(self, float value, long game_count, float virtual_loss):
-        self.ptr.backup(value, game_count, virtual_loss)
+    def backup(self, float value, float mixing, long game_count, float virtual_loss):
+        self.ptr.backup(value, mixing, game_count, virtual_loss)
 
     def reset(self):
         self.ptr.reset()
@@ -312,16 +315,19 @@ ctypedef Env * Envptr
 cdef class PyEnv:
     cdef Envptr ptr
 
-    def __cinit__(self, PyTreeNode init_node, PyTreeNode end_node, *args, **kwargs):
-        self.ptr = new Env(init_node.ptr, end_node.ptr)
+    def __cinit__(self, PyTreeNode init_node, PyTreeNode end_node, float final_reward, float step_penalty, *args, **kwargs):
+        self.ptr = new Env(init_node.ptr, end_node.ptr, final_reward, step_penalty)
 
     def __dealloc__(self):
         self.ptr = NULL
         # del self.ptr
 
     def step(self, PyTreeNode node, PyAction action):
-        cdef TreeNode *next_node = self.ptr.step(node.ptr, action.ptr)
-        return wrap_node(type(node), next_node)
+        cdef Edge edge = self.ptr.step(node.ptr, action.ptr)
+        cdef TreeNode * next_node = edge.first
+        cdef bool done = node.ptr.done
+        cdef float reward = edge.second
+        return wrap_node(type(node), next_node), done, reward
 
     def is_done(self, PyTreeNode node):
         return self.ptr.end_node == node.ptr
@@ -375,7 +381,9 @@ cpdef object parallel_select(PyTreeNode py_root,
     cdef Env *env = py_env.ptr
 
     cdef TreeNode *node, *next_node
+    cdef float reward
     cdef long n_steps_left, i, action_id
+    cdef Edge edge
     cdef Action *action
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
     cdef ActionSpace *action_space = py_as.ptr
@@ -384,15 +392,19 @@ cpdef object parallel_select(PyTreeNode py_root,
         for i in prange(num_sims, num_threads=num_threads):
             node = root
             n_steps_left = depth_limit
-            while n_steps_left > 0 and not node.is_leaf() and node.vocab_i != end.vocab_i:
+            while n_steps_left > 0 and not node.is_leaf():
                 node.lock()
                 action_id = node.get_best_action_id(puct_c)
                 action = action_space.get_action(action_id)
-                next_node = env.step(node, action)
+                edge = env.step(node, action)
+                next_node = edge.first
+                reward = edge.second
                 n_steps_left = n_steps_left - 1
                 node.virtual_backup(action_id, game_count, virtual_loss)
                 node.unlock()
 
+                if node.done:
+                    break
                 node = next_node
             selected[i] = node
     tn_cls = type(py_root)
