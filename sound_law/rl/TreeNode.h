@@ -42,11 +42,11 @@ public:
     long visit_count;
     vector<float> total_value;
     bool done;
+    bool played;
 
 private:
     mutex mtx;
     unique_lock<mutex> ulock;
-    bool played;
 };
 
 using Edge = pair<TreeNode *, float>;

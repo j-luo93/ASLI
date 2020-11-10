@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Optional, Set, Tuple, Union, overload
 
 import numpy as np
@@ -48,6 +49,7 @@ class Mcts:
     def reset(self):
         for s in self._states:
             s.reset()
+        logging.debug(f'Total number of states reset: {len(self._states)}.')
 
     # @profile
     def parallel_select(self, root: VocabState, num_sims: int, depth_limit: int) -> List[VocabState]:
@@ -62,7 +64,7 @@ class Mcts:
     def expand(self, states: List[VocabState]) -> List[float]: ...
 
     @torch.no_grad()
-    @profile
+    # @profile
     def expand(self, states):
         """Expand and evaluate the leaf node."""
         ret_lst = True
@@ -83,10 +85,6 @@ class Mcts:
 
         # Collect states that need evaluation.
         if outstanding_states:
-            # action_masks = [
-            #     self.action_space.get_action_mask(state)
-            #     for state in outstanding_states
-            # ]
             action_masks = parallel_get_action_masks(outstanding_states, self.env.action_space, g.num_workers)
             am_tensor = get_tensor(action_masks).rename('batch', 'action')
             id_seqs = parallel_stack_ids(outstanding_states, g.num_workers)

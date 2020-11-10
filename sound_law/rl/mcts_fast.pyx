@@ -51,6 +51,7 @@ cdef extern from "TreeNode.h":
         long visit_count
         vector[float] total_value
         bool done
+        bool played
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
@@ -64,7 +65,7 @@ cdef extern from "Action.h":
 
         void register_action(long, long)
         Action *get_action(long)
-        vector[bool] get_action_mask(TreeNode *)
+        vector[bool] get_action_mask(TreeNode *) except +
         long size()
 
 ctypedef TreeNode * TNptr
@@ -194,6 +195,10 @@ cdef class PyTreeNode:
     @property
     def total_value(self):
         return np.asarray(self.ptr.total_value)
+
+    @property
+    def played(self):
+        return self.ptr.played
 
     def __str__(self):
         out = f'visit_count: {self.ptr.visit_count}\n'

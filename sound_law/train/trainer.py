@@ -385,7 +385,7 @@ class MctsTrainer(RLTrainer):
         self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         self.tracker.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
-    @profile
+    # @profile
     def train_one_step(self, dl: OnePairDataLoader):
         samples = list()
         success = 0.0
@@ -393,7 +393,6 @@ class MctsTrainer(RLTrainer):
         # Collect episodes.
         for ei in range(g.num_episodes):
             root = dl.init_state
-            # FIXME(j_luo) reset the prior and stuff.
             self.mcts.reset()
             value = self.mcts.expand(root)
             self.mcts.backup(root, value)

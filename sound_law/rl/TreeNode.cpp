@@ -122,7 +122,7 @@ void TreeNode::backup(float value, float mixing, long game_count, float virtual_
 {
     TreeNode *parent_node = this->parent_node;
     TreeNode *node = this;
-    while ((parent_node != nullptr) and (!node->played))
+    while ((parent_node != nullptr) and (!parent_node->played))
     {
         long action_id = node->prev_action;
         float reward = parent_node->edges[action_id].second;
