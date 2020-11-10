@@ -1,3 +1,4 @@
+from dev_misc.utils import pad_for_log
 from sound_law.rl.env import stack_ids
 import logging
 import math
@@ -391,9 +392,15 @@ class MctsTrainer(RLTrainer):
         success = 0.0
 
         # Collect episodes.
+        last = len(self.mcts._total_state_ids)
         for ei in range(g.num_episodes):
+            # self.mcts.unplay()
             root = dl.init_state
             self.mcts.reset()
+            this = len(self.mcts._total_state_ids)
+            if ei % 10 == 0:
+                logging.debug(this - last)
+            last = this
             value = self.mcts.expand(root)
             self.mcts.backup(root, value)
 
@@ -410,26 +417,30 @@ class MctsTrainer(RLTrainer):
                     for state, value in zip(new_states, values):
                         self.mcts.backup(state, value)
                     self.tracker.update('mcts', incr=g.expansion_batch_size)
-                probs, action, new_state = self.mcts.play(root)
-                print(action)
-                history.append((probs, root))
+                probs, action, reward, new_state = self.mcts.play(root)
+                history.append((probs, root, action, reward))
                 root = new_state
 
                 self.tracker.update('rollout')
                 if root == dl.end_state:
                     break
-            print('-' * 10)
+            if ei % 10 == 0:
+                out = '(' + ', '.join(str(action) for _, _, action, _ in history) + ')'
+                logging.debug(pad_for_log(out))
 
             reward = int(root == dl.end_state)
             success += reward
-            samples.extend([(probs, state, reward) for probs, state in history])
+            samples.extend(history)
+            # if ei == 0:
+            #     breakpoint()  # BREAKPOINT(j_luo)
+            # samples.extend([(probs, state, reward) for probs, state in history])
             self.tracker.update('episode')
 
         curr_ids = list()
         action_masks = list()
         rewards = list()
         tgt_policies = list()
-        for probs, state, reward in samples:
+        for probs, state, action, reward in samples:
             curr_ids.extend(state.vocab)
             # FIXME(j_luo) check this
             action_masks.append(self.mcts.action_space.get_action_mask(state))
@@ -457,7 +468,7 @@ class MctsTrainer(RLTrainer):
             pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), bs)
             v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), bs)
             print(pi_ce_loss.mean.item(), v_regress_loss.mean.item())
-            total_loss = Metric('total_loss', pi_ce_loss.total + v_regress_loss.total, bs)
+            total_loss = Metric('total_loss', pi_ce_loss.total + 100.0 * v_regress_loss.total, bs)
 
             total_loss.mean.backward()
 

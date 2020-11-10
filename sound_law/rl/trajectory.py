@@ -45,6 +45,10 @@ class VocabState(PyTreeNode):
         """Convert the state into a long tensor."""
         return get_tensor(self.vocab_array).t().contiguous().rename('pos', 'word')
 
+    @property
+    def q(self):
+        return self.total_value / (1e-8 + self.action_count)
+
 
 class Trajectory:
 

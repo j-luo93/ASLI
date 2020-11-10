@@ -13,6 +13,9 @@ using VocabIdSeq = vector<IdSeq>;
 class TreeNode
 {
 public:
+    static long instance_cnt;
+    static mutex cls_mtx;
+
     TreeNode(VocabIdSeq);
     TreeNode(VocabIdSeq, TreeNode *);
     TreeNode(VocabIdSeq, TreeNode *, long, TreeNode *);
@@ -29,6 +32,7 @@ public:
     void backup(float, float, long, float);
     void reset();
     void play();
+    void unplay();
 
     VocabIdSeq vocab_i;
     TreeNode *end_node;
@@ -43,6 +47,7 @@ public:
     vector<float> total_value;
     bool done;
     bool played;
+    long idx;
 
 private:
     mutex mtx;

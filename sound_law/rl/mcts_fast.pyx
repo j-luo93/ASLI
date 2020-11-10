@@ -42,6 +42,7 @@ cdef extern from "TreeNode.h":
         void backup(float, float, long, float)
         void reset()
         void play()
+        void unplay()
 
         VocabIdSeq vocab_i
         long dist_to_end
@@ -52,6 +53,7 @@ cdef extern from "TreeNode.h":
         vector[float] total_value
         bool done
         bool played
+        long idx
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
@@ -200,6 +202,10 @@ cdef class PyTreeNode:
     def played(self):
         return self.ptr.played
 
+    @property
+    def idx(self):
+        return self.ptr.idx
+
     def __str__(self):
         out = f'visit_count: {self.ptr.visit_count}\n'
         out += f'action_count:\n'
@@ -231,6 +237,9 @@ cdef class PyTreeNode:
 
     def play(self):
         self.ptr.play()
+
+    def unplay(self):
+        self.ptr.unplay()
 
     def __eq__(self, PyTreeNode other):
         return self.ptr.vocab_i == other.ptr.vocab_i
@@ -337,40 +346,7 @@ cdef class PyEnv:
     def is_done(self, PyTreeNode node):
         return self.ptr.end_node == node.ptr
 
-
-# @cython.boundscheck(False)
-# @cython.wraparound(False)
-# cdef inline float np_sum(float[::1] x, long size) nogil:
-#     cdef float s = 0.0
-#     cdef long i
-#     for i in range(size):
-#         s = s + x[i]
-#     return s
-
-# @cython.boundscheck(False)
-# @cython.wraparound(False)
-# cdef inline long np_argmax(float[::1] x, long size) nogil:
-#     cdef long best_i, i
-#     best_i = 0
-#     cdef float best_v = x[0]
-#     for i in range(1, size):
-#         if best_v < x[i]:
-#             best_v = x[i]
-#             best_i = i
-#     return best_i
-
-# cdef inline long vector_argmax(vector[float] vec) nogil:
-#     cdef long best_i, i
-#     best_i = 0
-#     cdef float best_v = vec[0]
-#     for i in range(1, vec.size()):
-#         if best_v < vec[i]:
-#             best_v = vec[i]
-#             best_i = i
-#     return best_i
-
-
-# # FIXME(j_luo) rename node to state?
+# FIXME(j_luo) rename node to state?
 cpdef object parallel_select(PyTreeNode py_root,
                              PyTreeNode py_end,
                              PyActionSpace py_as,
@@ -434,7 +410,9 @@ cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, lon
     with nogil:
         for i in prange(n, num_threads=num_threads):
             node = nodes[i]
+            node.lock()
             action_mask = action_space.get_action_mask(node)
+            node.unlock()
             masks[i] = action_mask
 
     arr = np.zeros([n, m], dtype='bool')

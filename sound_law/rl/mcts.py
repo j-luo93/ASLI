@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from typing import Set
 import logging
 from typing import Dict, List, Optional, Set, Tuple, Union, overload
 
@@ -44,12 +45,19 @@ class Mcts:
 
         # NOTE(j_luo) This keeps track all selected states in history.
         self._states: List[VocabState] = list()
+        self._total_state_ids: Set[int] = set()
         self.reset()
 
     def reset(self):
         for s in self._states:
             s.reset()
-        logging.debug(f'Total number of states reset: {len(self._states)}.')
+        # logging.debug(f'Total number of states reset: {len(self._states)}.')
+        self._state_ids: Set[int] = set()
+        self._states: List[VocabState] = list()
+
+    # def unplay(self):
+    #     for s in self._states:
+    #         s.unplay()
 
     # @profile
     def parallel_select(self, root: VocabState, num_sims: int, depth_limit: int) -> List[VocabState]:
@@ -99,7 +107,11 @@ class Mcts:
                 if not state.is_leaf():
                     continue
 
-                self._states.append(state)
+                if state.idx not in self._state_ids:
+                    self._state_ids.add(state.idx)
+                    self._states.append(state)
+                if state.idx not in self._total_state_ids:
+                    self._total_state_ids.add(state.idx)
 
                 # See issue here https://github.com/cython/cython/issues/2204. Memoryview with bool dtype is still not supported.
                 state.expand(p, am.astype('uint8'))
@@ -115,7 +127,7 @@ class Mcts:
         state.backup(value, g.mixing, g.game_count, g.virtual_loss)
 
     # @profile
-    def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, VocabState]:
+    def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, float, VocabState]:
         exp = np.power(state.action_count, 1.0)
         probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)
         action_id = np.random.choice(range(len(probs)), p=probs)
@@ -123,4 +135,4 @@ class Mcts:
         new_state, done, reward = self.env(state, action)
         # Set `state.played` to True. This would prevent future backups from going further up.
         state.play()
-        return probs, action, new_state
+        return probs, action, reward, new_state

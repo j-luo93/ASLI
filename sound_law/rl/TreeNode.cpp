@@ -3,6 +3,9 @@
 #include <iostream>
 #include <math.h>
 
+long TreeNode::instance_cnt = 0;
+mutex TreeNode::cls_mtx;
+
 TreeNode::TreeNode(VocabIdSeq vocab_i)
 {
     // This constructor is used for end node only.
@@ -14,6 +17,11 @@ TreeNode::TreeNode(VocabIdSeq vocab_i)
     this->played = false;
     this->done = true;
     this->action_mask = vector<bool>();
+    {
+        lock_guard<mutex> lock(TreeNode::cls_mtx);
+        this->idx = TreeNode::instance_cnt;
+        TreeNode::instance_cnt++;
+    }
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
@@ -27,6 +35,11 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
     this->played = false;
     this->done = (this->vocab_i == end_node->vocab_i);
     this->action_mask = vector<bool>();
+    {
+        lock_guard<mutex> lock(TreeNode::cls_mtx);
+        this->idx = TreeNode::instance_cnt;
+        TreeNode::instance_cnt++;
+    }
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeNode *parent_node)
@@ -40,6 +53,11 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeN
     this->played = false;
     this->done = (this->vocab_i == end_node->vocab_i);
     this->action_mask = vector<bool>();
+    {
+        lock_guard<mutex> lock(TreeNode::cls_mtx);
+        this->idx = TreeNode::instance_cnt;
+        TreeNode::instance_cnt++;
+    }
 }
 
 void TreeNode::add_edge(long action_id, Edge edge)
@@ -140,6 +158,12 @@ void TreeNode::reset()
     this->action_count.clear();
     this->visit_count = 0;
     this->total_value.clear();
+    this->played = false;
+}
+
+void TreeNode::unplay()
+{
+    // assert(this->played);
     this->played = false;
 }
 
