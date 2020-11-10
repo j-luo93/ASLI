@@ -2,8 +2,6 @@
 """
 from __future__ import annotations
 
-from dev_misc.devlib import pad_to_dense
-from sound_law.data.alphabet import PAD_ID
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -11,13 +9,22 @@ import torch
 import torch.nn as nn
 
 from dev_misc import FT, LT, add_argument, g, get_tensor, get_zeros
+from dev_misc.devlib import pad_to_dense
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.utils import handle_sequence_inputs
+from sound_law.data.alphabet import PAD_ID
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, VanillaPolicyGradient
 from .mcts_fast import PyEnv  # pylint: disable=no-name-in-module
 from .trajectory import Trajectory, VocabState
+
+
+def stack_ids(seqs, batch_size, num_words):
+    seqs = get_tensor(pad_to_dense(seqs, pad_idx=PAD_ID, dtype='long')[0])
+    seqs = seqs.view(batch_size, num_words, -1).rename('batch', 'word', 'pos')
+    seqs = seqs.align_to('batch', 'pos', 'word')
+    return seqs
 
 
 class SoundChangeEnv(nn.Module, PyEnv):
@@ -33,6 +40,7 @@ class SoundChangeEnv(nn.Module, PyEnv):
         self._starting_dist = init_state.dist_to_end
 
     def forward(self, state: VocabState, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
+        # FIXME(j_luo) reward shaping should be part of self.step?
         new_state = self.step(state, action)
         done = self.is_done(new_state)
         final_reward = g.final_reward if done else -g.step_penalty
@@ -114,14 +122,8 @@ class TrajectoryCollector:
         bs = len(done)
         nw = len(init_state)
 
-        def stack_ids(seqs):
-            seqs = get_tensor(pad_to_dense(seqs, pad_idx=PAD_ID, dtype='long')[0])
-            seqs = seqs.view(bs, nw, -1).rename('batch', 'word', 'pos')
-            seqs = seqs.align_to('batch', 'pos', 'word')
-            return seqs
-
-        id_seqs = stack_ids(id_seqs)
-        next_id_seqs = stack_ids(next_id_seqs)
+        id_seqs = stack_ids(id_seqs, bs, nw)
+        next_id_seqs = stack_ids(next_id_seqs, bs, nw)
         action_ids = get_tensor(action_ids).rename('batch')
         rewards = get_tensor(rewards).rename('batch')
         action_masks = torch.stack(action_masks, dim=0).rename('batch', 'action')

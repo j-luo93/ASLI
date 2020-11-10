@@ -20,5 +20,7 @@ TreeNode *Env::step(TreeNode *node, Action *action)
     {
         vocab_i[i] = action->apply_to(node->vocab_i[i]).second;
     };
-    return new TreeNode(vocab_i, node->end_node, action->action_id, node);
+    TreeNode *new_node = new TreeNode(vocab_i, node->end_node, action->action_id, node);
+    node->add_edge(action->action_id, new_node);
+    return new_node;
 };

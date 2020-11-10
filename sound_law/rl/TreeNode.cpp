@@ -11,6 +11,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i)
     this->dist_to_end = 0;
     this->prev_action = NULL;
     this->parent_node = nullptr;
+    this->played = false;
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
@@ -21,6 +22,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
     this->dist_to_end = node_distance(this, end_node);
     this->prev_action = NULL;
     this->parent_node = nullptr;
+    this->played = false;
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeNode *parent_node)
@@ -31,6 +33,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeN
     this->dist_to_end = node_distance(this, end_node);
     this->prev_action = action_id;
     this->parent_node = parent_node;
+    this->played = false;
 }
 
 void TreeNode::add_edge(long action_id, TreeNode *child)
@@ -113,7 +116,7 @@ void TreeNode::backup(float value, long game_count, float virtual_loss)
 {
     TreeNode *parent_node = this->parent_node;
     TreeNode *node = this;
-    while (parent_node != nullptr)
+    while ((parent_node != nullptr) and (!node->played))
     {
         long action_id = node->prev_action;
         parent_node->action_count[action_id] -= game_count - 1;
@@ -122,4 +125,18 @@ void TreeNode::backup(float value, long game_count, float virtual_loss)
         node = parent_node;
         parent_node = node->parent_node;
     }
+}
+void TreeNode::reset()
+{
+    this->prior.clear();
+    this->action_count.clear();
+    this->visit_count = 0;
+    this->total_value.clear();
+    this->played = false;
+}
+
+void TreeNode::play()
+{
+    assert(!this->played);
+    this->played = true;
 }

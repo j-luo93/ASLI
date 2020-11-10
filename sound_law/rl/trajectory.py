@@ -34,8 +34,6 @@ class VocabStateSpace:
         # NOTE(j_luo) Since memoryviews are used in the extension class, we have to make them contiguous.
         arr = np.ascontiguousarray(ids.cpu().numpy())
         lengths = np.ascontiguousarray(lengths.cpu().numpy())
-        # breakpoint()  # BREAKPOINT(j_luo)
-
         return VocabState(arr=arr, lengths=lengths, end_node=end_state)
 
 

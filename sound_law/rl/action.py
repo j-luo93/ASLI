@@ -15,12 +15,13 @@ from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import Singleton
 from sound_law.data.alphabet import Alphabet
 
-from .mcts_fast import (PyAction,  # pylint: disable=no-name-in-module
-                        PyActionSpace)
+from .mcts_fast import PyAction, PyActionSpace  # pylint: disable=no-name-in-module
 
+from typing import ClassVar
 
 class SoundChangeAction(PyAction):
     """One sound change rule."""
+    abc: ClassVar[Alphabet] = None
 
     # FIXME(j_luo) no unit so far.
     # action_id: int
@@ -30,6 +31,10 @@ class SoundChangeAction(PyAction):
     # after_id: int
 
     def __str__(self):
+        if self.abc is not None:
+            before = self.abc[self.before_id]
+            after = self.abc[self.after_id]
+            return f'{before} > {after}'
         return f'{self.before_id} > {self.after_id}'
 
 
@@ -41,7 +46,8 @@ class SoundChangeActionSpace(PyActionSpace):
 
     def __init__(self, abc: Alphabet):
         super().__init__()
-        self.abc = abc
+        # Set class variable for `SoundChangeAction` here.
+        self.abc = SoundChangeAction.abc = abc
         units = [u for u in self.abc if u not in self.abc.special_units]
         for u1, u2 in product(units, repeat=2):
             if u1 != u2:

@@ -27,6 +27,8 @@ public:
     void expand(vector<float>, vector<bool>);
     void virtual_backup(long, long, float);
     void backup(float, long, float);
+    void reset();
+    void play();
 
     VocabIdSeq vocab_i;
     TreeNode *end_node;
@@ -34,8 +36,8 @@ public:
     long prev_action;
     long dist_to_end;
     unordered_map<long, TreeNode *> edges;
-    vector<float> prior;
     vector<bool> action_mask;
+    vector<float> prior;
     vector<long> action_count;
     long visit_count;
     vector<float> total_value;
@@ -43,4 +45,5 @@ public:
 private:
     mutex mtx;
     unique_lock<mutex> ulock;
+    bool played;
 };

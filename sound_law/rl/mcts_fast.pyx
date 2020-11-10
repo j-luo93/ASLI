@@ -40,6 +40,8 @@ cdef extern from "TreeNode.h":
         void expand(vector[float], vector[bool])
         void virtual_backup(long, long, float)
         void backup(float, long, float)
+        void reset()
+        void play()
 
         VocabIdSeq vocab_i
         long dist_to_end
@@ -178,6 +180,18 @@ cdef class PyTreeNode:
     def prior(self):
         return np.asarray(self.ptr.prior)
 
+    @property
+    def visit_count(self):
+        return np.asarray(self.ptr.visit_count)
+
+    @property
+    def action_count(self):
+        return np.asarray(self.ptr.action_count)
+
+    @property
+    def total_value(self):
+        return np.asarray(self.ptr.total_value)
+
     def __str__(self):
         out = f'visit_count: {self.ptr.visit_count}\n'
         out += f'action_count:\n'
@@ -192,6 +206,9 @@ cdef class PyTreeNode:
         out += '\n'.join(vocab)
         return out
 
+    def is_leaf(self):
+        return self.ptr.is_leaf()
+
     def expand(self, float[::1] prior, bool[::1] action_mask):
         cdef long n = prior.shape[0]
         cdef vector[float] prior_vec = np2vector(prior, n)
@@ -200,6 +217,15 @@ cdef class PyTreeNode:
 
     def backup(self, float value, long game_count, float virtual_loss):
         self.ptr.backup(value, game_count, virtual_loss)
+
+    def reset(self):
+        self.ptr.reset()
+
+    def play(self):
+        self.ptr.play()
+
+    def __eq__(self, PyTreeNode other):
+        return self.ptr.vocab_i == other.ptr.vocab_i
 
     @property
     def prev_action(self):

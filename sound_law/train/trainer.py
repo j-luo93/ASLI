@@ -1,3 +1,4 @@
+from sound_law.rl.env import stack_ids
 import logging
 import math
 from typing import Optional, Tuple
@@ -363,9 +364,6 @@ class PolicyGradientTrainer(RLTrainer):
 class MctsTrainer(RLTrainer):
 
     add_argument('num_mcts_sims', default=100, dtype=int, msg='Number of MCTS simulations to run.')
-    add_argument('use_wu_uct', default=False, dtype=bool, msg='Flag to use WU-UCT.')
-    add_argument('use_virtual_loss', default=False, dtype=bool, msg='Flag to use virtual loss.')
-    add_argument('num_workers', default=4, dtype=int, msg='Number of workers for parallelizing MCTS.')
     add_argument('expansion_batch_size', default=10, dtype=int, msg='Batch size for WU-UCT expansion steps.')
     add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
     add_argument('num_inner_steps', default=10, dtype=int, msg='Number of optimization step per batch.')
@@ -374,8 +372,8 @@ class MctsTrainer(RLTrainer):
         if mcts is None:
             raise TypeError(f'Must pass a trajectory collector to initialize this trainer.')
 
-        if g.num_mcts_sim % g.expansion_batch_size > 0:
-            raise ValueError(f'`expansion_batch_size should divide `num_mcts_sim`.')
+        if g.num_mcts_sims % g.expansion_batch_size > 0:
+            raise ValueError(f'`expansion_batch_size should divide `num_mcts_sims`.')
 
         self.mcts = mcts
         super().__init__(*args, **kwargs)
@@ -394,45 +392,35 @@ class MctsTrainer(RLTrainer):
 
         # Collect episodes.
         for ei in range(g.num_episodes):
-            state = dl.init_state
+            root = dl.init_state
+            # FIXME(j_luo) reset the prior and stuff.
             self.mcts.reset()
+            value = self.mcts.expand(root)
+            self.mcts.backup(root, value)
+
             history = list()
             # Episodes have max rollout length.
             for ri in range(g.max_rollout_length):
                 depth_limit = g.max_rollout_length - ri
-                # Run many simulations before take one action.
-                if g.use_wu_uct or g.use_virtual_loss:
-                    num_batches = g.num_mcts_sims // g.expansion_batch_size
-                    for _ in range(num_batches):
-                        if g.use_virtual_loss:
-                            new_states, paths = self.mcts.parallel_select(state, g.expansion_batch_size, depth_limit)
-                            expand_buffer = list(zip(new_states, paths))
-                        else:
-                            expand_buffer = list()
-                            for _ in range(g.expansion_batch_size):
-                                new_state, path = self.mcts.select(state, depth_limit)
-                                self.mcts.backup(path, complete=False)
-                                expand_buffer.append((new_state, path))
-                        values = self.mcts.expand([s for s, _ in expand_buffer])
-                        for path, value in zip([path for _, path in expand_buffer], values):
-                            self.mcts.backup(path, value=value, complete=True)
-                        self.tracker.update('mcts', incr=g.expansion_batch_size)
-                else:
-                    for _ in range(g.num_mcts_sims):
-                        new_state, path = self.mcts.select(state, depth_limit)
-                        value = self.mcts.expand(new_state)
-                        self.mcts.backup(path, value=value)
-                        self.tracker.update('mcts')
-
-                probs, action, new_state = self.mcts.play(state)
-                history.append((probs, state))
-                state = new_state
+                # Run many simulations before take one action. Simulations take place in batches. Each batch
+                # would be evaluated and expanded after batched selection.
+                num_batches = g.num_mcts_sims // g.expansion_batch_size
+                for _ in range(num_batches):
+                    new_states = self.mcts.parallel_select(root, g.expansion_batch_size, depth_limit)
+                    values = self.mcts.expand(new_states)
+                    for state, value in zip(new_states, values):
+                        self.mcts.backup(state, value)
+                    self.tracker.update('mcts', incr=g.expansion_batch_size)
+                probs, action, new_state = self.mcts.play(root)
+                print(action)
+                history.append((probs, root))
+                root = new_state
 
                 self.tracker.update('rollout')
-                if state == dl.end_state:
+                if root == dl.end_state:
                     break
 
-            reward = int(state == dl.end_state)
+            reward = int(root == dl.end_state)
             success += reward
             samples.extend([(probs, state, reward) for probs, state in history])
             self.tracker.update('episode')
@@ -442,13 +430,14 @@ class MctsTrainer(RLTrainer):
         rewards = list()
         tgt_policies = list()
         for probs, state, reward in samples:
-            curr_ids.append(state.ids)
+            curr_ids.extend(state.vocab)
             # FIXME(j_luo) check this
-            action_masks.append(self.mcts.action_space.get_permissible_actions(state, return_type='tensor'))
+            action_masks.append(self.mcts.action_space.get_action_mask(state))
             tgt_policies.append(probs)
             rewards.append(reward)
-        curr_ids = get_tensor(np.stack(curr_ids, axis=0)).rename('batch', 'pos', 'word')
-        action_masks = torch.stack(action_masks, new_name='batch').align_to('batch', 'action')
+        # HACK(j_luo) I don't like this function.
+        curr_ids = stack_ids(curr_ids, len(rewards), len(state))
+        action_masks = get_tensor(np.stack(action_masks, axis=0)).rename('batch', 'action')
         tgt_policies = get_tensor(np.stack(tgt_policies, axis=0)).rename('batch', 'action')
         rewards = get_tensor(rewards).rename('batch')
 
