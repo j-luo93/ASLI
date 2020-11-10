@@ -13,8 +13,8 @@ from dev_misc.utils import pad_for_log
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, AgentOutputs, BasePG
-from .env import SoundChangeEnv, stack_ids
-from .mcts_fast import parallel_select, parallel_get_action_masks  # pylint: disable=no-name-in-module
+from .env import SoundChangeEnv
+from .mcts_fast import parallel_select, parallel_get_action_masks, parallel_stack_ids  # pylint: disable=no-name-in-module
 from .trajectory import VocabState
 
 
@@ -89,10 +89,8 @@ class Mcts:
             # ]
             action_masks = parallel_get_action_masks(outstanding_states, self.env.action_space, g.num_workers)
             am_tensor = get_tensor(action_masks).rename('batch', 'action')
-            id_seqs = list()
-            for state in outstanding_states:
-                id_seqs.extend(state.vocab)
-            id_seqs = stack_ids(id_seqs, am_tensor.size('batch'), len(state))
+            id_seqs = parallel_stack_ids(outstanding_states, g.num_workers)
+            id_seqs = get_tensor(id_seqs).rename('batch', 'pos', 'word')
             probs = self.agent.get_policy(id_seqs, am_tensor).probs.cpu().numpy()
             agent_values = self.agent.get_values(id_seqs).cpu().numpy()
 

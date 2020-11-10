@@ -439,3 +439,33 @@ cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, lon
             for j in range(m):
                 arr_view[i, j] = masks[i][j]
     return arr
+
+cpdef object parallel_stack_ids(object py_nodes, long num_threads):
+    cdef long n = len(py_nodes)
+    cdef vector[TNptr] nodes = vector[TNptr](n)
+    cdef long i, j, k, m
+    for i in range(n):
+        nodes[i] = get_ptr(py_nodes[i])
+    cdef long nw = nodes[0].size()
+
+    lengths = np.zeros([n, nw], dtype='long')
+    cdef long[:, ::1] lengths_view = lengths
+    cdef VocabIdSeq vocab_i
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            vocab_i = nodes[i].vocab_i
+            for j in range(nw):
+                lengths_view[i, j] = vocab_i[j].size()
+
+    m = lengths.max()
+    arr = np.full([n, m, nw], PAD_ID, dtype='long')
+    cdef long[:, :, ::1] arr_view = arr
+    cdef IdSeq id_seq
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            vocab_i = nodes[i].vocab_i
+            for k in range(nw):
+                id_seq = vocab_i[k]
+                for j in range(id_seq.size()):
+                    arr_view[i, j, k] = id_seq[j]
+    return  arr

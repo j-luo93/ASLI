@@ -22,7 +22,6 @@ ActionSpace::ActionSpace()
 
 void ActionSpace::register_action(long before_id, long after_id)
 {
-    // FIXME(j_luo) there is no duplicate check here. Should be done by python?
     long action_id = this->actions.size();
     Action *action = new Action(action_id, before_id, after_id);
     this->actions.push_back(action);
