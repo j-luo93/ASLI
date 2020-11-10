@@ -14,7 +14,7 @@ from dev_misc.utils import pad_for_log
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, AgentOutputs, BasePG
 from .env import SoundChangeEnv, stack_ids
-from .mcts_fast import parallel_select  # pylint: disable=no-name-in-module
+from .mcts_fast import parallel_select, parallel_get_action_masks  # pylint: disable=no-name-in-module
 from .trajectory import VocabState
 
 
@@ -62,7 +62,7 @@ class Mcts:
     def expand(self, states: List[VocabState]) -> List[float]: ...
 
     @torch.no_grad()
-    # @profile
+    @profile
     def expand(self, states):
         """Expand and evaluate the leaf node."""
         ret_lst = True
@@ -83,11 +83,12 @@ class Mcts:
 
         # Collect states that need evaluation.
         if outstanding_states:
-            action_masks = [
-                self.action_space.get_action_mask(state)
-                for state in outstanding_states
-            ]
-            am_tensor = get_tensor(np.stack(action_masks, axis=0)).rename('batch', 'action')
+            # action_masks = [
+            #     self.action_space.get_action_mask(state)
+            #     for state in outstanding_states
+            # ]
+            action_masks = parallel_get_action_masks(outstanding_states, self.env.action_space, g.num_workers)
+            am_tensor = get_tensor(action_masks).rename('batch', 'action')
             id_seqs = list()
             for state in outstanding_states:
                 id_seqs.extend(state.vocab)

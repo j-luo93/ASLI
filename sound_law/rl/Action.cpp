@@ -35,6 +35,8 @@ Action *ActionSpace::get_action(long action_id)
 
 vector<bool> ActionSpace::get_action_mask(TreeNode *node)
 {
+    if (not node->action_mask.empty())
+        return node->action_mask;
     vector<bool> ret = vector<bool>(this->size(), false);
     for (long i = 0; i < node->size(); ++i)
     {
@@ -48,6 +50,7 @@ vector<bool> ActionSpace::get_action_mask(TreeNode *node)
                 ret[j] = true;
         }
     }
+    node->action_mask = ret;
     return ret;
 }
 

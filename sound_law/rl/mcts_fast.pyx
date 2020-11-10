@@ -409,3 +409,33 @@ cpdef object parallel_select(PyTreeNode py_root,
             selected[i] = node
     tn_cls = type(py_root)
     return [wrap_node(tn_cls, ptr) for ptr in selected]
+
+# Use this to circumvent the issue of not being able to specifier a type identifier like vector[PyTreeNode].
+cdef inline TreeNode *get_ptr(PyTreeNode py_node):
+    return py_node.ptr
+
+cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, long num_threads):
+    cdef long n = len(py_nodes)
+    cdef long m = len(py_as)
+    cdef long i, j
+    cdef TreeNode *node
+    cdef vector[TNptr] nodes = vector[TNptr](n)
+    cdef ActionSpace *action_space = py_as.ptr
+    cdef vector[bool] action_mask
+    cdef vector[vector[bool]] masks = vector[vector[bool]](n)
+    for i in range(n):
+        nodes[i] = get_ptr(py_nodes[i])
+
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            node = nodes[i]
+            action_mask = action_space.get_action_mask(node)
+            masks[i] = action_mask
+
+    arr = np.zeros([n, m], dtype='bool')
+    cdef bool[:, ::1] arr_view = arr
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            for j in range(m):
+                arr_view[i, j] = masks[i][j]
+    return arr

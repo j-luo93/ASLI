@@ -13,6 +13,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i)
     this->parent_node = nullptr;
     this->played = false;
     this->done = true;
+    this->action_mask = vector<bool>();
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
@@ -25,6 +26,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
     this->parent_node = nullptr;
     this->played = false;
     this->done = (this->vocab_i == end_node->vocab_i);
+    this->action_mask = vector<bool>();
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeNode *parent_node)
@@ -37,6 +39,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeN
     this->parent_node = parent_node;
     this->played = false;
     this->done = (this->vocab_i == end_node->vocab_i);
+    this->action_mask = vector<bool>();
 }
 
 void TreeNode::add_edge(long action_id, Edge edge)
