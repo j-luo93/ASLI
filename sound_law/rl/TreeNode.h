@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <list>
 #include <unordered_map>
 #include <mutex>
 
@@ -32,6 +33,7 @@ public:
     void backup(float, float, long, float);
     void reset();
     void play();
+    list<pair<long, float>> get_path();
 
     VocabIdSeq vocab_i;
     TreeNode *end_node;

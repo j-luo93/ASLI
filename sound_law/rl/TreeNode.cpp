@@ -140,13 +140,16 @@ void TreeNode::backup(float value, float mixing, long game_count, float virtual_
 {
     TreeNode *parent_node = this->parent_node;
     TreeNode *node = this;
+    float rtg = 0.0;
     while ((parent_node != nullptr) and (!parent_node->played))
     {
         long action_id = node->prev_action;
         float reward = parent_node->edges[action_id].second;
-        float mixed_value = (1 - mixing) * value + mixing * reward;
+        rtg += reward;
+        // float mixed_value = (1 - mixing) * value + mixing * reward;
         parent_node->action_count[action_id] -= game_count - 1;
-        parent_node->total_value[action_id] += game_count * virtual_loss + mixed_value;
+        // parent_node->total_value[action_id] += game_count * virtual_loss + mixed_value;
+        parent_node->total_value[action_id] += game_count * virtual_loss + value + rtg;
         parent_node->visit_count -= game_count - 1;
         node = parent_node;
         parent_node = node->parent_node;
@@ -165,4 +168,20 @@ void TreeNode::play()
 {
     assert(!this->played);
     this->played = true;
+}
+
+list<pair<long, float>> TreeNode::get_path()
+{
+    TreeNode *node = this;
+    list<pair<long, float>> path = list<pair<long, float>>();
+    while (node->parent_node != nullptr)
+    {
+        long action_id = node->prev_action;
+        Edge edge = node->parent_node->edges[action_id];
+        float reward = edge.second;
+        pair<long, float> path_edge = pair<long, float>(action_id, reward);
+        path.push_front(path_edge);
+        node = node->parent_node;
+    }
+    return path;
 }

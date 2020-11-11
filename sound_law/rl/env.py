@@ -38,6 +38,13 @@ class SoundChangeEnv(nn.Module, PyEnv):
     def forward(self, state: VocabState, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
         return self.step(state, action)
 
+    def show_path(self, state: VocabState) -> str:
+        out = list()
+        for action_id, reward in state.get_path():
+            action = self.action_space.get_action(action_id)
+            out.append(f'{action}, {reward:.3f}')
+        return '(' + ', '.join(out) + ')'
+
 
 class TrajectoryCollector:
     """This collects trajectories and (flattened/batched) samples."""

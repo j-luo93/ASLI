@@ -1,6 +1,7 @@
 # distutils: language = c++
 
 from libcpp.vector cimport vector
+from libcpp.list cimport list as cpplist
 from libcpp.pair cimport pair
 from libcpp.unordered_map cimport unordered_map
 from cython.operator cimport dereference as deref
@@ -28,6 +29,9 @@ cdef extern from "TreeNode.h":
     ctypedef vector[long] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
     cdef cppclass TreeNode nogil:
+        ctypedef TreeNode * TNptr
+        ctypedef pair[TNptr, float] Edge
+
         TreeNode(VocabIdSeq) except +
         TreeNode(VocabIdSeq, TreeNode *) except +
 
@@ -42,7 +46,9 @@ cdef extern from "TreeNode.h":
         void backup(float, float, long, float)
         void reset()
         void play()
+        cpplist[pair[long, float]] get_path()
 
+        TreeNode *parent_node
         VocabIdSeq vocab_i
         long dist_to_end
         long prev_action
@@ -53,6 +59,8 @@ cdef extern from "TreeNode.h":
         bool done
         bool played
         long idx
+        unordered_map[long, Edge] edges
+
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
@@ -126,6 +134,12 @@ cdef inline vector[convertible] np2vector(convertible[::1] arr, long n) except *
 cdef extern from "unistd.h" nogil:
     unsigned int sleep(unsigned int seconds)
 
+cdef inline object get_py_edge(PyTreeNode node, Edge edge):
+    cdef TreeNode * next_node = edge.first
+    cdef bool done = node.ptr.done
+    cdef float reward = edge.second
+    return wrap_node(type(node), next_node), done, reward
+
 ctypedef Action * Aptr
 
 cdef class PyTreeNode:
@@ -164,12 +178,6 @@ cdef class PyTreeNode:
             self.ptr = new TreeNode(vocab_i, end_node.ptr)
         self.end_node = end_node
 
-    # @staticmethod
-    # cdef PyTreeNode from_ptr(TreeNode *ptr):
-    #     """This is used in cython code to wrap around a c++ TreeNode object."""
-    #     cdef PyTreeNode py_tn = PyTreeNode.__new__(PyTreeNode, from_ptr=True)
-    #     py_tn.ptr = ptr
-    #     return py_tn
     def __len__(self):
         return self.ptr.size()
 
@@ -180,6 +188,12 @@ cdef class PyTreeNode:
     @property
     def vocab(self):
         return self.ptr.vocab_i
+
+    @property
+    def parent(self):
+        if self.ptr.parent_node == nullptr:
+            return None
+        return wrap_node(type(self), self.ptr.parent_node)
 
     @property
     def prior(self):
@@ -204,6 +218,9 @@ cdef class PyTreeNode:
     @property
     def idx(self):
         return self.ptr.idx
+
+    def get_path(self):
+        return self.ptr.get_path()
 
     def __str__(self):
         out = f'visit_count: {self.ptr.visit_count}\n'
@@ -252,6 +269,13 @@ cdef class PyTreeNode:
     def done(self):
         return self.ptr.done
 
+    def get_edge(self, long action_id):
+        cdef Edge edge
+        if self.ptr.has_acted(action_id):
+            edge = self.ptr.edges.at(action_id)
+            return get_py_edge(self, edge)
+        raise ValueError(f'Action {action_id} has not been explored.')
+
 
 cdef class PyAction:
     """This is a wrapper class for c++ class Action. It should be created by a PyActionSpace object with registered actions."""
@@ -264,11 +288,6 @@ cdef class PyAction:
         self.ptr = NULL
         # del self.ptr
 
-    # @staticmethod
-    # cdef PyAction from_ptr(cls, Action *ptr):
-    #     cdef PyAction py_a = cls.__new__(cls, from_ptr=True)
-    #     py_a.ptr = ptr
-    #     return py_a
     @property
     def action_id(self):
         return self.ptr.action_id
@@ -313,6 +332,8 @@ cdef class PyActionSpace:
         return np.asarray(action_mask)
 
     def get_action(self, long action_id):
+        if action_id >= len(self) or action_id < 0:
+            raise ValueError(f'Action id out of bound.')
         cdef Action *action = self.ptr.get_action(action_id)
         action_cls = type(self).action_cls
         return wrap_action(action_cls, action)
@@ -338,10 +359,7 @@ cdef class PyEnv:
 
     def step(self, PyTreeNode node, PyAction action):
         cdef Edge edge = self.ptr.step(node.ptr, action.ptr)
-        cdef TreeNode * next_node = edge.first
-        cdef bool done = node.ptr.done
-        cdef float reward = edge.second
-        return wrap_node(type(node), next_node), done, reward
+        return get_py_edge(node, edge)
 
 # FIXME(j_luo) rename node to state?
 cpdef object parallel_select(PyTreeNode py_root,

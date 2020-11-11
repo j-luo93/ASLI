@@ -405,22 +405,29 @@ class MctsTrainer(RLTrainer):
             value = self.mcts.expand(root)
             self.mcts.backup(root, value)
 
-            history = list()
             trajectory = Trajectory(root, dl.end_state)
             # Episodes have max rollout length.
             for ri in range(g.max_rollout_length):
                 depth_limit = g.max_rollout_length - ri
                 # Run many simulations before take one action. Simulations take place in batches. Each batch
                 # would be evaluated and expanded after batched selection.
+                # logging.debug('=' * 20)
                 num_batches = g.num_mcts_sims // g.expansion_batch_size
                 for _ in range(num_batches):
                     new_states = self.mcts.parallel_select(root, g.expansion_batch_size, depth_limit)
+                    if ei == 0 and ri == 0:
+                        for state in new_states:
+                            logging.debug(pad_for_log(self.mcts.env.show_path(state)))
+                        logging.debug('-' * 10)
                     values = self.mcts.expand(new_states)
                     for state, value in zip(new_states, values):
                         self.mcts.backup(state, value)
                     self.tracker.update('mcts', incr=g.expansion_batch_size)
                 probs, action, reward, new_state = self.mcts.play(root)
                 trajectory.append(action, new_state, new_state.done, reward, mcts_pi=probs)
+                if ri == 0 and ei % 10 == 0:
+                    logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(20))))
+                    logging.debug(pad_for_log(str(get_tensor(root.q).topk(20))))
                 root = new_state
 
                 self.tracker.update('rollout')
@@ -458,7 +465,6 @@ class MctsTrainer(RLTrainer):
 
             pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), bs)
             v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), bs)
-            print(pi_ce_loss.mean.item(), v_regress_loss.mean.item())
             total_loss = Metric('total_loss', pi_ce_loss.total + 100.0 * v_regress_loss.total, bs)
 
             total_loss.mean.backward()

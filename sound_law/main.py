@@ -2,6 +2,7 @@ import json
 from multiprocessing import set_start_method
 from typing import Optional
 
+import numpy as np
 import torch
 
 from dev_misc import Initiator, add_argument, g, parse_args
@@ -20,6 +21,7 @@ def setup() -> Initiator:
     initiator = Initiator(reg, logger=True, log_level=True, gpus=True, random_seed=True, commit_id=True, log_dir=True)
     patch_named_tensors()
     torch.set_printoptions(sci_mode=False)
+    np.set_printoptions(suppress=True)
     return initiator
 
 
