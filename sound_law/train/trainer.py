@@ -19,6 +19,7 @@ from sound_law.model.decoder import get_beam_probs
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
+from sound_law.rl.reward import get_rtgs_dense
 from sound_law.rl.trajectory import Trajectory
 
 
@@ -386,13 +387,13 @@ class MctsTrainer(RLTrainer):
         self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         self.tracker.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
-    # @profile
     def train_one_step(self, dl: OnePairDataLoader):
         samples = list()
         success = 0.0
 
         # Collect episodes.
         last = len(self.mcts._total_state_ids)
+        trajectories = list()
         for ei in range(g.num_episodes):
             # self.mcts.unplay()
             root = dl.init_state
@@ -405,6 +406,7 @@ class MctsTrainer(RLTrainer):
             self.mcts.backup(root, value)
 
             history = list()
+            trajectory = Trajectory(root, dl.end_state)
             # Episodes have max rollout length.
             for ri in range(g.max_rollout_length):
                 depth_limit = g.max_rollout_length - ri
@@ -418,51 +420,40 @@ class MctsTrainer(RLTrainer):
                         self.mcts.backup(state, value)
                     self.tracker.update('mcts', incr=g.expansion_batch_size)
                 probs, action, reward, new_state = self.mcts.play(root)
-                history.append((probs, root, action, reward))
+                trajectory.append(action, new_state, new_state.done, reward, mcts_pi=probs)
                 root = new_state
 
                 self.tracker.update('rollout')
-                if root == dl.end_state:
+                if root.done:
                     break
             if ei % 10 == 0:
-                out = ', '.join(f'({action}, {reward:.3f})' for _, _, action, reward in history)
+                out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
                 logging.debug(pad_for_log(out))
 
-            reward = int(root == dl.end_state)
-            success += reward
-            samples.extend(history)
-            # if ei == 0:
-            #     breakpoint()  # BREAKPOINT(j_luo)
-            # samples.extend([(probs, state, reward) for probs, state in history])
+            success += int(root.done)
+            trajectories.append(trajectory)
             self.tracker.update('episode')
-
-        curr_ids = list()
-        action_masks = list()
-        rewards = list()
-        tgt_policies = list()
-        for probs, state, action, reward in samples:
-            curr_ids.extend(state.vocab)
-            # FIXME(j_luo) check this
-            action_masks.append(self.mcts.action_space.get_action_mask(state))
-            tgt_policies.append(probs)
-            rewards.append(reward)
-        # HACK(j_luo) I don't like this function.
-        curr_ids = stack_ids(curr_ids, len(rewards), len(state))
-        action_masks = get_tensor(np.stack(action_masks, axis=0)).rename('batch', 'action')
-        tgt_policies = get_tensor(np.stack(tgt_policies, axis=0)).rename('batch', 'action')
-        rewards = get_tensor(rewards).rename('batch')
-
-        bs = rewards.size('batch')
-        success = Metric('success', success, bs)
+        success = Metric('success', success, g.num_episodes)
         metrics = Metrics(success)
+
+        agent_inputs = AgentInputs.from_trajectories(trajectories, self.mcts.env.action_space)
+        tgt_policies = list()
+        for tr in trajectories:
+            tgt_policies.extend([edge.mcts_pi for edge in tr])
+        tgt_policies = np.stack(tgt_policies, axis=0)
+        tgt_policies = get_tensor(tgt_policies).rename('batch', 'action')
+        rewards = get_rtgs_dense(agent_inputs.rewards.cpu().numpy(), agent_inputs.offsets, 1.0)
+        rewards = get_tensor(rewards)
+        bs = len(tgt_policies)
         for _ in range(g.num_inner_steps):
             self.agent.train()
             self.optimizer.zero_grad()
 
             with self.agent.policy_grad(True), self.agent.value_grad(True):
-                policy = self.agent.get_policy(curr_ids, action_masks)
-                values = self.agent.get_values(curr_ids)
+                policy = self.agent.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks)
+                values = self.agent.get_values(agent_inputs.id_seqs)
             pi_ce_losses = -tgt_policies * policy.logits
+
             v_regress_losses = 0.5 * (values - rewards) ** 2
 
             pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), bs)

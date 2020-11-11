@@ -161,12 +161,6 @@ void TreeNode::reset()
     this->played = false;
 }
 
-void TreeNode::unplay()
-{
-    // assert(this->played);
-    this->played = false;
-}
-
 void TreeNode::play()
 {
     assert(!this->played);

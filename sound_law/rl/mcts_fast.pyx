@@ -42,7 +42,6 @@ cdef extern from "TreeNode.h":
         void backup(float, float, long, float)
         void reset()
         void play()
-        void unplay()
 
         VocabIdSeq vocab_i
         long dist_to_end
@@ -238,9 +237,6 @@ cdef class PyTreeNode:
     def play(self):
         self.ptr.play()
 
-    def unplay(self):
-        self.ptr.unplay()
-
     def __eq__(self, PyTreeNode other):
         return self.ptr.vocab_i == other.ptr.vocab_i
 
@@ -251,6 +247,10 @@ cdef class PyTreeNode:
     @property
     def dist_to_end(self):
         return self.ptr.dist_to_end
+
+    @property
+    def done(self):
+        return self.ptr.done
 
 
 cdef class PyAction:
@@ -342,9 +342,6 @@ cdef class PyEnv:
         cdef bool done = node.ptr.done
         cdef float reward = edge.second
         return wrap_node(type(node), next_node), done, reward
-
-    def is_done(self, PyTreeNode node):
-        return self.ptr.end_node == node.ptr
 
 # FIXME(j_luo) rename node to state?
 cpdef object parallel_select(PyTreeNode py_root,

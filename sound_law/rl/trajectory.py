@@ -59,6 +59,7 @@ class TrEdge:
     s1: VocabState
     done: bool
     r: float
+    mcts_pi: Optional[NDA]  # This stores the policy produced by MCTS.
 
 
 class Trajectory:
@@ -67,16 +68,24 @@ class Trajectory:
         self._states = [init_state]
         self._actions: List[a.SoundChangeAction] = list()
         self._rewards: List[float] = list()
+        self._mcts_pis: List[NDA] = list()
         self._end_state = end_state
         self._done = False  # Whether the trajectory has reached the end state.
 
-    def append(self, action: a.SoundChangeAction, state: VocabState, done: bool, reward: float):
+    def append(self,
+               action: a.SoundChangeAction,
+               state: VocabState,
+               done: bool,
+               reward: float,
+               mcts_pi: Optional[NDA] = None):
         if self._done:
             raise RuntimeError(f'This trajectory has already ended.')
 
         self._actions.append(action)
         self._states.append(state)
         self._rewards.append(reward)
+        if mcts_pi is not None:
+            self._mcts_pis.append(mcts_pi)
         self._done = done
 
     @property
@@ -98,12 +107,13 @@ class Trajectory:
         for i, (s0, a, r) in enumerate(zip(self._states, self._actions, self._rewards)):
             s1 = self._states[i + 1]
             done = False if i < len(self._actions) - 1 else self._done
-            yield TrEdge(s0, a, s1, done, r)
+            mcts_pi = self._mcts_pis[i] if self._mcts_pis else None
+            yield TrEdge(s0, a, s1, done, r, mcts_pi=mcts_pi)
 
     def __repr__(self):
         out = list()
-        for s0, a, s1, r in self:
-            out.append(f'({a}; {r:.3f})')
+        for edge in self:
+            out.append(f'({edge.a}; {edge.r:.3f})')
         out = ', '.join(out)
         if self._done:
             out += ' DONE'

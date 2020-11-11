@@ -32,7 +32,6 @@ public:
     void backup(float, float, long, float);
     void reset();
     void play();
-    void unplay();
 
     VocabIdSeq vocab_i;
     TreeNode *end_node;

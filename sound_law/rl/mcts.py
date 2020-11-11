@@ -72,7 +72,6 @@ class Mcts:
     def expand(self, states: List[VocabState]) -> List[float]: ...
 
     @torch.no_grad()
-    # @profile
     def expand(self, states):
         """Expand and evaluate the leaf node."""
         ret_lst = True
