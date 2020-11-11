@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import (ClassVar, Dict, Iterator, List, NewType, Optional,
                     Sequence, Set, Tuple, Union)
@@ -50,24 +51,32 @@ class VocabState(PyTreeNode):
         return self.total_value / (1e-8 + self.action_count)
 
 
+@dataclass
+class TrEdge:
+    """This represents one edge in the trajectories."""
+    s0: VocabState
+    a: a.SoundChangeAction
+    s1: VocabState
+    done: bool
+    r: float
+
+
 class Trajectory:
 
     def __init__(self, init_state: VocabState, end_state: VocabState):
         self._states = [init_state]
         self._actions: List[a.SoundChangeAction] = list()
         self._rewards: List[float] = list()
-        self._action_masks: List[BT] = list()
         self._end_state = end_state
         self._done = False  # Whether the trajectory has reached the end state.
 
-    def append(self, action: a.SoundChangeAction, state: VocabState, done: bool, reward: float, action_masks: BT):
+    def append(self, action: a.SoundChangeAction, state: VocabState, done: bool, reward: float):
         if self._done:
             raise RuntimeError(f'This trajectory has already ended.')
 
         self._actions.append(action)
         self._states.append(state)
         self._rewards.append(reward)
-        self._action_masks.append(action_masks)
         self._done = done
 
     @property
@@ -85,14 +94,15 @@ class Trajectory:
     def __len__(self):
         return len(self._actions)
 
-    def __iter__(self) -> Iterator[Tuple[VocabState, a.SoundChangeAction, VocabState, FT, BT]]:
-        for i, (s0, a, r, am) in enumerate(zip(self._states, self._actions, self._rewards, self._action_masks)):
+    def __iter__(self) -> Iterator[TrEdge]:
+        for i, (s0, a, r) in enumerate(zip(self._states, self._actions, self._rewards)):
             s1 = self._states[i + 1]
-            yield s0, a, s1, r, am
+            done = False if i < len(self._actions) - 1 else self._done
+            yield TrEdge(s0, a, s1, done, r)
 
     def __repr__(self):
         out = list()
-        for s0, a, s1, r, am in self:
+        for s0, a, s1, r in self:
             out.append(f'({a}; {r:.3f})')
         out = ', '.join(out)
         if self._done:

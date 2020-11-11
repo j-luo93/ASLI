@@ -22,7 +22,7 @@ long edit_distance(IdSeq seq1, IdSeq seq2)
     for (long i = 1; i < l1 + 1; ++i)
         for (long j = 1; j < l2 + 1; ++j)
         {
-            long sub_cost = seq1[i] == seq2[j] ? 0 : 1;
+            long sub_cost = seq1[i - 1] == seq2[j - 1] ? 0 : 1;
             dist[i][j] = min(dist[i - 1][j - 1] + sub_cost, min(dist[i - 1][j], dist[i][j - 1]) + 1);
         }
     long ret = dist[l1][l2];

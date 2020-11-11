@@ -20,13 +20,6 @@ from .mcts_fast import PyEnv  # pylint: disable=no-name-in-module
 from .trajectory import Trajectory, VocabState
 
 
-def stack_ids(seqs, batch_size, num_words):
-    seqs = get_tensor(pad_to_dense(seqs, pad_idx=PAD_ID, dtype='long')[0])
-    seqs = seqs.view(batch_size, num_words, -1).rename('batch', 'word', 'pos')
-    seqs = seqs.align_to('batch', 'pos', 'word')
-    return seqs
-
-
 class SoundChangeEnv(nn.Module, PyEnv):
 
     add_argument(f'final_reward', default=1.0, dtype=float, msg='Final reward for reaching the end.')
@@ -95,33 +88,8 @@ class TrajectoryCollector:
             policy = agent.get_policy(state, action_masks)
             action = agent.sample_action(policy)
             next_state, done, next_reward = env(state, action)
-            trajectory.append(action, next_state, done, next_reward, action_masks)
+            trajectory.append(action, next_state, done, next_reward)
             n_samples += 1
 
         # Make a batch out of all the states and actions in the list of trajectories. Note that only starting states are batched.
-        id_seqs = list()
-        next_id_seqs = list()
-        action_ids = list()
-        rewards = list()
-        done = list()
-        action_masks = list()
-        for t in trajectories:
-            for s0, a, s1, r, am in t:
-                id_seqs.extend(s0.vocab)
-                next_id_seqs.extend(s1.vocab)
-                action_ids.append(a.action_id)
-                rewards.append(r)
-                action_masks.append(am)
-            done.extend([False] * (len(t) - 1))
-            done.append(t.done)
-        bs = len(done)
-        nw = len(init_state)
-
-        id_seqs = stack_ids(id_seqs, bs, nw)
-        next_id_seqs = stack_ids(next_id_seqs, bs, nw)
-        action_ids = get_tensor(action_ids).rename('batch')
-        rewards = get_tensor(rewards).rename('batch')
-        action_masks = torch.stack(action_masks, dim=0).rename('batch', 'action')
-        done = get_tensor(done).rename('batch')
-        agent_inputs = AgentInputs(trajectories, id_seqs, next_id_seqs, action_ids, rewards, done, action_masks)
-        return agent_inputs
+        return AgentInputs.from_trajectories(trajectories, env.action_space)

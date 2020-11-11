@@ -1,5 +1,3 @@
-from dev_misc.utils import pad_for_log
-from sound_law.rl.env import stack_ids
 import logging
 import math
 from typing import Optional, Tuple
@@ -12,6 +10,7 @@ from dev_misc.devlib.named_tensor import get_named_range
 from dev_misc.trainlib import (Metric, Metrics, clip_grad, get_optim_params,
                                init_params)
 from dev_misc.trainlib.base_trainer import BaseTrainer as BaseTrainerDev
+from dev_misc.utils import pad_for_log
 from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
                                         PaddedUnitSeqs, VSOnePairDataLoader)
@@ -20,6 +19,7 @@ from sound_law.model.decoder import get_beam_probs
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
+from sound_law.rl.trajectory import Trajectory
 
 
 def get_ce_loss(log_probs: FT, batch: OnePairBatch, agg='all') -> FT:
@@ -425,7 +425,7 @@ class MctsTrainer(RLTrainer):
                 if root == dl.end_state:
                     break
             if ei % 10 == 0:
-                out = '(' + ', '.join(str(action) for _, _, action, _ in history) + ')'
+                out = ', '.join(f'({action}, {reward:.3f})' for _, _, action, reward in history)
                 logging.debug(pad_for_log(out))
 
             reward = int(root == dl.end_state)

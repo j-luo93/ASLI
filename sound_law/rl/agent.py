@@ -19,8 +19,10 @@ from sound_law.model.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                     get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
-from .reward import (get_rtgs_dense,  # pylint: disable=no-name-in-module
-                     get_rtgs_list)
+from .mcts_fast import (  # pylint: disable=no-name-in-module
+    parallel_get_action_masks, parallel_stack_ids)
+from .reward import get_rtgs_dense  # pylint: disable=no-name-in-module
+from .reward import get_rtgs_list
 from .trajectory import Trajectory, VocabState
 
 
@@ -28,11 +30,11 @@ from .trajectory import Trajectory, VocabState
 class AgentInputs:
     trajectories: List[Trajectory]
     id_seqs: LT
-    next_id_seqs: LT
-    action_ids: LT
     rewards: FT
-    done: BT
     action_masks: BT
+    next_id_seqs: Optional[LT] = None
+    action_ids: Optional[LT] = None
+    done: Optional[BT] = None
 
     @property
     def batch_size(self) -> int:
@@ -41,6 +43,31 @@ class AgentInputs:
     @property
     def offsets(self) -> NDA:
         return np.cumsum(np.asarray([len(tr) for tr in self.trajectories]), dtype='int32')
+
+    @classmethod
+    def from_trajectories(cls, trs: List[Trajectory], action_space: SoundChangeActionSpace) -> AgentInputs:
+        def gather(attr: str):
+            """Gather information from trajectory edges. See definition for `TrEdge`."""
+            ret = list()
+            for tr in trs:
+                ret.extend([getattr(edge, attr) for edge in tr])
+            return ret
+
+        states = gather('s0')
+        id_seqs = get_tensor(parallel_stack_ids(states, g.num_workers)).rename('batch', 'pos', 'word')
+        rewards = get_tensor(gather('r')).rename('batch')
+        action_masks = parallel_get_action_masks(states, action_space, g.num_workers)
+        action_masks = get_tensor(action_masks).rename('batch', 'action')
+        next_id_seqs = action_ids = done = None
+        if not g.use_mcts:
+            next_id_seqs = parallel_stack_ids(gather('s1'), num_threads=g.num_workers)
+            next_id_seqs = get_tensor(next_id_seqs).rename('batch', 'pos', 'word')
+            action_ids = get_tensor([a.action_id for a in gather('a')]).rename('batch')
+            done = get_tensor(gather('done')).rename('batch')
+        return AgentInputs(trs, id_seqs, rewards, action_masks,
+                           next_id_seqs=next_id_seqs,
+                           action_ids=action_ids,
+                           done=done)
 
 
 @dataclass
