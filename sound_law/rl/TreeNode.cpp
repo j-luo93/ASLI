@@ -95,23 +95,36 @@ bool TreeNode::is_leaf()
     return this->prior.empty();
 }
 
-long TreeNode::get_best_action_id(float puct_c)
+vector<float> TreeNode::get_scores(float puct_c)
 {
     long sqrt_ns = sqrt(this->visit_count);
-    long best_i = -1;
-    float best_v = NULL;
+    vector<float> scores = vector<float>(this->prior.size());
     for (long i = 0; i < this->prior.size(); ++i)
     {
         if (not this->action_mask[i])
-            continue;
-        long nsa = this->action_count[i];
-        float q = this->total_value[i] / (nsa + 1e-8);
-        float p = this->prior[i];
-        float u = puct_c * p * sqrt_ns / (1 + nsa);
-        float score = q + u;
-        if ((best_v == NULL) or (score > best_v))
+            scores[i] = -9999.9;
+        else
         {
-            best_v = score;
+            long nsa = this->action_count[i];
+            float q = this->total_value[i] / (nsa + 1e-8);
+            float p = this->prior[i];
+            float u = puct_c * p * sqrt_ns / (1 + nsa);
+            scores[i] = q + u;
+        }
+    }
+    return scores;
+}
+
+long TreeNode::get_best_action_id(float puct_c)
+{
+    long best_i = -1;
+    float best_v = NULL;
+    vector<float> scores = this->get_scores(puct_c);
+    for (long i = 0; i < this->prior.size(); ++i)
+    {
+        if ((best_v == NULL) or (scores[i] > best_v))
+        {
+            best_v = scores[i];
             best_i = i;
         };
     }

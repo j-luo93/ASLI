@@ -34,6 +34,7 @@ public:
     void reset();
     void play();
     list<pair<long, float>> get_path();
+    vector<float> get_scores(float);
 
     VocabIdSeq vocab_i;
     TreeNode *end_node;

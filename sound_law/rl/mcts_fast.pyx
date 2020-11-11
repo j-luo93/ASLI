@@ -47,6 +47,7 @@ cdef extern from "TreeNode.h":
         void reset()
         void play()
         cpplist[pair[long, float]] get_path()
+        vector[float] get_scores(float)
 
         TreeNode *parent_node
         VocabIdSeq vocab_i
@@ -180,6 +181,9 @@ cdef class PyTreeNode:
 
     def __len__(self):
         return self.ptr.size()
+
+    def get_scores(self, float puct_c):
+        return np.asarray(self.ptr.get_scores(puct_c))
 
     @property
     def vocab_array(self):
