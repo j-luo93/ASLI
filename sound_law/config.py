@@ -7,6 +7,14 @@ from inflection import camelize
 from dev_misc.arglib import Registry
 
 reg = Registry('config')
+a2c_reg = Registry('a2c_config')
+mcts_reg = Registry('mcts_config')
+s2s_reg = Registry('s2s_reg')
+
+
+@s2s_reg
+class S2S:
+    check_interval: int = 100
 
 
 @reg
@@ -16,7 +24,6 @@ class ZSLatIta:  # "ZS" stands for zero-shot.
     src_lang: str = 'lat'
     tgt_lang: str = 'ita'
     dropout: float = 0.2
-    check_interval: int = 100
     num_steps: int = 10000
     input_format: str = 'wikt'
     eval_interval: int = 1000
@@ -137,22 +144,14 @@ class OPLatSpaPhono(ZSLatSpaPhono, Size220):  # "OP" stands for one-pair.
     task: str = 'one_pair'
 
 
-@reg
-class OPRLFake(OPLatSpaPhono):
-    use_rl: bool = True
-    agent: str = 'a2c'
+@a2c_reg
+class Ppo:
     critic_target: str = 'expected'
     learning_rate: float = 5e-4
     value_learning_rate: float = 2e-3
     value_steps: int = 50
-    num_layers: int = 1
     check_interval: int = 10
-    use_phono_features: bool = False
-
     batch_size: int = 512
-    src_lang: str = 'fake1'
-    tgt_lang: str = 'fake2'
-
     use_gae: bool = True
     gae_lambda: float = 0.2
     init_entropy_reg: float = 0.01
@@ -160,6 +159,17 @@ class OPRLFake(OPLatSpaPhono):
     when_entropy_reg: int = 100
     policy_steps: int = 50
     use_ppo: bool = True
+
+
+@reg
+class OPRLFake(OPLatSpaPhono):
+    use_rl: bool = True
+    agent: str = 'a2c'
+    num_layers: int = 1
+    use_phono_features: bool = False
+
+    src_lang: str = 'fake1'
+    tgt_lang: str = 'fake2'
 
 
 @reg
@@ -197,6 +207,23 @@ class OPRLFakeR5(OPRLFake):
 class OPRLFakeR5i(OPRLFake):
     src_lang: str = 'fake1-r5i'
     tgt_lang: str = 'fake2-r5i'
+
+
+@mcts_reg
+class BasicMcts:
+    use_mcts: bool = True
+    check_interval: int = 1
+    expansion_batch_size: int = 20
+    num_mcts_sims: int = 200
+    num_inner_steps: int = 100
+    learning_rate: float = 1e-3
+    virtual_loss: float = 0.5
+    game_count: int = 3
+    num_workers: int = 8
+    mixing: float = 0.0
+    puct_c: float = 5.0
+    num_episodes: int = 256
+    episode_check_interval: int = 10
 
 
 @reg
