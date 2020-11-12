@@ -198,3 +198,14 @@ list<pair<long, float>> TreeNode::get_path()
     }
     return path;
 }
+
+void TreeNode::clear_subtree()
+{
+    for (auto const &edge : this->edges)
+    {
+        TreeNode *node = edge.second.first;
+        node->clear_subtree();
+        delete edge.second.first;
+    }
+    this->edges.clear();
+}

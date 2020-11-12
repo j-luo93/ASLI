@@ -48,6 +48,7 @@ cdef extern from "TreeNode.h":
         void play()
         cpplist[pair[long, float]] get_path()
         vector[float] get_scores(float)
+        void clear_subtree()
 
         TreeNode *parent_node
         VocabIdSeq vocab_i
@@ -279,6 +280,9 @@ cdef class PyTreeNode:
             edge = self.ptr.edges.at(action_id)
             return get_py_edge(self, edge)
         raise ValueError(f'Action {action_id} has not been explored.')
+
+    def clear_subtree(self):
+        self.ptr.clear_subtree()
 
 
 cdef class PyAction:

@@ -369,6 +369,7 @@ class MctsTrainer(RLTrainer):
     add_argument('expansion_batch_size', default=10, dtype=int, msg='Batch size for WU-UCT expansion steps.')
     add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
     add_argument('num_inner_steps', default=10, dtype=int, msg='Number of optimization step per batch.')
+    add_argument('episode_check_interval', default=10, dtype=int, msg='Frequency of checking episodes')
 
     def __init__(self, *args, mcts: Mcts = None, **kwargs):
         if mcts is None:
@@ -393,6 +394,9 @@ class MctsTrainer(RLTrainer):
 
         # Collect episodes.
         last = len(self.mcts._total_state_ids)
+        if last > 1000000:
+            logging.info(f'Clearing up all the tree nodes.')
+            self.mcts.clear_subtree(dl.init_state)
         trajectories = list()
         for ei in range(g.num_episodes):
             # self.mcts.unplay()
@@ -415,17 +419,17 @@ class MctsTrainer(RLTrainer):
                 num_batches = g.num_mcts_sims // g.expansion_batch_size
                 for _ in range(num_batches):
                     new_states = self.mcts.parallel_select(root, g.expansion_batch_size, depth_limit)
-                    if ei == 0 and ri == 0:
-                        for state in new_states:
-                            logging.debug(pad_for_log(self.mcts.env.show_path(state)))
-                        logging.debug('-' * 10)
+                    # if ei == 0 and ri == 0:
+                    #     for state in new_states:
+                    #         logging.debug(pad_for_log(self.mcts.env.show_path(state)))
+                    #     logging.debug('-' * 10)
                     values = self.mcts.expand(new_states)
                     for state, value in zip(new_states, values):
                         self.mcts.backup(state, value)
                     self.tracker.update('mcts', incr=g.expansion_batch_size)
                 probs, action, reward, new_state = self.mcts.play(root)
                 trajectory.append(action, new_state, new_state.done, reward, mcts_pi=probs)
-                if ri == 0 and ei % 10 == 0:
+                if ri == 0 and ei % g.episode_check_interval == 0:
                     logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(20))))
                     logging.debug(pad_for_log(str(get_tensor(root.q).topk(20))))
                 root = new_state
@@ -433,7 +437,7 @@ class MctsTrainer(RLTrainer):
                 self.tracker.update('rollout')
                 if root.done:
                     break
-            if ei % 10 == 0:
+            if ei % g.episode_check_interval == 0:
                 out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
                 logging.debug(pad_for_log(out))
 

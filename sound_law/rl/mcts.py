@@ -65,6 +65,10 @@ class Mcts:
                                num_sims, g.num_workers, depth_limit,
                                g.puct_c, g.game_count, g.virtual_loss)
 
+    def clear_subtree(self, state: VocabState):
+        self._total_state_ids.clear()
+        state.clear_subtree()
+
     @overload
     def expand(self, state: VocabState) -> float: ...
 
