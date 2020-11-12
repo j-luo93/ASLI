@@ -15,17 +15,3 @@ public:
     long after_id;
     // FIXME(j_luo) some cache is needed here.
 };
-
-class ActionSpace
-{
-public:
-    ActionSpace();
-
-    void register_action(long, long);
-    Action *get_action(long);
-    vector<bool> get_action_mask(TreeNode *);
-    long size();
-
-private:
-    vector<Action *> actions;
-};

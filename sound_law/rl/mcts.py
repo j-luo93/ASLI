@@ -32,6 +32,8 @@ class Mcts:
     add_argument('game_count', default=3, dtype=int, msg='How many virtual games lost.')
     add_argument('mixing', default=0.5, dtype=float, msg='Mixing lambda hyperparameter.')
     add_argument('num_workers', default=4, dtype=int, msg='Number of workers for parallelizing MCTS.')
+    add_argument('dirichlet_alpha', default=0.03, dtype=float, msg='Alpha value for the Dirichlet noise.')
+    add_argument('noise_ratio', default=0.25, dtype=float, msg='Mixing ratio for the Dirichlet noise.')
 
     def __init__(self,
                  action_space: SoundChangeActionSpace,
@@ -139,3 +141,8 @@ class Mcts:
         # Set `state.played` to True. This would prevent future backups from going further up.
         state.play()
         return probs, action, reward, new_state
+
+    def add_noise(self, state: VocabState):
+        """Add Dirichlet noise to `state`, usually the root."""
+        noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(len(self.action_space))).astype('float32')
+        state.add_noise(noise, g.noise_ratio)

@@ -36,6 +36,7 @@ public:
     list<pair<long, float>> get_path();
     vector<float> get_scores(float);
     void clear_subtree();
+    void add_noise(vector<float>, float);
 
     VocabIdSeq vocab_i;
     TreeNode *end_node;

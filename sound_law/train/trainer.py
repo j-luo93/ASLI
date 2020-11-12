@@ -19,7 +19,7 @@ from sound_law.model.decoder import get_beam_probs
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
-from sound_law.rl.reward import get_rtgs_dense
+from sound_law.rl.reward import get_rtgs_dense  # pylint: disable=no-name-in-module
 from sound_law.rl.trajectory import Trajectory
 
 
@@ -399,7 +399,6 @@ class MctsTrainer(RLTrainer):
             self.mcts.clear_subtree(dl.init_state)
         trajectories = list()
         for ei in range(g.num_episodes):
-            # self.mcts.unplay()
             root = dl.init_state
             self.mcts.reset()
             this = len(self.mcts._total_state_ids)
@@ -412,17 +411,13 @@ class MctsTrainer(RLTrainer):
             trajectory = Trajectory(root, dl.end_state)
             # Episodes have max rollout length.
             for ri in range(g.max_rollout_length):
+                self.mcts.add_noise(root)
                 depth_limit = g.max_rollout_length - ri
                 # Run many simulations before take one action. Simulations take place in batches. Each batch
                 # would be evaluated and expanded after batched selection.
-                # logging.debug('=' * 20)
                 num_batches = g.num_mcts_sims // g.expansion_batch_size
                 for _ in range(num_batches):
                     new_states = self.mcts.parallel_select(root, g.expansion_batch_size, depth_limit)
-                    # if ei == 0 and ri == 0:
-                    #     for state in new_states:
-                    #         logging.debug(pad_for_log(self.mcts.env.show_path(state)))
-                    #     logging.debug('-' * 10)
                     values = self.mcts.expand(new_states)
                     for state, value in zip(new_states, values):
                         self.mcts.backup(state, value)

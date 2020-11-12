@@ -209,3 +209,12 @@ void TreeNode::clear_subtree()
     }
     this->edges.clear();
 }
+
+void TreeNode::add_noise(vector<float> noise, float noise_ratio)
+{
+    assert(!this->prior.empty());
+    for (long i = 0; i < this->prior.size(); ++i)
+    {
+        this->prior[i] = this->prior[i] * (1.0 - noise_ratio) + noise[i] * noise_ratio;
+    }
+}

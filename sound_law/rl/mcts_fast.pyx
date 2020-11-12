@@ -22,6 +22,9 @@ cdef extern from "TreeNode.cpp":
 cdef extern from "Action.cpp":
     pass
 
+cdef extern from "ActionSpace.cpp":
+    pass
+
 cdef extern from "Env.cpp":
     pass
 
@@ -49,6 +52,7 @@ cdef extern from "TreeNode.h":
         cpplist[pair[long, float]] get_path()
         vector[float] get_scores(float)
         void clear_subtree()
+        void add_noise(vector[float], float)
 
         TreeNode *parent_node
         VocabIdSeq vocab_i
@@ -71,6 +75,8 @@ cdef extern from "Action.h":
         long action_id
         long before_id
         long after_id
+
+cdef extern from "ActionSpace.h":
     cdef cppclass ActionSpace nogil:
         ActionSpace()
 
@@ -283,6 +289,11 @@ cdef class PyTreeNode:
 
     def clear_subtree(self):
         self.ptr.clear_subtree()
+
+    def add_noise(self, float [::1] noise, float noise_ratio):
+        cdef long n = len(noise)
+        cdef vector[float] noise_vec = np2vector(noise, n)
+        self.ptr.add_noise(noise_vec, noise_ratio)
 
 
 cdef class PyAction:

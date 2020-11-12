@@ -214,16 +214,17 @@ class BasicMcts:
     use_mcts: bool = True
     check_interval: int = 1
     expansion_batch_size: int = 20
-    num_mcts_sims: int = 200
+    num_mcts_sims: int = 1000
     num_inner_steps: int = 100
     learning_rate: float = 1e-3
     virtual_loss: float = 0.5
     game_count: int = 3
-    num_workers: int = 8
+    num_workers: int = 10
     mixing: float = 0.0
     puct_c: float = 5.0
-    num_episodes: int = 256
+    num_episodes: int = 128
     episode_check_interval: int = 10
+    dirichlet_alpha: float = 0.3
 
 
 @reg
