@@ -1,10 +1,11 @@
 #include <Env.h>
 #include <algorithm>
 
-Env::Env(TreeNode *init_node, TreeNode *end_node, float final_reward, float step_penalty)
+Env::Env(TreeNode *init_node, TreeNode *end_node, ActionSpace *action_space, float final_reward, float step_penalty)
 {
     this->init_node = init_node;
     this->end_node = end_node;
+    this->action_space = action_space;
     this->final_reward = final_reward;
     this->step_penalty = step_penalty;
     this->starting_dist = init_node->dist_to_end;
@@ -23,7 +24,8 @@ Edge Env::step(TreeNode *node, Action *action)
     {
         vocab_i[i] = action->apply_to(node->vocab_i[i]).second;
     };
-    TreeNode *new_node = new TreeNode(vocab_i, node->end_node, action->action_id, node);
+    vector<bool> action_mask = this->action_space->get_action_mask(vocab_i);
+    TreeNode *new_node = new TreeNode(vocab_i, node->end_node, action->action_id, node, action_mask);
     float final_reward = new_node->done ? this->final_reward : -this->step_penalty;
     float incremental_reward = (node->dist_to_end - new_node->dist_to_end) / this->starting_dist;
     Edge edge = Edge(new_node, final_reward + incremental_reward);

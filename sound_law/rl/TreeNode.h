@@ -18,8 +18,8 @@ public:
     static mutex cls_mtx;
 
     TreeNode(VocabIdSeq);
-    TreeNode(VocabIdSeq, TreeNode *);
-    TreeNode(VocabIdSeq, TreeNode *, long, TreeNode *);
+    TreeNode(VocabIdSeq, TreeNode *, vector<bool>);
+    TreeNode(VocabIdSeq, TreeNode *, long, TreeNode *, vector<bool>);
 
     void add_edge(long, pair<TreeNode *, float>);
     bool has_acted(long);

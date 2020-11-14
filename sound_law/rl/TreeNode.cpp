@@ -29,7 +29,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i)
     this->action_mask = vector<bool>();
 };
 
-TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
+TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, vector<bool> action_mask)
 {
     // This constructor is used for root node only.
     common_init(this, vocab_i);
@@ -38,10 +38,10 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
     this->prev_action = NULL;
     this->parent_node = nullptr;
     this->done = (this->vocab_i == end_node->vocab_i);
-    this->action_mask = vector<bool>();
+    this->action_mask = action_mask;
 };
 
-TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeNode *parent_node)
+TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeNode *parent_node, vector<bool> action_mask)
 {
     // This constructor is used for nodes created by one env step.
     common_init(this, vocab_i);
@@ -50,7 +50,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeN
     this->prev_action = action_id;
     this->parent_node = parent_node;
     this->done = (this->vocab_i == end_node->vocab_i);
-    this->action_mask = vector<bool>();
+    this->action_mask = action_mask;
 }
 
 void TreeNode::add_edge(long action_id, Edge edge)
@@ -71,10 +71,7 @@ long TreeNode::size()
 
 void TreeNode::lock()
 {
-    // unique_lock<mutex> this->ulock(this->mtx);
-    // FIXME(j_luo) how to use unique_lock?
     this->mtx.lock();
-    // this->ulock = unique_lock<mutex> lock(this->mtx);
 }
 
 void TreeNode::unlock()

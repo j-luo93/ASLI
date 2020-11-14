@@ -112,8 +112,13 @@ class OnePairManager:
             test_setting = create_setting('test', Split('test'), False)
             settings.append(test_setting)
 
+        if g.use_rl:
+            self.action_space = SoundChangeActionSpace(self.tgt_abc)
+            dl_kwargs = {'action_space': self.action_space}
+        else:
+            dl_kwargs = dict()
         for setting in settings:
-            self.dl_reg.register_data_loader(setting, cr)
+            self.dl_reg.register_data_loader(setting, cr, **dl_kwargs)
 
     def run(self):
         phono_feat_mat = special_ids = None
@@ -123,9 +128,6 @@ class OnePairManager:
 
         metric_writer = MetricWriter(g.log_dir, flush_secs=5)
 
-        if g.use_rl:
-            action_space = SoundChangeActionSpace(self.tgt_abc)
-
         def get_model(dl=None):
             phono_kwargs = {
                 'phono_feat_mat': phono_feat_mat,
@@ -134,7 +136,7 @@ class OnePairManager:
             if g.use_rl:
                 end_state = dl.end_state
                 agent_cls = VanillaPolicyGradient if g.agent == 'vpg' else A2C
-                model = agent_cls(len(self.tgt_abc), action_space, end_state, **phono_kwargs)
+                model = agent_cls(len(self.tgt_abc), self.action_space, end_state, **phono_kwargs)
             else:
                 model = OnePairModel(len(self.src_abc), len(self.tgt_abc), **phono_kwargs)
             if g.saved_model_path is not None:
@@ -188,7 +190,7 @@ class OnePairManager:
                                   metric_writer=metric_writer)
 
             if g.evaluate_only:
-                # FIXME(j_luo) load global_step from saved model.
+                # TODO(j_luo) load global_step from saved model.
                 evaluator.evaluate('evaluate_only', 0)
             else:
                 trainer = get_trainer(model, train_name, evaluator, metric_writer)
@@ -196,10 +198,10 @@ class OnePairManager:
 
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
-            env = SoundChangeEnv(dl.init_state, dl.end_state, g.final_reward, g.step_penalty, action_space)
+            env = SoundChangeEnv(dl.init_state, dl.end_state, self.action_space, g.final_reward, g.step_penalty)
             model = get_model(dl=dl)
             if g.use_mcts:
-                mcts = Mcts(action_space, model, env, dl.end_state)
+                mcts = Mcts(self.action_space, model, env, dl.end_state)
                 trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
             else:
                 collector = TrajectoryCollector(g.batch_size,
@@ -331,7 +333,7 @@ class OneToManyManager:
 
     def run(self):
         if g.evaluate_only:
-            # FIXME(j_luo) load global_step from saved model.
+            # TODO(j_luo) load global_step from saved model.
             self.evaluator.evaluate('evaluate_only', 0)
         else:
             self.trainer.train(self.dl_reg)

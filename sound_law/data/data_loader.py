@@ -10,6 +10,7 @@ from torch.utils.data import BatchSampler, SequentialSampler
 from torch.utils.data.sampler import WeightedRandomSampler
 
 import sound_law.rl.trajectory as tr
+from sound_law.rl.action import SoundChangeActionSpace
 from dev_misc import BT, LT, NDA, add_argument, g
 from dev_misc.devlib import BaseBatch, batch_class, pad_to_dense
 from dev_misc.devlib.helper import get_array, get_tensor, has_gpus
@@ -239,6 +240,7 @@ class VSOnePairDataLoader(BaseOnePairDataLoader):  # VS stands for vocab state.
     def __init__(self,
                  setting: Setting,
                  cog_reg: CognateRegistry,
+                 action_space: SoundChangeActionSpace,
                  lang2id: Dict[str, int] = None):
         if setting.src_sot != setting.tgt_sot:
             raise ValueError(f'Expect equal values, but got {setting.src_sot} and {setting.tgt_sot}.')
@@ -253,6 +255,7 @@ class VSOnePairDataLoader(BaseOnePairDataLoader):  # VS stands for vocab state.
                          batch_sampler=batch_sampler)
         # This is used to cache the entire batch.
         self._entire_batch: OnePairBatch = None
+        self.action_space = action_space
 
     @property
     def entire_batch(self) -> OnePairBatch:
@@ -273,7 +276,7 @@ class VSOnePairDataLoader(BaseOnePairDataLoader):  # VS stands for vocab state.
     @cached_property
     def init_state(self) -> tr.VocabState:
         vss = tr.VocabStateSpace()
-        return vss.get_state(seqs=self.entire_batch.src_seqs, end_state=self.end_state)
+        return vss.get_state(seqs=self.entire_batch.src_seqs, end_state=self.end_state, action_space=self.action_space)
 
     @cached_property
     def end_state(self) -> tr.VocabState:

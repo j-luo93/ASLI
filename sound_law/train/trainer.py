@@ -218,7 +218,7 @@ class PolicyGradientTrainer(RLTrainer):
 
         # Collect episodes first.
         agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
-        # FIXME(j_luo) a bit ugly here.
+        # TODO(j_luo) a bit ugly here.
         self.add_callback('check', 'log_tr', lambda: log_trajectories(agent_inputs))
         bs = agent_inputs.batch_size
         n_tr = len(agent_inputs.trajectories)

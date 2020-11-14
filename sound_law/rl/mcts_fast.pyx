@@ -36,7 +36,7 @@ cdef extern from "TreeNode.h":
         ctypedef pair[TNptr, float] Edge
 
         TreeNode(VocabIdSeq) except +
-        TreeNode(VocabIdSeq, TreeNode *) except +
+        TreeNode(VocabIdSeq, TreeNode *, vector[bool]) except +
 
         bool has_acted(long)
         long size()
@@ -59,6 +59,7 @@ cdef extern from "TreeNode.h":
         long dist_to_end
         long prev_action
         vector[float] prior
+        vector[bool] action_mask
         vector[long] action_count
         long visit_count
         vector[float] total_value
@@ -82,7 +83,7 @@ cdef extern from "ActionSpace.h":
 
         void register_action(long, long)
         Action *get_action(long)
-        vector[bool] get_action_mask(TreeNode *) except +
+        vector[bool] get_action_mask(VocabIdSeq) except +
         long size()
 
 ctypedef TreeNode * TNptr
@@ -90,7 +91,7 @@ ctypedef TreeNode * TNptr
 cdef extern from "Env.h":
     ctypedef pair[TNptr, float] Edge
     cdef cppclass Env nogil:
-        Env(TreeNode *, TreeNode *, float, float) except +
+        Env(TreeNode *, TreeNode *, ActionSpace *, float, float) except +
 
         Edge step(TreeNode *, Action *) except +
 
@@ -156,15 +157,13 @@ cdef class PyTreeNode:
 
     def __dealloc__(self):
         # # Don't free the memory. Just delete the attribute.
-        # del self.ptr
-        # free(self.ptr)
-        # FIXME(j_luo) Make sure this is correct
         self.ptr = NULL
 
     def __cinit__(self,
                   *args,
                   object arr = None,
                   object lengths = None,
+                  object action_mask = None,
                   PyTreeNode end_node = None,
                   bool from_ptr = False,
                   **kwargs):
@@ -180,10 +179,16 @@ cdef class PyTreeNode:
         cdef long[::1] lengths_view = lengths
 
         cdef VocabIdSeq vocab_i = np2vocab(arr_view, lengths_view, n)
+        cdef bool[::1] am_view
+        cdef long m
+        cdef vector[bool] am_vec
         if end_node is None:
             self.ptr = new TreeNode(vocab_i)
         else:
-            self.ptr = new TreeNode(vocab_i, end_node.ptr)
+            m = len(action_mask)
+            am_view = action_mask
+            am_vec = np2vector(am_view, m)
+            self.ptr = new TreeNode(vocab_i, end_node.ptr, am_vec)
         self.end_node = end_node
 
     def __len__(self):
@@ -346,8 +351,12 @@ cdef class PyActionSpace:
     def register_action(self, long before_id, long after_id):
         self.ptr.register_action(before_id, after_id)
 
-    def get_action_mask(self, PyTreeNode py_node):
-        cdef vector[bool] action_mask = self.ptr.get_action_mask(py_node.ptr)
+    def get_action_mask(self, object arr, object lengths):
+        cdef long n = len(arr)
+        cdef long[:, ::1] arr_view = arr
+        cdef long[::1] lengths_view = lengths
+        cdef vector[vector[long]] vocab_i = np2vocab(arr_view, lengths_view, n)
+        cdef vector[bool] action_mask = self.ptr.get_action_mask(vocab_i)
         return np.asarray(action_mask)
 
     def get_action(self, long action_id):
@@ -369,18 +378,23 @@ ctypedef Env * Envptr
 cdef class PyEnv:
     cdef Envptr ptr
 
-    def __cinit__(self, PyTreeNode init_node, PyTreeNode end_node, float final_reward, float step_penalty, *args, **kwargs):
-        self.ptr = new Env(init_node.ptr, end_node.ptr, final_reward, step_penalty)
+    def __cinit__(self,
+                  PyTreeNode init_node,
+                  PyTreeNode end_node,
+                  PyActionSpace py_as,
+                  float final_reward,
+                  float step_penalty,
+                  *args, **kwargs):
+        self.ptr = new Env(init_node.ptr, end_node.ptr, py_as.ptr, final_reward, step_penalty)
 
     def __dealloc__(self):
         self.ptr = NULL
-        # del self.ptr
 
     def step(self, PyTreeNode node, PyAction action):
         cdef Edge edge = self.ptr.step(node.ptr, action.ptr)
         return get_py_edge(node, edge)
 
-# FIXME(j_luo) rename node to state?
+# IDEA(j_luo) rename node to state?
 cpdef object parallel_select(PyTreeNode py_root,
                              PyTreeNode py_end,
                              PyActionSpace py_as,
@@ -435,26 +449,18 @@ cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, lon
     cdef long i, j
     cdef TreeNode *node
     cdef vector[TNptr] nodes = vector[TNptr](n)
-    cdef ActionSpace *action_space = py_as.ptr
     cdef vector[bool] action_mask
     cdef vector[vector[bool]] masks = vector[vector[bool]](n)
     for i in range(n):
         nodes[i] = get_ptr(py_nodes[i])
 
-    with nogil:
-        for i in prange(n, num_threads=num_threads):
-            node = nodes[i]
-            node.lock()
-            action_mask = action_space.get_action_mask(node)
-            node.unlock()
-            masks[i] = action_mask
-
     arr = np.zeros([n, m], dtype='bool')
     cdef bool[:, ::1] arr_view = arr
     with nogil:
         for i in prange(n, num_threads=num_threads):
+            node = nodes[i]
             for j in range(m):
-                arr_view[i, j] = masks[i][j]
+                arr_view[i, j] = node.action_mask[j]
     return arr
 
 cpdef object parallel_stack_ids(object py_nodes, long num_threads):

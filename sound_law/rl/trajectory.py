@@ -17,7 +17,7 @@ from editdistance import eval_batch
 from sound_law.data.alphabet import PAD_ID
 
 from .mcts_fast import \
-    PyTreeNode  # pylint: disable=no-name-in-module # FIXME(j_luo) move tree node to another pyx file?
+    PyTreeNode  # pylint: disable=no-name-in-module # IDEA(j_luo) move tree node to another pyx file?
 
 
 class VocabStateSpace:
@@ -25,9 +25,10 @@ class VocabStateSpace:
 
     def get_state(self,
                   seqs: Optional[dl.PaddedUnitSeqs] = None,
-                  #   units: Optional[Sequence[Sequence[str]]] = None, # FIXME(j_luo) units are not used for now.
+                  #   units: Optional[Sequence[Sequence[str]]] = None, # TODO(j_luo) units are not used for now.
                   ids: Optional[NDA] = None,
                   lengths: Optional[NDA] = None,
+                  action_space: Optional[a.SoundChangeActionSpace] = None,
                   end_state: Optional[VocabState] = None) -> VocabState:
         if seqs is not None:
             ids = seqs.ids.t()
@@ -35,7 +36,8 @@ class VocabStateSpace:
         # NOTE(j_luo) Since memoryviews are used in the extension class, we have to make them contiguous.
         arr = np.ascontiguousarray(ids.cpu().numpy())
         lengths = np.ascontiguousarray(lengths.cpu().numpy())
-        return VocabState(arr=arr, lengths=lengths, end_node=end_state)
+        action_mask = action_space.get_action_mask(arr, lengths) if action_space is not None else None
+        return VocabState(arr=arr, lengths=lengths, action_mask=action_mask, end_node=end_state)
 
 
 class VocabState(PyTreeNode):

@@ -17,17 +17,15 @@ Action *ActionSpace::get_action(long action_id)
     return this->actions[action_id];
 }
 
-vector<bool> ActionSpace::get_action_mask(TreeNode *node)
+vector<bool> ActionSpace::get_action_mask(VocabIdSeq vocab_i)
 {
-    if (not node->action_mask.empty())
-        return node->action_mask;
     vector<bool> ret = vector<bool>(this->size(), false);
     for (long i = 0; i < this->size(); ++i)
     {
         Action *action = this->actions[i];
-        for (long j = 0; j < node->size(); ++j)
+        for (long j = 0; j < vocab_i.size(); ++j)
         {
-            IdSeq id_seq = node->vocab_i[j];
+            IdSeq id_seq = vocab_i[j];
             bool replaced = action->apply_to(id_seq).first;
             if (replaced)
             {
@@ -36,7 +34,6 @@ vector<bool> ActionSpace::get_action_mask(TreeNode *node)
             }
         }
     }
-    node->action_mask = ret;
     return ret;
 }
 

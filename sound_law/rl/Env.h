@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <TreeNode.h>
 #include <Action.h>
+#include <ActionSpace.h>
 #include <assert.h>
 #include <iostream>
 
@@ -49,12 +50,13 @@ long node_distance(TreeNode *node1, TreeNode *node2)
 class Env
 {
 public:
-    Env(TreeNode *, TreeNode *, float, float);
+    Env(TreeNode *, TreeNode *, ActionSpace *, float, float);
 
     Edge step(TreeNode *, Action *);
 
     TreeNode *init_node;
     TreeNode *end_node;
+    ActionSpace *action_space;
 
 private:
     float final_reward;

@@ -29,9 +29,9 @@ class SoundChangeEnv(nn.Module, PyEnv):
     def __init__(self,
                  init_state: VocabState,
                  end_state: VocabState,
+                 action_space: SoundChangeActionSpace,
                  final_reward: float,
-                 step_penalty: float,
-                 action_space: SoundChangeActionSpace):
+                 step_penalty: float):
         nn.Module.__init__(self)
         self.action_space = action_space
 

@@ -207,7 +207,7 @@ class SoundChangeRule:
         self.after = after
 
         # Check unless conditions are well-formed.
-        # FIXME(j_luo) need to go through other tests added below here.
+        # IDEA(j_luo) need to go through other tests added below here.
         unless = unless or list()
         for unl in unless:
             if isinstance(unl, PlaceholderCondition):

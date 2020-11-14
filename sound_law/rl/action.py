@@ -24,7 +24,7 @@ class SoundChangeAction(PyAction):
     """One sound change rule."""
     abc: ClassVar[Alphabet] = None
 
-    # FIXME(j_luo) no unit so far.
+    # TODO(j_luo) no unit so far.
     # action_id: int
     # before: str
     # after: str

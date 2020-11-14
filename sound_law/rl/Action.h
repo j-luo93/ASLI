@@ -13,5 +13,5 @@ public:
     long action_id;
     long before_id;
     long after_id;
-    // FIXME(j_luo) some cache is needed here.
+    // TODO(j_luo) some cache is needed here.
 };
