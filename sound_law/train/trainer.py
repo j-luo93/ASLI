@@ -394,7 +394,7 @@ class MctsTrainer(RLTrainer):
 
         # Collect episodes.
         last = len(self.mcts._total_state_ids)
-        if last > 1000000:
+        if last > 100000:
             logging.info(f'Clearing up all the tree nodes.')
             self.mcts.clear_subtree(dl.init_state)
         trajectories = list()

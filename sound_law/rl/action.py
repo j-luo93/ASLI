@@ -19,6 +19,7 @@ from .mcts_fast import PyAction, PyActionSpace  # pylint: disable=no-name-in-mod
 
 from typing import ClassVar
 
+
 class SoundChangeAction(PyAction):
     """One sound change rule."""
     abc: ClassVar[Alphabet] = None
@@ -43,6 +44,7 @@ class SoundChangeActionSpace(PyActionSpace):
     action_cls = SoundChangeAction
 
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
+    add_argument('max_dist', dtype=int, default=2, msg='Maximum distance to draw an edge between two characters.')
 
     def __init__(self, abc: Alphabet):
         super().__init__()
@@ -51,7 +53,10 @@ class SoundChangeActionSpace(PyActionSpace):
         units = [u for u in self.abc if u not in self.abc.special_units]
         for u1, u2 in product(units, repeat=2):
             if u1 != u2:
-                self.register_action(abc[u1], abc[u2])
+                id1 = abc[u1]
+                id2 = abc[u2]
+                if not g.use_mcts or abc.dist_mat[id1, id2] <= g.max_dist:
+                    self.register_action(id1, id2)
         logging.info(f'Number of actions in action space: {len(self)}.')
 
         if g.factorize_actions:

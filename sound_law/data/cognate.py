@@ -1,3 +1,4 @@
+from typing import Optional, List
 import logging
 import random
 import unicodedata
@@ -138,26 +139,35 @@ class CognateRegistry:
     def get_alphabet(self, lang: Lang) -> Alphabet:
         return self._lang2abc[lang]
 
-    def prepare_alphabet(self, *langs: Lang) -> Alphabet:
+    def prepare_alphabet(self, *langs: Lang,
+                         phoible: Optional[dict] = None) -> Alphabet:
         if any(lang in self._lang2abc for lang in langs):
             raise TypeError(f'Some lang in {langs} has been prepared.')
-        # Get all relevant data frames.
-        dfs = list()
-        for lang in langs:
-            for source, df in self._lang2dfs[lang].items():
-                df['source'] = source
-                dfs.append(df)
-        df = pd.concat(dfs)
+        if phoible is not None:
+            phoible_map = phoible['proto_ph_map']
+            contents = [phoible['proto_ph_lst']]
+            sources = ['phoible']
+            std_func = handle_sequence_inputs(lambda s: phoible_map[s])
+            dist_mat = phoible['dist_mat']
+        else:
+            # Get all relevant data frames.
+            dfs = list()
+            for lang in langs:
+                for source, df in self._lang2dfs[lang].items():
+                    df['source'] = source
+                    dfs.append(df)
+            df = pd.concat(dfs)
 
-        # Get and register the alphabet.
-        contents = df['pre_unit_seq']
-        sources = df['source'].tolist()
-        abc = Alphabet(','.join(langs), contents, sources=sources)
+            # Get and register the alphabet.
+            contents = df['pre_unit_seq']
+            sources = df['source'].tolist()
+            std_func = handle_sequence_inputs(lambda s: abc.standardize(s))
+            dist_mat = None
+        abc = Alphabet(','.join(langs), contents, sources=sources, dist_mat=dist_mat)
         for lang in langs:
             self._lang2abc[lang] = abc
 
         # Post-progress the unit seqs if needed.
-        std_func = handle_sequence_inputs(lambda s: abc.standardize(s))
         cols = ['post_unit_seq', 'id_seq', 'form']  # These are the columns to add.
         for lang in langs:
             for df in self._lang2dfs[lang].values():

@@ -1,6 +1,7 @@
 """
 A manager class takes care of managing the data loader, the model, and the trainer.
 """
+import pickle
 import logging
 from typing import List, Optional, Tuple
 
@@ -41,6 +42,7 @@ add_argument('optim_cls', dtype=str, default='adam', choices=['sgd', 'adam'], ms
 add_argument('separate_value', dtype=bool, default=True,
              msg='Flag to use a separate model for value network. Used in RL.')
 add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of rollout')
+add_argument('phoible_path', dtype='path', msg='Path to the processed Phoible pickle file.')
 
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
@@ -56,7 +58,10 @@ class OnePairManager:
         cr.add_pair(g.data_path, g.src_lang, g.tgt_lang)
 
         # Prepare alphabets now.
-        if g.share_src_tgt_abc:
+        if g.use_mcts:
+            phoible = pickle.load(open(g.phoible_path, 'rb'))
+            self.src_abc = self.tgt_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang, phoible=phoible)
+        elif g.share_src_tgt_abc:
             self.src_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang)
             self.tgt_abc = self.src_abc
         else:
