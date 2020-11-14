@@ -6,58 +6,51 @@
 long TreeNode::instance_cnt = 0;
 mutex TreeNode::cls_mtx;
 
+void common_init(TreeNode *node, VocabIdSeq vocab_i)
+{
+    node->vocab_i = vocab_i;
+    node->played = false;
+    {
+        lock_guard<mutex> lock(TreeNode::cls_mtx);
+        node->idx = TreeNode::instance_cnt;
+        TreeNode::instance_cnt++;
+    }
+}
+
 TreeNode::TreeNode(VocabIdSeq vocab_i)
 {
     // This constructor is used for end node only.
-    this->vocab_i = vocab_i;
+    common_init(this, vocab_i);
     this->end_node = nullptr;
     this->dist_to_end = 0;
     this->prev_action = NULL;
     this->parent_node = nullptr;
-    this->played = false;
     this->done = true;
     this->action_mask = vector<bool>();
-    {
-        lock_guard<mutex> lock(TreeNode::cls_mtx);
-        this->idx = TreeNode::instance_cnt;
-        TreeNode::instance_cnt++;
-    }
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node)
 {
     // This constructor is used for root node only.
-    this->vocab_i = vocab_i;
+    common_init(this, vocab_i);
     this->end_node = end_node;
     this->dist_to_end = node_distance(this, end_node);
     this->prev_action = NULL;
     this->parent_node = nullptr;
-    this->played = false;
     this->done = (this->vocab_i == end_node->vocab_i);
     this->action_mask = vector<bool>();
-    {
-        lock_guard<mutex> lock(TreeNode::cls_mtx);
-        this->idx = TreeNode::instance_cnt;
-        TreeNode::instance_cnt++;
-    }
 };
 
 TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long action_id, TreeNode *parent_node)
 {
     // This constructor is used for nodes created by one env step.
-    this->vocab_i = vocab_i;
+    common_init(this, vocab_i);
     this->end_node = end_node;
     this->dist_to_end = node_distance(this, end_node);
     this->prev_action = action_id;
     this->parent_node = parent_node;
-    this->played = false;
     this->done = (this->vocab_i == end_node->vocab_i);
     this->action_mask = vector<bool>();
-    {
-        lock_guard<mutex> lock(TreeNode::cls_mtx);
-        this->idx = TreeNode::instance_cnt;
-        TreeNode::instance_cnt++;
-    }
 }
 
 void TreeNode::add_edge(long action_id, Edge edge)
@@ -168,6 +161,7 @@ void TreeNode::backup(float value, float mixing, long game_count, float virtual_
         parent_node = node->parent_node;
     }
 }
+
 void TreeNode::reset()
 {
     this->prior.clear();

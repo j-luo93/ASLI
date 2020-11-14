@@ -225,6 +225,7 @@ class BasicMcts:
     num_episodes: int = 128
     episode_check_interval: int = 10
     dirichlet_alpha: float = 0.3
+    phoible_path: 'path' = 'data/phoible_segs.pkl'
 
 
 @reg
