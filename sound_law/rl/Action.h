@@ -8,7 +8,7 @@ class Action
 public:
     Action(long, long, long);
 
-    pair<bool, IdSeq> apply_to(IdSeq);
+    IdSeq apply_to(const IdSeq &);
 
     long action_id;
     long before_id;

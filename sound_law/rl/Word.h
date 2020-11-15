@@ -5,7 +5,7 @@
 class Word
 {
 public:
-    Word(IdSeq);
+    Word(const IdSeq &);
 
     string key;
     unordered_set<long> action_allowed;

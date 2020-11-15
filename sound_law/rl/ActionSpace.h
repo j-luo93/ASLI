@@ -11,7 +11,7 @@ public:
 
     void register_action(long, long);
     Action *get_action(long);
-    vector<long> get_action_allowed(VocabIdSeq);
+    vector<long> get_action_allowed(const VocabIdSeq &);
     long size();
 
 private:

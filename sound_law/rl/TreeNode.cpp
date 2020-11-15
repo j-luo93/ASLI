@@ -6,7 +6,7 @@
 long TreeNode::instance_cnt = 0;
 mutex TreeNode::cls_mtx;
 
-void common_init(TreeNode *node, VocabIdSeq vocab_i)
+void common_init(TreeNode *node, const VocabIdSeq &vocab_i)
 {
     node->vocab_i = vocab_i;
     node->played = false;
@@ -17,7 +17,7 @@ void common_init(TreeNode *node, VocabIdSeq vocab_i)
     }
 }
 
-TreeNode::TreeNode(VocabIdSeq vocab_i)
+TreeNode::TreeNode(const VocabIdSeq &vocab_i)
 {
     // This constructor is used for end node only.
     common_init(this, vocab_i);
@@ -28,7 +28,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i)
     this->action_allowed = vector<long>();
 };
 
-TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, vector<long> action_allowed)
+TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node, const vector<long> &action_allowed)
 {
     // This constructor is used for root node only.
     common_init(this, vocab_i);
@@ -39,7 +39,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, vector<long> action_a
     this->action_allowed = action_allowed;
 };
 
-TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long best_i, long action_id, TreeNode *parent_node, vector<long> action_allowed)
+TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node, long best_i, long action_id, TreeNode *parent_node, const vector<long> &action_allowed)
 {
     // This constructor is used for nodes created by one env step.
     common_init(this, vocab_i);
@@ -51,7 +51,7 @@ TreeNode::TreeNode(VocabIdSeq vocab_i, TreeNode *end_node, long best_i, long act
     this->action_allowed = action_allowed;
 }
 
-void TreeNode::add_edge(long action_id, Edge edge)
+void TreeNode::add_edge(long action_id, const Edge &edge)
 {
     // This will replace the old edge if it exists. Always call `has_acted` first.
     this->edges[action_id] = edge;
@@ -74,7 +74,6 @@ void TreeNode::lock()
 
 void TreeNode::unlock()
 {
-    // this->ulock.unlock();
     this->mtx.unlock();
 }
 
@@ -115,7 +114,7 @@ long TreeNode::get_best_i(float puct_c)
     return best_i;
 }
 
-void TreeNode::expand(vector<float> prior)
+void TreeNode::expand(const vector<float> &prior)
 {
     this->prior = prior;
     long num_actions = this->action_allowed.size();
@@ -196,7 +195,7 @@ void TreeNode::clear_subtree()
     this->edges.clear();
 }
 
-void TreeNode::add_noise(vector<float> noise, float noise_ratio)
+void TreeNode::add_noise(const vector<float> &noise, float noise_ratio)
 {
     assert(!this->prior.empty());
     for (long i = 0; i < this->prior.size(); ++i)

@@ -24,7 +24,7 @@ Action *ActionSpace::get_action(long action_id)
     return this->actions[action_id];
 }
 
-vector<long> ActionSpace::get_action_allowed(VocabIdSeq vocab_i)
+vector<long> ActionSpace::get_action_allowed(const VocabIdSeq &vocab_i)
 {
     unordered_set<long> action_set = unordered_set<long>();
     for (long i = 0; i < vocab_i.size(); ++i)

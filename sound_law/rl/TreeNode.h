@@ -14,18 +14,18 @@ public:
     static long instance_cnt;
     static mutex cls_mtx;
 
-    TreeNode(VocabIdSeq);
-    TreeNode(VocabIdSeq, TreeNode *, vector<long>);
-    TreeNode(VocabIdSeq, TreeNode *, long, long, TreeNode *, vector<long>);
+    TreeNode(const VocabIdSeq &);
+    TreeNode(const VocabIdSeq &, TreeNode *, const vector<long> &);
+    TreeNode(const VocabIdSeq &, TreeNode *, long, long, TreeNode *, const vector<long> &);
 
-    void add_edge(long, pair<TreeNode *, float>);
+    void add_edge(long, const pair<TreeNode *, float> &);
     bool has_acted(long);
     long size();
     void lock();
     void unlock();
     bool is_leaf();
     long get_best_i(float);
-    void expand(vector<float>);
+    void expand(const vector<float> &);
     void virtual_backup(long, long, float);
     void backup(float, float, long, float);
     void reset();
@@ -33,7 +33,7 @@ public:
     list<pair<long, float>> get_path();
     vector<float> get_scores(float);
     void clear_subtree();
-    void add_noise(vector<float>, float);
+    void add_noise(const vector<float> &, float);
     long get_num_allowed();
 
     VocabIdSeq vocab_i;

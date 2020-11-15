@@ -14,7 +14,7 @@ using namespace std;
 using IdSeq = vector<long>;
 using VocabIdSeq = vector<IdSeq>;
 
-long edit_distance(IdSeq seq1, IdSeq seq2)
+long edit_distance(const IdSeq &seq1, const IdSeq &seq2)
 {
     long l1 = seq1.size();
     long l2 = seq2.size();
@@ -40,7 +40,7 @@ long edit_distance(IdSeq seq1, IdSeq seq2)
     return ret;
 };
 
-string get_key(IdSeq id_seq)
+string get_key(const IdSeq &id_seq)
 {
     string key = "";
     long i = 0;

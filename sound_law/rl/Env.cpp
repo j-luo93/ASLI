@@ -22,7 +22,7 @@ Edge Env::step(TreeNode *node, long best_i, Action *action)
     VocabIdSeq vocab_i = VocabIdSeq(node->size());
     for (long i = 0; i < node->size(); ++i)
     {
-        vocab_i[i] = action->apply_to(node->vocab_i[i]).second;
+        vocab_i[i] = action->apply_to(node->vocab_i[i]);
     };
     vector<long> action_allowed = this->action_space->get_action_allowed(vocab_i);
     TreeNode *new_node = new TreeNode(vocab_i, node->end_node, best_i, action->action_id, node, action_allowed);
