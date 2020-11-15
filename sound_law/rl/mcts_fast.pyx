@@ -28,9 +28,14 @@ cdef extern from "ActionSpace.cpp":
 cdef extern from "Env.cpp":
     pass
 
-cdef extern from "TreeNode.h":
+cdef extern from "Word.cpp":
+    pass
+
+cdef extern from "common.h":
     ctypedef vector[long] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
+
+cdef extern from "TreeNode.h":
     cdef cppclass TreeNode nogil:
         ctypedef TreeNode * TNptr
         ctypedef pair[TNptr, float] Edge

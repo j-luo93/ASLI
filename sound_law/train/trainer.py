@@ -388,6 +388,7 @@ class MctsTrainer(RLTrainer):
         self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         self.tracker.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
+    # @profile
     def train_one_step(self, dl: OnePairDataLoader):
         samples = list()
         success = 0.0
@@ -398,47 +399,48 @@ class MctsTrainer(RLTrainer):
             logging.info(f'Clearing up all the tree nodes.')
             self.mcts.clear_subtree(dl.init_state)
         trajectories = list()
-        for ei in range(g.num_episodes):
-            root = dl.init_state
-            self.mcts.reset()
-            this = len(self.mcts._total_state_ids)
-            if ei % 10 == 0:
-                logging.debug(this - last)
-            last = this
-            value = self.mcts.expand(root)
-            self.mcts.backup(root, value)
+        with self.agent.policy_grad(False), self.agent.value_grad(False):
+            for ei in range(g.num_episodes):
+                root = dl.init_state
+                self.mcts.reset()
+                this = len(self.mcts._total_state_ids)
+                if ei % 10 == 0:
+                    logging.debug(this - last)
+                last = this
+                value = self.mcts.expand(root)
+                self.mcts.backup(root, value)
 
-            trajectory = Trajectory(root, dl.end_state)
-            # Episodes have max rollout length.
-            for ri in range(g.max_rollout_length):
-                self.mcts.add_noise(root)
-                depth_limit = g.max_rollout_length - ri
-                # Run many simulations before take one action. Simulations take place in batches. Each batch
-                # would be evaluated and expanded after batched selection.
-                num_batches = g.num_mcts_sims // g.expansion_batch_size
-                for _ in range(num_batches):
-                    new_states = self.mcts.parallel_select(root, g.expansion_batch_size, depth_limit)
-                    values = self.mcts.expand(new_states)
-                    for state, value in zip(new_states, values):
-                        self.mcts.backup(state, value)
-                    self.tracker.update('mcts', incr=g.expansion_batch_size)
-                probs, action, reward, new_state = self.mcts.play(root)
-                trajectory.append(action, new_state, new_state.done, reward, mcts_pi=probs)
-                if ri == 0 and ei % g.episode_check_interval == 0:
-                    logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(20))))
-                    logging.debug(pad_for_log(str(get_tensor(root.q).topk(20))))
-                root = new_state
+                trajectory = Trajectory(root, dl.end_state)
+                # Episodes have max rollout length.
+                for ri in range(g.max_rollout_length):
+                    self.mcts.add_noise(root)
+                    depth_limit = g.max_rollout_length - ri
+                    # Run many simulations before take one action. Simulations take place in batches. Each batch
+                    # would be evaluated and expanded after batched selection.
+                    num_batches = g.num_mcts_sims // g.expansion_batch_size
+                    for _ in range(num_batches):
+                        new_states = self.mcts.parallel_select(root, g.expansion_batch_size, depth_limit)
+                        values = self.mcts.expand(new_states)
+                        for state, value in zip(new_states, values):
+                            self.mcts.backup(state, value)
+                        self.tracker.update('mcts', incr=g.expansion_batch_size)
+                    probs, action, reward, new_state = self.mcts.play(root)
+                    trajectory.append(action, new_state, new_state.done, reward, mcts_pi=probs)
+                    if ri == 0 and ei % g.episode_check_interval == 0:
+                        logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(20))))
+                        logging.debug(pad_for_log(str(get_tensor(root.q).topk(20))))
+                    root = new_state
 
-                self.tracker.update('rollout')
-                if root.done:
-                    break
-            if ei % g.episode_check_interval == 0:
-                out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
-                logging.debug(pad_for_log(out))
+                    self.tracker.update('rollout')
+                    if root.done:
+                        break
+                if ei % g.episode_check_interval == 0:
+                    out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
+                    logging.debug(pad_for_log(out))
 
-            success += int(root.done)
-            trajectories.append(trajectory)
-            self.tracker.update('episode')
+                success += int(root.done)
+                trajectories.append(trajectory)
+                self.tracker.update('episode')
         success = Metric('success', success, g.num_episodes)
         metrics = Metrics(success)
 
@@ -451,27 +453,27 @@ class MctsTrainer(RLTrainer):
         rewards = get_rtgs_dense(agent_inputs.rewards.cpu().numpy(), agent_inputs.offsets, 1.0)
         rewards = get_tensor(rewards)
         bs = len(tgt_policies)
-        for _ in range(g.num_inner_steps):
-            self.agent.train()
-            self.optimizer.zero_grad()
+        with self.agent.policy_grad(True), self.agent.value_grad(True):
+            for _ in range(g.num_inner_steps):
+                self.agent.train()
+                self.optimizer.zero_grad()
 
-            with self.agent.policy_grad(True), self.agent.value_grad(True):
                 policy = self.agent.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks)
                 values = self.agent.get_values(agent_inputs.id_seqs)
-            pi_ce_losses = -tgt_policies * policy.logits
+                pi_ce_losses = -tgt_policies * policy.logits
 
-            v_regress_losses = 0.5 * (values - rewards) ** 2
+                v_regress_losses = 0.5 * (values - rewards) ** 2
 
-            pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), bs)
-            v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), bs)
-            total_loss = Metric('total_loss', pi_ce_loss.total + 100.0 * v_regress_loss.total, bs)
+                pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), bs)
+                v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), bs)
+                total_loss = Metric('total_loss', pi_ce_loss.total + 100.0 * v_regress_loss.total, bs)
 
-            total_loss.mean.backward()
+                total_loss.mean.backward()
 
-            # Clip gradient norm.
-            grad_norm = clip_grad(self.agent.parameters(), bs)
-            metrics += Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm)
-            self.optimizer.step()
-            self.tracker.update('inner_step')
+                # Clip gradient norm.
+                grad_norm = clip_grad(self.agent.parameters(), bs)
+                metrics += Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm)
+                self.optimizer.step()
+                self.tracker.update('inner_step')
 
         return metrics

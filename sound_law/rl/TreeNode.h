@@ -4,12 +4,9 @@
 #include <list>
 #include <unordered_map>
 #include <mutex>
+#include <common.h>
 
 using namespace std;
-
-// FIXME(j_luo) Probably need list for insertion speed.
-using IdSeq = vector<long>;
-using VocabIdSeq = vector<IdSeq>;
 
 class TreeNode
 {

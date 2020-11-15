@@ -2,12 +2,15 @@
 
 #include <vector>
 #include <list>
+#include <string>
+#include <unordered_set>
 #include <unordered_map>
 #include <mutex>
 #include <assert.h>
 
 using namespace std;
 
+// FIXME(j_luo) Probably need list for insertion speed.
 using IdSeq = vector<long>;
 using VocabIdSeq = vector<IdSeq>;
 
@@ -36,3 +39,16 @@ long edit_distance(IdSeq seq1, IdSeq seq2)
     free(dist);
     return ret;
 };
+
+string get_key(IdSeq id_seq)
+{
+    string key = "";
+    long i = 0;
+    while (i < id_seq.size() - 1)
+    {
+        key += to_string(id_seq[i]) + ',';
+        i++;
+    }
+    key += to_string(id_seq[i]);
+    return key;
+}
