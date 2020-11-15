@@ -52,7 +52,7 @@ class Env
 public:
     Env(TreeNode *, TreeNode *, ActionSpace *, float, float);
 
-    Edge step(TreeNode *, Action *);
+    Edge step(TreeNode *, long, Action *);
 
     TreeNode *init_node;
     TreeNode *end_node;

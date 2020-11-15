@@ -119,7 +119,7 @@ class Mcts:
                     self._total_state_ids.add(state.idx)
 
                 # See issue here https://github.com/cython/cython/issues/2204. Memoryview with bool dtype is still not supported.
-                state.expand(p, am.astype('uint8'))
+                state.expand(p)
 
         if ret_lst:
             return values
@@ -135,14 +135,16 @@ class Mcts:
     def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, float, VocabState]:
         exp = np.power(state.action_count, 1.0)
         probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)
-        action_id = np.random.choice(range(len(probs)), p=probs)
+        best_i = np.random.choice(range(len(probs)), p=probs)
+        action_id = state.action_allowed[best_i]
         action = self.action_space.get_action(action_id)
-        new_state, done, reward = self.env(state, action)
+        new_state, done, reward = self.env(state, best_i, action)
         # Set `state.played` to True. This would prevent future backups from going further up.
         state.play()
         return probs, action, reward, new_state
 
     def add_noise(self, state: VocabState):
         """Add Dirichlet noise to `state`, usually the root."""
-        noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(len(self.action_space))).astype('float32')
+        num_actions = state.get_num_allowed()
+        noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(num_actions)).astype('float32')
         state.add_noise(noise, g.noise_ratio)

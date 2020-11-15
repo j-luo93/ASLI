@@ -36,15 +36,15 @@ cdef extern from "TreeNode.h":
         ctypedef pair[TNptr, float] Edge
 
         TreeNode(VocabIdSeq) except +
-        TreeNode(VocabIdSeq, TreeNode *, vector[bool]) except +
+        TreeNode(VocabIdSeq, TreeNode *, vector[long]) except +
 
         bool has_acted(long)
         long size()
         void lock()
         void unlock()
         bool is_leaf()
-        long get_best_action_id(float)
-        void expand(vector[float], vector[bool])
+        long get_best_i(float)
+        void expand(vector[float])
         void virtual_backup(long, long, float)
         void backup(float, float, long, float)
         void reset()
@@ -53,13 +53,14 @@ cdef extern from "TreeNode.h":
         vector[float] get_scores(float)
         void clear_subtree()
         void add_noise(vector[float], float)
+        long get_num_allowed()
 
         TreeNode *parent_node
         VocabIdSeq vocab_i
         long dist_to_end
-        long prev_action
+        pair[long, long] prev_action
         vector[float] prior
-        vector[bool] action_mask
+        vector[long] action_allowed
         vector[long] action_count
         long visit_count
         vector[float] total_value
@@ -83,7 +84,7 @@ cdef extern from "ActionSpace.h":
 
         void register_action(long, long)
         Action *get_action(long)
-        vector[bool] get_action_mask(VocabIdSeq) except +
+        vector[long] get_action_allowed(VocabIdSeq) except +
         long size()
 
 ctypedef TreeNode * TNptr
@@ -93,7 +94,7 @@ cdef extern from "Env.h":
     cdef cppclass Env nogil:
         Env(TreeNode *, TreeNode *, ActionSpace *, float, float) except +
 
-        Edge step(TreeNode *, Action *) except +
+        Edge step(TreeNode *, long, Action *) except +
 
         TreeNode *init_node
         TreeNode *end_node
@@ -132,6 +133,7 @@ cdef inline long[:, ::1] vocab2np(VocabIdSeq vocab_i) except *:
 ctypedef fused convertible:
     float
     bool
+    long
 
 cdef inline vector[convertible] np2vector(convertible[::1] arr, long n) except *:
     cdef long i
@@ -163,7 +165,7 @@ cdef class PyTreeNode:
                   *args,
                   object arr = None,
                   object lengths = None,
-                  object action_mask = None,
+                  object action_allowed = None,
                   PyTreeNode end_node = None,
                   bool from_ptr = False,
                   **kwargs):
@@ -179,20 +181,23 @@ cdef class PyTreeNode:
         cdef long[::1] lengths_view = lengths
 
         cdef VocabIdSeq vocab_i = np2vocab(arr_view, lengths_view, n)
-        cdef bool[::1] am_view
+        cdef long[::1] aa_view
         cdef long m
-        cdef vector[bool] am_vec
+        cdef vector[long] aa_vec
         if end_node is None:
             self.ptr = new TreeNode(vocab_i)
         else:
-            m = len(action_mask)
-            am_view = action_mask
-            am_vec = np2vector(am_view, m)
-            self.ptr = new TreeNode(vocab_i, end_node.ptr, am_vec)
+            m = len(action_allowed)
+            aa_view = action_allowed
+            aa_vec = np2vector(aa_view, m)
+            self.ptr = new TreeNode(vocab_i, end_node.ptr, aa_vec)
         self.end_node = end_node
 
     def __len__(self):
         return self.ptr.size()
+
+    def get_num_allowed(self):
+        return self.ptr.get_num_allowed()
 
     def get_scores(self, float puct_c):
         return np.asarray(self.ptr.get_scores(puct_c))
@@ -255,11 +260,14 @@ cdef class PyTreeNode:
     def is_leaf(self):
         return self.ptr.is_leaf()
 
-    def expand(self, float[::1] prior, bool[::1] action_mask):
-        cdef long n = prior.shape[0]
-        cdef vector[float] prior_vec = np2vector(prior, n)
-        cdef vector[bool] action_mask_vec = np2vector(action_mask, n)
-        self.ptr.expand(prior_vec, action_mask_vec)
+    def expand(self, float[::1] prior):
+        cdef vector[long] aa = self.ptr.action_allowed
+        cdef long n = aa.size()
+        cdef long i
+        cdef vector[float] prior_vec = vector[float](n)
+        for i in range(n):
+            prior_vec[i] = aa[i]
+        self.ptr.expand(prior_vec)
 
     def backup(self, float value, float mixing, long game_count, float virtual_loss):
         self.ptr.backup(value, mixing, game_count, virtual_loss)
@@ -284,6 +292,10 @@ cdef class PyTreeNode:
     @property
     def done(self):
         return self.ptr.done
+
+    @property
+    def action_allowed(self):
+        return np.asarray(self.ptr.action_allowed)
 
     def get_edge(self, long action_id):
         cdef Edge edge
@@ -351,13 +363,20 @@ cdef class PyActionSpace:
     def register_action(self, long before_id, long after_id):
         self.ptr.register_action(before_id, after_id)
 
-    def get_action_mask(self, object arr, object lengths):
+    def get_action_allowed(self, object arr, object lengths):
         cdef long n = len(arr)
         cdef long[:, ::1] arr_view = arr
         cdef long[::1] lengths_view = lengths
         cdef vector[vector[long]] vocab_i = np2vocab(arr_view, lengths_view, n)
-        cdef vector[bool] action_mask = self.ptr.get_action_mask(vocab_i)
-        return np.asarray(action_mask)
+        cdef vector[long] action_allowed = self.ptr.get_action_allowed(vocab_i)
+        return np.asarray(action_allowed)
+
+    def get_action_mask(self, object arr, object lengths):
+        action_allowed = self.get_action_allowed(arr, lengths)
+        ret = np.zeros([len(self)], dtype='bool')
+        for i in range(len(arr)):
+            ret[action_allowed[i]] = True
+        return  ret
 
     def get_action(self, long action_id):
         if action_id >= len(self) or action_id < 0:
@@ -390,8 +409,8 @@ cdef class PyEnv:
     def __dealloc__(self):
         self.ptr = NULL
 
-    def step(self, PyTreeNode node, PyAction action):
-        cdef Edge edge = self.ptr.step(node.ptr, action.ptr)
+    def step(self, PyTreeNode node, long best_i, PyAction action):
+        cdef Edge edge = self.ptr.step(node.ptr, best_i, action.ptr)
         return get_py_edge(node, edge)
 
 # IDEA(j_luo) rename node to state?
@@ -411,7 +430,8 @@ cpdef object parallel_select(PyTreeNode py_root,
 
     cdef TreeNode *node, *next_node
     cdef float reward
-    cdef long n_steps_left, i, action_id
+    cdef long n_steps_left, i, action_id, best_i
+    cdef vector[long] action_allowed
     cdef Edge edge
     cdef Action *action
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
@@ -423,13 +443,15 @@ cpdef object parallel_select(PyTreeNode py_root,
             n_steps_left = depth_limit
             while n_steps_left > 0 and not node.is_leaf():
                 node.lock()
-                action_id = node.get_best_action_id(puct_c)
+                best_i = node.get_best_i(puct_c)
+                action_allowed = node.action_allowed
+                action_id = action_allowed[best_i]
                 action = action_space.get_action(action_id)
-                edge = env.step(node, action)
+                edge = env.step(node, best_i, action)
                 next_node = edge.first
                 reward = edge.second
                 n_steps_left = n_steps_left - 1
-                node.virtual_backup(action_id, game_count, virtual_loss)
+                node.virtual_backup(best_i, game_count, virtual_loss)
                 node.unlock()
 
                 if node.done:
@@ -449,8 +471,7 @@ cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, lon
     cdef long i, j
     cdef TreeNode *node
     cdef vector[TNptr] nodes = vector[TNptr](n)
-    cdef vector[bool] action_mask
-    cdef vector[vector[bool]] masks = vector[vector[bool]](n)
+    cdef vector[long] action_allowed
     for i in range(n):
         nodes[i] = get_ptr(py_nodes[i])
 
@@ -459,8 +480,10 @@ cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, lon
     with nogil:
         for i in prange(n, num_threads=num_threads):
             node = nodes[i]
+            action_allowed = node.action_allowed
+            m = action_allowed.size()
             for j in range(m):
-                arr_view[i, j] = node.action_mask[j]
+                arr_view[i, action_allowed[j]] = True
     return arr
 
 cpdef object parallel_stack_ids(object py_nodes, long num_threads):

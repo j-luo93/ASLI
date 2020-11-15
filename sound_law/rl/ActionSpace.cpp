@@ -17,9 +17,9 @@ Action *ActionSpace::get_action(long action_id)
     return this->actions[action_id];
 }
 
-vector<bool> ActionSpace::get_action_mask(VocabIdSeq vocab_i)
+vector<long> ActionSpace::get_action_allowed(VocabIdSeq vocab_i)
 {
-    vector<bool> ret = vector<bool>(this->size(), false);
+    vector<long> ret = vector<long>();
     for (long i = 0; i < this->size(); ++i)
     {
         Action *action = this->actions[i];
@@ -29,7 +29,7 @@ vector<bool> ActionSpace::get_action_mask(VocabIdSeq vocab_i)
             bool replaced = action->apply_to(id_seq).first;
             if (replaced)
             {
-                ret[i] = true;
+                ret.push_back(i);
                 break;
             }
         }

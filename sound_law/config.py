@@ -167,6 +167,7 @@ class OPRLFake(OPLatSpaPhono):
     agent: str = 'a2c'
     num_layers: int = 1
     use_phono_features: bool = False
+    factorize_actions: bool = True
 
     src_lang: str = 'fake1'
     tgt_lang: str = 'fake2'

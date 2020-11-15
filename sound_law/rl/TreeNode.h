@@ -18,8 +18,8 @@ public:
     static mutex cls_mtx;
 
     TreeNode(VocabIdSeq);
-    TreeNode(VocabIdSeq, TreeNode *, vector<bool>);
-    TreeNode(VocabIdSeq, TreeNode *, long, TreeNode *, vector<bool>);
+    TreeNode(VocabIdSeq, TreeNode *, vector<long>);
+    TreeNode(VocabIdSeq, TreeNode *, long, long, TreeNode *, vector<long>);
 
     void add_edge(long, pair<TreeNode *, float>);
     bool has_acted(long);
@@ -27,8 +27,8 @@ public:
     void lock();
     void unlock();
     bool is_leaf();
-    long get_best_action_id(float);
-    void expand(vector<float>, vector<bool>);
+    long get_best_i(float);
+    void expand(vector<float>);
     void virtual_backup(long, long, float);
     void backup(float, float, long, float);
     void reset();
@@ -37,14 +37,15 @@ public:
     vector<float> get_scores(float);
     void clear_subtree();
     void add_noise(vector<float>, float);
+    long get_num_allowed();
 
     VocabIdSeq vocab_i;
     TreeNode *end_node;
     TreeNode *parent_node;
-    long prev_action;
+    pair<long, long> prev_action;
     long dist_to_end;
     unordered_map<long, pair<TreeNode *, float>> edges;
-    vector<bool> action_mask;
+    vector<long> action_allowed;
     vector<float> prior;
     vector<long> action_count;
     long visit_count;

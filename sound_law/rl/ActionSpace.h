@@ -10,7 +10,7 @@ public:
 
     void register_action(long, long);
     Action *get_action(long);
-    vector<bool> get_action_mask(VocabIdSeq);
+    vector<long> get_action_allowed(VocabIdSeq);
     long size();
 
 private:

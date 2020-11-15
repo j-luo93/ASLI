@@ -36,8 +36,8 @@ class VocabStateSpace:
         # NOTE(j_luo) Since memoryviews are used in the extension class, we have to make them contiguous.
         arr = np.ascontiguousarray(ids.cpu().numpy())
         lengths = np.ascontiguousarray(lengths.cpu().numpy())
-        action_mask = action_space.get_action_mask(arr, lengths) if action_space is not None else None
-        return VocabState(arr=arr, lengths=lengths, action_mask=action_mask, end_node=end_state)
+        action_allowed = action_space.get_action_allowed(arr, lengths) if action_space is not None else None
+        return VocabState(arr=arr, lengths=lengths, action_allowed=action_allowed, end_node=end_state)
 
 
 class VocabState(PyTreeNode):

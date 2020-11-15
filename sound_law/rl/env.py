@@ -35,8 +35,8 @@ class SoundChangeEnv(nn.Module, PyEnv):
         nn.Module.__init__(self)
         self.action_space = action_space
 
-    def forward(self, state: VocabState, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
-        return self.step(state, action)
+    def forward(self, state: VocabState, best_i: int, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
+        return self.step(state, best_i, action)
 
     def show_path(self, state: VocabState) -> str:
         out = list()
