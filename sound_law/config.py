@@ -229,6 +229,14 @@ class BasicMcts:
     phoible_path: 'path' = 'data/phoible_segs.pkl'
 
 
+@mcts_reg
+class MoreSims(BasicMcts):
+    expansion_batch_size: int = 80
+    num_mcts_sims: int = 4000
+    num_inner_steps: int = 10
+    num_episodes: int = 10
+
+
 @reg
 class OPLatSpaPhono880(Size880, OPLatSpaPhono):
     pass

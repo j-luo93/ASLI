@@ -44,7 +44,7 @@ class SoundChangeActionSpace(PyActionSpace):
     action_cls = SoundChangeAction
 
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
-    add_argument('max_dist', dtype=int, default=2, msg='Maximum distance to draw an edge between two characters.')
+    add_argument('max_dist', dtype=int, default=3, msg='Maximum distance to draw an edge between two characters.')
 
     def __init__(self, abc: Alphabet):
         super().__init__()
