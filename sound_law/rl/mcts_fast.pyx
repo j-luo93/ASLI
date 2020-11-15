@@ -266,12 +266,8 @@ cdef class PyTreeNode:
         return self.ptr.is_leaf()
 
     def expand(self, float[::1] prior):
-        cdef vector[long] aa = self.ptr.action_allowed
-        cdef long n = aa.size()
-        cdef long i
-        cdef vector[float] prior_vec = vector[float](n)
-        for i in range(n):
-            prior_vec[i] = aa[i]
+        cdef long n = len(prior)
+        cdef vector[float] prior_vec = np2vector(prior, n)
         self.ptr.expand(prior_vec)
 
     def backup(self, float value, float mixing, long game_count, float virtual_loss):
@@ -491,7 +487,7 @@ cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, lon
                 arr_view[i, action_allowed[j]] = True
     return arr
 
-cpdef object parallel_get_action_indices(object py_nodes, long num_threads):
+cpdef object parallel_get_sparse_action_masks(object py_nodes, long num_threads):
     cdef long n = len(py_nodes)
     cdef long i, j, k
     cdef TreeNode *node
@@ -511,9 +507,11 @@ cpdef object parallel_get_action_indices(object py_nodes, long num_threads):
     cdef long m = max(lengths)
 
     arr = np.zeros([n, m], dtype='long')
-    padding = np.ones([n, m], dtype='bool')
+    num_actions = np.zeros([n], dtype='long')
+    action_masks = np.ones([n, m], dtype='bool')
     cdef long[:, ::1] arr_view = arr
-    cdef bool[:, ::1] padding_view = padding
+    cdef long[::1] na_view = num_actions
+    cdef bool[:, ::1] am_view = action_masks
     with nogil:
         for i in prange(n, num_threads=num_threads):
             node = nodes[i]
@@ -521,9 +519,10 @@ cpdef object parallel_get_action_indices(object py_nodes, long num_threads):
             k = action_allowed.size()
             for j in range(k):
                 arr_view[i, j] = action_allowed[j]
+            na_view[i] = k
             for j in range(k, m):
-                padding_view[i, j] = False
-    return arr, padding
+                am_view[i, j] = False
+    return arr, action_masks, num_actions
 
 cpdef object parallel_stack_ids(object py_nodes, long num_threads):
     cdef long n = len(py_nodes)

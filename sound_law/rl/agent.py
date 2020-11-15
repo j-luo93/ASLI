@@ -173,7 +173,7 @@ class SparseProjection(nn.Module):
         super().__init__()
         self.input_size = input_size
         self.num_classes = num_classes
-        self.weight = nn.Parameter(nn.init.xavier_uniform(torch.randn(self.input_size, num_classes)))
+        self.weight = nn.Parameter(nn.init.xavier_uniform(torch.randn(num_classes, input_size)))
         self.bias = nn.Parameter(torch.zeros(num_classes))
 
     def forward(self, inp: FT, sparse: bool = False, indices: LT = None):
@@ -184,7 +184,7 @@ class SparseProjection(nn.Module):
                 out = torch.bmm(w, inp.unsqueeze(dim=-1)).squeeze(dim=-1) + b
                 return out
             else:
-                return torch.addmm(self.bias, inp, self.weight)
+                return torch.addmm(self.bias, inp, self.weight.t())
 
 
 class PolicyNetwork(nn.Module):
@@ -221,12 +221,12 @@ class PolicyNetwork(nn.Module):
     def forward(self,
                 curr_ids: LT,
                 end_ids: LT,
+                action_masks: BT,
                 sparse: bool = False,
-                action_masks: Optional[BT] = None,
                 indices: Optional[LT] = None) -> Distribution:
         """Get policy distribution based on current state (and end state)."""
-        if (sparse and indices is None) or (not sparse and action_masks is None):
-            raise TypeError(f'Must provide `action_masks` in non-sparse mode, and `indices` in sparse mode.')
+        if sparse and indices is None:
+            raise TypeError(f'Must provide `indices` in sparse mode.')
 
         state_repr = _get_state_repr(self.char_emb, curr_ids, end_ids, cnn=self.cnn)
 
@@ -235,8 +235,8 @@ class PolicyNetwork(nn.Module):
             action_logits = self.proj(hid, indices=indices, sparse=True)
         else:
             action_logits = self.proj(hid, sparse=False)
-            action_logits = torch.where(action_masks, action_logits,
-                                        torch.full_like(action_logits, -999.9))
+        action_logits = torch.where(action_masks, action_logits,
+                                    torch.full_like(action_logits, -999.9))
 
         with NoName(action_logits):
             policy = torch.distributions.Categorical(logits=action_logits)
@@ -325,9 +325,9 @@ class BasePG(nn.Module, metaclass=ABCMeta):
 
     def get_policy(self,
                    state_or_ids: Union[VocabState, LT],
+                   action_masks: BT,
                    sparse: bool = False,
-                   indices: Optional[LT] = None,
-                   action_masks: Optional[BT] = None) -> Distribution:
+                   indices: Optional[LT] = None) -> Distribution:
         """Get policy distribution based on current state (and end state)."""
         if isinstance(state_or_ids, VocabState):
             curr_ids = state_or_ids.tensor
@@ -336,7 +336,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
         end_ids = self.end_state.tensor
         with torch.set_grad_enabled(self._policy_grad):
             return self.policy_net(curr_ids, end_ids,
-                                   action_masks=action_masks,
+                                   action_masks,
                                    sparse=sparse,
                                    indices=indices)
 

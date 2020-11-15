@@ -16,8 +16,7 @@ from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, AgentOutputs, BasePG
 from .env import SoundChangeEnv
 from .mcts_fast import (  # pylint: disable=no-name-in-module
-    parallel_get_action_indices, parallel_get_action_masks, parallel_select,
-    parallel_stack_ids)
+    parallel_get_sparse_action_masks, parallel_select, parallel_stack_ids)
 from .trajectory import VocabState
 
 
@@ -98,15 +97,16 @@ class Mcts:
 
         # Collect states that need evaluation.
         if outstanding_states:
-            indices, padding = parallel_get_action_indices(outstanding_states, g.num_workers)
+            indices, action_masks, num_actions = parallel_get_sparse_action_masks(outstanding_states, g.num_workers)
             indices = get_tensor(indices)
+            am_tensor = get_tensor(action_masks)
             id_seqs = parallel_stack_ids(outstanding_states, g.num_workers)
             id_seqs = get_tensor(id_seqs).rename('batch', 'pos', 'word')
             with ScopedCache('word_embedding'):
-                probs = self.agent.get_policy(id_seqs, indices=indices, sparse=True).probs.cpu().numpy()
+                probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
                 agent_values = self.agent.get_values(id_seqs).cpu().numpy()
 
-            for i, state, p, v in zip(outstanding_idx, outstanding_states, probs, agent_values):
+            for i, state, p, v, na in zip(outstanding_idx, outstanding_states, probs, agent_values, num_actions):
                 # NOTE(j_luo) Values should be returned even if states are duplicates or have been visited.
                 values[i] = v
                 # NOTE(j_luo) Skip duplicate states (due to exploration collapse) or visited states (due to rollout truncation).
@@ -120,7 +120,7 @@ class Mcts:
                     self._total_state_ids.add(state.idx)
 
                 # See issue here https://github.com/cython/cython/issues/2204. Memoryview with bool dtype is still not supported.
-                state.expand(p)
+                state.expand(p[:na])
 
         if ret_lst:
             return values
