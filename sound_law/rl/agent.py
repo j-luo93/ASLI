@@ -20,7 +20,7 @@ from sound_law.model.module import (CharEmbedding, EmbParams, PhonoEmbedding,
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .mcts_fast import (  # pylint: disable=no-name-in-module
-    parallel_get_action_masks, parallel_stack_ids)
+    parallel_get_action_masks, parallel_stack_ids, parallel_get_sparse_action_masks)
 from .reward import get_rtgs_dense  # pylint: disable=no-name-in-module
 from .reward import get_rtgs_list
 from .trajectory import Trajectory, VocabState
@@ -35,6 +35,7 @@ class AgentInputs:
     next_id_seqs: Optional[LT] = None
     action_ids: Optional[LT] = None
     done: Optional[BT] = None
+    indices: Optional[LT] = None
 
     @property
     def batch_size(self) -> int:
@@ -45,7 +46,10 @@ class AgentInputs:
         return np.cumsum(np.asarray([len(tr) for tr in self.trajectories]), dtype='int32')
 
     @classmethod
-    def from_trajectories(cls, trs: List[Trajectory], action_space: SoundChangeActionSpace) -> AgentInputs:
+    def from_trajectories(cls,
+                          trs: List[Trajectory],
+                          action_space: SoundChangeActionSpace,
+                          sparse: bool = False) -> AgentInputs:
         def gather(attr: str):
             """Gather information from trajectory edges. See definition for `TrEdge`."""
             ret = list()
@@ -56,7 +60,12 @@ class AgentInputs:
         states = gather('s0')
         id_seqs = get_tensor(parallel_stack_ids(states, g.num_workers)).rename('batch', 'pos', 'word')
         rewards = get_tensor(gather('r')).rename('batch')
-        action_masks = parallel_get_action_masks(states, action_space, g.num_workers)
+        if sparse:
+            indices, action_masks, _ = parallel_get_sparse_action_masks(states, g.num_workers)
+            indices = get_tensor(indices).rename('batch', 'action')
+        else:
+            action_masks = parallel_get_action_masks(states, action_space, g.num_workers)
+            indices = None
         action_masks = get_tensor(action_masks).rename('batch', 'action')
         next_id_seqs = action_ids = done = None
         if not g.use_mcts:
@@ -67,7 +76,8 @@ class AgentInputs:
         return AgentInputs(trs, id_seqs, rewards, action_masks,
                            next_id_seqs=next_id_seqs,
                            action_ids=action_ids,
-                           done=done)
+                           done=done,
+                           indices=indices)
 
 
 @dataclass
@@ -143,25 +153,32 @@ class FactorizedProjection(nn.Module):
 
     def __init__(self, input_size: int, action_space: SoundChangeActionSpace):
         super().__init__()
-        self.hidden = nn.Sequential(nn.Linear(input_size, input_size // 2),
-                                    nn.Tanh())
         num_ids = len(action_space.abc)
-        self.before_potential = nn.Linear(input_size // 2, num_ids)
-        self.after_potential = nn.Linear(input_size // 2, num_ids)
+        self.before_potential = nn.Linear(input_size, num_ids)
+        self.after_potential = nn.Linear(input_size, num_ids)
         self.action_space = action_space
 
-    def forward(self, input_: FT) -> FT:
-        h = self.hidden(input_)
-        bp = self.before_potential(h)
-        ap = self.after_potential(h)
-        is_2d = input_.ndim == 2
-        with NoName(ap, bp):
-            if is_2d:
-                action_bp = bp[:, self.action_space.action2before]
-                action_ap = ap[:, self.action_space.action2after]
+    def forward(self, inp: FT, sparse: bool = False, indices: Optional[LT] = None) -> FT:
+        bp = self.before_potential(inp)
+        ap = self.after_potential(inp)
+        is_2d = inp.ndim == 2
+        with NoName(ap, bp, indices):
+            a2b = self.action_space.action2before
+            a2a = self.action_space.action2after
+            if sparse:
+                a2b = a2b[indices]
+                a2a = a2a[indices]
+                if is_2d:
+                    action_bp = bp.gather(1, a2b)
+                    action_ap = ap.gather(1, a2a)
+                else:
+                    raise RuntimeError(f'Not sure why you end up here.')
+            elif is_2d:
+                action_bp = bp[:, a2b]
+                action_ap = ap[:, a2a]
             else:
-                action_bp = bp[self.action_space.action2before]
-                action_ap = ap[self.action_space.action2after]
+                action_bp = bp[a2b]
+                action_ap = ap[a2a]
         names = ('batch', ) * is_2d + ('action',)
         return (action_bp + action_ap).rename(*names)
 
@@ -176,7 +193,7 @@ class SparseProjection(nn.Module):
         self.weight = nn.Parameter(nn.init.xavier_uniform(torch.randn(num_classes, input_size)))
         self.bias = nn.Parameter(torch.zeros(num_classes))
 
-    def forward(self, inp: FT, sparse: bool = False, indices: LT = None):
+    def forward(self, inp: FT, sparse: bool = False, indices: Optional[LT] = None):
         with NoName(inp):
             if sparse:
                 w = self.weight[indices]
@@ -209,12 +226,12 @@ class PolicyNetwork(nn.Module):
         cnn = get_cnn1d(cnn1d_params)
         input_size = cnn1d_params.hidden_size
         num_actions = len(action_space)
+        hidden = nn.Sequential(
+            nn.Linear(input_size, input_size // 2),
+            nn.Tanh())
         if g.factorize_actions:
-            proj = FactorizedProjection(input_size, action_space)
+            proj = FactorizedProjection(input_size // 2, action_space)
         else:
-            hidden = nn.Sequential(
-                nn.Linear(input_size, input_size // 2),
-                nn.Tanh())
             proj = SparseProjection(input_size // 2, num_actions)
         return cls(char_emb, cnn, hidden, proj, action_space)
 

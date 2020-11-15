@@ -394,7 +394,7 @@ class MctsTrainer(RLTrainer):
 
         # Collect episodes.
         last = len(self.mcts._total_state_ids)
-        if last > 100000:
+        if last > 300000:
             logging.info(f'Clearing up all the tree nodes.')
             self.mcts.clear_subtree(dl.init_state)
         trajectories = list()
@@ -443,10 +443,11 @@ class MctsTrainer(RLTrainer):
         success = Metric('success', success, g.num_episodes)
         metrics = Metrics(success)
 
-        agent_inputs = AgentInputs.from_trajectories(trajectories, self.mcts.env.action_space)
+        agent_inputs = AgentInputs.from_trajectories(trajectories, self.mcts.env.action_space, sparse=True)
+        ml = agent_inputs.action_masks.size('action')
         tgt_policies = list()
         for tr in trajectories:
-            tgt_policies.extend([edge.mcts_pi for edge in tr])
+            tgt_policies.extend([np.pad(edge.mcts_pi, (0, ml - len(edge.mcts_pi))) for edge in tr])
         tgt_policies = np.stack(tgt_policies, axis=0)
         tgt_policies = get_tensor(tgt_policies).rename('batch', 'action')
         rewards = get_rtgs_dense(agent_inputs.rewards.cpu().numpy(), agent_inputs.offsets, 1.0)
@@ -457,7 +458,8 @@ class MctsTrainer(RLTrainer):
                 self.agent.train()
                 self.optimizer.zero_grad()
 
-                policy = self.agent.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks)
+                policy = self.agent.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks,
+                                               indices=agent_inputs.indices, sparse=True)
                 values = self.agent.get_values(agent_inputs.id_seqs)
                 pi_ce_losses = -tgt_policies * policy.logits
 
