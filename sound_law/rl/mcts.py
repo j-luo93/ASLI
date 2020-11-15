@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-from typing import Set
 import logging
 from typing import Dict, List, Optional, Set, Tuple, Union, overload
 
@@ -11,12 +10,14 @@ import numpy as np
 import torch
 
 from dev_misc import NDA, add_argument, g, get_tensor, get_zeros
-from dev_misc.utils import pad_for_log
+from dev_misc.utils import ScopedCache, pad_for_log
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, AgentOutputs, BasePG
 from .env import SoundChangeEnv
-from .mcts_fast import parallel_select, parallel_get_action_masks, parallel_stack_ids  # pylint: disable=no-name-in-module
+from .mcts_fast import (  # pylint: disable=no-name-in-module
+    parallel_get_action_indices, parallel_get_action_masks, parallel_select,
+    parallel_stack_ids)
 from .trajectory import VocabState
 
 
@@ -77,7 +78,6 @@ class Mcts:
     @overload
     def expand(self, states: List[VocabState]) -> List[float]: ...
 
-    @torch.no_grad()
     def expand(self, states):
         """Expand and evaluate the leaf node."""
         ret_lst = True
@@ -98,14 +98,15 @@ class Mcts:
 
         # Collect states that need evaluation.
         if outstanding_states:
-            action_masks = parallel_get_action_masks(outstanding_states, self.env.action_space, g.num_workers)
-            am_tensor = get_tensor(action_masks).rename('batch', 'action')
+            indices, padding = parallel_get_action_indices(outstanding_states, g.num_workers)
+            indices = get_tensor(indices)
             id_seqs = parallel_stack_ids(outstanding_states, g.num_workers)
             id_seqs = get_tensor(id_seqs).rename('batch', 'pos', 'word')
-            probs = self.agent.get_policy(id_seqs, am_tensor).probs.cpu().numpy()
-            agent_values = self.agent.get_values(id_seqs).cpu().numpy()
+            with ScopedCache('word_embedding'):
+                probs = self.agent.get_policy(id_seqs, indices=indices, sparse=True).probs.cpu().numpy()
+                agent_values = self.agent.get_values(id_seqs).cpu().numpy()
 
-            for i, state, p, v, am in zip(outstanding_idx, outstanding_states, probs, agent_values, action_masks):
+            for i, state, p, v in zip(outstanding_idx, outstanding_states, probs, agent_values):
                 # NOTE(j_luo) Values should be returned even if states are duplicates or have been visited.
                 values[i] = v
                 # NOTE(j_luo) Skip duplicate states (due to exploration collapse) or visited states (due to rollout truncation).

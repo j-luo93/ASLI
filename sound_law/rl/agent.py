@@ -166,19 +166,42 @@ class FactorizedProjection(nn.Module):
         return (action_bp + action_ap).rename(*names)
 
 
+class SparseProjection(nn.Module):
+    """A projection layer that can be selectively computed on given indices."""
+
+    def __init__(self, input_size: int, num_classes: int):
+        super().__init__()
+        self.input_size = input_size
+        self.num_classes = num_classes
+        self.weight = nn.Parameter(nn.init.xavier_uniform(torch.randn(self.input_size, num_classes)))
+        self.bias = nn.Parameter(torch.zeros(num_classes))
+
+    def forward(self, inp: FT, sparse: bool = False, indices: LT = None):
+        with NoName(inp):
+            if sparse:
+                w = self.weight[indices]
+                b = self.bias[indices]
+                out = torch.bmm(w, inp.unsqueeze(dim=-1)).squeeze(dim=-1) + b
+                return out
+            else:
+                return torch.addmm(self.bias, inp, self.weight)
+
+
 class PolicyNetwork(nn.Module):
 
     def __init__(self, char_emb: CharEmbedding,
                  cnn: nn.Module,
+                 hidden: nn.Module,
                  proj: nn.Module,
                  action_space: SoundChangeActionSpace):
         super().__init__()
         self.char_emb = char_emb
         self.cnn = cnn
+        self.hidden = hidden
         self.proj = proj
         self.action_space = action_space
 
-    @classmethod
+    @ classmethod
     def from_params(cls, emb_params: EmbParams,
                     cnn1d_params: Cnn1dParams,
                     action_space: SoundChangeActionSpace) -> PolicyNetwork:
@@ -189,22 +212,31 @@ class PolicyNetwork(nn.Module):
         if g.factorize_actions:
             proj = FactorizedProjection(input_size, action_space)
         else:
-            proj = nn.Sequential(
+            hidden = nn.Sequential(
                 nn.Linear(input_size, input_size // 2),
-                nn.Tanh(),
-                nn.Linear(input_size // 2, num_actions))
-        return cls(char_emb, cnn, proj, action_space)
+                nn.Tanh())
+            proj = SparseProjection(input_size // 2, num_actions)
+        return cls(char_emb, cnn, hidden, proj, action_space)
 
     def forward(self,
                 curr_ids: LT,
                 end_ids: LT,
-                action_masks: BT) -> Distribution:
-        """Get policy distribution based on current state (and end state). If ids are passed, we have to specify action masks directly."""
+                sparse: bool = False,
+                action_masks: Optional[BT] = None,
+                indices: Optional[LT] = None) -> Distribution:
+        """Get policy distribution based on current state (and end state)."""
+        if (sparse and indices is None) or (not sparse and action_masks is None):
+            raise TypeError(f'Must provide `action_masks` in non-sparse mode, and `indices` in sparse mode.')
+
         state_repr = _get_state_repr(self.char_emb, curr_ids, end_ids, cnn=self.cnn)
 
-        action_logits = self.proj(state_repr)
-        action_logits = torch.where(action_masks, action_logits,
-                                    torch.full_like(action_logits, -999.9))
+        hid = self.hidden(state_repr)
+        if sparse:
+            action_logits = self.proj(hid, indices=indices, sparse=True)
+        else:
+            action_logits = self.proj(hid, sparse=False)
+            action_logits = torch.where(action_masks, action_logits,
+                                        torch.full_like(action_logits, -999.9))
 
         with NoName(action_logits):
             policy = torch.distributions.Categorical(logits=action_logits)
@@ -291,7 +323,11 @@ class BasePG(nn.Module, metaclass=ABCMeta):
         with torch.set_grad_enabled(self._value_grad):
             return self.value_net(curr_ids, end_ids, done=done)
 
-    def get_policy(self, state_or_ids: Union[VocabState, LT], action_masks: BT) -> Distribution:
+    def get_policy(self,
+                   state_or_ids: Union[VocabState, LT],
+                   sparse: bool = False,
+                   indices: Optional[LT] = None,
+                   action_masks: Optional[BT] = None) -> Distribution:
         """Get policy distribution based on current state (and end state)."""
         if isinstance(state_or_ids, VocabState):
             curr_ids = state_or_ids.tensor
@@ -299,7 +335,10 @@ class BasePG(nn.Module, metaclass=ABCMeta):
             curr_ids = state_or_ids
         end_ids = self.end_state.tensor
         with torch.set_grad_enabled(self._policy_grad):
-            return self.policy_net(curr_ids, end_ids, action_masks)
+            return self.policy_net(curr_ids, end_ids,
+                                   action_masks=action_masks,
+                                   sparse=sparse,
+                                   indices=indices)
 
     def sample_action(self, policy: Distribution) -> SoundChangeAction:
         with torch.set_grad_enabled(self._policy_grad):

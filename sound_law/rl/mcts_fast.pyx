@@ -491,6 +491,40 @@ cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, lon
                 arr_view[i, action_allowed[j]] = True
     return arr
 
+cpdef object parallel_get_action_indices(object py_nodes, long num_threads):
+    cdef long n = len(py_nodes)
+    cdef long i, j, k
+    cdef TreeNode *node
+    cdef vector[TNptr] nodes = vector[TNptr](n)
+    cdef vector[long] action_allowed
+    for i in range(n):
+        nodes[i] = get_ptr(py_nodes[i])
+
+    # First pass to get the maximum number of actions.
+    lengths = np.zeros([n], dtype='long')
+    cdef long[::1] lengths_view = lengths
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            node = nodes[i]
+            action_allowed = node.action_allowed
+            lengths_view[i] = action_allowed.size()
+    cdef long m = max(lengths)
+
+    arr = np.zeros([n, m], dtype='long')
+    padding = np.ones([n, m], dtype='bool')
+    cdef long[:, ::1] arr_view = arr
+    cdef bool[:, ::1] padding_view = padding
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            node = nodes[i]
+            action_allowed = node.action_allowed
+            k = action_allowed.size()
+            for j in range(k):
+                arr_view[i, j] = action_allowed[j]
+            for j in range(k, m):
+                padding_view[i, j] = False
+    return arr, padding
+
 cpdef object parallel_stack_ids(object py_nodes, long num_threads):
     cdef long n = len(py_nodes)
     cdef vector[TNptr] nodes = vector[TNptr](n)

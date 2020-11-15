@@ -388,7 +388,6 @@ class MctsTrainer(RLTrainer):
         self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         self.tracker.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
-    # @profile
     def train_one_step(self, dl: OnePairDataLoader):
         samples = list()
         success = 0.0
