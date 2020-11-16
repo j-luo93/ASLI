@@ -205,6 +205,18 @@ class OPRLFakeR5(OPRLFake):
 
 
 @reg
+class OPRLFakeR10(OPRLFake):
+    src_lang: str = 'fake1-r10'
+    tgt_lang: str = 'fake2-r10'
+
+
+@reg
+class OPRLFakeR15(OPRLFake):
+    src_lang: str = 'fake1-r15'
+    tgt_lang: str = 'fake2-r15'
+
+
+@reg
 class OPRLFakeR5i(OPRLFake):
     src_lang: str = 'fake1-r5i'
     tgt_lang: str = 'fake2-r5i'
