@@ -31,7 +31,7 @@ class SoundChangeAction(PyAction):
     # before_id: int
     # after_id: int
 
-    def __str__(self):
+    def __repr__(self):
         if self.abc is not None:
             before = self.abc[self.before_id]
             after = self.abc[self.after_id]
