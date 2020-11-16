@@ -13,6 +13,8 @@ public:
     Action *get_action(long);
     vector<long> get_action_allowed(const VocabIdSeq &);
     long size();
+    void clear_cache();
+    long get_cache_size();
 
 private:
     vector<Action *> actions;

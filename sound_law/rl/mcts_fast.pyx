@@ -93,6 +93,8 @@ cdef extern from "ActionSpace.h":
         Action *get_action(long)
         vector[long] get_action_allowed(VocabIdSeq) except +
         long size()
+        void clear_cache()
+        long get_cache_size()
 
 ctypedef TreeNode * TNptr
 
@@ -408,6 +410,13 @@ cdef class PyActionSpace:
     def __iter__(self):
         for i in range(len(self)):
             yield self.get_action(i)
+
+    def clear_cache(self):
+        self.ptr.clear_cache()
+
+    @property
+    def cache_size(self):
+        return self.ptr.get_cache_size()
 
 ctypedef Env * Envptr
 

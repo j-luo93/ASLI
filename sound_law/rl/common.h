@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <assert.h>
+#include <iostream>
 
 using namespace std;
 
@@ -24,9 +25,9 @@ long edit_distance(const IdSeq &seq1, const IdSeq &seq2, const vector<vector<lon
         dist[i] = (long *)malloc((l2 + 1) * sizeof(long *));
 
     for (long i = 0; i < l1 + 1; ++i)
-        dist[i][0] = i;
+        dist[i][0] = i * ins_cost;
     for (long i = 0; i < l2 + 1; ++i)
-        dist[0][i] = i;
+        dist[0][i] = i * ins_cost;
 
     long sub_cost;
     bool use_phono_edit_dist = (dist_mat.size() > 0);

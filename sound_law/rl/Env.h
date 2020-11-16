@@ -5,7 +5,6 @@
 #include <Action.h>
 #include <ActionSpace.h>
 #include <assert.h>
-#include <iostream>
 
 long node_distance(TreeNode *node1, TreeNode *node2, const vector<vector<long>> &dist_mat, long ins_cost)
 {

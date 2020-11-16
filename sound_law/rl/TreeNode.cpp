@@ -1,6 +1,5 @@
 #include <TreeNode.h>
 #include <Env.h>
-#include <iostream>
 #include <math.h>
 
 long TreeNode::instance_cnt = 0;

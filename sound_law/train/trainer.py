@@ -394,9 +394,13 @@ class MctsTrainer(RLTrainer):
 
         # Collect episodes.
         logging.info(f'{self.mcts.num_cached_states} states cached.')
+        logging.info(f'{self.mcts.env.action_space.cache_size} words cached.')
         if self.mcts.num_cached_states > 300000:
             logging.info(f'Clearing up all the tree nodes.')
             self.mcts.clear_subtree(dl.init_state)
+        if self.mcts.env.action_space.cache_size > 500000:
+            logging.info(f'Clearing up all the cached words.')
+            self.mcts.env.action_space.clear_cache()
         trajectories = list()
         with self.agent.policy_grad(False), self.agent.value_grad(False):
             for ei in range(g.num_episodes):

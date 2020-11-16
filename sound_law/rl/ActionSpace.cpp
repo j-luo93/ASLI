@@ -59,3 +59,17 @@ long ActionSpace::size()
 {
     return this->actions.size();
 }
+
+void ActionSpace::clear_cache()
+{
+    for (auto const &item : this->word_cache)
+    {
+        delete item.second;
+    }
+    this->word_cache.clear();
+}
+
+long ActionSpace::get_cache_size()
+{
+    return this->word_cache.size();
+}
