@@ -393,8 +393,8 @@ class MctsTrainer(RLTrainer):
         success = 0.0
 
         # Collect episodes.
-        last = len(self.mcts._total_state_ids)
-        if last > 300000:
+        logging.info(f'{self.mcts.num_cached_states} states cached.')
+        if self.mcts.num_cached_states > 300000:
             logging.info(f'Clearing up all the tree nodes.')
             self.mcts.clear_subtree(dl.init_state)
         trajectories = list()
@@ -403,8 +403,6 @@ class MctsTrainer(RLTrainer):
                 root = dl.init_state
                 self.mcts.reset()
                 this = len(self.mcts._total_state_ids)
-                if ei % 10 == 0:
-                    logging.debug(this - last)
                 last = this
                 value = self.mcts.expand(root)
                 self.mcts.backup(root, value)

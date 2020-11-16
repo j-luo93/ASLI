@@ -43,7 +43,7 @@ class AgentInputs:
 
     @property
     def offsets(self) -> NDA:
-        return np.cumsum(np.asarray([len(tr) for tr in self.trajectories]), dtype='int32')
+        return np.cumsum(np.asarray([len(tr) for tr in self.trajectories]), dtype='long')
 
     @classmethod
     def from_trajectories(cls,

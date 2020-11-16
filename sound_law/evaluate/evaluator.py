@@ -26,7 +26,7 @@ add_argument('eval_mode', dtype=str, default='edit_dist', choices=[
              'prob', 'edit_dist'], msg='Evaluation mode using probabilities or edit distance.')
 add_argument('comp_mode', dtype=str, default='str', choices=['ids', 'units', 'str', 'ids_gpu'],
              msg='Comparison mode.')
-add_argument('use_phono_edit_dist', dtype=str, default=True,
+add_argument('use_phono_edit_dist', dtype=bool, default=False,
              msg='Flag to use phonologically-aware edit distance.')
 add_argument('phono_edit_dist_scale', dtype=float, default=1.0,
              msg='Scaling factor for phonological edit distance.')

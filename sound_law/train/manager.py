@@ -22,6 +22,7 @@ from sound_law.model.one_to_many import OneToManyModel
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
+from sound_law.rl.trajectory import VocabState
 from sound_law.rl.mcts import Mcts
 
 from .trainer import MctsTrainer, PolicyGradientTrainer, Trainer
@@ -61,6 +62,8 @@ class OnePairManager:
         if g.use_mcts:
             phoible = pickle.load(open(g.phoible_path, 'rb'))
             self.src_abc = self.tgt_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang, phoible=phoible)
+            if g.use_phono_edit_dist:
+                VocabState.set_dist_mat(self.tgt_abc.dist_mat)
         elif g.share_src_tgt_abc:
             self.src_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang)
             self.tgt_abc = self.src_abc

@@ -13,6 +13,9 @@ class TreeNode
 public:
     static long instance_cnt;
     static mutex cls_mtx;
+    static vector<vector<long>> dist_mat;
+    static void set_dist_mat(vector<vector<long>> &);
+    static long ins_cost;
 
     TreeNode(const VocabIdSeq &);
     TreeNode(const VocabIdSeq &, TreeNode *, const vector<long> &);

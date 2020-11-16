@@ -71,7 +71,7 @@ class Alphabet:
         self.dist_mat = None
         if dist_mat is not None:
             # Pad the dist_mat for special units.
-            self.dist_mat = np.full([len(self), len(self)], 99999, dtype='int32')
+            self.dist_mat = np.full([len(self), len(self)], 99999, dtype='long')
             orig_ids = np.asarray([self[u] for u in contents[0]])
             self.dist_mat[orig_ids.reshape(-1, 1), orig_ids] = dist_mat
 

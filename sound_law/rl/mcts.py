@@ -71,6 +71,10 @@ class Mcts:
         self._total_state_ids.clear()
         state.clear_subtree()
 
+    @property
+    def num_cached_states(self) -> int:
+        return len(self._total_state_ids)
+
     @overload
     def expand(self, state: VocabState) -> float: ...
 

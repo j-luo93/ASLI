@@ -5,6 +5,9 @@
 
 long TreeNode::instance_cnt = 0;
 mutex TreeNode::cls_mtx;
+// Default values for edit distance computation.
+vector<vector<long>> TreeNode::dist_mat = vector<vector<long>>();
+long TreeNode::ins_cost = 1;
 
 void common_init(TreeNode *node, const VocabIdSeq &vocab_i)
 {
@@ -15,6 +18,12 @@ void common_init(TreeNode *node, const VocabIdSeq &vocab_i)
         node->idx = TreeNode::instance_cnt;
         TreeNode::instance_cnt++;
     }
+}
+
+void TreeNode::set_dist_mat(vector<vector<long>> &dist_mat)
+{
+    TreeNode::dist_mat = dist_mat;
+    TreeNode::ins_cost = 3;
 }
 
 TreeNode::TreeNode(const VocabIdSeq &vocab_i)
@@ -33,7 +42,7 @@ TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node, const vector<l
     // This constructor is used for root node only.
     common_init(this, vocab_i);
     this->end_node = end_node;
-    this->dist_to_end = node_distance(this, end_node);
+    this->dist_to_end = node_distance(this, end_node, TreeNode::dist_mat, TreeNode::ins_cost);
     this->parent_node = nullptr;
     this->done = (this->vocab_i == end_node->vocab_i);
     this->action_allowed = action_allowed;
@@ -44,7 +53,7 @@ TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node, long best_i, l
     // This constructor is used for nodes created by one env step.
     common_init(this, vocab_i);
     this->end_node = end_node;
-    this->dist_to_end = node_distance(this, end_node);
+    this->dist_to_end = node_distance(this, end_node, TreeNode::dist_mat, TreeNode::ins_cost);
     this->prev_action = pair<long, long>(best_i, action_id);
     this->parent_node = parent_node;
     this->done = (this->vocab_i == end_node->vocab_i);

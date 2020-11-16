@@ -40,6 +40,9 @@ cdef extern from "TreeNode.h":
         ctypedef TreeNode * TNptr
         ctypedef pair[TNptr, float] Edge
 
+        @staticmethod
+        void set_dist_mat(vector[vector[long]])
+
         TreeNode(VocabIdSeq) except +
         TreeNode(VocabIdSeq, TreeNode *, vector[long]) except +
 
@@ -73,7 +76,6 @@ cdef extern from "TreeNode.h":
         bool played
         long idx
         unordered_map[long, Edge] edges
-
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
@@ -313,6 +315,20 @@ cdef class PyTreeNode:
         cdef vector[float] noise_vec = np2vector(noise, n)
         self.ptr.add_noise(noise_vec, noise_ratio)
 
+    @staticmethod
+    def set_dist_mat(object np_dist_mat):
+        cdef long[:, ::1] dist_view = np_dist_mat
+        cdef long n = np_dist_mat.shape[0]
+        cdef long m = np_dist_mat.shape[1]
+        cdef vector[vector[long]] dist_mat = vector[vector[long]](n)
+        cdef long i, j
+        cdef vector[long] vec
+        for i in range(n):
+            vec = vector[long](m)
+            for j in range(m):
+                vec[j] = dist_view[i, j]
+            dist_mat[i] = vec
+        TreeNode.set_dist_mat(dist_mat)
 
 cdef class PyAction:
     """This is a wrapper class for c++ class Action. It should be created by a PyActionSpace object with registered actions."""

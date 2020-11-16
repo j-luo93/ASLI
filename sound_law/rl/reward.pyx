@@ -4,7 +4,7 @@ import numpy as np
 cimport numpy as np
 
 cpdef object get_rtgs(float[::1] rewards, float discount):
-    cdef int n = len(rewards)
+    cdef long n = len(rewards)
     rtgs = np.zeros([n], dtype='float32')
     cdef float[::1] rtgs_view = rtgs
     cdef float accum = 0.0
@@ -14,23 +14,23 @@ cpdef object get_rtgs(float[::1] rewards, float discount):
     return rtgs
 
 cpdef object get_rtgs_list(object rewards, float discount):
-    cdef int n = len(rewards)
+    cdef long n = len(rewards)
     ret = list()
     for i in range(n):
         ret.append(get_rtgs(rewards[i], discount))
     return ret
 
-cpdef object get_rtgs_dense(float[::1] rewards, int[::1] offsets, float discount):
-    cdef int nr = len(rewards)
-    cdef int no = len(offsets)
-    cdef int[::1] offsets_view = offsets
+cpdef object get_rtgs_dense(float[::1] rewards, long[::1] offsets, float discount):
+    cdef long nr = len(rewards)
+    cdef long no = len(offsets)
+    cdef long[::1] offsets_view = offsets
     rtgs = np.zeros([nr], dtype='float32')
     cdef float[::1] rtgs_view = rtgs
-    cdef int *starts = <int *> malloc(no * sizeof(int))
-    cdef int start = 0
-    cdef int end = 0
-    cdef int i = 0
-    cdef int j = 0
+    cdef long *starts = <long *> malloc(no * sizeof(long))
+    cdef long start = 0
+    cdef long end = 0
+    cdef long i = 0
+    cdef long j = 0
     cdef float accum = 0.0
 
     if offsets_view[-1] != nr:
