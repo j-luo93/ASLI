@@ -2,6 +2,7 @@
 """
 
 from __future__ import annotations
+from dev_misc import LT
 
 import logging
 from typing import Dict, List, Optional, Set, Tuple, Union, overload
@@ -106,6 +107,9 @@ class Mcts:
             am_tensor = get_tensor(action_masks)
             id_seqs = parallel_stack_ids(outstanding_states, g.num_workers)
             id_seqs = get_tensor(id_seqs).rename('batch', 'pos', 'word')
+            if steps is not None and not isinstance(steps, int):
+                steps = steps[outstanding_idx]
+
             with ScopedCache('word_embedding'):
                 probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
                 agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()
@@ -156,6 +160,3 @@ class Mcts:
         num_actions = state.get_num_allowed()
         noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(num_actions)).astype('float32')
         state.add_noise(noise, g.noise_ratio)
-
-
-from dev_misc import LT

@@ -206,12 +206,14 @@ class OPRLFakeR5(OPRLFake):
 
 @reg
 class OPRLFakeR10(OPRLFake):
+    max_rollout_length: int = 15
     src_lang: str = 'fake1-r10'
     tgt_lang: str = 'fake2-r10'
 
 
 @reg
 class OPRLFakeR15(OPRLFake):
+    max_rollout_length: int = 20
     src_lang: str = 'fake1-r15'
     tgt_lang: str = 'fake2-r15'
 
@@ -245,8 +247,10 @@ class BasicMcts:
 class MoreSims(BasicMcts):
     expansion_batch_size: int = 80
     num_mcts_sims: int = 4000
-    num_inner_steps: int = 10
+    num_inner_steps: int = 50
     num_episodes: int = 10
+    use_finite_horizon: bool = True
+    use_max_value: bool = True
 
 
 @reg
