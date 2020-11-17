@@ -1,8 +1,8 @@
 """
 A manager class takes care of managing the data loader, the model, and the trainer.
 """
-import pickle
 import logging
+import pickle
 from typing import List, Optional, Tuple
 
 import torch
@@ -22,8 +22,8 @@ from sound_law.model.one_to_many import OneToManyModel
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
-from sound_law.rl.trajectory import VocabState
 from sound_law.rl.mcts import Mcts
+from sound_law.rl.trajectory import VocabState
 
 from .trainer import MctsTrainer, PolicyGradientTrainer, Trainer
 
@@ -44,6 +44,7 @@ add_argument('separate_value', dtype=bool, default=True,
              msg='Flag to use a separate model for value network. Used in RL.')
 add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of rollout')
 add_argument('phoible_path', dtype='path', msg='Path to the processed Phoible pickle file.')
+add_argument('use_max_value', dtype=bool, default=False, msg='Flag to use max mode in MCTS.')
 
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
@@ -64,6 +65,7 @@ class OnePairManager:
             self.src_abc = self.tgt_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang, phoible=phoible)
             if g.use_phono_edit_dist:
                 VocabState.set_dist_mat(self.tgt_abc.dist_mat)
+            VocabState.set_max_mode(g.use_max_value)
         elif g.share_src_tgt_abc:
             self.src_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang)
             self.tgt_abc = self.src_abc

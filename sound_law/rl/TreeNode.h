@@ -14,8 +14,11 @@ public:
     static long instance_cnt;
     static mutex cls_mtx;
     static vector<vector<long>> dist_mat;
-    static void set_dist_mat(vector<vector<long>> &);
     static long ins_cost;
+    static bool max_mode;
+
+    static void set_dist_mat(vector<vector<long>> &);
+    static void set_max_mode(bool);
 
     TreeNode(const VocabIdSeq &);
     TreeNode(const VocabIdSeq &, TreeNode *, const vector<long> &);
@@ -50,6 +53,7 @@ public:
     vector<long> action_count;
     long visit_count;
     vector<float> total_value;
+    vector<float> max_value;
     bool done;
     bool played;
     long idx;

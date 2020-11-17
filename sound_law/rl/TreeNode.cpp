@@ -7,6 +7,7 @@ mutex TreeNode::cls_mtx;
 // Default values for edit distance computation.
 vector<vector<long>> TreeNode::dist_mat = vector<vector<long>>();
 long TreeNode::ins_cost = 1;
+bool TreeNode::max_mode = false;
 
 void common_init(TreeNode *node, const VocabIdSeq &vocab_i)
 {
@@ -23,6 +24,11 @@ void TreeNode::set_dist_mat(vector<vector<long>> &dist_mat)
 {
     TreeNode::dist_mat = dist_mat;
     TreeNode::ins_cost = 3;
+}
+
+void TreeNode::set_max_mode(bool max_mode)
+{
+    TreeNode::max_mode = max_mode;
 }
 
 TreeNode::TreeNode(const VocabIdSeq &vocab_i)
@@ -130,6 +136,10 @@ void TreeNode::expand(const vector<float> &prior)
     this->action_count = vector<long>(num_actions, 0);
     this->visit_count = 0;
     this->total_value = vector<float>(num_actions, 0.0);
+    if (TreeNode::max_mode)
+    {
+        this->max_value = vector<float>(num_actions, -9999.9);
+    }
 }
 
 void TreeNode::virtual_backup(long best_id, long game_count, float virtual_loss)
@@ -154,6 +164,10 @@ void TreeNode::backup(float value, float mixing, long game_count, float virtual_
         // float mixed_value = (1 - mixing) * value + mixing * reward;
         parent_node->action_count[best_i] -= game_count - 1;
         // parent_node->total_value[action_id] += game_count * virtual_loss + mixed_value;
+        if (TreeNode::max_mode)
+        {
+            parent_node->max_value[best_i] = max(parent_node->max_value[best_i], value + rtg);
+        }
         parent_node->total_value[best_i] += game_count * virtual_loss + value + rtg;
         parent_node->visit_count -= game_count - 1;
         node = parent_node;
@@ -168,6 +182,10 @@ void TreeNode::reset()
     this->visit_count = 0;
     this->total_value.clear();
     this->played = false;
+    if (TreeNode::max_mode)
+    {
+        this->max_value.clear();
+    }
 }
 
 void TreeNode::play()

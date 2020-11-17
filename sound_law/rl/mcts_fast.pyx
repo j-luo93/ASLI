@@ -42,6 +42,8 @@ cdef extern from "TreeNode.h":
 
         @staticmethod
         void set_dist_mat(vector[vector[long]])
+        @staticmethod
+        void set_max_mode(bool)
 
         TreeNode(VocabIdSeq) except +
         TreeNode(VocabIdSeq, TreeNode *, vector[long]) except +
@@ -76,6 +78,7 @@ cdef extern from "TreeNode.h":
         bool played
         long idx
         unordered_map[long, Edge] edges
+        vector[float] max_value
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
@@ -227,19 +230,23 @@ cdef class PyTreeNode:
 
     @property
     def prior(self):
-        return np.asarray(self.ptr.prior)
+        return np.asarray(self.ptr.prior, dtpye='float32')
 
     @property
     def visit_count(self):
-        return np.asarray(self.ptr.visit_count)
+        return self.ptr.visit_count
 
     @property
     def action_count(self):
-        return np.asarray(self.ptr.action_count)
+        return np.asarray(self.ptr.action_count, dtype='long')
 
     @property
     def total_value(self):
-        return np.asarray(self.ptr.total_value)
+        return np.asarray(self.ptr.total_value, dtype='float32')
+
+    @property
+    def max_value(self):
+        return np.asarray(self.ptr.max_value, dtype='float32')
 
     @property
     def played(self):
@@ -331,6 +338,10 @@ cdef class PyTreeNode:
                 vec[j] = dist_view[i, j]
             dist_mat[i] = vec
         TreeNode.set_dist_mat(dist_mat)
+
+    @staticmethod
+    def set_max_mode(bool max_mode):
+        TreeNode.set_max_mode(max_mode)
 
 cdef class PyAction:
     """This is a wrapper class for c++ class Action. It should be created by a PyActionSpace object with registered actions."""

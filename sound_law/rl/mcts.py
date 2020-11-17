@@ -140,7 +140,10 @@ class Mcts:
     def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, float, VocabState]:
         exp = np.power(state.action_count, 1.0)
         probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)
-        best_i = np.random.choice(range(len(probs)), p=probs)
+        if g.use_max_value:
+            best_i = np.argmax(state.max_value)
+        else:
+            best_i = np.random.choice(range(len(probs)), p=probs)
         action_id = state.action_allowed[best_i]
         action = self.action_space.get_action(action_id)
         new_state, done, reward = self.env(state, best_i, action)
