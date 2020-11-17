@@ -219,6 +219,20 @@ class OPRLFakeR15(OPRLFake):
 
 
 @reg
+class OPRLFakeR20(OPRLFake):
+    max_rollout_length: int = 25
+    src_lang: str = 'fake1-r20'
+    tgt_lang: str = 'fake2-r20'
+
+
+@reg
+class OPRLFakeR30(OPRLFake):
+    max_rollout_length: int = 35
+    src_lang: str = 'fake1-r30'
+    tgt_lang: str = 'fake2-r30'
+
+
+@reg
 class OPRLFakeR5i(OPRLFake):
     src_lang: str = 'fake1-r5i'
     tgt_lang: str = 'fake2-r5i'
@@ -228,29 +242,29 @@ class OPRLFakeR5i(OPRLFake):
 class BasicMcts:
     use_mcts: bool = True
     check_interval: int = 1
-    expansion_batch_size: int = 20
-    num_mcts_sims: int = 1000
-    num_inner_steps: int = 100
+    expansion_batch_size: int = 10
+    num_mcts_sims: int = 40
+    num_inner_steps: int = 50
     learning_rate: float = 1e-3
     virtual_loss: float = 0.5
     game_count: int = 3
     num_workers: int = 10
     mixing: float = 0.0
     puct_c: float = 5.0
-    num_episodes: int = 128
-    episode_check_interval: int = 10
+    num_episodes: int = 500
+    episode_check_interval: int = 50
     dirichlet_alpha: float = 0.3
     phoible_path: 'path' = 'data/phoible_segs.pkl'
+    use_finite_horizon: bool = True
+    use_max_value: bool = True
 
 
 @mcts_reg
 class MoreSims(BasicMcts):
     expansion_batch_size: int = 80
+    episode_check_interval: int = 10
     num_mcts_sims: int = 4000
-    num_inner_steps: int = 50
     num_episodes: int = 10
-    use_finite_horizon: bool = True
-    use_max_value: bool = True
 
 
 @reg
