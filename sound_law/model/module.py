@@ -280,7 +280,7 @@ class NormControlledResidual(nn.Module):
 
 class LanguageEmbedding(nn.Embedding):
 
-    def __init__(self, num_langs: int, embedding_dim: int,
+    def __init__(self, num_embeddings: int, embedding_dim: int,
                  unseen_idx: Optional[int] = None,
                  lang2id: Optional[Dict[str, int]] = None,
                  mode: str = 'random',
@@ -317,7 +317,7 @@ class LanguageEmbedding(nn.Embedding):
             embedding_dim -= emb_len
             assert emb_len + embedding_dim == g.char_emb_size
 
-        super().__init__(num_langs, embedding_dim, **kwargs)
+        super().__init__(num_embeddings, embedding_dim, **kwargs)
         self.drop = nn.Dropout(dropout)
 
         if self.mode == 'lang2vec' or self.mode == 'wals':
@@ -334,7 +334,7 @@ class LanguageEmbedding(nn.Embedding):
                 emb = self.weight[index]
             elif self.mode == 'mean' or self.mode == 'lang2vec' or self.mode == 'wals':
                 # lang2vec and wals use mean for the non-fixed portion of the unseen lang's embedding, though this could be changed
-                emb = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_langs - 1)
+                emb = (self.weight.sum(dim=0) - self.weight[index]) / (self.num_embeddings - 1)
         else:
             emb = self.weight[index]
 
