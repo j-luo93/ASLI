@@ -303,6 +303,9 @@ class LanguageEmbedding(nn.Embedding):
 
                 with gzip.open('data/wals_udv1.pkl.gz', 'rb') as f: # fix path
                     wals_emb = pickle.load(f) # maps 2 letter ISO codes to WALS embeddings
+                # FIXME() hacky temp fix for Catalan being absent: Catalan happens to share all its WALS features with Spanish. Ideally fix later by creating a new wals file.
+                wals_emb['ca'] = wals_emb['es']
+
                 # the WALS data contains some non-iso-codes: we simply ignore those, as they're not in our target langs anyway
                 lang2emb = {iso_corrector[iso2]: emb for iso2,emb in wals_emb.items() if iso2 in iso_corrector and iso_corrector[iso2] in self.tgt_langs} # good place to use walrus operator but I'm on python 3.7
 
