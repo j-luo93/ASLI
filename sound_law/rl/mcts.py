@@ -95,7 +95,8 @@ class Mcts:
         # Deal with end states first.
         for i, state in enumerate(states):
             if state == self.end_state:
-                values[i] = g.final_reward
+                # NOTE(j_luo) This value is used for backup. If already reaching the end state, the final reward is either accounted for by the step reward, or by the value network. Therefore, we need to set it to 0.0 here.
+                values[i] = 0.0
             else:
                 outstanding_idx.append(i)
                 outstanding_states.append(state)
@@ -112,7 +113,10 @@ class Mcts:
 
             with ScopedCache('word_embedding'):
                 probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
-                agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()
+                if g.use_value_guidance:
+                    agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()
+                else:
+                    agent_values = np.zeros([len(probs)], dtype='float32')
 
             for i, state, p, v, na in zip(outstanding_idx, outstanding_states, probs, agent_values, num_actions):
                 # NOTE(j_luo) Values should be returned even if states are duplicates or have been visited.

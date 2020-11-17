@@ -370,6 +370,8 @@ class MctsTrainer(RLTrainer):
     add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
     add_argument('num_inner_steps', default=10, dtype=int, msg='Number of optimization step per batch.')
     add_argument('episode_check_interval', default=10, dtype=int, msg='Frequency of checking episodes')
+    add_argument('use_value_guidance', default=True, dtype=bool,
+                 msg='Flag to use predicted values to guide the search.')
 
     def __init__(self, *args, mcts: Mcts = None, **kwargs):
         if mcts is None:
