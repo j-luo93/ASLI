@@ -20,7 +20,8 @@ from sound_law.model.module import (CharEmbedding, EmbParams, PhonoEmbedding,
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .mcts_fast import (  # pylint: disable=no-name-in-module
-    parallel_get_action_masks, parallel_stack_ids, parallel_get_sparse_action_masks)
+    parallel_get_action_masks, parallel_get_sparse_action_masks,
+    parallel_stack_ids)
 from .reward import get_rtgs_dense  # pylint: disable=no-name-in-module
 from .reward import get_rtgs_list
 from .trajectory import Trajectory, VocabState
@@ -36,6 +37,7 @@ class AgentInputs:
     action_ids: Optional[LT] = None
     done: Optional[BT] = None
     indices: Optional[LT] = None
+    steps: Optional[LT] = None
 
     @property
     def batch_size(self) -> int:
@@ -67,17 +69,23 @@ class AgentInputs:
             action_masks = parallel_get_action_masks(states, action_space, g.num_workers)
             indices = None
         action_masks = get_tensor(action_masks).rename('batch', 'action')
-        next_id_seqs = action_ids = done = None
+        steps = next_id_seqs = action_ids = done = None
         if not g.use_mcts:
             next_id_seqs = parallel_stack_ids(gather('s1'), num_threads=g.num_workers)
             next_id_seqs = get_tensor(next_id_seqs).rename('batch', 'pos', 'word')
             action_ids = get_tensor([a.action_id for a in gather('a')]).rename('batch')
             done = get_tensor(gather('done')).rename('batch')
+        if g.use_finite_horizon:
+            steps = list()
+            for tr in trs:
+                steps.extend(list(range(len(tr))))
+            steps = get_tensor(steps)
         return AgentInputs(trs, id_seqs, rewards, action_masks,
                            next_id_seqs=next_id_seqs,
                            action_ids=action_ids,
                            done=done,
-                           indices=indices)
+                           indices=indices,
+                           steps=steps)
 
 
 @dataclass
@@ -278,18 +286,33 @@ class ValueNetwork(nn.Module):
         cnn = cnn or get_cnn1d(cnn1d_params)
         input_size = cnn1d_params.hidden_size
         regressor = nn.Sequential(
-            nn.Linear(input_size, input_size // 2),
+            nn.Linear(input_size + g.use_finite_horizon, input_size // 2),
             nn.Tanh(),
             nn.Linear(input_size // 2, 1))
         return ValueNetwork(char_emb, cnn, regressor)
 
-    def forward(self, curr_ids: LT, end_ids: LT, done: Optional[BT] = None) -> FT:
-        """Get policy evaluation. if `done` is provided, we get values for s1 instead of s0. In that case, end states should have values set to 0."""
+    def forward(self, curr_ids: LT, end_ids: LT, steps: Optional[LT] = None, done: Optional[BT] = None) -> FT:
+        """Get policy evaluation. if `done` is provided, we get values for s1 instead of s0.
+        In that case, end states should have values set to 0.
+        `step` should start with 0.
+        """
+        # In finite mode, if this is the last step, and we are evaluating s1, we should return 0 value.
         state_repr = _get_state_repr(self.char_emb, curr_ids, end_ids, cnn=self.cnn)
-        with NoName(state_repr):
+        # NOTE(j_luo) If s1 is being evaluated, we should increment `step`.
+        if done is not None and g.use_finite_horizon:
+            steps = steps + 1
+        with NoName(state_repr, steps):
+            if g.use_finite_horizon:
+                rel_step = steps.float() / g.max_rollout_length
+                state_repr = torch.cat([state_repr, rel_step.unsqueeze(dim=-1)], dim=-1)
             values = self.regressor(state_repr).squeeze(dim=-1)
+        # Deal with special cases. We start with final step case, and then overwrite it if done.
+        if g.use_finite_horizon:
+            final_step = steps == g.max_rollout_length
+            values = torch.where(final_step, torch.zeros_like(values), values)
         if done is not None:
-            values = torch.where(done, torch.zeros_like(values), values)
+            # NOTE(j_luo) Use final reward for the value of the end state.
+            values = torch.where(done, torch.full_like(values, g.final_reward), values)
         return values
 
 
@@ -308,6 +331,7 @@ def get_bool_context(attr_name: str):
 class BasePG(nn.Module, metaclass=ABCMeta):
 
     add_argument('discount', dtype=float, default=1.0, msg='Discount for computing rewards.')
+    add_argument('use_finite_horizon', dtype=bool, default=False, msg='Flag to use finite horizon.')
 
     def __init__(self, num_chars: int,
                  action_space: SoundChangeActionSpace,
@@ -329,16 +353,24 @@ class BasePG(nn.Module, metaclass=ABCMeta):
     @abstractmethod
     def _get_value_net(self, emb_params: EmbParams, cnn1d_params: Cnn1dParams) -> Optional[ValueNetwork]: ...
 
-    def get_values(self, curr_state_or_ids: Union[VocabState, LT], done: Optional[BT] = None) -> FT:
+    def get_values(self,
+                   curr_state_or_ids: Union[VocabState, LT],
+                   steps: Optional[Union[int, LT]] = None,
+                   done: Optional[BT] = None) -> FT:
         if self.value_net is None:
             raise TypeError(f'There is no value net.')
+        if g.use_finite_horizon and steps is None:
+            raise TypeError(f'Must pass the step if finite horizon is used.')
         if isinstance(curr_state_or_ids, VocabState):
             curr_ids = curr_state_or_ids.tensor
         else:
             curr_ids = curr_state_or_ids
         end_ids = self.end_state.tensor
+
+        if isinstance(steps, int):
+            steps = torch.full([curr_ids.shape[0]], steps, dtype=torch.long, device=end_ids.device)
         with torch.set_grad_enabled(self._value_grad):
-            return self.value_net(curr_ids, end_ids, done=done)
+            return self.value_net(curr_ids, end_ids, steps=steps, done=done)
 
     def get_policy(self,
                    state_or_ids: Union[VocabState, LT],

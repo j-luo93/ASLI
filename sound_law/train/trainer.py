@@ -408,7 +408,8 @@ class MctsTrainer(RLTrainer):
                 self.mcts.reset()
                 this = len(self.mcts._total_state_ids)
                 last = this
-                value = self.mcts.expand(root)
+                steps = 0 if g.use_finite_horizon else None
+                value = self.mcts.expand(root, steps=steps)
                 self.mcts.backup(root, value)
 
                 trajectory = Trajectory(root, dl.end_state)
@@ -420,8 +421,9 @@ class MctsTrainer(RLTrainer):
                     # would be evaluated and expanded after batched selection.
                     num_batches = g.num_mcts_sims // g.expansion_batch_size
                     for _ in range(num_batches):
-                        new_states = self.mcts.parallel_select(root, g.expansion_batch_size, depth_limit)
-                        values = self.mcts.expand(new_states)
+                        new_states, steps_left = self.mcts.parallel_select(root, g.expansion_batch_size, depth_limit)
+                        steps = g.max_rollout_length - get_tensor(steps_left) if g.use_finite_horizon else None
+                        values = self.mcts.expand(new_states, steps=steps)
                         for state, value in zip(new_states, values):
                             self.mcts.backup(state, value)
                         self.tracker.update('mcts', incr=g.expansion_batch_size)
@@ -462,7 +464,7 @@ class MctsTrainer(RLTrainer):
 
                 policy = self.agent.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks,
                                                indices=agent_inputs.indices, sparse=True)
-                values = self.agent.get_values(agent_inputs.id_seqs)
+                values = self.agent.get_values(agent_inputs.id_seqs, steps=agent_inputs.steps)
                 pi_ce_losses = -tgt_policies * policy.logits
 
                 v_regress_losses = 0.5 * (values - rewards) ** 2

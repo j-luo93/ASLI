@@ -81,7 +81,7 @@ class Mcts:
     @overload
     def expand(self, states: List[VocabState]) -> List[float]: ...
 
-    def expand(self, states):
+    def expand(self, states, steps: Optional[Union[int, LT]] = None):
         """Expand and evaluate the leaf node."""
         ret_lst = True
         if isinstance(states, VocabState):
@@ -94,7 +94,7 @@ class Mcts:
         # Deal with end states first.
         for i, state in enumerate(states):
             if state == self.end_state:
-                values[i] = 1.0
+                values[i] = g.final_reward
             else:
                 outstanding_idx.append(i)
                 outstanding_states.append(state)
@@ -108,7 +108,7 @@ class Mcts:
             id_seqs = get_tensor(id_seqs).rename('batch', 'pos', 'word')
             with ScopedCache('word_embedding'):
                 probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
-                agent_values = self.agent.get_values(id_seqs).cpu().numpy()
+                agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()
 
             for i, state, p, v, na in zip(outstanding_idx, outstanding_states, probs, agent_values, num_actions):
                 # NOTE(j_luo) Values should be returned even if states are duplicates or have been visited.
@@ -156,3 +156,6 @@ class Mcts:
         num_actions = state.get_num_allowed()
         noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(num_actions)).astype('float32')
         state.add_noise(noise, g.noise_ratio)
+
+
+from dev_misc import LT

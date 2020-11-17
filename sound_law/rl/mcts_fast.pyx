@@ -465,7 +465,7 @@ cpdef object parallel_select(PyTreeNode py_root,
     cdef TreeNode *root = py_root.ptr
     cdef Env *env = py_env.ptr
 
-    cdef TreeNode *node, *next_node
+    cdef TreeNode *node
     cdef float reward
     cdef long n_steps_left, i, action_id, best_i
     cdef vector[long] action_allowed
@@ -473,6 +473,8 @@ cpdef object parallel_select(PyTreeNode py_root,
     cdef Action *action
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
     cdef ActionSpace *action_space = py_as.ptr
+    steps_left = np.zeros([num_sims], dtype='long')
+    cdef long[::1] steps_left_view = steps_left
 
     with nogil:
         for i in prange(num_sims, num_threads=num_threads):
@@ -485,18 +487,18 @@ cpdef object parallel_select(PyTreeNode py_root,
                 action_id = action_allowed[best_i]
                 action = action_space.get_action(action_id)
                 edge = env.step(node, best_i, action)
-                next_node = edge.first
-                reward = edge.second
-                n_steps_left = n_steps_left - 1
                 node.virtual_backup(best_i, game_count, virtual_loss)
                 node.unlock()
 
+                n_steps_left = n_steps_left - 1
                 if node.done:
                     break
-                node = next_node
+
+                node = edge.first
             selected[i] = node
+            steps_left_view[i] = n_steps_left
     tn_cls = type(py_root)
-    return [wrap_node(tn_cls, ptr) for ptr in selected]
+    return [wrap_node(tn_cls, ptr) for ptr in selected], steps_left
 
 # Use this to circumvent the issue of not being able to specifier a type identifier like vector[PyTreeNode].
 cdef inline TreeNode *get_ptr(PyTreeNode py_node):
