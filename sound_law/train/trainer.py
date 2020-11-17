@@ -444,10 +444,13 @@ class MctsTrainer(RLTrainer):
                 success += int(root.done)
                 trajectories.append(trajectory)
                 self.tracker.update('episode')
-        success = Metric('success', success, g.num_episodes)
-        metrics = Metrics(success)
 
         agent_inputs = AgentInputs.from_trajectories(trajectories, self.mcts.env.action_space, sparse=True)
+        tr_rew = Metric('reward', agent_inputs.rewards.sum(), g.num_episodes)
+        tr_len = Metric('trajectory_length', sum(map(len, agent_inputs.trajectories)), g.num_episodes)
+        success = Metric('success', success, g.num_episodes)
+        metrics = Metrics(tr_rew, tr_len, success)
+
         ml = agent_inputs.action_masks.size('action')
         tgt_policies = list()
         for tr in trajectories:
