@@ -205,6 +205,12 @@ class OPRLFakeR5(OPRLFake):
 
 
 @reg
+class OPRLFakeR5C(OPRLFakeR5):
+    src_lang: str = 'fake1-r5c'
+    tgt_lang: str = 'fake2-r5c'
+
+
+@reg
 class OPRLFakeR10(OPRLFake):
     max_rollout_length: int = 15
     src_lang: str = 'fake1-r10'
@@ -230,6 +236,12 @@ class OPRLFakeR30(OPRLFake):
     max_rollout_length: int = 35
     src_lang: str = 'fake1-r30'
     tgt_lang: str = 'fake2-r30'
+
+
+@reg
+class OPRLFakeR30C(OPRLFakeR30):
+    src_lang: str = 'fake1-r30c'
+    tgt_lang: str = 'fake2-r30c'
 
 
 @reg

@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import product
-from typing import Iterator, List, Set, Union
+from typing import ClassVar, Iterator, List, Set, Union
 
 import numpy as np
 
@@ -15,9 +15,8 @@ from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import Singleton
 from sound_law.data.alphabet import Alphabet
 
-from .mcts_fast import PyAction, PyActionSpace  # pylint: disable=no-name-in-module
-
-from typing import ClassVar
+from .mcts_fast import (PyAction,  # pylint: disable=no-name-in-module
+                        PyActionSpace)
 
 
 class SoundChangeAction(PyAction):
@@ -35,8 +34,10 @@ class SoundChangeAction(PyAction):
         if self.abc is not None:
             before = self.abc[self.before_id]
             after = self.abc[self.after_id]
-            return f'{before} > {after}'
-        return f'{self.before_id} > {self.after_id}'
+            prefix = f'{self.abc[self.pre_id]} + ' if self.pre_id != -1 else ''
+            return f'{prefix}{before} > {prefix}{after}'
+        prefix = f'{self.pre_id} + ' if self.pre_id != -1 else ''
+        return f'{prefix}{self.before_id} > {prefix}{self.after_id}'
 
 
 class SoundChangeActionSpace(PyActionSpace):

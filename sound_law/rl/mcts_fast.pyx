@@ -369,6 +369,10 @@ cdef class PyAction:
     def after_id(self):
         return self.ptr.after_id
 
+    @property
+    def pre_id(self):
+        return self.ptr.pre_id
+
 # NOTE(j_luo) Using staticmethod as the tutorial suggests doesn't work as a flexible factory method -- you might want to control the `cls` in case of subclassing it.
 cdef PyAction wrap_action(cls, Action *ptr):
     cdef PyAction py_a = cls.__new__(cls, from_ptr=True)

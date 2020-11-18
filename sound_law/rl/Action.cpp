@@ -32,7 +32,7 @@ IdSeq Action::apply_to_uncond(const IdSeq &id_seq)
 
 IdSeq Action::apply_to_pre(const IdSeq &id_seq)
 {
-    IdSeq ret = IdSeq();
+    IdSeq ret = IdSeq{id_seq[0]};
     for (long i = 1; i < id_seq.size(); ++i)
         if ((id_seq[i] == this->before_id) and (id_seq[i - 1] == this->pre_id))
             ret.push_back(this->after_id);
