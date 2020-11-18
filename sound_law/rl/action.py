@@ -57,6 +57,9 @@ class SoundChangeActionSpace(PyActionSpace):
                 id2 = abc[u2]
                 if not g.use_mcts or abc.dist_mat[id1, id2] <= g.max_dist:
                     self.register_action(id1, id2)
+                    if g.use_conditional:
+                        for u in units:
+                            self.register_action(id1, id2, abc[u])
         logging.info(f'Number of actions in action space: {len(self)}.')
 
         if g.factorize_actions:

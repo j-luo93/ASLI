@@ -45,6 +45,7 @@ add_argument('separate_value', dtype=bool, default=True,
 add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of rollout')
 add_argument('phoible_path', dtype='path', msg='Path to the processed Phoible pickle file.')
 add_argument('use_max_value', dtype=bool, default=False, msg='Flag to use max mode in MCTS.')
+add_argument('use_conditional', dtype=bool, default=False, msg='Flag to use conditional rules.')
 
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
@@ -118,6 +119,7 @@ class OnePairManager:
             settings.append(test_setting)
 
         if g.use_rl:
+            SoundChangeActionSpace.set_conditional(g.use_conditional)
             self.action_space = SoundChangeActionSpace(self.tgt_abc)
             dl_kwargs = {'action_space': self.action_space}
         else:

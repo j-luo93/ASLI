@@ -82,17 +82,20 @@ cdef extern from "TreeNode.h":
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
-        Action(long, long, long)
-
         long action_id
         long before_id
         long after_id
+        long pre_id
 
 cdef extern from "ActionSpace.h":
     cdef cppclass ActionSpace nogil:
+        @staticmethod
+        void set_conditional(bool)
+
         ActionSpace()
 
         void register_action(long, long)
+        void register_action(long, long, long)
         Action *get_action(long)
         vector[long] get_action_allowed(VocabIdSeq) except +
         long size()
@@ -390,8 +393,15 @@ cdef class PyActionSpace:
         self.ptr = NULL
         # del self.ptr
 
-    def register_action(self, long before_id, long after_id):
-        self.ptr.register_action(before_id, after_id)
+    def register_action(self, long before_id, long after_id, pre_id=None):
+        if pre_id is None:
+            self.ptr.register_action(before_id, after_id)
+        else:
+            self.ptr.register_action(before_id, after_id, pre_id)
+
+    @staticmethod
+    def set_conditional(bool conditional):
+        ActionSpace.set_conditional(conditional)
 
     def get_action_allowed(self, object arr, object lengths):
         cdef long n = len(arr)
