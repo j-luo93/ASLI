@@ -19,7 +19,7 @@ add_argument('agent', dtype=str, default='vpg', choices=['vpg', 'a2c'], msg='RL 
 
 def setup() -> Initiator:
     initiator = Initiator(reg, mcts_reg, a2c_reg, s2s_reg, logger=True, log_level=True, gpus=True,
-                          random_seed=True, commit_id=True, log_dir=True)
+                          random_seed=True, commit_id=True, log_dir=True, command=True)
     patch_named_tensors()
     torch.set_printoptions(sci_mode=False)
     np.set_printoptions(suppress=True)
