@@ -64,10 +64,14 @@ class SoundChangeActionSpace(PyActionSpace):
         logging.info(f'Number of actions in action space: {len(self)}.')
 
         if g.factorize_actions:
-            a2b = list()
-            a2a = list()
-            for action in self:
-                a2b.append(action.before_id)
-                a2a.append(action.after_id)
-            self.action2before = get_tensor(a2b)
-            self.action2after = get_tensor(a2a)
+
+            def gather(attr: str):
+                ret = list()
+                for action in self:
+                    ret.append(getattr(action, attr))
+                return get_tensor(ret)
+
+            self.action2before = gather('before_id')
+            self.action2after = gather('after_id')
+            if g.use_conditional:
+                self.action2pre = gather('pre_id')

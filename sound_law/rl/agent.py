@@ -164,31 +164,44 @@ class FactorizedProjection(nn.Module):
         num_ids = len(action_space.abc)
         self.before_potential = nn.Linear(input_size, num_ids)
         self.after_potential = nn.Linear(input_size, num_ids)
+        if g.use_conditional:
+            self.pre_potential = nn.Linear(input_size, num_ids)
         self.action_space = action_space
 
     def forward(self, inp: FT, sparse: bool = False, indices: Optional[LT] = None) -> FT:
-        bp = self.before_potential(inp)
-        ap = self.after_potential(inp)
         is_2d = inp.ndim == 2
-        with NoName(ap, bp, indices):
-            a2b = self.action_space.action2before
-            a2a = self.action_space.action2after
-            if sparse:
-                a2b = a2b[indices]
-                a2a = a2a[indices]
-                if is_2d:
-                    action_bp = bp.gather(1, a2b)
-                    action_ap = ap.gather(1, a2a)
+        if g.use_conditional and not is_2d:
+            raise RuntimeError(f'Not sure why you end up here.')
+
+        def get_potential(attr: str):
+            a2i = getattr(self.action_space, f'action2{attr}')
+            mod = getattr(self, f'{attr}_potential')
+            potential = mod(inp)
+            with NoName(potential, indices):
+                if sparse:
+                    a2i = a2i[indices]
+                    # NOTE(j_luo) For conditional rules, mask out those that are not.
+                    if attr == 'pre':
+                        pre_mask = a2i == -1
+                        a2i = torch.where(pre_mask, torch.zeros_like(a2i), a2i)
+                        ret = potential.gather(1, a2i)
+                        ret = torch.where(pre_mask, torch.zeros_like(ret), ret)
+                        return ret
+                    return potential.gather(1, a2i)
+                elif is_2d:
+                    return potential[:, a2i]
                 else:
-                    raise RuntimeError(f'Not sure why you end up here.')
-            elif is_2d:
-                action_bp = bp[:, a2b]
-                action_ap = ap[:, a2a]
-            else:
-                action_bp = bp[a2b]
-                action_ap = ap[a2a]
+                    return potential[a2i]
+
+        bp = get_potential('before')
+        ap = get_potential('after')
+        if g.use_conditional:
+            pp = get_potential('pre')
+            ret = bp + ap + pp
+        else:
+            ret = bp + ap
         names = ('batch', ) * is_2d + ('action',)
-        return (action_bp + action_ap).rename(*names)
+        return ret.rename(*names)
 
 
 class SparseProjection(nn.Module):
