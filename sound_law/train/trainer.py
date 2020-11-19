@@ -45,7 +45,8 @@ class BaseTrainer(BaseTrainerDev):
 
     add_argument('num_steps', default=1000, dtype=int, msg='Number of steps for training.')
     add_argument('save_model', dtype=bool, default=True, msg='Flag to save model.')
-    add_argument('almt_reg_hyper', dtype=float, default=0.0, msg='Hypagentgularization.')
+    add_argument('almt_reg_hyper', dtype=float, default=0.0, msg='Hyperparameter for alignment.')
+    add_argument('weight_decay', dtype=float, default=0.0, msg='Hyperparameter for weight decay.')
     add_argument('concentration_scale', dtype=float, default=1.0, msg='Hyperparameter for concentration scale.')
     add_argument('train_mode', dtype=str, default='mle',
                  choices=['mle', 'mrt'], msg='Training mode: either MRT or MLE.')
@@ -371,6 +372,7 @@ class MctsTrainer(RLTrainer):
     add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
     add_argument('num_inner_steps', default=10, dtype=int, msg='Number of optimization step per batch.')
     add_argument('episode_check_interval', default=10, dtype=int, msg='Frequency of checking episodes')
+    add_argument('regress_lambda', default=0.01, dtype=float, msg='Hyperparameter for regression loss.')
     add_argument('use_value_guidance', default=True, dtype=bool,
                  msg='Flag to use predicted values to guide the search.')
 
@@ -475,7 +477,7 @@ class MctsTrainer(RLTrainer):
 
                 pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), bs)
                 v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), bs)
-                total_loss = Metric('total_loss', pi_ce_loss.total + 100.0 * v_regress_loss.total, bs)
+                total_loss = Metric('total_loss', pi_ce_loss.total + g.regress_lambda * v_regress_loss.total, bs)
 
                 total_loss.mean.backward()
 

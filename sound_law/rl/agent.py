@@ -143,6 +143,7 @@ class Cnn1dParams:
     hidden_size: int
     kernel_size: int
     num_layers: int
+    dropout: float
 
 
 def get_cnn1d(cnn1d_params: Cnn1dParams) -> nn.Module:
@@ -153,6 +154,8 @@ def get_cnn1d(cnn1d_params: Cnn1dParams) -> nn.Module:
                                 cnn1d_params.kernel_size))
         if i != cnn1d_params.num_layers - 1:
             layers.append(nn.LeakyReLU())
+            layers.append(nn.Dropout(cnn1d_params.dropout))
+    layers.append(nn.Dropout(cnn1d_params.dropout))
     return nn.Sequential(*layers)
 
 
@@ -249,7 +252,8 @@ class PolicyNetwork(nn.Module):
         num_actions = len(action_space)
         hidden = nn.Sequential(
             nn.Linear(input_size, input_size // 2),
-            nn.Tanh())
+            nn.Tanh(),
+            nn.Dropout(g.dropout))
         if g.factorize_actions:
             proj = FactorizedProjection(input_size // 2, action_space)
         else:
@@ -301,6 +305,7 @@ class ValueNetwork(nn.Module):
         regressor = nn.Sequential(
             nn.Linear(input_size + g.use_finite_horizon, input_size // 2),
             nn.Tanh(),
+            nn.Dropout(g.dropout),
             nn.Linear(input_size // 2, 1))
         return ValueNetwork(char_emb, cnn, regressor)
 
@@ -353,7 +358,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
                  special_ids: Optional[Sequence[int]] = None):
         super().__init__()
         emb_params = get_emb_params(num_chars, phono_feat_mat, special_ids)
-        cnn1d_params = Cnn1dParams(g.char_emb_size, g.hidden_size, 3, g.num_layers)
+        cnn1d_params = Cnn1dParams(g.char_emb_size, g.hidden_size, 3, g.num_layers, g.dropout)
         self.policy_net = PolicyNetwork.from_params(emb_params, cnn1d_params, action_space)
         self.value_net = self._get_value_net(emb_params, cnn1d_params)
         self.end_state = end_state

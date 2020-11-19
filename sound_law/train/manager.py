@@ -176,7 +176,7 @@ class OnePairManager:
                 trainer.init_params('xavier_uniform')
             optim_cls = Adam if g.optim_cls == 'adam' else SGD
             if not g.use_rl or g.use_mcts or (g.agent == 'a2c' and g.value_steps == 0):
-                trainer.set_optimizer(optim_cls, lr=g.learning_rate)
+                trainer.set_optimizer(optim_cls, lr=g.learning_rate, weight_decay=g.weight_decay)
             else:
                 trainer.set_optimizer(optim_cls, name='policy', mod=model.policy_net,
                                       lr=g.learning_rate)  # , weight_decay=1e-4)
