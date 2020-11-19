@@ -218,6 +218,12 @@ class OPRLFakeR10(OPRLFake):
 
 
 @reg
+class OPRLFakeR10C(OPRLFakeR10):
+    src_lang: str = 'fake1-r10c'
+    tgt_lang: str = 'fake2-r10c'
+
+
+@reg
 class OPRLFakeR15(OPRLFake):
     max_rollout_length: int = 20
     src_lang: str = 'fake1-r15'

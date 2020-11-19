@@ -193,14 +193,15 @@ class PolicyGradientTrainer(RLTrainer):
         return 0.0
 
     def add_trackables(self):
+        super().add_trackables()
         if g.init_entropy_reg > 0.0:
             multiplier = math.exp(math.log(g.end_entropy_reg / g.init_entropy_reg) / g.when_entropy_reg)
             self.tracker.add_anneal_trackable('entropy_reg', g.init_entropy_reg, multiplier, g.end_entropy_reg)
         if g.value_steps:
+            step = self.tracker['step']
             policy_steps = g.policy_steps if g.use_ppo else 1
-            self.tracker.add_trackable('policy_step', total=policy_steps, endless=True)
-            self.tracker.add_trackable('value_step', total=g.value_steps, endless=True)
-        super().add_trackables()
+            step.add_trackable('policy_step', total=policy_steps, endless=True)
+            step.add_trackable('value_step', total=g.value_steps, endless=True)
 
     def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
         if collector is None:
@@ -385,13 +386,13 @@ class MctsTrainer(RLTrainer):
 
     def add_trackables(self):
         super().add_trackables()
-        self.tracker.add_trackable('episode', total=g.num_episodes, endless=True)
-        self.tracker.add_trackable('rollout', total=g.max_rollout_length, endless=True)
-        self.tracker.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
-        self.tracker.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
+        step = self.tracker['step']
+        episode = step.add_trackable('episode', total=g.num_episodes, endless=True)
+        episode.add_trackable('rollout', total=g.max_rollout_length, endless=True)
+        episode.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
+        step.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
     def train_one_step(self, dl: OnePairDataLoader):
-        samples = list()
         success = 0.0
 
         # Collect episodes.
@@ -408,8 +409,6 @@ class MctsTrainer(RLTrainer):
             for ei in range(g.num_episodes):
                 root = dl.init_state
                 self.mcts.reset()
-                this = len(self.mcts._total_state_ids)
-                last = this
                 steps = 0 if g.use_finite_horizon else None
                 value = self.mcts.expand(root, steps=steps)
                 self.mcts.backup(root, value)
