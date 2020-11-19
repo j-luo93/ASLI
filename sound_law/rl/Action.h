@@ -6,15 +6,16 @@
 class Action
 {
 public:
-    Action(long, long, long);
-    Action(long, long, long, long);
+    Action(abc_t, abc_t, abc_t);
+    Action(abc_t, abc_t, abc_t, abc_t);
 
     IdSeq apply_to(const IdSeq &);
+    bool is_conditional();
 
-    long action_id;
-    long before_id;
-    long after_id;
-    long pre_id = -1;
+    abc_t action_id;
+    abc_t before_id;
+    abc_t after_id;
+    abc_t pre_id = NULL_abc;
 
 private:
     IdSeq apply_to_uncond(const IdSeq &);

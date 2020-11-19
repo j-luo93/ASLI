@@ -13,18 +13,18 @@ public:
 
     ActionSpace();
 
-    void register_action(long, long);
-    void register_action(long, long, long);
-    Action *get_action(long);
-    vector<long> get_action_allowed(const VocabIdSeq &);
-    long size();
+    void register_action(abc_t, abc_t);
+    void register_action(abc_t, abc_t, abc_t);
+    Action *get_action(action_t);
+    vector<action_t> get_action_allowed(const VocabIdSeq &);
+    size_t size();
     void clear_cache();
-    long get_cache_size();
+    size_t get_cache_size();
 
 private:
     vector<Action *> actions;
     unordered_map<string, Word *> word_cache;
-    unordered_map<long, vector<long>> uni_map;
-    unordered_map<long, unordered_map<long, vector<long>>> pre_map;
+    unordered_map<abc_t, vector<action_t>> uni_map;
+    unordered_map<abc_t, unordered_map<abc_t, vector<action_t>>> pre_map;
     mutex mtx;
 };

@@ -22,8 +22,7 @@ from .action import SoundChangeAction, SoundChangeActionSpace
 from .mcts_fast import (  # pylint: disable=no-name-in-module
     parallel_get_action_masks, parallel_get_sparse_action_masks,
     parallel_stack_ids)
-from .reward import get_rtgs_dense  # pylint: disable=no-name-in-module
-from .reward import get_rtgs_list
+from .reward import get_rtgs_list, get_rtgs_dense  # pylint: disable=no-name-in-module
 from .trajectory import Trajectory, VocabState
 
 

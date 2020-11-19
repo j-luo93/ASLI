@@ -8,31 +8,42 @@
 #include <mutex>
 #include <assert.h>
 #include <iostream>
+#include <limits>
 
 using namespace std;
 
-// FIXME(j_luo) Probably need list for insertion speed.
-// FIXME(j_luo) Use int to reduce memory?
-using IdSeq = vector<long>;
+// Define basic integer types for different purporses.
+using abc_t = uint16_t;    // for alphabet
+using cost_t = uint8_t;    // for cost
+using dist_t = uint16_t;   // for distance
+using visit_t = int16_t;   // for visit/action counts -- due to virtual games, this could be negative.
+using action_t = uint32_t; // for actions
+using node_t = uint64_t;   // for node id
+
+// Use the maximum values as the sentinel/null values.
+abc_t NULL_abc = numeric_limits<abc_t>::max();
+action_t NULL_action = numeric_limits<action_t>::max();
+
+using IdSeq = vector<abc_t>;
 using VocabIdSeq = vector<IdSeq>;
 
-long edit_distance(const IdSeq &seq1, const IdSeq &seq2, const vector<vector<long>> &dist_mat, long ins_cost)
+dist_t edit_distance(const IdSeq &seq1, const IdSeq &seq2, const vector<vector<cost_t>> &dist_mat, cost_t ins_cost)
 {
-    long l1 = seq1.size();
-    long l2 = seq2.size();
-    long **dist = (long **)malloc((l1 + 1) * sizeof(long **));
-    for (long i = 0; i < l1 + 1; ++i)
-        dist[i] = (long *)malloc((l2 + 1) * sizeof(long *));
+    size_t l1 = seq1.size();
+    size_t l2 = seq2.size();
+    dist_t **dist = (dist_t **)malloc((l1 + 1) * sizeof(dist_t **));
+    for (size_t i = 0; i < l1 + 1; ++i)
+        dist[i] = (dist_t *)malloc((l2 + 1) * sizeof(dist_t *));
 
-    for (long i = 0; i < l1 + 1; ++i)
+    for (size_t i = 0; i < l1 + 1; ++i)
         dist[i][0] = i * ins_cost;
-    for (long i = 0; i < l2 + 1; ++i)
+    for (size_t i = 0; i < l2 + 1; ++i)
         dist[0][i] = i * ins_cost;
 
-    long sub_cost;
+    cost_t sub_cost;
     bool use_phono_edit_dist = (dist_mat.size() > 0);
-    for (long i = 1; i < l1 + 1; ++i)
-        for (long j = 1; j < l2 + 1; ++j)
+    for (size_t i = 1; i < l1 + 1; ++i)
+        for (size_t j = 1; j < l2 + 1; ++j)
         {
             if (use_phono_edit_dist)
             {
@@ -44,8 +55,8 @@ long edit_distance(const IdSeq &seq1, const IdSeq &seq2, const vector<vector<lon
             }
             dist[i][j] = min(dist[i - 1][j - 1] + sub_cost, min(dist[i - 1][j], dist[i][j - 1]) + ins_cost);
         }
-    long ret = dist[l1][l2];
-    for (long i = 0; i < l1 + 1; ++i)
+    dist_t ret = dist[l1][l2];
+    for (size_t i = 0; i < l1 + 1; ++i)
         free(dist[i]);
     free(dist);
     return ret;
@@ -54,7 +65,7 @@ long edit_distance(const IdSeq &seq1, const IdSeq &seq2, const vector<vector<lon
 string get_key(const IdSeq &id_seq)
 {
     string key = "";
-    long i = 0;
+    size_t i = 0;
     while (i < id_seq.size() - 1)
     {
         key += to_string(id_seq[i]) + ',';

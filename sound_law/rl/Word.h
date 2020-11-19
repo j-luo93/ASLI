@@ -8,7 +8,7 @@ public:
     Word(const IdSeq &);
 
     string key;
-    unordered_set<long> action_allowed_uncond;
-    unordered_set<long> uni_keys;
-    unordered_map<long, unordered_set<long>> pre_keys;
+    unordered_set<action_t> action_allowed_uncond;
+    unordered_set<abc_t> uni_keys;
+    unordered_map<abc_t, unordered_set<abc_t>> pre_keys;
 };

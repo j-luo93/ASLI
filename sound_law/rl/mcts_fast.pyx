@@ -32,8 +32,18 @@ cdef extern from "Word.cpp":
     pass
 
 cdef extern from "common.h":
-    ctypedef vector[long] IdSeq
+    ctypedef unsigned short abc_t
+    ctypedef unsigned char cost_t
+    ctypedef unsigned short dist_t
+    ctypedef unsigned short visit_t
+    ctypedef unsigned int action_t
+    ctypedef unsigned long node_t
+    ctypedef vector[abc_t] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
+
+# These are used by numpy's python api.
+np_action_t = np.uint32
+np_cost_t = np.uint8
 
 cdef extern from "TreeNode.h":
     cdef cppclass TreeNode nogil:
@@ -41,51 +51,53 @@ cdef extern from "TreeNode.h":
         ctypedef pair[TNptr, float] Edge
 
         @staticmethod
-        void set_dist_mat(vector[vector[long]])
+        void set_dist_mat(vector[vector[cost_t]])
         @staticmethod
         void set_max_mode(bool)
 
         TreeNode(VocabIdSeq) except +
-        TreeNode(VocabIdSeq, TreeNode *, vector[long]) except +
+        TreeNode(VocabIdSeq, TreeNode *, vector[action_t]) except +
 
-        bool has_acted(long)
-        long size()
+        bool has_acted(action_t)
+        size_t size()
         void lock()
         void unlock()
         bool is_leaf()
-        long get_best_i(float)
+        action_t get_best_i(float)
         void expand(vector[float])
-        void virtual_backup(long, long, float)
-        void backup(float, float, long, float)
+        void virtual_backup(action_t, int, float)
+        void backup(float, float, int, float)
         void reset()
         void play()
-        cpplist[pair[long, float]] get_path()
+        cpplist[pair[action_t, float]] get_path()
         vector[float] get_scores(float)
         void clear_subtree()
         void add_noise(vector[float], float)
-        long get_num_allowed()
+        size_t get_num_allowed()
 
         TreeNode *parent_node
         VocabIdSeq vocab_i
-        long dist_to_end
-        pair[long, long] prev_action
+        dist_t dist_to_end
+        pair[action_t, action_t] prev_action
         vector[float] prior
-        vector[long] action_allowed
-        vector[long] action_count
-        long visit_count
+        vector[action_t] action_allowed
+        vector[visit_t] action_count
+        visit_t visit_count
         vector[float] total_value
+        unordered_map[action_t, Edge] edges
+        vector[float] max_value
         bool done
         bool played
-        long idx
-        unordered_map[long, Edge] edges
-        vector[float] max_value
+        node_t idx
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
-        long action_id
-        long before_id
-        long after_id
-        long pre_id
+        abc_t action_id
+        abc_t before_id
+        abc_t after_id
+        abc_t pre_id
+
+        bool is_conditional()
 
 cdef extern from "ActionSpace.h":
     cdef cppclass ActionSpace nogil:
@@ -94,13 +106,13 @@ cdef extern from "ActionSpace.h":
 
         ActionSpace()
 
-        void register_action(long, long)
-        void register_action(long, long, long)
-        Action *get_action(long)
-        vector[long] get_action_allowed(VocabIdSeq) except +
-        long size()
+        void register_action(abc_t, abc_t)
+        void register_action(abc_t, abc_t, abc_t)
+        Action *get_action(action_t)
+        vector[action_t] get_action_allowed(VocabIdSeq) except +
+        size_t size()
         void clear_cache()
-        long get_cache_size()
+        size_t get_cache_size()
 
 ctypedef TreeNode * TNptr
 
@@ -109,15 +121,15 @@ cdef extern from "Env.h":
     cdef cppclass Env nogil:
         Env(TreeNode *, TreeNode *, ActionSpace *, float, float) except +
 
-        Edge step(TreeNode *, long, Action *) except +
+        Edge step(TreeNode *, size_t, Action *) except +
 
         TreeNode *init_node
         TreeNode *end_node
 
 cdef inline VocabIdSeq np2vocab(long[:, ::1] arr,
                                 long[::1] lengths,
-                                long n) except *:
-    cdef long i, j, m
+                                size_t n) except *:
+    cdef size_t i, j, m
     cdef VocabIdSeq vocab_i = VocabIdSeq(n)
     cdef IdSeq id_seq
     for i in range(n):
@@ -129,10 +141,10 @@ cdef inline VocabIdSeq np2vocab(long[:, ::1] arr,
     return vocab_i
 
 cdef inline long[:, ::1] vocab2np(VocabIdSeq vocab_i) except *:
-    cdef long n = vocab_i.size()
-    cdef long m = 0
+    cdef size_t n = vocab_i.size()
+    cdef size_t m = 0
     # Find the longest sequence.
-    cdef long i, j
+    cdef size_t i, j
     for i in range(n):
         m = max(m, vocab_i[i].size())
     arr = np.full([n, m], PAD_ID, dtype='long')
@@ -147,18 +159,14 @@ cdef inline long[:, ::1] vocab2np(VocabIdSeq vocab_i) except *:
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:
     float
-    bool
-    long
+    action_t
 
-cdef inline vector[convertible] np2vector(convertible[::1] arr, long n) except *:
-    cdef long i
+cdef inline vector[convertible] np2vector(convertible[::1] arr, size_t n) except *:
+    cdef size_t i
     cdef vector[convertible] vec = vector[convertible](n)
     for i in range(n):
         vec[i] = arr[i]
     return vec
-
-cdef extern from "unistd.h" nogil:
-    unsigned int sleep(unsigned int seconds)
 
 cdef inline object get_py_edge(PyTreeNode node, Edge edge):
     cdef TreeNode * next_node = edge.first
@@ -191,19 +199,19 @@ cdef class PyTreeNode:
             return
 
         cdef long[:, ::1] arr_view = arr
-        cdef long n = arr.shape[0]
+        cdef size_t n = arr.shape[0]
         assert n == lengths.shape[0], '`arr` and `lengths` must have the same length.'
         cdef long[::1] lengths_view = lengths
 
         cdef VocabIdSeq vocab_i = np2vocab(arr_view, lengths_view, n)
-        cdef long[::1] aa_view
-        cdef long m
-        cdef vector[long] aa_vec
+        cdef action_t[::1] aa_view
+        cdef size_t m
+        cdef vector[action_t] aa_vec
         if end_node is None:
             self.ptr = new TreeNode(vocab_i)
         else:
             m = len(action_allowed)
-            aa_view = action_allowed
+            aa_view = action_allowed.astype(np_action_t)
             aa_vec = np2vector(aa_view, m)
             self.ptr = new TreeNode(vocab_i, end_node.ptr, aa_vec)
         self.end_node = end_node
@@ -215,11 +223,15 @@ cdef class PyTreeNode:
         return self.ptr.get_num_allowed()
 
     def get_scores(self, float puct_c):
-        return np.asarray(self.ptr.get_scores(puct_c))
+        return np.asarray(self.ptr.get_scores(puct_c), dtype='float32')
+
+    @property
+    def idx(self):
+        return self.ptr.idx
 
     @property
     def vocab_array(self):
-        return np.asarray(vocab2np(self.ptr.vocab_i))
+        return np.asarray(vocab2np(self.ptr.vocab_i), dtype='long')
 
     @property
     def vocab(self):
@@ -255,10 +267,6 @@ cdef class PyTreeNode:
     def played(self):
         return self.ptr.played
 
-    @property
-    def idx(self):
-        return self.ptr.idx
-
     def get_path(self):
         return self.ptr.get_path()
 
@@ -280,11 +288,11 @@ cdef class PyTreeNode:
         return self.ptr.is_leaf()
 
     def expand(self, float[::1] prior):
-        cdef long n = len(prior)
+        cdef size_t n = len(prior)
         cdef vector[float] prior_vec = np2vector(prior, n)
         self.ptr.expand(prior_vec)
 
-    def backup(self, float value, float mixing, long game_count, float virtual_loss):
+    def backup(self, float value, float mixing, int game_count, float virtual_loss):
         self.ptr.backup(value, mixing, game_count, virtual_loss)
 
     def reset(self):
@@ -310,9 +318,9 @@ cdef class PyTreeNode:
 
     @property
     def action_allowed(self):
-        return np.asarray(self.ptr.action_allowed)
+        return np.asarray(self.ptr.action_allowed, dtype='long')
 
-    def get_edge(self, long action_id):
+    def get_edge(self, action_t action_id):
         cdef Edge edge
         if self.ptr.has_acted(action_id):
             edge = self.ptr.edges.at(action_id)
@@ -323,20 +331,20 @@ cdef class PyTreeNode:
         self.ptr.clear_subtree()
 
     def add_noise(self, float [::1] noise, float noise_ratio):
-        cdef long n = len(noise)
+        cdef size_t n = len(noise)
         cdef vector[float] noise_vec = np2vector(noise, n)
         self.ptr.add_noise(noise_vec, noise_ratio)
 
     @staticmethod
     def set_dist_mat(object np_dist_mat):
-        cdef long[:, ::1] dist_view = np_dist_mat
-        cdef long n = np_dist_mat.shape[0]
-        cdef long m = np_dist_mat.shape[1]
-        cdef vector[vector[long]] dist_mat = vector[vector[long]](n)
-        cdef long i, j
-        cdef vector[long] vec
+        cdef cost_t[:, ::1] dist_view = np_dist_mat.astype(np_cost_t)
+        cdef size_t n = np_dist_mat.shape[0]
+        cdef size_t m = np_dist_mat.shape[1]
+        cdef vector[vector[cost_t]] dist_mat = vector[vector[cost_t]](n)
+        cdef size_t i, j
+        cdef vector[cost_t] vec
         for i in range(n):
-            vec = vector[long](m)
+            vec = vector[cost_t](m)
             for j in range(m):
                 vec[j] = dist_view[i, j]
             dist_mat[i] = vec
@@ -371,6 +379,8 @@ cdef class PyAction:
 
     @property
     def pre_id(self):
+        if not self.ptr.is_conditional():
+            return -1
         return self.ptr.pre_id
 
 # NOTE(j_luo) Using staticmethod as the tutorial suggests doesn't work as a flexible factory method -- you might want to control the `cls` in case of subclassing it.
@@ -397,23 +407,25 @@ cdef class PyActionSpace:
         self.ptr = NULL
         # del self.ptr
 
-    def register_action(self, long before_id, long after_id, pre_id=None):
+    def register_action(self, abc_t before_id, abc_t after_id, pre_id=None):
+        cdef abc_t c_pre_id
         if pre_id is None:
             self.ptr.register_action(before_id, after_id)
         else:
-            self.ptr.register_action(before_id, after_id, pre_id)
+            c_pre_id = <abc_t>pre_id
+            self.ptr.register_action(before_id, after_id, c_pre_id)
 
     @staticmethod
     def set_conditional(bool conditional):
         ActionSpace.set_conditional(conditional)
 
     def get_action_allowed(self, object arr, object lengths):
-        cdef long n = len(arr)
+        cdef size_t n = len(arr)
         cdef long[:, ::1] arr_view = arr
         cdef long[::1] lengths_view = lengths
-        cdef vector[vector[long]] vocab_i = np2vocab(arr_view, lengths_view, n)
-        cdef vector[long] action_allowed = self.ptr.get_action_allowed(vocab_i)
-        return np.asarray(action_allowed)
+        cdef vector[vector[abc_t]] vocab_i = np2vocab(arr_view, lengths_view, n)
+        cdef vector[action_t] action_allowed = self.ptr.get_action_allowed(vocab_i)
+        return np.asarray(action_allowed, dtype='long')
 
     def get_action_mask(self, object arr, object lengths):
         action_allowed = self.get_action_allowed(arr, lengths)
@@ -422,7 +434,7 @@ cdef class PyActionSpace:
             ret[action_allowed[i]] = True
         return  ret
 
-    def get_action(self, long action_id):
+    def get_action(self, action_t action_id):
         if action_id >= len(self) or action_id < 0:
             raise ValueError(f'Action id out of bound.')
         cdef Action *action = self.ptr.get_action(action_id)
@@ -460,7 +472,7 @@ cdef class PyEnv:
     def __dealloc__(self):
         self.ptr = NULL
 
-    def step(self, PyTreeNode node, long best_i, PyAction action):
+    def step(self, PyTreeNode node, action_t best_i, PyAction action):
         cdef Edge edge = self.ptr.step(node.ptr, best_i, action.ptr)
         return get_py_edge(node, edge)
 
@@ -469,11 +481,11 @@ cpdef object parallel_select(PyTreeNode py_root,
                              PyTreeNode py_end,
                              PyActionSpace py_as,
                              PyEnv py_env,
-                             long num_sims,
-                             long num_threads,
-                             long depth_limit,
+                             int num_sims,
+                             int num_threads,
+                             int depth_limit,
                              float puct_c,
-                             long game_count,
+                             int game_count,
                              float virtual_loss):
     cdef TreeNode *end = py_end.ptr
     cdef TreeNode *root = py_root.ptr
@@ -481,8 +493,10 @@ cpdef object parallel_select(PyTreeNode py_root,
 
     cdef TreeNode *node
     cdef float reward
-    cdef long n_steps_left, i, action_id, best_i
-    cdef vector[long] action_allowed
+    cdef long n_steps_left
+    cdef size_t i
+    cdef action_t action_id, best_i
+    cdef vector[action_t] action_allowed
     cdef Edge edge
     cdef Action *action
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
@@ -518,13 +532,13 @@ cpdef object parallel_select(PyTreeNode py_root,
 cdef inline TreeNode *get_ptr(PyTreeNode py_node):
     return py_node.ptr
 
-cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, long num_threads):
-    cdef long n = len(py_nodes)
-    cdef long m = len(py_as)
-    cdef long i, j
+cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, int num_threads):
+    cdef size_t n = len(py_nodes)
+    cdef size_t m = len(py_as)
+    cdef size_t i, j
     cdef TreeNode *node
     cdef vector[TNptr] nodes = vector[TNptr](n)
-    cdef vector[long] action_allowed
+    cdef vector[action_t] action_allowed
     for i in range(n):
         nodes[i] = get_ptr(py_nodes[i])
 
@@ -539,12 +553,12 @@ cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, lon
                 arr_view[i, action_allowed[j]] = True
     return arr
 
-cpdef object parallel_get_sparse_action_masks(object py_nodes, long num_threads):
-    cdef long n = len(py_nodes)
-    cdef long i, j, k
+cpdef object parallel_get_sparse_action_masks(object py_nodes, int num_threads):
+    cdef size_t n = len(py_nodes)
+    cdef size_t i, j, k
     cdef TreeNode *node
     cdef vector[TNptr] nodes = vector[TNptr](n)
-    cdef vector[long] action_allowed
+    cdef vector[action_t] action_allowed
     for i in range(n):
         nodes[i] = get_ptr(py_nodes[i])
 
@@ -556,7 +570,7 @@ cpdef object parallel_get_sparse_action_masks(object py_nodes, long num_threads)
             node = nodes[i]
             action_allowed = node.action_allowed
             lengths_view[i] = action_allowed.size()
-    cdef long m = max(lengths)
+    cdef size_t m = max(lengths)
 
     arr = np.zeros([n, m], dtype='long')
     num_actions = np.zeros([n], dtype='long')
@@ -576,13 +590,13 @@ cpdef object parallel_get_sparse_action_masks(object py_nodes, long num_threads)
                 am_view[i, j] = False
     return arr, action_masks, num_actions
 
-cpdef object parallel_stack_ids(object py_nodes, long num_threads):
-    cdef long n = len(py_nodes)
+cpdef object parallel_stack_ids(object py_nodes, int num_threads):
+    cdef size_t n = len(py_nodes)
     cdef vector[TNptr] nodes = vector[TNptr](n)
-    cdef long i, j, k, m
+    cdef size_t i, j, k, m
     for i in range(n):
         nodes[i] = get_ptr(py_nodes[i])
-    cdef long nw = nodes[0].size()
+    cdef size_t nw = nodes[0].size()
 
     lengths = np.zeros([n, nw], dtype='long')
     cdef long[:, ::1] lengths_view = lengths
