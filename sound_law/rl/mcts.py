@@ -111,7 +111,7 @@ class Mcts:
             if steps is not None and not isinstance(steps, int):
                 steps = steps[outstanding_idx]
 
-            with ScopedCache('word_embedding'):
+            with ScopedCache('state_repr'):
                 probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
                 if g.use_value_guidance:
                     agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()

@@ -198,7 +198,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
         to specify which outputs to return.
         """
         log_probs = entropy = rew_outputs = None
-        with ScopedCache('word_embedding'):
+        with ScopedCache('state_repr'):
             if ret_log_probs or ret_entropy:
                 policy = self.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks)
                 if ret_entropy:
@@ -236,11 +236,11 @@ class A2C(BasePG):
     add_argument('gae_lambda', dtype=float, default=1.0, msg='Lambda value for GAE.')
 
     def _get_value_net(self, emb_params, cnn1d_params):
-        char_emb = cnn = None
+        enc = None
         if not g.separate_value:
-            char_emb = self.policy_net.char_emb
-            cnn = self.policy_net.cnn
-        return ValueNetwork.from_params(emb_params, cnn1d_params, char_emb=char_emb, cnn=cnn)
+            enc = self.policy_net.enc
+        return ValueNetwork.from_params(emb_params, cnn1d_params,
+                                        enc=enc)
 
     def _get_reward_outputs(self, agent_inputs: AgentInputs) -> RewardOutputs:
         values = self.get_values(agent_inputs.id_seqs)

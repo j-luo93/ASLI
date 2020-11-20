@@ -85,90 +85,6 @@ class SparseProjection(nn.Module):
                 return torch.addmm(self.bias, inp, self.weight.t())
 
 
-@cacheable(switch='word_embedding')
-def _get_word_embedding(char_emb: PhonoEmbedding, ids: LT, cnn: nn.Module = None) -> FT:
-    """Get word embeddings based on ids."""
-    names = ids.names + ('emb',)
-    emb = char_emb(ids).rename(*names)
-    if cnn is not None:
-        if emb.ndim == 4:
-            emb = emb.align_to('batch', 'word', 'emb', 'pos')
-            bs, ws, hs, l = emb.shape
-            ret = cnn(emb.rename(None).reshape(bs * ws, hs, l)).view(bs, ws, hs, -1).max(dim=-1)[0]
-            return ret.rename('batch', 'word', 'emb')
-        else:
-            emb = emb.align_to('word', 'emb', 'pos')
-            ret = cnn(emb.rename(None)).max(dim=-1)[0]
-            return ret.rename('word', 'emb')
-
-    return emb.mean(dim='pos')
-
-
-def _get_state_repr(char_emb: PhonoEmbedding, curr_ids: LT, end_ids: LT, cnn: nn.Module = None) -> FT:
-    """Get state representation used for action prediction."""
-    word_repr = _get_word_embedding(char_emb, curr_ids, cnn=cnn)
-    end_word_repr = _get_word_embedding(char_emb, end_ids, cnn=cnn)
-    state_repr = (word_repr - end_word_repr).mean(dim='word')
-    return state_repr
-
-
-class PolicyNetwork(nn.Module):
-
-    def __init__(self, char_emb: CharEmbedding,
-                 cnn: nn.Module,
-                 hidden: nn.Module,
-                 proj: nn.Module,
-                 action_space: SoundChangeActionSpace):
-        super().__init__()
-        self.char_emb = char_emb
-        self.cnn = cnn
-        self.hidden = hidden
-        self.proj = proj
-        self.action_space = action_space
-
-    @classmethod
-    def from_params(cls, emb_params: EmbParams,
-                    cnn1d_params: Cnn1dParams,
-                    action_space: SoundChangeActionSpace) -> PolicyNetwork:
-        char_emb = get_embedding(emb_params)
-        cnn = get_cnn1d(cnn1d_params)
-        input_size = cnn1d_params.hidden_size
-        num_actions = len(action_space)
-        hidden = nn.Sequential(
-            nn.Linear(input_size, input_size // 2),
-            nn.Tanh(),
-            nn.Dropout(g.dropout))
-        if g.factorize_actions:
-            proj = FactorizedProjection(input_size // 2, action_space)
-        else:
-            proj = SparseProjection(input_size // 2, num_actions)
-        return cls(char_emb, cnn, hidden, proj, action_space)
-
-    def forward(self,
-                curr_ids: LT,
-                end_ids: LT,
-                action_masks: BT,
-                sparse: bool = False,
-                indices: Optional[LT] = None) -> Distribution:
-        """Get policy distribution based on current state (and end state)."""
-        if sparse and indices is None:
-            raise TypeError(f'Must provide `indices` in sparse mode.')
-
-        state_repr = _get_state_repr(self.char_emb, curr_ids, end_ids, cnn=self.cnn)
-
-        hid = self.hidden(state_repr)
-        if sparse:
-            action_logits = self.proj(hid, indices=indices, sparse=True)
-        else:
-            action_logits = self.proj(hid, sparse=False)
-        action_logits = torch.where(action_masks, action_logits,
-                                    torch.full_like(action_logits, -999.9))
-
-        with NoName(action_logits):
-            policy = torch.distributions.Categorical(logits=action_logits)
-        return policy
-
-
 @dataclass
 class Cnn1dParams:
     input_size: int
@@ -191,37 +107,126 @@ def get_cnn1d(cnn1d_params: Cnn1dParams) -> nn.Module:
     return nn.Sequential(*layers)
 
 
-class ValueNetwork(nn.Module):
+class StateEncoder(nn.Module):
+    """Encode a vocab state."""
 
-    def __init__(self, char_emb: CharEmbedding, cnn: nn.Module, regressor: nn.Module):
+    def __init__(self, char_emb: CharEmbedding, cnn: nn.Module):
         super().__init__()
         self.char_emb = char_emb
         self.cnn = cnn
+
+    @classmethod
+    def from_params(cls, emb_params: EmbParams, cnn1d_params: Cnn1dParams):
+        char_emb = get_embedding(emb_params)
+        cnn = get_cnn1d(cnn1d_params)
+        return cls(char_emb, cnn)
+
+    @cacheable(switch='state_repr')
+    def forward(self, curr_ids: LT, end_ids: LT):
+        word_repr = self._get_word_embedding(curr_ids)
+        end_word_repr = self._get_word_embedding(end_ids)
+        state_repr = (word_repr - end_word_repr).mean(dim='word')
+        return state_repr
+
+    def _get_word_embedding(self, ids: LT) -> FT:
+        """Get word embeddings based on ids."""
+        names = ids.names + ('emb',)
+        emb = self.char_emb(ids).rename(*names)
+        if emb.ndim == 4:
+            emb = emb.align_to('batch', 'word', 'emb', 'pos')
+            bs, ws, hs, l = emb.shape
+            ret = self.cnn(emb.rename(None).reshape(bs * ws, hs, l)).view(bs, ws, hs, -1).max(dim=-1)[0]
+            return ret.rename('batch', 'word', 'emb')
+        else:
+            emb = emb.align_to('word', 'emb', 'pos')
+            ret = self.cnn(emb.rename(None)).max(dim=-1)[0]
+            return ret.rename('word', 'emb')
+
+        return emb.mean(dim='pos')
+
+
+class PolicyNetwork(nn.Module):
+
+    def __init__(self,
+                 enc: StateEncoder,
+                 hidden: nn.Module,
+                 proj: nn.Module,
+                 action_space: SoundChangeActionSpace):
+        super().__init__()
+        self.enc = enc
+        self.hidden = hidden
+        self.proj = proj
+        self.action_space = action_space
+
+    @classmethod
+    def from_params(cls, emb_params: EmbParams,
+                    cnn1d_params: Cnn1dParams,
+                    action_space: SoundChangeActionSpace) -> PolicyNetwork:
+        enc = StateEncoder.from_params(emb_params, cnn1d_params)
+        input_size = cnn1d_params.hidden_size
+        num_actions = len(action_space)
+        hidden = nn.Sequential(
+            nn.Linear(input_size, input_size // 2),
+            nn.Tanh(),
+            nn.Dropout(g.dropout))
+        if g.factorize_actions:
+            proj = FactorizedProjection(input_size // 2, action_space)
+        else:
+            proj = SparseProjection(input_size // 2, num_actions)
+        return cls(enc, hidden, proj, action_space)
+
+    def forward(self,
+                curr_ids: LT,
+                end_ids: LT,
+                action_masks: BT,
+                sparse: bool = False,
+                indices: Optional[LT] = None) -> Distribution:
+        """Get policy distribution based on current state (and end state)."""
+        if sparse and indices is None:
+            raise TypeError(f'Must provide `indices` in sparse mode.')
+
+        state_repr = self.enc(curr_ids, end_ids)
+
+        hid = self.hidden(state_repr)
+        if sparse:
+            action_logits = self.proj(hid, indices=indices, sparse=True)
+        else:
+            action_logits = self.proj(hid, sparse=False)
+        action_logits = torch.where(action_masks, action_logits,
+                                    torch.full_like(action_logits, -999.9))
+
+        with NoName(action_logits):
+            policy = torch.distributions.Categorical(logits=action_logits)
+        return policy
+
+
+class ValueNetwork(nn.Module):
+
+    def __init__(self, enc: StateEncoder, regressor: nn.Module):
+        super().__init__()
+        self.enc = enc
         self.regressor = regressor
 
     @classmethod
     def from_params(cls,
                     emb_params: EmbParams,
                     cnn1d_params: Cnn1dParams,
-                    char_emb: Optional[CharEmbedding] = None,
-                    cnn: Optional[nn.Module] = None) -> ValueNetwork:
-        char_emb = char_emb or get_embedding(emb_params)
-        cnn = cnn or get_cnn1d(cnn1d_params)
+                    enc: Optional[StateEncoder] = None) -> ValueNetwork:
+        enc = enc or StateEncoder.from_params(emb_params, cnn1d_params)
         input_size = cnn1d_params.hidden_size
         regressor = nn.Sequential(
             nn.Linear(input_size + g.use_finite_horizon, input_size // 2),
             nn.Tanh(),
             nn.Dropout(g.dropout),
             nn.Linear(input_size // 2, 1))
-        return ValueNetwork(char_emb, cnn, regressor)
+        return ValueNetwork(enc, regressor)
 
     def forward(self, curr_ids: LT, end_ids: LT, steps: Optional[LT] = None, done: Optional[BT] = None) -> FT:
         """Get policy evaluation. if `done` is provided, we get values for s1 instead of s0.
         In that case, end states should have values set to 0.
         `step` should start with 0.
         """
-        # In finite mode, if this is the last step, and we are evaluating s1, we should return 0 value.
-        state_repr = _get_state_repr(self.char_emb, curr_ids, end_ids, cnn=self.cnn)
+        state_repr = self.enc(curr_ids, end_ids)
         # NOTE(j_luo) If s1 is being evaluated, we should increment `step`.
         if done is not None and g.use_finite_horizon:
             steps = steps + 1
