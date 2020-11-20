@@ -60,3 +60,19 @@ private:
 };
 
 using Edge = pair<TreeNode *, float>;
+
+// FIXME(j_luo) Try inheritance here and in cython?
+class DetachedTreeNode
+{
+public:
+    // This only holds the data, without the pointers to parents and children, or visit counts.
+    DetachedTreeNode(TreeNode *);
+
+    VocabIdSeq vocab_i;
+    pair<action_t, action_t> prev_action;
+    dist_t dist_to_end;
+    vector<action_t> action_allowed;
+    bool done;
+
+    size_t size();
+};

@@ -89,6 +89,16 @@ cdef extern from "TreeNode.h":
         bool done
         bool played
         node_t idx
+    cdef cppclass DetachedTreeNode nogil:
+        DetachedTreeNode(TreeNode *)
+
+        VocabIdSeq vocab_i
+        dist_t dist_to_end
+        pair[action_t, action_t] prev_action
+        vector[action_t] action_allowed
+        bool done
+
+        size_t size()
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
@@ -115,6 +125,7 @@ cdef extern from "ActionSpace.h":
         size_t get_cache_size()
 
 ctypedef TreeNode * TNptr
+ctypedef DetachedTreeNode * DTNptr
 
 cdef extern from "Env.h":
     ctypedef pair[TNptr, float] Edge
@@ -181,7 +192,6 @@ cdef class PyTreeNode:
     cdef public PyTreeNode end_node
 
     def __dealloc__(self):
-        # # Don't free the memory. Just delete the attribute.
         self.ptr = NULL
 
     def __cinit__(self,
@@ -353,6 +363,48 @@ cdef class PyTreeNode:
     @staticmethod
     def set_max_mode(bool max_mode):
         TreeNode.set_max_mode(max_mode)
+
+    def detach(self):
+        cdef DetachedTreeNode *ptr = new DetachedTreeNode(self.ptr)
+        cdef PyDetachedTreeNode py_dtn = PyDetachedTreeNode.__new__(PyDetachedTreeNode)
+        py_dtn.ptr = ptr
+        return py_dtn
+
+
+cdef class PyDetachedTreeNode:
+    cdef DetachedTreeNode *ptr
+
+    def __dealloc__(self):
+        del self.ptr
+
+    def __len__(self):
+        return self.ptr.size()
+
+    @property
+    def vocab_array(self):
+        return np.asarray(vocab2np(self.ptr.vocab_i), dtype='long')
+
+    @property
+    def vocab(self):
+        return self.ptr.vocab_i
+
+    @property
+    def prev_action(self):
+        return self.ptr.prev_action
+
+    @property
+    def dist_to_end(self):
+        return self.ptr.dist_to_end
+
+    @property
+    def done(self):
+        return self.ptr.done
+
+    @property
+    def action_allowed(self):
+        return np.asarray(self.ptr.action_allowed, dtype='long')
+
+
 
 cdef class PyAction:
     """This is a wrapper class for c++ class Action. It should be created by a PyActionSpace object with registered actions."""
@@ -532,6 +584,9 @@ cpdef object parallel_select(PyTreeNode py_root,
 cdef inline TreeNode *get_ptr(PyTreeNode py_node):
     return py_node.ptr
 
+cdef inline DetachedTreeNode *get_dptr(PyDetachedTreeNode py_node):
+    return py_node.ptr
+
 cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, int num_threads):
     cdef size_t n = len(py_nodes)
     cdef size_t m = len(py_as)
@@ -556,19 +611,28 @@ cpdef object parallel_get_action_masks(object py_nodes, PyActionSpace py_as, int
 cpdef object parallel_get_sparse_action_masks(object py_nodes, int num_threads):
     cdef size_t n = len(py_nodes)
     cdef size_t i, j, k
+    cdef DetachedTreeNode *dnode
     cdef TreeNode *node
+    cdef vector[DTNptr] dnodes = vector[DTNptr](n)
     cdef vector[TNptr] nodes = vector[TNptr](n)
     cdef vector[action_t] action_allowed
+    # HACK(j_luo) very hacky here
+    cdef bool is_detached = isinstance(py_nodes[0], PyDetachedTreeNode)
     for i in range(n):
-        nodes[i] = get_ptr(py_nodes[i])
+        if is_detached:
+            dnodes[i] = get_dptr(py_nodes[i])
+        else:
+            nodes[i] = get_ptr(py_nodes[i])
 
     # First pass to get the maximum number of actions.
     lengths = np.zeros([n], dtype='long')
     cdef long[::1] lengths_view = lengths
     with nogil:
         for i in prange(n, num_threads=num_threads):
-            node = nodes[i]
-            action_allowed = node.action_allowed
+            if is_detached:
+                action_allowed = dnodes[i].action_allowed
+            else:
+                action_allowed = nodes[i].action_allowed
             lengths_view[i] = action_allowed.size()
     cdef size_t m = max(lengths)
 
@@ -580,8 +644,10 @@ cpdef object parallel_get_sparse_action_masks(object py_nodes, int num_threads):
     cdef bool[:, ::1] am_view = action_masks
     with nogil:
         for i in prange(n, num_threads=num_threads):
-            node = nodes[i]
-            action_allowed = node.action_allowed
+            if is_detached:
+                action_allowed = dnodes[i].action_allowed
+            else:
+                action_allowed = nodes[i].action_allowed
             k = action_allowed.size()
             for j in range(k):
                 arr_view[i, j] = action_allowed[j]
@@ -592,18 +658,27 @@ cpdef object parallel_get_sparse_action_masks(object py_nodes, int num_threads):
 
 cpdef object parallel_stack_ids(object py_nodes, int num_threads):
     cdef size_t n = len(py_nodes)
+    # HACK(j_luo) very hacky here
     cdef vector[TNptr] nodes = vector[TNptr](n)
+    cdef vector[DTNptr] dnodes = vector[DTNptr](n)
     cdef size_t i, j, k, m
+    cdef bool is_detached = isinstance(py_nodes[0], PyDetachedTreeNode)
     for i in range(n):
-        nodes[i] = get_ptr(py_nodes[i])
-    cdef size_t nw = nodes[0].size()
+        if is_detached:
+            dnodes[i] = get_dptr(py_nodes[i])
+        else:
+            nodes[i] = get_ptr(py_nodes[i])
+    cdef size_t nw = len(py_nodes[0])
 
     lengths = np.zeros([n, nw], dtype='long')
     cdef long[:, ::1] lengths_view = lengths
     cdef VocabIdSeq vocab_i
     with nogil:
         for i in prange(n, num_threads=num_threads):
-            vocab_i = nodes[i].vocab_i
+            if is_detached:
+                vocab_i = dnodes[i].vocab_i
+            else:
+                vocab_i = nodes[i].vocab_i
             for j in range(nw):
                 lengths_view[i, j] = vocab_i[j].size()
 
@@ -613,7 +688,10 @@ cpdef object parallel_stack_ids(object py_nodes, int num_threads):
     cdef IdSeq id_seq
     with nogil:
         for i in prange(n, num_threads=num_threads):
-            vocab_i = nodes[i].vocab_i
+            if is_detached:
+                vocab_i = dnodes[i].vocab_i
+            else:
+                vocab_i = nodes[i].vocab_i
             for k in range(nw):
                 id_seq = vocab_i[k]
                 for j in range(id_seq.size()):

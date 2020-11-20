@@ -234,3 +234,16 @@ size_t TreeNode::get_num_allowed()
 {
     return this->action_allowed.size();
 }
+
+DetachedTreeNode::DetachedTreeNode(TreeNode *node) : vocab_i(node->vocab_i),
+                                                     prev_action(node->prev_action),
+                                                     dist_to_end(node->dist_to_end),
+                                                     action_allowed(node->action_allowed),
+                                                     done(this->done)
+{
+}
+
+size_t DetachedTreeNode::size()
+{
+    return this->vocab_i.size();
+}

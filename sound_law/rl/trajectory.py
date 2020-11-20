@@ -64,7 +64,7 @@ class TrEdge:
     mcts_pi: Optional[NDA]  # This stores the policy produced by MCTS.
 
 
-class Trajectory:
+class BaseTrajectory:
 
     def __init__(self, init_state: VocabState, end_state: VocabState):
         self._states = [init_state]
@@ -73,22 +73,6 @@ class Trajectory:
         self._mcts_pis: List[NDA] = list()
         self._end_state = end_state
         self._done = False  # Whether the trajectory has reached the end state.
-
-    def append(self,
-               action: a.SoundChangeAction,
-               state: VocabState,
-               done: bool,
-               reward: float,
-               mcts_pi: Optional[NDA] = None):
-        if self._done:
-            raise RuntimeError(f'This trajectory has already ended.')
-
-        self._actions.append(action)
-        self._states.append(state)
-        self._rewards.append(reward)
-        if mcts_pi is not None:
-            self._mcts_pis.append(mcts_pi)
-        self._done = done
 
     @property
     def rewards(self) -> NDA:
@@ -120,3 +104,33 @@ class Trajectory:
         if self._done:
             out += ' DONE'
         return out
+
+
+class Trajectory(BaseTrajectory):
+
+    def append(self,
+               action: a.SoundChangeAction,
+               state: VocabState,
+               done: bool,
+               reward: float,
+               mcts_pi: Optional[NDA] = None):
+        if self._done:
+            raise RuntimeError(f'This trajectory has already ended.')
+
+        self._actions.append(action)
+        self._states.append(state)
+        self._rewards.append(reward)
+        if mcts_pi is not None:
+            self._mcts_pis.append(mcts_pi)
+        self._done = done
+
+
+class ReplayTrajectory(BaseTrajectory):
+
+    def __init__(self, tr: Trajectory):
+        self._states = [state.detach() for state in tr._states]
+        self._actions = tr._actions
+        self._rewards = tr._rewards
+        self._mcts_pis = tr._mcts_pis
+        self._end_state = tr._end_state
+        self._done = tr._done
