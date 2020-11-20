@@ -16,9 +16,9 @@ from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.setting import Setting, Split
 from sound_law.evaluate.evaluator import Evaluator
-from sound_law.model.module import CharEmbedding, EmbParams, PhonoEmbedding
-from sound_law.model.one_pair import OnePairModel
-from sound_law.model.one_to_many import OneToManyModel
+from sound_law.s2s.module import CharEmbedding, EmbParams, PhonoEmbedding
+from sound_law.s2s.one_pair import OnePairModel
+from sound_law.s2s.one_to_many import OneToManyModel
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector

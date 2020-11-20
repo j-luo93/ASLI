@@ -18,8 +18,8 @@ from dev_misc.utils import pad_for_log, pbar
 from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
 from sound_law.evaluate.edit_dist import edit_dist_all
-from sound_law.model.decoder import get_beam_probs
-from sound_law.model.one_pair import OnePairModel
+from sound_law.s2s.decoder import get_beam_probs
+from sound_law.s2s.one_pair import OnePairModel
 from sound_law.train.trainer import get_ce_loss
 
 add_argument('eval_mode', dtype=str, default='edit_dist', choices=[

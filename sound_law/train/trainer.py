@@ -15,7 +15,7 @@ from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
                                         PaddedUnitSeqs, VSOnePairDataLoader)
 from sound_law.evaluate.edit_dist import edit_dist_batch
-from sound_law.model.decoder import get_beam_probs
+from sound_law.s2s.decoder import get_beam_probs
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
@@ -407,6 +407,7 @@ class MctsTrainer(RLTrainer):
             logging.info(f'Clearing up all the cached words.')
             self.mcts.env.action_space.clear_cache()
         trajectories = list()
+        self.agent.eval()
         with self.agent.policy_grad(False), self.agent.value_grad(False):
             for ei in range(g.num_episodes):
                 root = dl.init_state

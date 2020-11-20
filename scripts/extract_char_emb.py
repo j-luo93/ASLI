@@ -5,8 +5,8 @@ import torch
 
 from dev_misc import g, get_tensor
 from sound_law.main import setup
-from sound_law.model.base_model import get_emb_params
-from sound_law.model.module import PhonoEmbedding
+from sound_law.s2s.base_model import get_emb_params
+from sound_law.s2s.module import PhonoEmbedding
 from sound_law.train.manager import OneToManyManager
 
 if __name__ == "__main__":

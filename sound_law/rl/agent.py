@@ -14,8 +14,8 @@ from dev_misc import BT, FT, LT, NDA, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import Metric, Metrics, init_params
 from dev_misc.utils import ScopedCache, cacheable
-from sound_law.model.base_model import get_emb_params
-from sound_law.model.module import (CharEmbedding, EmbParams, PhonoEmbedding,
+from sound_law.s2s.base_model import get_emb_params
+from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                     get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
@@ -241,7 +241,7 @@ class PolicyNetwork(nn.Module):
         self.proj = proj
         self.action_space = action_space
 
-    @ classmethod
+    @classmethod
     def from_params(cls, emb_params: EmbParams,
                     cnn1d_params: Cnn1dParams,
                     action_space: SoundChangeActionSpace) -> PolicyNetwork:

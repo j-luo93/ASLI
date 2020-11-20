@@ -15,7 +15,7 @@ from dev_misc import BT, FT, LT, add_argument, g, get_zeros
 from dev_misc.devlib.named_tensor import NameHelper, NoName
 from dev_misc.utils import cacheable
 from sound_law.data.alphabet import PAD_ID
-from sound_law.model.lstm_state import LstmStatesByLayers, LstmStateTuple
+from sound_law.s2s.lstm_state import LstmStatesByLayers, LstmStateTuple
 
 LstmOutputsByLayers = Tuple[FT, LstmStatesByLayers]
 
