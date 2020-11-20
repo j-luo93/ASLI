@@ -2,6 +2,7 @@
 """
 
 from __future__ import annotations
+from dev_misc.trainlib import Tracker
 from dev_misc import LT
 
 import logging
@@ -18,7 +19,7 @@ from .agent import AgentInputs, AgentOutputs, BasePG
 from .env import SoundChangeEnv
 from .mcts_fast import (  # pylint: disable=no-name-in-module
     parallel_get_sparse_action_masks, parallel_select, parallel_stack_ids)
-from .trajectory import VocabState
+from .trajectory import VocabState, Trajectory
 
 
 class Mcts:
@@ -164,3 +165,56 @@ class Mcts:
         num_actions = state.get_num_allowed()
         noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(num_actions)).astype('float32')
         state.add_noise(noise, g.noise_ratio)
+
+    def collect_episodes(self, init_state: VocabState, end_state: VocabState, tracker: Tracker) -> List[Trajectory]:
+        logging.info(f'{self.num_cached_states} states cached.')
+        logging.info(f'{self.env.action_space.cache_size} words cached.')
+        if self.num_cached_states > 300000:
+            logging.info(f'Clearing up all the tree nodes.')
+            self.clear_subtree(init_state)
+        if self.env.action_space.cache_size > 300000:
+            logging.info(f'Clearing up all the cached words.')
+            self.env.action_space.clear_cache()
+        trajectories = list()
+        self.agent.eval()
+        with self.agent.policy_grad(False), self.agent.value_grad(False):
+            for ei in range(g.num_episodes):
+                root = init_state
+                self.reset()
+                steps = 0 if g.use_finite_horizon else None
+                value = self.expand(root, steps=steps)
+                self.backup(root, value)
+
+                trajectory = Trajectory(root, end_state)
+                # Episodes have max rollout length.
+                for ri in range(g.max_rollout_length):
+                    self.add_noise(root)
+                    depth_limit = g.max_rollout_length - ri
+                    # Run many simulations before take one action. Simulations take place in batches. Each batch
+                    # would be evaluated and expanded after batched selection.
+                    num_batches = g.num_mcts_sims // g.expansion_batch_size
+                    for _ in range(num_batches):
+                        new_states, steps_left = self.parallel_select(root, g.expansion_batch_size, depth_limit)
+                        steps = g.max_rollout_length - get_tensor(steps_left) if g.use_finite_horizon else None
+                        values = self.expand(new_states, steps=steps)
+                        for state, value in zip(new_states, values):
+                            self.backup(state, value)
+                        tracker.update('mcts', incr=g.expansion_batch_size)
+                    probs, action, reward, new_state = self.play(root)
+                    trajectory.append(action, new_state, new_state.done, reward, mcts_pi=probs)
+                    if ri == 0 and ei % g.episode_check_interval == 0:
+                        logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(20))))
+                        logging.debug(pad_for_log(str(get_tensor(root.q).topk(20))))
+                    root = new_state
+
+                    tracker.update('rollout')
+                    if root.done:
+                        break
+                if ei % g.episode_check_interval == 0:
+                    out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
+                    logging.debug(pad_for_log(out))
+
+                trajectories.append(trajectory)
+                tracker.update('episode')
+
+        return trajectories

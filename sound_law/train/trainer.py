@@ -15,12 +15,13 @@ from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
                                         PaddedUnitSeqs, VSOnePairDataLoader)
 from sound_law.evaluate.edit_dist import edit_dist_batch
-from sound_law.s2s.decoder import get_beam_probs
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
-from sound_law.rl.reward import get_rtgs_dense  # pylint: disable=no-name-in-module
+from sound_law.rl.reward import \
+    get_rtgs_dense  # pylint: disable=no-name-in-module
 from sound_law.rl.trajectory import Trajectory
+from sound_law.s2s.decoder import get_beam_probs
 
 
 def get_ce_loss(log_probs: FT, batch: OnePairBatch, agg='all') -> FT:
@@ -395,64 +396,11 @@ class MctsTrainer(RLTrainer):
         step.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
     def train_one_step(self, dl: OnePairDataLoader):
-        success = 0.0
-
-        # Collect episodes.
-        logging.info(f'{self.mcts.num_cached_states} states cached.')
-        logging.info(f'{self.mcts.env.action_space.cache_size} words cached.')
-        if self.mcts.num_cached_states > 300000:
-            logging.info(f'Clearing up all the tree nodes.')
-            self.mcts.clear_subtree(dl.init_state)
-        if self.mcts.env.action_space.cache_size > 300000:
-            logging.info(f'Clearing up all the cached words.')
-            self.mcts.env.action_space.clear_cache()
-        trajectories = list()
-        self.agent.eval()
-        with self.agent.policy_grad(False), self.agent.value_grad(False):
-            for ei in range(g.num_episodes):
-                root = dl.init_state
-                self.mcts.reset()
-                steps = 0 if g.use_finite_horizon else None
-                value = self.mcts.expand(root, steps=steps)
-                self.mcts.backup(root, value)
-
-                trajectory = Trajectory(root, dl.end_state)
-                # Episodes have max rollout length.
-                for ri in range(g.max_rollout_length):
-                    self.mcts.add_noise(root)
-                    depth_limit = g.max_rollout_length - ri
-                    # Run many simulations before take one action. Simulations take place in batches. Each batch
-                    # would be evaluated and expanded after batched selection.
-                    num_batches = g.num_mcts_sims // g.expansion_batch_size
-                    for _ in range(num_batches):
-                        new_states, steps_left = self.mcts.parallel_select(root, g.expansion_batch_size, depth_limit)
-                        steps = g.max_rollout_length - get_tensor(steps_left) if g.use_finite_horizon else None
-                        values = self.mcts.expand(new_states, steps=steps)
-                        for state, value in zip(new_states, values):
-                            self.mcts.backup(state, value)
-                        self.tracker.update('mcts', incr=g.expansion_batch_size)
-                    probs, action, reward, new_state = self.mcts.play(root)
-                    trajectory.append(action, new_state, new_state.done, reward, mcts_pi=probs)
-                    if ri == 0 and ei % g.episode_check_interval == 0:
-                        logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(20))))
-                        logging.debug(pad_for_log(str(get_tensor(root.q).topk(20))))
-                    root = new_state
-
-                    self.tracker.update('rollout')
-                    if root.done:
-                        break
-                if ei % g.episode_check_interval == 0:
-                    out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
-                    logging.debug(pad_for_log(out))
-
-                success += int(root.done)
-                trajectories.append(trajectory)
-                self.tracker.update('episode')
-
+        trajectories = self.mcts.collect_episodes(dl.init_state, dl.end_state, self.tracker)
         agent_inputs = AgentInputs.from_trajectories(trajectories, self.mcts.env.action_space, sparse=True)
         tr_rew = Metric('reward', agent_inputs.rewards.sum(), g.num_episodes)
         tr_len = Metric('trajectory_length', sum(map(len, agent_inputs.trajectories)), g.num_episodes)
-        success = Metric('success', success, g.num_episodes)
+        success = Metric('success', sum(tr.done for tr in trajectories), g.num_episodes)
         metrics = Metrics(tr_rew, tr_len, success)
 
         ml = agent_inputs.action_masks.size('action')
