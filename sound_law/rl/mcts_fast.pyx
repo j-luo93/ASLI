@@ -6,6 +6,7 @@ from libcpp.pair cimport pair
 from libcpp.unordered_map cimport unordered_map
 from cython.operator cimport dereference as deref
 from cython.parallel import prange
+from cython cimport view
 from libcpp cimport nullptr
 from typing import List
 from libc.stdio cimport printf
@@ -697,3 +698,21 @@ cpdef object parallel_stack_ids(object py_nodes, int num_threads):
                 for j in range(id_seq.size()):
                     arr_view[i, j, k] = id_seq[j]
     return  arr
+
+cpdef parallel_stack_policies(object trajectories, action_t num_actions, int num_threads):
+    cdef long n = sum(map(len, trajectories))
+    cdef vector[float[::1]] mcts_pi_vec = vector[float[::1]](n)
+    cdef vector[size_t] pi_len = vector[size_t](n)
+    cdef size_t i = 0
+    for tr in trajectories:
+        for edge in tr:
+            mcts_pi_vec[i] = edge.mcts_pi
+            pi_len[i] = len(edge.mcts_pi)
+            i += 1
+
+    ret = np.zeros([n, num_actions], dtype='float32')
+    cdef float[:, ::1] ret_view = ret
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            ret_view[i, :pi_len[i]] = mcts_pi_vec[i]
+    return ret

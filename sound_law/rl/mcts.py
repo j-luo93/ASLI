@@ -147,7 +147,7 @@ class Mcts:
 
     # @profile
     def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, float, VocabState]:
-        exp = np.power(state.action_count, 1.0)
+        exp = np.power(state.action_count.astype('float32'), 1.0)
         probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)
         if g.use_max_value:
             best_i = np.argmax(state.max_value)

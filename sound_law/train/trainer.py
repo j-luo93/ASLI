@@ -19,8 +19,10 @@ from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
-from sound_law.rl.reward import \
-    get_rtgs_dense  # pylint: disable=no-name-in-module
+# pylint: disable=no-name-in-module
+from sound_law.rl.mcts_fast import parallel_stack_policies
+from sound_law.rl.reward import get_rtgs_dense
+# pylint: enable=no-name-in-module
 from sound_law.rl.trajectory import ReplayTrajectory, Trajectory
 from sound_law.s2s.decoder import get_beam_probs
 
@@ -399,6 +401,7 @@ class MctsTrainer(RLTrainer):
         episode.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         step.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
+    @profile
     def train_one_step(self, dl: OnePairDataLoader):
         # Collect episodes with the latest agent first.
         new_tr = self.mcts.collect_episodes(dl.init_state, dl.end_state, self.tracker)
@@ -416,12 +419,10 @@ class MctsTrainer(RLTrainer):
                 # Get a batch of training trajectories from the replay buffer.
                 tr_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
                 agent_inputs = AgentInputs.from_trajectories(tr_batch, self.mcts.env.action_space, sparse=True)
-                ml = agent_inputs.action_masks.size('action')
                 tgt_policies = list()
-                for tr in agent_inputs.trajectories:
-                    tgt_policies.extend([np.pad(edge.mcts_pi, (0, ml - len(edge.mcts_pi))) for edge in tr])
-                tgt_policies = np.stack(tgt_policies, axis=0)
-                tgt_policies = get_tensor(tgt_policies).rename('batch', 'action')
+                na = agent_inputs.action_masks.size('action')
+                tgt_policies = parallel_stack_policies(agent_inputs.trajectories, na, g.num_workers)
+                tgt_policies = get_tensor(tgt_policies)
                 rewards = get_rtgs_dense(agent_inputs.rewards.cpu().numpy(), agent_inputs.offsets, 1.0)
                 rewards = get_tensor(rewards)
 
