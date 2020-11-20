@@ -56,12 +56,14 @@ class VocabState(PyTreeNode):
 @dataclass
 class TrEdge:
     """This represents one edge in the trajectories."""
+    step: int
     s0: VocabState
     a: a.SoundChangeAction
     s1: VocabState
     done: bool
     r: float
-    mcts_pi: Optional[NDA]  # This stores the policy produced by MCTS.
+    mcts_pi: Optional[NDA] = None  # This stores the policy produced by MCTS.
+    rtg: Optional[float] = None
 
 
 class BaseTrajectory:
@@ -94,7 +96,7 @@ class BaseTrajectory:
             s1 = self._states[i + 1]
             done = False if i < len(self._actions) - 1 else self._done
             mcts_pi = self._mcts_pis[i] if self._mcts_pis else None
-            yield TrEdge(s0, a, s1, done, r, mcts_pi=mcts_pi)
+            yield TrEdge(i, s0, a, s1, done, r, mcts_pi=mcts_pi)
 
     def __repr__(self):
         out = list()

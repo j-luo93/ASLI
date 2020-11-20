@@ -26,12 +26,12 @@ from .module import Cnn1dParams, PolicyNetwork, ValueNetwork
 # pylint: disable=no-name-in-module
 from .reward import get_rtgs_dense, get_rtgs_list
 # pylint: enable=no-name-in-module
-from .trajectory import Trajectory, VocabState
+from .trajectory import Trajectory, VocabState, TrEdge
 
 
 @dataclass
 class AgentInputs:
-    trajectories: List[Trajectory]
+    edges: List[TrEdge]
     id_seqs: LT
     rewards: FT
     action_masks: BT
@@ -40,6 +40,12 @@ class AgentInputs:
     done: Optional[BT] = None
     indices: Optional[LT] = None
     steps: Optional[LT] = None
+    trajectories: Optional[List[Trajectory]] = None
+    rtgs: Optional[FT] = None
+
+    def __post_init__(self):
+        if self.trajectories is None and self.edges is None:
+            raise TypeError(f'You must have either trajectories or edges.')
 
     @property
     def batch_size(self) -> int:
@@ -50,16 +56,14 @@ class AgentInputs:
         return np.cumsum(np.asarray([len(tr) for tr in self.trajectories]), dtype='long')
 
     @classmethod
-    def from_trajectories(cls,
-                          trs: List[Trajectory],
-                          action_space: SoundChangeActionSpace,
-                          sparse: bool = False) -> AgentInputs:
+    def from_edges(cls,
+                   edges: List[TrEdge],
+                   action_space: SoundChangeActionSpace,
+                   sparse: bool = False) -> AgentInputs:
+
         def gather(attr: str):
             """Gather information from trajectory edges. See definition for `TrEdge`."""
-            ret = list()
-            for tr in trs:
-                ret.extend([getattr(edge, attr) for edge in tr])
-            return ret
+            return [getattr(edge, attr) for edge in edges]
 
         states = gather('s0')
         id_seqs = get_tensor(parallel_stack_ids(states, g.num_workers)).rename('batch', 'pos', 'word')
@@ -71,23 +75,36 @@ class AgentInputs:
             action_masks = parallel_get_action_masks(states, action_space, g.num_workers)
             indices = None
         action_masks = get_tensor(action_masks).rename('batch', 'action')
-        steps = next_id_seqs = action_ids = done = None
+        rtgs = steps = next_id_seqs = action_ids = done = None
         if not g.use_mcts:
             next_id_seqs = parallel_stack_ids(gather('s1'), num_threads=g.num_workers)
             next_id_seqs = get_tensor(next_id_seqs).rename('batch', 'pos', 'word')
             action_ids = get_tensor([a.action_id for a in gather('a')]).rename('batch')
             done = get_tensor(gather('done')).rename('batch')
         if g.use_finite_horizon:
-            steps = list()
-            for tr in trs:
-                steps.extend(list(range(len(tr))))
-            steps = get_tensor(steps)
-        return AgentInputs(trs, id_seqs, rewards, action_masks,
+            steps = get_tensor(gather('step'))
+        if edges[0].rtg is not None:
+            rtgs = get_tensor(gather('rtg')).rename('batch')
+        return AgentInputs(edges, id_seqs, rewards, action_masks,
                            next_id_seqs=next_id_seqs,
                            action_ids=action_ids,
                            done=done,
                            indices=indices,
-                           steps=steps)
+                           steps=steps,
+                           rtgs=rtgs)
+
+    @classmethod
+    def from_trajectories(cls,
+                          trs: List[Trajectory],
+                          action_space: SoundChangeActionSpace,
+                          sparse: bool = False) -> AgentInputs:
+        edges: List[TrEdge] = list()
+        for tr in trs:
+            edges.extend(list(tr))
+
+        ret = cls.from_edges(edges, action_space, sparse=sparse)
+        ret.trajectories = trs
+        return ret
 
 
 @dataclass

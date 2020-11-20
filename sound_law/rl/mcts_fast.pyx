@@ -699,16 +699,14 @@ cpdef object parallel_stack_ids(object py_nodes, int num_threads):
                     arr_view[i, j, k] = id_seq[j]
     return  arr
 
-cpdef parallel_stack_policies(object trajectories, action_t num_actions, int num_threads):
-    cdef long n = sum(map(len, trajectories))
+cpdef parallel_stack_policies(object edges, action_t num_actions, int num_threads):
+    cdef long n = len(edges)
     cdef vector[float[::1]] mcts_pi_vec = vector[float[::1]](n)
     cdef vector[size_t] pi_len = vector[size_t](n)
     cdef size_t i = 0
-    for tr in trajectories:
-        for edge in tr:
-            mcts_pi_vec[i] = edge.mcts_pi
-            pi_len[i] = len(edge.mcts_pi)
-            i += 1
+    for i in range(n):
+        mcts_pi_vec[i] = edges[i].mcts_pi
+        pi_len[i] = len(edges[i].mcts_pi)
 
     ret = np.zeros([n, num_actions], dtype='float32')
     cdef float[:, ::1] ret_view = ret

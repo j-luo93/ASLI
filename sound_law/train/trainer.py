@@ -21,9 +21,9 @@ from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
 # pylint: disable=no-name-in-module
 from sound_law.rl.mcts_fast import parallel_stack_policies
-from sound_law.rl.reward import get_rtgs_dense
+from sound_law.rl.reward import get_rtgs
 # pylint: enable=no-name-in-module
-from sound_law.rl.trajectory import ReplayTrajectory, Trajectory
+from sound_law.rl.trajectory import ReplayTrajectory, Trajectory, TrEdge
 from sound_law.s2s.decoder import get_beam_probs
 
 
@@ -374,7 +374,7 @@ class MctsTrainer(RLTrainer):
     add_argument('num_mcts_sims', default=100, dtype=int, msg='Number of MCTS simulations to run.')
     add_argument('expansion_batch_size', default=10, dtype=int, msg='Batch size for expansion steps.')
     add_argument('mcts_batch_size', default=128, dtype=int, msg='Batch size for optimizing the MCTS agent.')
-    add_argument('replay_buffer_size', default=512, dtype=int, msg='Size for the replay buffer.')
+    add_argument('replay_buffer_size', default=1024, dtype=int, msg='Size for the replay buffer.')
     add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
     add_argument('num_inner_steps', default=10, dtype=int, msg='Number of optimization step per batch.')
     add_argument('episode_check_interval', default=10, dtype=int, msg='Frequency of checking episodes')
@@ -390,7 +390,7 @@ class MctsTrainer(RLTrainer):
             raise ValueError(f'`expansion_batch_size should divide `num_mcts_sims`.')
 
         self.mcts = mcts
-        self.replay_buffer: Deque[ReplayTrajectory] = deque(maxlen=g.replay_buffer_size)
+        self.replay_buffer: Deque[TrEdge] = deque(maxlen=g.replay_buffer_size)
         super().__init__(*args, **kwargs)
 
     def add_trackables(self):
@@ -401,7 +401,6 @@ class MctsTrainer(RLTrainer):
         episode.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         step.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
-    @profile
     def train_one_step(self, dl: OnePairDataLoader):
         # Collect episodes with the latest agent first.
         new_tr = self.mcts.collect_episodes(dl.init_state, dl.end_state, self.tracker)
@@ -411,20 +410,23 @@ class MctsTrainer(RLTrainer):
         metrics = Metrics(tr_rew, tr_len, success)
 
         # Add these new episodes to the replay buffer.
-        self.replay_buffer.extend([ReplayTrajectory(tr) for tr in new_tr])
+        for tr in new_tr:
+            replay_tr = ReplayTrajectory(tr)
+            rtgs = get_rtgs(tr.rewards, g.discount)
+            for rtg, tr_edge in zip(rtgs, replay_tr):
+                tr_edge.rtg = rtg
+                self.replay_buffer.append(tr_edge)
 
         # Main loop.
         with self.agent.policy_grad(True), self.agent.value_grad(True):
             for _ in range(g.num_inner_steps):
                 # Get a batch of training trajectories from the replay buffer.
-                tr_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
-                agent_inputs = AgentInputs.from_trajectories(tr_batch, self.mcts.env.action_space, sparse=True)
+                edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
+                agent_inputs = AgentInputs.from_edges(edge_batch, self.mcts.env.action_space, sparse=True)
                 tgt_policies = list()
                 na = agent_inputs.action_masks.size('action')
-                tgt_policies = parallel_stack_policies(agent_inputs.trajectories, na, g.num_workers)
+                tgt_policies = parallel_stack_policies(agent_inputs.edges, na, g.num_workers)
                 tgt_policies = get_tensor(tgt_policies)
-                rewards = get_rtgs_dense(agent_inputs.rewards.cpu().numpy(), agent_inputs.offsets, 1.0)
-                rewards = get_tensor(rewards)
 
                 self.agent.train()
                 self.optimizer.zero_grad()
@@ -434,7 +436,7 @@ class MctsTrainer(RLTrainer):
                 values = self.agent.get_values(agent_inputs.id_seqs, steps=agent_inputs.steps)
                 pi_ce_losses = -tgt_policies * policy.logits
 
-                v_regress_losses = 0.5 * (values - rewards) ** 2
+                v_regress_losses = 0.5 * (values - agent_inputs.rtgs) ** 2
 
                 pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), g.mcts_batch_size)
                 v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), g.mcts_batch_size)

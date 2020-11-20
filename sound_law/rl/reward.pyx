@@ -26,7 +26,7 @@ cpdef object get_rtgs_dense(float[::1] rewards, long[::1] offsets, float discoun
     cdef long[::1] offsets_view = offsets
     rtgs = np.zeros([nr], dtype='float32')
     cdef float[::1] rtgs_view = rtgs
-    cdef long *starts = <long *> malloc(no * sizeof(long))
+    cdef long *starts = <long *> malloc(no * sizeof(long *))
     cdef long start = 0
     cdef long end = 0
     cdef long i = 0
