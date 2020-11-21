@@ -142,10 +142,10 @@ void TreeNode::expand(const vector<float> &prior)
     }
 }
 
-void TreeNode::virtual_backup(action_t best_id, int game_count, float virtual_loss)
+void TreeNode::virtual_backup(action_t best_i, int game_count, float virtual_loss)
 {
-    this->action_count[best_id] += game_count;
-    this->total_value[best_id] -= game_count * virtual_loss;
+    this->action_count[best_i] += game_count;
+    this->total_value[best_i] -= game_count * virtual_loss;
     this->visit_count += game_count;
 }
 
@@ -163,6 +163,7 @@ void TreeNode::backup(float value, float mixing, int game_count, float virtual_l
         rtg += reward;
         // float mixed_value = (1 - mixing) * value + mixing * reward;
         parent_node->action_count[best_i] -= game_count - 1;
+        assert(parent_node->action_count[best_i] >= 0);
         // parent_node->total_value[action_id] += game_count * virtual_loss + mixed_value;
         if (TreeNode::max_mode)
         {

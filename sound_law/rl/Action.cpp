@@ -1,13 +1,13 @@
 #include <Action.h>
 
-Action::Action(abc_t action_id, abc_t before_id, abc_t after_id)
+Action::Action(action_t action_id, abc_t before_id, abc_t after_id)
 {
     this->action_id = action_id;
     this->before_id = before_id;
     this->after_id = after_id;
 }
 
-Action::Action(abc_t action_id, abc_t before_id, abc_t after_id, abc_t pre_id)
+Action::Action(action_t action_id, abc_t before_id, abc_t after_id, abc_t pre_id)
 {
     this->action_id = action_id;
     this->before_id = before_id;

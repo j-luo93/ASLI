@@ -36,7 +36,7 @@ cdef extern from "common.h":
     ctypedef unsigned short abc_t
     ctypedef unsigned char cost_t
     ctypedef unsigned short dist_t
-    ctypedef unsigned short visit_t
+    ctypedef short visit_t
     ctypedef unsigned int action_t
     ctypedef unsigned long node_t
     ctypedef vector[abc_t] IdSeq
@@ -103,7 +103,7 @@ cdef extern from "TreeNode.h":
 
 cdef extern from "Action.h":
     cdef cppclass Action nogil:
-        abc_t action_id
+        action_t action_id
         abc_t before_id
         abc_t after_id
         abc_t pre_id
@@ -133,7 +133,7 @@ cdef extern from "Env.h":
     cdef cppclass Env nogil:
         Env(TreeNode *, TreeNode *, ActionSpace *, float, float) except +
 
-        Edge step(TreeNode *, size_t, Action *) except +
+        Edge step(TreeNode *, action_t, Action *) except +
 
         TreeNode *init_node
         TreeNode *end_node
