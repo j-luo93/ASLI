@@ -26,6 +26,9 @@ class FactorizedProjection(nn.Module):
         self.after_potential = nn.Linear(input_size, num_ids)
         if g.use_conditional:
             self.pre_potential = nn.Linear(input_size, num_ids)
+            self.post_potential = nn.Linear(input_size, num_ids)
+            self.d_pre_potential = nn.Linear(input_size, num_ids)
+            self.d_post_potential = nn.Linear(input_size, num_ids)
         self.action_space = action_space
 
     def forward(self, inp: FT, sparse: bool = False, indices: Optional[LT] = None) -> FT:
@@ -41,11 +44,11 @@ class FactorizedProjection(nn.Module):
                 if sparse:
                     a2i = a2i[indices]
                     # NOTE(j_luo) For conditional rules, mask out those that are not.
-                    if attr == 'pre':
-                        pre_mask = a2i == -1
-                        a2i = torch.where(pre_mask, torch.zeros_like(a2i), a2i)
+                    if attr in ['pre', 'd_pre', 'post', 'd_post']:
+                        mask = a2i == -1
+                        a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
                         ret = potential.gather(1, a2i)
-                        ret = torch.where(pre_mask, torch.zeros_like(ret), ret)
+                        ret = torch.where(mask, torch.zeros_like(ret), ret)
                         return ret
                     return potential.gather(1, a2i)
                 elif is_2d:
@@ -56,8 +59,11 @@ class FactorizedProjection(nn.Module):
         bp = get_potential('before')
         ap = get_potential('after')
         if g.use_conditional:
-            pp = get_potential('pre')
-            ret = bp + ap + pp
+            prep = get_potential('pre')
+            d_prep = get_potential('d_pre')
+            postp = get_potential('post')
+            d_postp = get_potential('d_post')
+            ret = bp + ap + prep + d_prep + postp + d_postp
         else:
             ret = bp + ap
         names = ('batch', ) * is_2d + ('action',)

@@ -1,7 +1,7 @@
 # distutils: language = c++
 
 from libcpp.vector cimport vector
-from libcpp.list cimport list as cpplist
+from libcpp.list cimport list as cpp_list
 from libcpp.pair cimport pair
 from libcpp.unordered_map cimport unordered_map
 from cython.operator cimport dereference as deref
@@ -70,7 +70,7 @@ cdef extern from "TreeNode.h":
         void backup(float, float, int, float)
         void reset()
         void play()
-        cpplist[pair[action_t, float]] get_path()
+        cpp_list[pair[action_t, float]] get_path()
         vector[float] get_scores(float)
         void clear_subtree()
         void add_noise(vector[float], float)
@@ -106,9 +106,8 @@ cdef extern from "Action.h":
         action_t action_id
         abc_t before_id
         abc_t after_id
-        abc_t pre_id
-
-        bool is_conditional()
+        vector[abc_t] pre_cond
+        vector[abc_t] post_cond
 
 cdef extern from "ActionSpace.h":
     cdef cppclass ActionSpace nogil:
@@ -117,8 +116,7 @@ cdef extern from "ActionSpace.h":
 
         ActionSpace()
 
-        void register_action(abc_t, abc_t)
-        void register_action(abc_t, abc_t, abc_t)
+        void register_action(abc_t, abc_t, vector[abc_t], vector[abc_t])
         Action *get_action(action_t)
         vector[action_t] get_action_allowed(VocabIdSeq) except +
         size_t size()
@@ -432,9 +430,28 @@ cdef class PyAction:
 
     @property
     def pre_id(self):
-        if not self.ptr.is_conditional():
-            return -1
-        return self.ptr.pre_id
+        if self.ptr.pre_cond.size() > 0:
+            return self.ptr.pre_cond.back()
+        return -1
+
+    @property
+    def d_pre_id(self):
+        if self.ptr.pre_cond.size() > 1:
+            return self.ptr.pre_cond.front()
+        return -1
+
+    @property
+    def post_id(self):
+        if self.ptr.post_cond.size() > 0:
+            return self.ptr.post_cond.front()
+        return -1
+
+    @property
+    def d_post_id(self):
+        if self.ptr.post_cond.size() > 1:
+            return self.ptr.pre_cond.back()
+        return -1
+
 
 # NOTE(j_luo) Using staticmethod as the tutorial suggests doesn't work as a flexible factory method -- you might want to control the `cls` in case of subclassing it.
 cdef PyAction wrap_action(cls, Action *ptr):
@@ -460,13 +477,17 @@ cdef class PyActionSpace:
         self.ptr = NULL
         # del self.ptr
 
-    def register_action(self, abc_t before_id, abc_t after_id, pre_id=None):
-        cdef abc_t c_pre_id
-        if pre_id is None:
-            self.ptr.register_action(before_id, after_id)
-        else:
-            c_pre_id = <abc_t>pre_id
-            self.ptr.register_action(before_id, after_id, c_pre_id)
+    def register_action(self, abc_t before_id, abc_t after_id, pre_cond=None, post_cond=None):
+        pre_cond = pre_cond or list()
+        post_cond = post_cond or list()
+        cdef vector[abc_t] cpp_pre_cond = vector[abc_t](len(pre_cond))
+        cdef vector[abc_t] cpp_post_cond = vector[abc_t](len(post_cond))
+        cdef size_t i
+        for i in range(len(pre_cond)):
+            cpp_pre_cond[i] = pre_cond[i]
+        for i in range(len(post_cond)):
+            cpp_post_cond[i] = post_cond[i]
+        self.ptr.register_action(before_id, after_id, cpp_pre_cond, cpp_post_cond)
 
     @staticmethod
     def set_conditional(bool conditional):

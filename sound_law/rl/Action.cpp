@@ -1,47 +1,50 @@
 #include <Action.h>
 
-Action::Action(action_t action_id, abc_t before_id, abc_t after_id)
+Action::Action(action_t action_id,
+               abc_t before_id,
+               abc_t after_id,
+               vector<abc_t> pre_cond = vector<abc_t>(),
+               vector<abc_t> post_cond = vector<abc_t>()) : action_id(action_id),
+                                                            before_id(before_id),
+                                                            after_id(after_id),
+                                                            pre_cond(pre_cond),
+                                                            post_cond(post_cond)
 {
-    this->action_id = action_id;
-    this->before_id = before_id;
-    this->after_id = after_id;
-}
-
-Action::Action(action_t action_id, abc_t before_id, abc_t after_id, abc_t pre_id)
-{
-    this->action_id = action_id;
-    this->before_id = before_id;
-    this->after_id = after_id;
-    this->pre_id = pre_id;
+    this->num_pre = pre_cond.size();
+    this->num_post = post_cond.size();
+    assert(this->num_pre <= 2);
+    assert(this->num_post <= 2);
 }
 
 IdSeq Action::apply_to(const IdSeq &id_seq)
 {
-    if (this->is_conditional())
-        return this->apply_to_pre(id_seq);
-    else
-        return this->apply_to_uncond(id_seq);
-}
+    IdSeq ret = IdSeq();
+    for (size_t i = 0; i < this->num_pre; ++i)
+        ret.push_back(id_seq.at(i));
+    for (size_t i = this->num_pre; i < id_seq.size() - this->num_post; ++i)
+    {
+        bool applied = (id_seq.at(i) == this->before_id);
+        if (applied)
+            for (size_t j = 0; j < this->num_pre; ++j)
+                if (id_seq.at(i - this->num_pre + j) != this->pre_cond.at(j))
+                {
+                    applied = false;
+                    break;
+                }
+        if (applied)
+            for (size_t j = 0; j < this->num_post; ++j)
+                if (id_seq.at(i + j + 1) != this->post_cond.at(j))
+                {
+                    applied = false;
+                    break;
+                }
 
-IdSeq Action::apply_to_uncond(const IdSeq &id_seq)
-{
-    IdSeq ret = IdSeq(id_seq.size());
-    replace_copy(id_seq.begin(), id_seq.end(), ret.begin(), this->before_id, this->after_id);
-    return ret;
-}
-
-IdSeq Action::apply_to_pre(const IdSeq &id_seq)
-{
-    IdSeq ret = IdSeq{id_seq[0]};
-    for (size_t i = 1; i < id_seq.size(); ++i)
-        if ((id_seq[i] == this->before_id) and (id_seq[i - 1] == this->pre_id))
+        if (applied)
             ret.push_back(this->after_id);
         else
-            ret.push_back(id_seq[i]);
+            ret.push_back(id_seq.at(i));
+    }
+    for (size_t i = 0; i < this->num_post; ++i)
+        ret.push_back(id_seq.at(id_seq.size() - this->num_post + i));
     return ret;
-}
-
-bool Action::is_conditional()
-{
-    return this->pre_id != NULL_abc;
 }

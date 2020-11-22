@@ -23,21 +23,28 @@ class SoundChangeAction(PyAction):
     """One sound change rule."""
     abc: ClassVar[Alphabet] = None
 
-    # TODO(j_luo) no unit so far.
-    # action_id: int
-    # before: str
-    # after: str
-    # before_id: int
-    # after_id: int
-
     def __repr__(self):
-        if self.abc is not None:
-            before = self.abc[self.before_id]
-            after = self.abc[self.after_id]
-            prefix = f'{self.abc[self.pre_id]} + ' if self.pre_id != -1 else ''
-            return f'{prefix}{before} > {prefix}{after}'
-        prefix = f'{self.pre_id} + ' if self.pre_id != -1 else ''
-        return f'{prefix}{self.before_id} > {prefix}{self.after_id}'
+
+        def get_cond(cond):
+            if self.abc is None:
+                ret = ' + '.join(map(str, cond))
+            else:
+                ret = ' + '.join(map(str, [self.abc[i] for i in cond]))
+            if ret:
+                ret = f'({ret})'
+            return ret
+
+        pre = get_cond(self.pre_cond)
+        if pre:
+            pre = f'{pre} + '
+        post = get_cond(self.post_cond)
+        if post:
+            post = f'+ {post}'
+
+        before = str(self.before_id) if self.abc is None else self.abc[self.before_id]
+        after = str(self.after_id) if self.abc is None else self.abc[self.after_id]
+
+        return f'{pre}{before}{post} > {after}'
 
 
 class SoundChangeActionSpace(PyActionSpace):
@@ -59,8 +66,22 @@ class SoundChangeActionSpace(PyActionSpace):
                 if not g.use_mcts or abc.dist_mat[id1, id2] <= g.max_dist:
                     self.register_action(id1, id2)
                     if g.use_conditional:
-                        for u in units:
-                            self.register_action(id1, id2, abc[u])
+                        # pre and post
+                        for v in units:
+                            self.register_action(id1, id2, pre_cond=[abc[v]])
+                            self.register_action(id1, id2, post_cond=[abc[v]])
+                        # d_pre, d_post and pre_post
+                        for v1, v2 in product(units, repeat=2):
+                            self.register_action(id1, id2, pre_cond=[abc[v1], abc[v2]])
+                            self.register_action(id1, id2, post_cond=[abc[v1], abc[v2]])
+                            self.register_action(id1, id2, pre_cond=[abc[v1]], post_cond=[abc[v2]])
+                        # d_pre_post and pre_d_post
+                        for v1, v2, v3 in product(units, repeat=3):
+                            self.register_action(id1, id2, pre_cond=[abc[v1], abc[v2]], post_cond=[abc[v3]])
+                            self.register_action(id1, id2, pre_cond=[abc[v1]], post_cond=[abc[v2], abc[v3]])
+                        # d_pre_d_post
+                        for v1, v2, v3, v4 in product(units, repeat=4):
+                            self.register_action(id1, id2, pre_cond=[abc[v1], abc[v2]], post_cond=[abc[v3], abc[v4]])
         logging.info(f'Number of actions in action space: {len(self)}.')
 
         if g.factorize_actions:
@@ -75,3 +96,6 @@ class SoundChangeActionSpace(PyActionSpace):
             self.action2after = gather('after_id')
             if g.use_conditional:
                 self.action2pre = gather('pre_id')
+                self.action2d_pre = gather('d_pre_id')
+                self.action2post = gather('post_id')
+                self.action2d_post = gather('d_post_id')

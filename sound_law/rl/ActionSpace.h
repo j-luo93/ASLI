@@ -13,8 +13,7 @@ public:
 
     ActionSpace();
 
-    void register_action(abc_t, abc_t);
-    void register_action(abc_t, abc_t, abc_t);
+    void register_action(abc_t, abc_t, vector<abc_t>, vector<abc_t>);
     Action *get_action(action_t);
     vector<action_t> get_action_allowed(const VocabIdSeq &);
     size_t size();

@@ -61,7 +61,6 @@ private:
 
 using Edge = pair<TreeNode *, float>;
 
-// FIXME(j_luo) Try inheritance here and in cython?
 class DetachedTreeNode
 {
 public:

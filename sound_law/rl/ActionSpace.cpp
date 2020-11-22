@@ -14,29 +14,20 @@ ActionSpace::ActionSpace()
     this->uni_map = unordered_map<abc_t, vector<action_t>>();
 }
 
-void ActionSpace::register_action(abc_t before_id, abc_t after_id)
+void ActionSpace::register_action(abc_t before_id,
+                                  abc_t after_id,
+                                  vector<abc_t> pre_cond = vector<abc_t>(),
+                                  vector<abc_t> post_cond = vector<abc_t>())
 {
     action_t action_id = (action_t)this->actions.size();
-    Action *action = new Action(action_id, before_id, after_id);
+    Action *action = new Action(action_id, before_id, after_id, pre_cond, post_cond);
     this->actions.push_back(action);
     if (this->uni_map.find(before_id) == this->uni_map.end())
     {
         this->uni_map[before_id] = vector<action_t>();
     }
     this->uni_map[before_id].push_back(action_id);
-}
-
-void ActionSpace::register_action(abc_t before_id, abc_t after_id, abc_t pre_id)
-{
-    action_t action_id = (action_t)this->actions.size();
-    Action *action = new Action(action_id, before_id, after_id, pre_id);
-    this->actions.push_back(action);
-    if (this->pre_map.find(before_id) == this->pre_map.end())
-        this->pre_map[before_id] = unordered_map<abc_t, vector<action_t>>();
-    unordered_map<abc_t, vector<action_t>> &nested = this->pre_map[before_id];
-    if (nested.find(pre_id) == nested.end())
-        nested[pre_id] = vector<action_t>();
-    nested[pre_id].push_back(action_id);
+    // FIXME(j_luo) wrong here
 }
 
 Action *ActionSpace::get_action(action_t action_id)

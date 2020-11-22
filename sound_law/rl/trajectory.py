@@ -25,7 +25,6 @@ class VocabStateSpace:
 
     def get_state(self,
                   seqs: Optional[dl.PaddedUnitSeqs] = None,
-                  #   units: Optional[Sequence[Sequence[str]]] = None, # TODO(j_luo) units are not used for now.
                   ids: Optional[NDA] = None,
                   lengths: Optional[NDA] = None,
                   action_space: Optional[a.SoundChangeActionSpace] = None,
