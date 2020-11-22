@@ -275,11 +275,42 @@ class BasicMcts:
     phoible_path: 'path' = 'data/phoible_segs.pkl'
     use_finite_horizon: bool = True
     use_max_value: bool = True
+    use_conditional: bool = True
+    use_value_guidance: bool = False
 
 
 @mcts_reg
-class MoreSims(BasicMcts):
+class SmallSims(BasicMcts):
+    # This does not work for R10C.
+    expansion_batch_size: int = 40
+    episode_check_interval: int = 10
+    num_mcts_sims: int = 1000
+    num_episodes: int = 10
+    virtual_loss: float = 0.2
+
+
+@mcts_reg
+class SmallSimsV(SmallSims):
+    # This is the version that succesfully use value guidance on R10C, but unstable because we are training the policy net on not so recent data.
+    use_value_guidance: bool = True
+    num_episodes: int = 32
+    puct_c: float = 1.0
+
+
+@mcts_reg
+class MediumSims(BasicMcts):
+    # This works for R10C.
     expansion_batch_size: int = 80
+    episode_check_interval: int = 10
+    num_mcts_sims: int = 2000
+    num_episodes: int = 10
+    virtual_loss: float = 0.3
+
+
+@mcts_reg
+class LargeSims(BasicMcts):
+    # This works for R10C.
+    expansion_batch_size: int = 160
     episode_check_interval: int = 10
     num_mcts_sims: int = 4000
     num_episodes: int = 10
