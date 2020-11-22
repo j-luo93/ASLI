@@ -16,7 +16,7 @@ using namespace std;
 using abc_t = uint16_t;    // for alphabet
 using cost_t = uint8_t;    // for cost
 using dist_t = uint16_t;   // for distance
-using visit_t = int16_t;   // for visit/action counts -- due to virtual games, this could be negative.
+using visit_t = int32_t;   // for visit/action counts -- due to virtual games, this could be negative.
 using action_t = uint32_t; // for actions
 using node_t = uint64_t;   // for node id
 
