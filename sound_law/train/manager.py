@@ -62,7 +62,8 @@ class OnePairManager:
 
         # Prepare alphabets now.
         if g.use_mcts:
-            phoible = pickle.load(open(g.phoible_path, 'rb'))
+            with open(g.phoible_path, 'rb') as fin:
+                phoible = pickle.load(fin)
             self.src_abc = self.tgt_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang, phoible=phoible)
             if g.use_phono_edit_dist:
                 VocabState.set_dist_mat(self.tgt_abc.dist_mat)

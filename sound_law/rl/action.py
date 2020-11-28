@@ -2,6 +2,9 @@
 """
 from __future__ import annotations
 
+from typing import Dict
+from collections import defaultdict
+import pickle
 import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -53,35 +56,60 @@ class SoundChangeActionSpace(PyActionSpace):
 
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
     add_argument('max_dist', dtype=int, default=3, msg='Maximum distance to draw an edge between two characters.')
+    add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
 
     def __init__(self, abc: Alphabet):
         super().__init__()
         # Set class variable for `SoundChangeAction` here.
         self.abc = SoundChangeAction.abc = abc
         units = [u for u in self.abc if u not in self.abc.special_units]
+        possible_path: Dict[str, List[str]] = defaultdict(list)
         for u1, u2 in product(units, repeat=2):
             if u1 != u2:
                 id1 = abc[u1]
                 id2 = abc[u2]
                 if not g.use_mcts or abc.dist_mat[id1, id2] <= g.max_dist:
                     self.register_action(id1, id2)
-                    if g.use_conditional:
-                        # pre and post
-                        for v in units:
-                            self.register_action(id1, id2, pre_cond=[abc[v]])
-                            self.register_action(id1, id2, post_cond=[abc[v]])
-                        # d_pre, d_post and pre_post
-                        for v1, v2 in product(units, repeat=2):
-                            self.register_action(id1, id2, pre_cond=[abc[v1], abc[v2]])
-                            self.register_action(id1, id2, post_cond=[abc[v1], abc[v2]])
-                            self.register_action(id1, id2, pre_cond=[abc[v1]], post_cond=[abc[v2]])
-                        # d_pre_post and pre_d_post
-                        for v1, v2, v3 in product(units, repeat=3):
-                            self.register_action(id1, id2, pre_cond=[abc[v1], abc[v2]], post_cond=[abc[v3]])
-                            self.register_action(id1, id2, pre_cond=[abc[v1]], post_cond=[abc[v2], abc[v3]])
-                        # d_pre_d_post
-                        for v1, v2, v3, v4 in product(units, repeat=4):
-                            self.register_action(id1, id2, pre_cond=[abc[v1], abc[v2]], post_cond=[abc[v3], abc[v4]])
+                    possible_path[id1].append(id2)
+        if g.use_conditional:
+            with open(g.ngram_path, 'rb') as fin:
+                ngram = pickle.load(fin)
+            for tup, atype in ngram:
+                pre_cond = post_cond = None
+                if atype == 'pre':
+                    pre_cond = [tup[0]]
+                    seg = tup[1]
+                elif atype == 'post':
+                    post_cond = [tup[1]]
+                    seg = tup[0]
+                elif atype == 'd_pre':
+                    pre_cond = [tup[0], tup[1]]
+                    seg = tup[2]
+                elif atype == 'd_post':
+                    post_cond = [tup[1], tup[2]]
+                    seg = tup[0]
+                elif atype == 'pre_post':
+                    pre_cond = [tup[0]]
+                    post_cond = [tup[2]]
+                    seg = tup[1]
+                elif atype == 'd_pre_post':
+                    pre_cond = [tup[0], tup[1]]
+                    post_cond = [tup[3]]
+                    seg = tup[2]
+                elif atype == 'pre_d_post':
+                    pre_cond = [tup[0]]
+                    post_cond = [tup[2], tup[3]]
+                    seg = tup[1]
+                elif atype == 'd_pre_d_post':
+                    pre_cond = [tup[0], tup[1]]
+                    post_cond = [tup[3], tup[4]]
+                    seg = tup[2]
+                pre_cond = [abc[i] for i in pre_cond] if pre_cond else None
+                post_cond = [abc[i] for i in post_cond] if post_cond else None
+                id1 = abc[seg]
+                for id2 in possible_path[id1]:
+                    self.register_action(id1, id2, pre_cond=pre_cond, post_cond=post_cond)
+
         logging.info(f'Number of actions in action space: {len(self)}.')
 
         if g.factorize_actions:
