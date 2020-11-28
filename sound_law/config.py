@@ -272,7 +272,7 @@ class BasicMcts:
     num_episodes: int = 500
     episode_check_interval: int = 50
     dirichlet_alpha: float = 0.3
-    phoible_path: 'path' = 'data/phoible_segs.pkl'
+    segments_dump_path: 'path' = 'data/nel_segs.pkl'
     use_finite_horizon: bool = True
     use_max_value: bool = True
     use_conditional: bool = True

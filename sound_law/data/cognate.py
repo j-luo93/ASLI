@@ -140,15 +140,15 @@ class CognateRegistry:
         return self._lang2abc[lang]
 
     def prepare_alphabet(self, *langs: Lang,
-                         phoible: Optional[dict] = None) -> Alphabet:
+                         segments_dump: Optional[dict] = None) -> Alphabet:
         if any(lang in self._lang2abc for lang in langs):
             raise TypeError(f'Some lang in {langs} has been prepared.')
-        if phoible is not None:
-            phoible_map = phoible['proto_ph_map']
-            contents = [phoible['proto_ph_lst']]
-            sources = ['phoible']
-            std_func = handle_sequence_inputs(lambda s: phoible_map[s])
-            dist_mat = phoible['dist_mat']
+        if segments_dump is not None:
+            proto_ph_map = segments_dump['proto_ph_map']
+            contents = [segments_dump['proto_ph_lst']]
+            sources = ['dump']
+            std_func = handle_sequence_inputs(lambda s: proto_ph_map[s])
+            dist_mat = segments_dump['dist_mat']
         else:
             # Get all relevant data frames.
             dfs = list()

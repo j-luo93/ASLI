@@ -43,7 +43,7 @@ add_argument('optim_cls', dtype=str, default='adam', choices=['sgd', 'adam'], ms
 add_argument('separate_value', dtype=bool, default=True,
              msg='Flag to use a separate model for value network. Used in RL.')
 add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of rollout')
-add_argument('phoible_path', dtype='path', msg='Path to the processed Phoible pickle file.')
+add_argument('segments_dump_path', dtype='path', msg='Path to the processed Phoible pickle file.')
 add_argument('use_max_value', dtype=bool, default=False, msg='Flag to use max mode in MCTS.')
 add_argument('use_conditional', dtype=bool, default=True, msg='Flag to use conditional rules.')
 
@@ -62,9 +62,9 @@ class OnePairManager:
 
         # Prepare alphabets now.
         if g.use_mcts:
-            with open(g.phoible_path, 'rb') as fin:
-                phoible = pickle.load(fin)
-            self.src_abc = self.tgt_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang, phoible=phoible)
+            with open(g.segments_dump_path, 'rb') as fin:
+                segments_dump = pickle.load(fin)
+            self.src_abc = self.tgt_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang, segments_dump=segments_dump)
             if g.use_phono_edit_dist:
                 VocabState.set_dist_mat(self.tgt_abc.dist_mat)
             VocabState.set_max_mode(g.use_max_value)
@@ -108,8 +108,7 @@ class OnePairManager:
                 train_folds.remove(dev_fold)
 
                 train_setting = create_setting(
-                    f'train@{fold}', Split('train', train_folds), True,
-                    keep_ratio=g.keep_ratio)
+                    f'train@{fold}', Split('train', train_folds), True, segments_dumpo=g.keep_ratio)
                 train_e_setting = create_setting(
                     f'train@{fold}_e', Split('train', train_folds), False,
                     keep_ratio=g.keep_ratio)
