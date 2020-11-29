@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <iostream>
 #include <limits>
+#include <memory>
 
 using namespace std;
 
@@ -62,9 +63,12 @@ dist_t edit_distance(const IdSeq &seq1, const IdSeq &seq2, const vector<vector<c
     return ret;
 };
 
-string get_key(const IdSeq &id_seq)
+using WordKey = string;
+using SiteKey = string;
+
+WordKey get_word_key(const IdSeq &id_seq)
 {
-    string key = "";
+    WordKey key = "";
     size_t i = 0;
     while (i < id_seq.size() - 1)
     {
@@ -72,5 +76,16 @@ string get_key(const IdSeq &id_seq)
         i++;
     }
     key += to_string(id_seq[i]);
+    return key;
+}
+
+SiteKey get_site_key(abc_t before_id, const vector<abc_t> pre_cond, const vector<abc_t> post_cond)
+{
+    SiteKey key = "";
+    for (abc_t idx : pre_cond)
+        key.append(to_string(idx) + ',');
+    key.append('|' + to_string(before_id) + '|');
+    for (abc_t idx : post_cond)
+        key.append(to_string(idx) + ',');
     return key;
 }

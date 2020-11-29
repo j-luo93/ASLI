@@ -3,6 +3,7 @@
 #include <Action.h>
 #include <TreeNode.h>
 #include <Word.h>
+#include <Site.h>
 
 class ActionSpace
 {
@@ -15,7 +16,7 @@ public:
 
     vector<Action *> actions;
 
-    void register_action(abc_t, abc_t, vector<abc_t>, vector<abc_t>);
+    void register_action(abc_t, abc_t, const vector<abc_t> &, const vector<abc_t> &);
     Action *get_action(action_t);
     vector<action_t> get_action_allowed(const VocabIdSeq &);
     size_t size();
@@ -23,8 +24,7 @@ public:
     size_t get_cache_size();
 
 private:
-    unordered_map<string, Word *> word_cache;
-    unordered_map<abc_t, vector<action_t>> uni_map;
-    unordered_map<abc_t, unordered_map<abc_t, vector<action_t>>> pre_map;
+    unordered_map<WordKey, Word *> word_cache;
+    unordered_map<SiteKey, vector<action_t>> site_map;
     mutex mtx;
 };

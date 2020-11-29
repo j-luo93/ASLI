@@ -96,7 +96,7 @@ class SoundChangeActionSpace(PyActionSpace):
         if g.factorize_actions:
 
             def gather(attr):
-                return get_tensor(self.gather(attr))
+                return get_tensor(self.gather(attr, g.num_workers))
 
             self.action2before = gather('before_id')
             self.action2after = gather('after_id')
