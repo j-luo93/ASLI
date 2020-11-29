@@ -17,4 +17,9 @@ public:
     vector<abc_t> post_cond;
     size_t num_pre;
     size_t num_post;
+
+    abc_t get_pre_id();
+    abc_t get_post_id();
+    abc_t get_d_pre_id();
+    abc_t get_d_post_id();
 };

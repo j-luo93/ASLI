@@ -42,6 +42,11 @@ cdef extern from "common.h":
     ctypedef vector[abc_t] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
 
+cdef extern from "limits.h":
+    cdef abc_t USHRT_MAX
+
+cdef abc_t NULL_abc = USHRT_MAX
+
 # These are used by numpy's python api.
 np_action_t = np.uint32
 np_cost_t = np.uint8
@@ -109,12 +114,21 @@ cdef extern from "Action.h":
         vector[abc_t] pre_cond
         vector[abc_t] post_cond
 
+        abc_t get_pre_id()
+        abc_t get_post_id()
+        abc_t get_d_pre_id()
+        abc_t get_d_post_id()
+
+ctypedef Action * Aptr
+
 cdef extern from "ActionSpace.h":
     cdef cppclass ActionSpace nogil:
         @staticmethod
         void set_conditional(bool)
 
         ActionSpace()
+
+        vector[Aptr] actions
 
         void register_action(abc_t, abc_t, vector[abc_t], vector[abc_t])
         Action *get_action(action_t)
@@ -184,7 +198,6 @@ cdef inline object get_py_edge(PyTreeNode node, Edge edge):
     cdef float reward = edge.second
     return wrap_node(type(node), next_node), done, reward
 
-ctypedef Action * Aptr
 
 cdef class PyTreeNode:
     cdef TNptr ptr
@@ -404,7 +417,6 @@ cdef class PyDetachedTreeNode:
         return np.asarray(self.ptr.action_allowed, dtype='long')
 
 
-
 cdef class PyAction:
     """This is a wrapper class for c++ class Action. It should be created by a PyActionSpace object with registered actions."""
     cdef Aptr ptr
@@ -522,6 +534,32 @@ cdef class PyActionSpace:
         cdef Action *action = self.ptr.get_action(action_id)
         action_cls = type(self).action_cls
         return wrap_action(action_cls, action)
+
+    def gather(self, attr):
+        assert attr in ['before_id', 'after_id', 'pre_id', 'post_id', 'd_pre_id', 'd_post_id']
+        cdef size_t i
+        cdef size_t n = self.ptr.size()
+        ret = np.zeros([n], dtype='long')
+        cdef long[::1] ret_view = ret
+        cdef Action *action
+        cdef abc_t idx
+        for i in range(n):
+            action = self.ptr.get_action(i)
+            if attr == 'before_id':
+                idx = action.before_id
+            elif attr == 'after_id':
+                idx = action.after_id
+            elif attr == 'pre_id':
+                idx = action.get_pre_id()
+            elif attr == 'd_pre_id':
+                idx = action.get_d_pre_id()
+            elif attr == 'post_id':
+                idx = action.get_post_id()
+            else:
+                idx = action.get_d_post_id()
+            ret_view[i] = idx
+        ret[ret == NULL_abc] = -1
+        return ret
 
     def __len__(self):
         return self.ptr.size()

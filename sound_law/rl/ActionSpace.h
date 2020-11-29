@@ -13,6 +13,8 @@ public:
 
     ActionSpace();
 
+    vector<Action *> actions;
+
     void register_action(abc_t, abc_t, vector<abc_t>, vector<abc_t>);
     Action *get_action(action_t);
     vector<action_t> get_action_allowed(const VocabIdSeq &);
@@ -21,7 +23,6 @@ public:
     size_t get_cache_size();
 
 private:
-    vector<Action *> actions;
     unordered_map<string, Word *> word_cache;
     unordered_map<abc_t, vector<action_t>> uni_map;
     unordered_map<abc_t, unordered_map<abc_t, vector<action_t>>> pre_map;

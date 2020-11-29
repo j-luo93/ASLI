@@ -2,6 +2,7 @@
 """
 from __future__ import annotations
 
+from dev_misc.utils import pbar
 from typing import Dict
 from collections import defaultdict
 import pickle
@@ -61,52 +62,32 @@ class SoundChangeActionSpace(PyActionSpace):
         super().__init__()
         # Set class variable for `SoundChangeAction` here.
         self.abc = SoundChangeAction.abc = abc
+
+        # Register unconditional actions first.
         units = [u for u in self.abc if u not in self.abc.special_units]
         possible_path: Dict[str, List[str]] = defaultdict(list)
-        for u1, u2 in product(units, repeat=2):
-            if u1 != u2:
-                id1 = abc[u1]
-                id2 = abc[u2]
-                if not g.use_mcts or (u1, u2) in abc.edges:
-                    self.register_action(id1, id2)
-                    possible_path[id1].append(id2)
+
+        def register_uncondional_action(u1: str, u2: str):
+            id1 = abc[u1]
+            id2 = abc[u2]
+            self.register_action(id1, id2)
+            possible_path[id1].append(id2)
+
+        if g.use_mcts:
+            for u1, u2 in abc.edges:
+                register_uncondional_action(u1, u2)
+        else:
+            for u1, u2 in product(units, repeat=2):
+                if u1 != u2:
+                    register_uncondional_action(u1, u2)
+
         if g.use_conditional:
             with open(g.ngram_path, 'rb') as fin:
                 ngram = pickle.load(fin)
-            from tqdm import tqdm
-            for tup, atype in tqdm(ngram):
-                pre_cond = post_cond = None
-                if atype == 'pre':
-                    pre_cond = [tup[0]]
-                    seg = tup[1]
-                elif atype == 'post':
-                    post_cond = [tup[1]]
-                    seg = tup[0]
-                elif atype == 'd_pre':
-                    pre_cond = [tup[0], tup[1]]
-                    seg = tup[2]
-                elif atype == 'd_post':
-                    post_cond = [tup[1], tup[2]]
-                    seg = tup[0]
-                elif atype == 'pre_post':
-                    pre_cond = [tup[0]]
-                    post_cond = [tup[2]]
-                    seg = tup[1]
-                elif atype == 'd_pre_post':
-                    pre_cond = [tup[0], tup[1]]
-                    post_cond = [tup[3]]
-                    seg = tup[2]
-                elif atype == 'pre_d_post':
-                    pre_cond = [tup[0]]
-                    post_cond = [tup[2], tup[3]]
-                    seg = tup[1]
-                elif atype == 'd_pre_d_post':
-                    pre_cond = [tup[0], tup[1]]
-                    post_cond = [tup[3], tup[4]]
-                    seg = tup[2]
-                pre_cond = [abc[i] for i in pre_cond] if pre_cond else None
-                post_cond = [abc[i] for i in post_cond] if post_cond else None
+            for seg, pre_cond, post_cond in pbar(ngram, desc='Registering conditional actions.'):
                 id1 = abc[seg]
+                pre_cond = [abc[u] for u in pre_cond] if pre_cond else None
+                post_cond = [abc[u] for u in post_cond] if post_cond else None
                 for id2 in possible_path[id1]:
                     self.register_action(id1, id2, pre_cond=pre_cond, post_cond=post_cond)
 
@@ -114,11 +95,8 @@ class SoundChangeActionSpace(PyActionSpace):
 
         if g.factorize_actions:
 
-            def gather(attr: str):
-                ret = list()
-                for action in self:
-                    ret.append(getattr(action, attr))
-                return get_tensor(ret)
+            def gather(attr):
+                return get_tensor(self.gather(attr))
 
             self.action2before = gather('before_id')
             self.action2after = gather('after_id')

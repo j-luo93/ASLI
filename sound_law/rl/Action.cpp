@@ -48,3 +48,23 @@ IdSeq Action::apply_to(const IdSeq &id_seq)
         ret.push_back(id_seq.at(id_seq.size() - this->num_post + i));
     return ret;
 }
+
+abc_t Action::get_pre_id()
+{
+    return (this->num_pre == 0) ? NULL_abc : this->pre_cond.back();
+}
+
+abc_t Action::get_d_pre_id()
+{
+    return (this->num_pre < 2) ? NULL_abc : this->pre_cond.front();
+}
+
+abc_t Action::get_post_id()
+{
+    return (this->num_post == 0) ? NULL_abc : this->post_cond.front();
+}
+
+abc_t Action::get_d_post_id()
+{
+    return (this->num_post < 2) ? NULL_abc : this->post_cond.back();
+}
