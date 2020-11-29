@@ -1,3 +1,4 @@
+from typing import List, Tuple
 from dev_misc import NDA
 from typing import Optional
 import logging
@@ -24,7 +25,9 @@ _ft = FeatureTable()
 class Alphabet:
     """A class to represent the alphabet of any dataset."""
 
-    def __init__(self, lang: str, contents: List[List[str]], sources: Union[str, List[str]], dist_mat: Optional[NDA] = None):
+    def __init__(self, lang: str, contents: List[List[str]], sources: Union[str, List[str]],
+                 dist_mat: Optional[NDA] = None,
+                 edges: Optional[List[Tuple[str, str]]] = None):
         if sources is not None:
             if isinstance(sources, str):
                 sources = [sources] * len(contents)
@@ -71,12 +74,13 @@ class Alphabet:
         self.dist_mat = None
         if dist_mat is not None:
             # Pad the dist_mat for special units.
-            self.dist_mat = np.full([len(self), len(self)], 99999, dtype='long')
+            self.dist_mat = np.full([len(self), len(self)], 99999, dtype='float32')
             # NOTE(j_luo) Special ids should have zero cost if matched.
             for i in range(len(self.special_ids)):
                 self.dist_mat[i, i] = 0
             orig_ids = np.asarray([self[u] for u in contents[0]])
             self.dist_mat[orig_ids.reshape(-1, 1), orig_ids] = dist_mat
+            self.edges = edges
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
         self.lang = lang

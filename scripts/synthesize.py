@@ -90,13 +90,14 @@ if __name__ == "__main__":
 
     if args.mode == 'random':
 
-        sys.argv = 'sound_law/main.py --config OPRLFakeR5 --mcts_config MoreSims --no_use_value_guidance --use_conditional'.split()
+        sys.argv = 'sound_law/main.py --config OPRLFakeR5 --mcts_config LargeSims --no_use_value_guidance --use_conditional'.split()
 
         initiator = setup()
         initiator.run()
 
         set_argument('data_path', 'data/wikt', _force=True)
-        set_argument('phoible_path', 'data/phoible_segs.pkl', _force=True)
+        set_argument('segments_dump_path', 'data/nel_segs.pkl', _force=True)
+        set_argument('ngram_path', 'data/nel_ngram.pkl', _force=True)
 
         manager = OnePairManager()
         dl = manager.dl_reg.get_loaders_by_name('rl')

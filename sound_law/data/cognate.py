@@ -149,6 +149,7 @@ class CognateRegistry:
             sources = ['dump']
             std_func = handle_sequence_inputs(lambda s: proto_ph_map[s])
             dist_mat = segments_dump['dist_mat']
+            edges = segments_dump['edges']
         else:
             # Get all relevant data frames.
             dfs = list()
@@ -162,8 +163,9 @@ class CognateRegistry:
             contents = df['pre_unit_seq']
             sources = df['source'].tolist()
             std_func = handle_sequence_inputs(lambda s: abc.standardize(s))
-            dist_mat = None
-        abc = Alphabet(','.join(langs), contents, sources=sources, dist_mat=dist_mat)
+            dist_mat = edges = None
+        abc = Alphabet(','.join(langs), contents, sources=sources,
+                       dist_mat=dist_mat, edges=edges)
         for lang in langs:
             self._lang2abc[lang] = abc
 

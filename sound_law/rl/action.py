@@ -42,7 +42,7 @@ class SoundChangeAction(PyAction):
             pre = f'{pre} + '
         post = get_cond(self.post_cond)
         if post:
-            post = f'+ {post}'
+            post = f' + {post}'
 
         before = str(self.before_id) if self.abc is None else self.abc[self.before_id]
         after = str(self.after_id) if self.abc is None else self.abc[self.after_id]
@@ -55,7 +55,6 @@ class SoundChangeActionSpace(PyActionSpace):
     action_cls = SoundChangeAction
 
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
-    add_argument('max_dist', dtype=int, default=3, msg='Maximum distance to draw an edge between two characters.')
     add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
 
     def __init__(self, abc: Alphabet):
@@ -68,13 +67,14 @@ class SoundChangeActionSpace(PyActionSpace):
             if u1 != u2:
                 id1 = abc[u1]
                 id2 = abc[u2]
-                if not g.use_mcts or abc.dist_mat[id1, id2] <= g.max_dist:
+                if not g.use_mcts or (u1, u2) in abc.edges:
                     self.register_action(id1, id2)
                     possible_path[id1].append(id2)
         if g.use_conditional:
             with open(g.ngram_path, 'rb') as fin:
                 ngram = pickle.load(fin)
-            for tup, atype in ngram:
+            from tqdm import tqdm
+            for tup, atype in tqdm(ngram):
                 pre_cond = post_cond = None
                 if atype == 'pre':
                     pre_cond = [tup[0]]

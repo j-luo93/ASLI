@@ -449,8 +449,16 @@ cdef class PyAction:
     @property
     def d_post_id(self):
         if self.ptr.post_cond.size() > 1:
-            return self.ptr.pre_cond.back()
+            return self.ptr.post_cond.back()
         return -1
+
+    @property
+    def pre_cond(self):
+        return self.ptr.pre_cond
+
+    @property
+    def post_cond(self):
+        return self.ptr.post_cond
 
 
 # NOTE(j_luo) Using staticmethod as the tutorial suggests doesn't work as a flexible factory method -- you might want to control the `cls` in case of subclassing it.
