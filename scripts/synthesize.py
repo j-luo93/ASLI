@@ -86,6 +86,7 @@ if __name__ == "__main__":
     parser.add_argument('out_path', type=str, help='Output path.')
     parser.add_argument('mode', type=str, help='Configuration name.')
     parser.add_argument('--length', type=int, help='Length of synthesizing random rules.')
+    parser.add_argument('--random_seed', type=int, default=1234, help='Random seed')
     args = parser.parse_args()
 
     if args.mode == 'random':
@@ -107,6 +108,7 @@ if __name__ == "__main__":
         print(init_n_chars)
         state = dl.init_state
         path = [state]
+        np.random.seed(args.random_seed)
         for i in range(args.length):
             while True:
                 best_i = np.random.choice(len(state.action_allowed))

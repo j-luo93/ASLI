@@ -26,11 +26,11 @@ void SiteGraph::add_site(const Site &new_site, shared_ptr<SiteNode> parent)
         this->nodes[key] = new_node;
     // Use this merged node in the graph instead of a new node.
     shared_ptr<SiteNode> node = this->nodes[key];
+    ++node->num_sites;
     if (parent != nullptr)
     {
         parent->children.push_back(node);
         ++node->in_degree;
-        ++node->num_sites;
     }
     const Site &site = node->site;
     if (site.pre_cond.size() > 0)
@@ -59,4 +59,5 @@ vector<shared_ptr<SiteNode>> SiteGraph::get_sources()
             sources.push_back(node);
     }
     assert(!sources.empty());
+    return sources;
 }

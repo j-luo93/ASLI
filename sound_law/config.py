@@ -273,6 +273,7 @@ class BasicMcts:
     episode_check_interval: int = 50
     dirichlet_alpha: float = 0.3
     segments_dump_path: 'path' = 'data/nel_segs.pkl'
+    ngram_path: 'path' = 'data/nel_ngram.pkl'
     use_finite_horizon: bool = True
     use_max_value: bool = True
     use_conditional: bool = True
