@@ -37,8 +37,8 @@ cdef extern from "Site.cpp":
 
 cdef extern from "common.h":
     ctypedef unsigned short abc_t
-    ctypedef unsigned char cost_t
-    ctypedef unsigned short dist_t
+    ctypedef float cost_t
+    ctypedef float dist_t
     ctypedef short visit_t
     ctypedef unsigned int action_t
     ctypedef unsigned long node_t
@@ -52,7 +52,7 @@ cdef abc_t NULL_abc = USHRT_MAX
 
 # These are used by numpy's python api.
 np_action_t = np.uint32
-np_cost_t = np.uint8
+np_cost_t = np.float32
 
 cdef extern from "TreeNode.h":
     cdef cppclass TreeNode nogil:
