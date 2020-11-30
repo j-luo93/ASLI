@@ -68,6 +68,7 @@ class OnePairManager:
             if g.use_phono_edit_dist:
                 VocabState.set_dist_mat(self.tgt_abc.dist_mat)
             VocabState.set_max_mode(g.use_max_value)
+            VocabState.abc = self.tgt_abc
         elif g.share_src_tgt_abc:
             self.src_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang)
             self.tgt_abc = self.src_abc

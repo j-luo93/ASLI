@@ -75,7 +75,7 @@ vector<action_t> ActionSpace::get_action_allowed(const VocabIdSeq &vocab_i)
         if (to_keep)
         {
             SiteKey key = node->site.key;
-            const vector<action_t> &map_values = this->site_map[key];
+            const vector<action_t> &map_values = this->site_map.at(key);
             action_allowed.insert(action_allowed.end(), map_values.begin(), map_values.end());
         }
     }

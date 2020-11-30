@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import ClassVar
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import (ClassVar, Dict, Iterator, List, NewType, Optional,
@@ -14,7 +15,7 @@ from dev_misc.devlib import pad_to_dense
 from dev_misc.utils import (Singleton, cached_property,
                             is_main_process_and_thread)
 from editdistance import eval_batch
-from sound_law.data.alphabet import PAD_ID
+from sound_law.data.alphabet import PAD_ID, Alphabet
 
 from .mcts_fast import \
     PyTreeNode  # pylint: disable=no-name-in-module # IDEA(j_luo) move tree node to another pyx file?
@@ -42,6 +43,8 @@ class VocabStateSpace:
 class VocabState(PyTreeNode):
     """State representing the vocab. Use `VocabStateSpace` to create one instance."""
 
+    abc: ClassVar[Alphabet] = None
+
     @cached_property
     def tensor(self) -> LT:
         """Convert the state into a long tensor."""
@@ -50,6 +53,14 @@ class VocabState(PyTreeNode):
     @property
     def q(self):
         return self.total_value / (1e-8 + self.action_count)
+
+    @property
+    def word_list(self) -> List[str]:
+        assert self.abc is not None
+        words = list()
+        for id_seq in self.vocab:
+            words.append(''.join(self.abc[i] for i in id_seq[1:-1]))  # pylint: disable=unsubscriptable-object
+        return words
 
 
 @dataclass
