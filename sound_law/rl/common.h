@@ -64,6 +64,7 @@ dist_t edit_distance(const IdSeq &seq1, const IdSeq &seq2, const vector<vector<c
 
 using WordKey = string;
 
+// Copied from https://gist.github.com/angeleno/e838a35f0849ecab56e8be7e46645177.
 namespace std
 {
     template <typename T>
