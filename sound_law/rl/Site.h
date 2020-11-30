@@ -6,7 +6,6 @@ class Site
 {
 public:
     Site(abc_t, const vector<abc_t> &, const vector<abc_t> &, const SiteKey &);
-    Site();
 
     abc_t before_id;
     vector<abc_t> pre_cond;
@@ -39,4 +38,5 @@ public:
 private:
     unordered_map<SiteKey, SiteNode *> nodes;
     void add_site(abc_t, const vector<abc_t> &, const vector<abc_t> &, const SiteKey &, SiteNode * = nullptr);
+    void add_site(const SiteKey &, SiteNode * = nullptr);
 };

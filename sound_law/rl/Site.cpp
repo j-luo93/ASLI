@@ -8,8 +8,6 @@ Site::Site(abc_t before_id,
                                  post_cond(post_cond),
                                  key(key) {}
 
-Site::Site() {}
-
 SiteGraph::SiteGraph()
 {
     this->nodes = unordered_map<SiteKey, SiteNode *>();
@@ -23,9 +21,8 @@ SiteNode::SiteNode(const Site &site) : site(site)
 SiteNode::SiteNode(abc_t before_id,
                    const vector<abc_t> &pre_cond,
                    const vector<abc_t> &post_cond,
-                   const SiteKey &key)
+                   const SiteKey &key) : site(Site(before_id, pre_cond, post_cond, key))
 {
-    this->site = Site(before_id, pre_cond, post_cond, key);
     this->children = vector<SiteNode *>();
 }
 
@@ -37,7 +34,11 @@ void SiteGraph::add_site(const Site &new_site, SiteNode *parent)
         SiteNode *new_node = new SiteNode(new_site);
         this->nodes[key] = new_node;
     }
+    this->add_site(key, parent);
+}
 
+void SiteGraph::add_site(const SiteKey &key, SiteNode *parent)
+{
     SiteNode *node = this->nodes[key];
     ++node->num_sites;
     if (parent != nullptr)
@@ -67,6 +68,7 @@ void SiteGraph::add_site(abc_t before_id, const vector<abc_t> &pre_cond, const v
         SiteNode *new_node = new SiteNode(before_id, pre_cond, post_cond, key);
         this->nodes[key] = new_node;
     }
+    this->add_site(key, parent);
 }
 
 vector<SiteNode *> SiteGraph::get_sources()
