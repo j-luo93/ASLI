@@ -127,6 +127,7 @@ class StateEncoder(nn.Module):
         cnn = get_cnn1d(cnn1d_params)
         return cls(char_emb, cnn)
 
+    # FIXME(j_luo) this might not be instance-specific.
     @cacheable(switch='state_repr')
     def forward(self, curr_ids: LT, end_ids: LT):
         word_repr = self._get_word_embedding(curr_ids)
@@ -140,8 +141,10 @@ class StateEncoder(nn.Module):
         emb = self.char_emb(ids).rename(*names)
         if emb.ndim == 4:
             emb = emb.align_to('batch', 'word', 'emb', 'pos')
-            bs, ws, hs, l = emb.shape
-            ret = self.cnn(emb.rename(None).reshape(bs * ws, hs, l)).view(bs, ws, hs, -1).max(dim=-1)[0]
+            bs, ws, es, l = emb.shape
+            # NOTE(j_luo) embedding size might not match hidden size.
+            emb_3d = emb.rename(None).reshape(bs * ws, es, -1)
+            ret = self.cnn(emb_3d).view(bs, ws, g.hidden_size, -1).max(dim=-1)[0]
             return ret.rename('batch', 'word', 'emb')
         else:
             emb = emb.align_to('word', 'emb', 'pos')

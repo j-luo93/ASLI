@@ -115,7 +115,7 @@ action_t TreeNode::get_best_i(float puct_c)
 {
     action_t best_i = NULL_action;
     float best_v;
-    vector<float> scores = this->get_scores(puct_c);
+    const vector<float> &scores = this->get_scores(puct_c);
     for (size_t i = 0; i < this->prior.size(); ++i)
     {
         if ((best_i == NULL_action) or (scores[i] > best_v))
