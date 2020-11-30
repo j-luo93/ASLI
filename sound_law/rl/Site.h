@@ -19,7 +19,7 @@ public:
     SiteNode(const Site &);
 
     Site site;
-    vector<shared_ptr<SiteNode>> children;
+    vector<SiteNode *> children;
     size_t num_sites = 0;
     size_t in_degree = 0;
     bool visited = false;
@@ -29,10 +29,11 @@ class SiteGraph
 {
 public:
     SiteGraph();
+    ~SiteGraph();
 
-    void add_site(const Site &, shared_ptr<SiteNode> = nullptr);
-    vector<shared_ptr<SiteNode>> get_sources();
+    void add_site(const Site &, SiteNode * = nullptr);
+    vector<SiteNode *> get_sources();
 
 private:
-    unordered_map<SiteKey, shared_ptr<SiteNode>> nodes;
+    unordered_map<SiteKey, SiteNode *> nodes;
 };

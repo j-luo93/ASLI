@@ -53,14 +53,14 @@ vector<action_t> ActionSpace::get_action_allowed(const VocabIdSeq &vocab_i)
     }
 
     vector<action_t> action_allowed = vector<action_t>();
-    vector<shared_ptr<SiteNode>> queue = graph.get_sources();
+    vector<SiteNode *> queue = graph.get_sources();
     while (!queue.empty())
     {
-        shared_ptr<SiteNode> node = queue.back();
+        SiteNode *node = queue.back();
         queue.pop_back();
         // If any child of this node has the same `num_sites`, then this node is discarded.
         bool to_keep = true;
-        for (shared_ptr<SiteNode> child : node->children)
+        for (SiteNode *child : node->children)
         {
             if (node->num_sites == child->num_sites)
                 to_keep = false;

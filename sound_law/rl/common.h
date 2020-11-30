@@ -9,7 +9,6 @@
 #include <assert.h>
 #include <iostream>
 #include <limits>
-#include <memory>
 
 using namespace std;
 
@@ -64,7 +63,54 @@ dist_t edit_distance(const IdSeq &seq1, const IdSeq &seq2, const vector<vector<c
 };
 
 using WordKey = string;
-using SiteKey = string;
+
+namespace std
+{
+    template <typename T>
+    inline void hash_combine(size_t &seed, const T &val)
+    {
+        hash<T> hasher;
+        seed ^= hasher(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+
+    template <class... TupleArgs>
+    struct hash<tuple<TupleArgs...>>
+    {
+    private:
+        //  this is a termination condition
+        //  N == sizeof...(TupleTypes)
+        //
+        template <size_t Idx, typename... TupleTypes>
+        inline typename enable_if<Idx == sizeof...(TupleTypes), void>::type
+        hash_combine_tup(size_t &seed, const tuple<TupleTypes...> &tup) const
+        {
+        }
+
+        //  this is the computation function
+        //  continues till condition N < sizeof...(TupleTypes) holds
+        //
+        template <size_t Idx, typename... TupleTypes>
+            inline typename enable_if < Idx<sizeof...(TupleTypes), void>::type
+                                        hash_combine_tup(size_t &seed, const tuple<TupleTypes...> &tup) const
+        {
+            hash_combine(seed, get<Idx>(tup));
+
+            //  on to next element
+            hash_combine_tup<Idx + 1>(seed, tup);
+        }
+
+    public:
+        size_t operator()(const tuple<TupleArgs...> &tupleValue) const
+        {
+            size_t seed = 0;
+            //  begin with the first iteration
+            hash_combine_tup<0>(seed, tupleValue);
+            return seed;
+        }
+    };
+} // namespace std
+
+using SiteKey = tuple<abc_t, abc_t, abc_t, abc_t, abc_t>;
 
 WordKey get_word_key(const IdSeq &id_seq)
 {
@@ -81,11 +127,16 @@ WordKey get_word_key(const IdSeq &id_seq)
 
 SiteKey get_site_key(abc_t before_id, const vector<abc_t> pre_cond, const vector<abc_t> post_cond)
 {
-    SiteKey key = "";
-    for (abc_t idx : pre_cond)
-        key.append(to_string(idx) + ',');
-    key.append('|' + to_string(before_id) + '|');
-    for (abc_t idx : post_cond)
-        key.append(to_string(idx) + ',');
-    return key;
+    // SiteKey key = "";
+    // for (abc_t idx : pre_cond)
+    //     key.append(to_string(idx) + ',');
+    // key.append('|' + to_string(before_id) + '|');
+    // for (abc_t idx : post_cond)
+    //     key.append(to_string(idx) + ',');
+    // return key;
+    abc_t pre_id = (pre_cond.size() > 0) ? pre_cond.back() : NULL_abc;
+    abc_t d_pre_id = (pre_cond.size() > 1) ? pre_cond.front() : NULL_abc;
+    abc_t post_id = (post_cond.size() > 0) ? post_cond.front() : NULL_abc;
+    abc_t d_post_id = (post_cond.size() > 1) ? post_cond.back() : NULL_abc;
+    return SiteKey(before_id, pre_id, d_pre_id, post_id, d_post_id);
 }
