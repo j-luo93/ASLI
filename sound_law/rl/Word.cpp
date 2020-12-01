@@ -9,11 +9,10 @@ Word::Word(const IdSeq &id_seq, const WordKey &key)
     for (int i = 1; i < id_seq.size() - 1; ++i)
     {
         abc_t before_id = id_seq.at(i);
-        int start = max(1, i - 2);
-        int end = min(i + 3, (int)id_seq.size() - 1);
-        vector<abc_t> pre_cond = vector<abc_t>(it + start, it + i);
-        vector<abc_t> post_cond = vector<abc_t>(it + i + 1, it + end);
-        SiteKey key = get_site_key(before_id, pre_cond, post_cond);
-        this->sites.push_back(Site(before_id, pre_cond, post_cond, key));
+        abc_t pre_id = (i > 1) ? id_seq.at(i - 1) : NULL_abc;
+        abc_t d_pre_id = (i > 2) ? id_seq.at(i - 2) : NULL_abc;
+        abc_t post_id = (i < id_seq.size() - 2) ? id_seq.at(i + 1) : NULL_abc;
+        abc_t d_post_id = (i < id_seq.size() - 3) ? id_seq.at(i + 2) : NULL_abc;
+        this->sites.push_back(Site(before_id, pre_id, d_pre_id, post_id, d_post_id));
     }
 }

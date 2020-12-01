@@ -109,7 +109,7 @@ class OnePairManager:
                 train_folds.remove(dev_fold)
 
                 train_setting = create_setting(
-                    f'train@{fold}', Split('train', train_folds), True, segments_dumpo=g.keep_ratio)
+                    f'train@{fold}', Split('train', train_folds), True, keep_ratio=g.keep_ratio)
                 train_e_setting = create_setting(
                     f'train@{fold}_e', Split('train', train_folds), False,
                     keep_ratio=g.keep_ratio)

@@ -2,22 +2,13 @@
 
 #include <common.h>
 
-class Site
-{
-public:
-    Site(abc_t, const vector<abc_t> &, const vector<abc_t> &, const SiteKey &);
-
-    abc_t before_id;
-    vector<abc_t> pre_cond;
-    vector<abc_t> post_cond;
-    SiteKey key;
-};
+using Site = tuple<abc_t, abc_t, abc_t, abc_t, abc_t>;
 
 class SiteNode
 {
 public:
     SiteNode(const Site &);
-    SiteNode(abc_t, const vector<abc_t> &, const vector<abc_t> &, const SiteKey &);
+    // SiteNode(abc_t, const vector<abc_t> &, const vector<abc_t> &, const SiteKey &);
 
     Site site;
     vector<SiteNode *> children;
@@ -34,9 +25,9 @@ public:
 
     void add_site(const Site &, SiteNode * = nullptr);
     vector<SiteNode *> get_sources();
+    unordered_map<Site, SiteNode *> nodes;
 
-private:
-    unordered_map<SiteKey, SiteNode *> nodes;
-    void add_site(abc_t, const vector<abc_t> &, const vector<abc_t> &, const SiteKey &, SiteNode * = nullptr);
-    void add_site(const SiteKey &, SiteNode * = nullptr);
+    // private:
+    // void add_site(abc_t, const vector<abc_t> &, const vector<abc_t> &, const SiteKey &, SiteNode * = nullptr);
+    // void add_site(const Site &, SiteNode * = nullptr);
 };

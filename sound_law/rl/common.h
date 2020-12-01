@@ -111,8 +111,6 @@ namespace std
     };
 } // namespace std
 
-using SiteKey = tuple<abc_t, abc_t, abc_t, abc_t, abc_t>;
-
 WordKey get_word_key(const IdSeq &id_seq)
 {
     WordKey key = "";
@@ -124,20 +122,4 @@ WordKey get_word_key(const IdSeq &id_seq)
     }
     key += to_string(id_seq[i]);
     return key;
-}
-
-SiteKey get_site_key(abc_t before_id, const vector<abc_t> pre_cond, const vector<abc_t> post_cond)
-{
-    // SiteKey key = "";
-    // for (abc_t idx : pre_cond)
-    //     key.append(to_string(idx) + ',');
-    // key.append('|' + to_string(before_id) + '|');
-    // for (abc_t idx : post_cond)
-    //     key.append(to_string(idx) + ',');
-    // return key;
-    abc_t pre_id = (pre_cond.size() > 0) ? pre_cond.back() : NULL_abc;
-    abc_t d_pre_id = (pre_cond.size() > 1) ? pre_cond.front() : NULL_abc;
-    abc_t post_id = (post_cond.size() > 0) ? post_cond.front() : NULL_abc;
-    abc_t d_post_id = (post_cond.size() > 1) ? post_cond.back() : NULL_abc;
-    return SiteKey(before_id, pre_id, d_pre_id, post_id, d_post_id);
 }

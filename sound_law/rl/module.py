@@ -14,6 +14,7 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
+from .mcts_fast import Code, parallel_gather_action_info  # pylint: disable=no-name-in-module
 
 
 class FactorizedProjection(nn.Module):
@@ -31,18 +32,21 @@ class FactorizedProjection(nn.Module):
             self.d_post_potential = nn.Linear(input_size, num_ids)
         self.action_space = action_space
 
-    def forward(self, inp: FT, sparse: bool = False, indices: Optional[LT] = None) -> FT:
+    def forward(self, inp: FT, sparse: bool = False, indices: Optional[NDA] = None) -> FT:
         is_2d = inp.ndim == 2
         if g.use_conditional and not is_2d:
             raise RuntimeError(f'Not sure why you end up here.')
 
-        def get_potential(attr: str):
-            a2i = getattr(self.action_space, f'action2{attr}')
+        assert sparse, 'Cannot deal with dense action space.'
+
+        def get_potential(attr: str, code: int):
             mod = getattr(self, f'{attr}_potential')
             potential = mod(inp)
-            with NoName(potential, indices):
+            with NoName(potential):
                 if sparse:
-                    a2i = a2i[indices]
+                    # a2i = (f'{attr}_id', indices)
+                    # a2i = a2i[indices]
+                    a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, code, g.num_workers))
                     # NOTE(j_luo) For conditional rules, mask out those that are not.
                     if attr in ['pre', 'd_pre', 'post', 'd_post']:
                         mask = a2i == -1
@@ -56,13 +60,13 @@ class FactorizedProjection(nn.Module):
                 else:
                     return potential[a2i]
 
-        bp = get_potential('before')
-        ap = get_potential('after')
+        bp = get_potential('before', Code.BEFORE)
+        ap = get_potential('after', Code.AFTER)
         if g.use_conditional:
-            prep = get_potential('pre')
-            d_prep = get_potential('d_pre')
-            postp = get_potential('post')
-            d_postp = get_potential('d_post')
+            prep = get_potential('pre', Code.PRE)
+            d_prep = get_potential('d_pre', Code.D_PRE)
+            postp = get_potential('post', Code.POST)
+            d_postp = get_potential('d_post', Code.D_POST)
             ret = bp + ap + prep + d_prep + postp + d_postp
         else:
             ret = bp + ap
@@ -189,7 +193,7 @@ class PolicyNetwork(nn.Module):
                 end_ids: LT,
                 action_masks: BT,
                 sparse: bool = False,
-                indices: Optional[LT] = None) -> Distribution:
+                indices: Optional[NDA] = None) -> Distribution:
         """Get policy distribution based on current state (and end state)."""
         if sparse and indices is None:
             raise TypeError(f'Must provide `indices` in sparse mode.')

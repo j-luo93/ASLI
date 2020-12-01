@@ -133,7 +133,9 @@ cdef extern from "ActionSpace.h":
 
         vector[Aptr] actions
 
-        void register_action(abc_t, abc_t, vector[abc_t], vector[abc_t])
+        # void register_action(abc_t, abc_t, vector[abc_t], vector[abc_t])
+        void register_edge(abc_t, abc_t)
+
         Action *get_action(action_t)
         vector[action_t] get_action_allowed(VocabIdSeq) except +
         size_t size()
@@ -500,17 +502,20 @@ cdef class PyActionSpace:
         self.ptr = NULL
         # del self.ptr
 
-    def register_action(self, abc_t before_id, abc_t after_id, pre_cond=None, post_cond=None):
-        pre_cond = pre_cond or list()
-        post_cond = post_cond or list()
-        cdef vector[abc_t] cpp_pre_cond = vector[abc_t](len(pre_cond))
-        cdef vector[abc_t] cpp_post_cond = vector[abc_t](len(post_cond))
-        cdef size_t i
-        for i in range(len(pre_cond)):
-            cpp_pre_cond[i] = pre_cond[i]
-        for i in range(len(post_cond)):
-            cpp_post_cond[i] = post_cond[i]
-        self.ptr.register_action(before_id, after_id, cpp_pre_cond, cpp_post_cond)
+    # def register_action(self, abc_t before_id, abc_t after_id, pre_cond=None, post_cond=None):
+    #     pre_cond = pre_cond or list()
+    #     post_cond = post_cond or list()
+    #     cdef vector[abc_t] cpp_pre_cond = vector[abc_t](len(pre_cond))
+    #     cdef vector[abc_t] cpp_post_cond = vector[abc_t](len(post_cond))
+    #     cdef size_t i
+    #     for i in range(len(pre_cond)):
+    #         cpp_pre_cond[i] = pre_cond[i]
+    #     for i in range(len(post_cond)):
+    #         cpp_post_cond[i] = post_cond[i]
+    #     self.ptr.register_action(before_id, after_id, cpp_pre_cond, cpp_post_cond)
+
+    def register_edge(self, abc_t before_id, abc_t after_id):
+        self.ptr.register_edge(before_id, after_id)
 
     @staticmethod
     def set_conditional(bool conditional):
@@ -770,7 +775,7 @@ cpdef object parallel_stack_ids(object py_nodes, int num_threads):
                     arr_view[i, j, k] = id_seq[j]
     return  arr
 
-cpdef parallel_stack_policies(object edges, action_t num_actions, int num_threads):
+cpdef object parallel_stack_policies(object edges, action_t num_actions, int num_threads):
     cdef long n = len(edges)
     cdef vector[float[::1]] mcts_pi_vec = vector[float[::1]](n)
     cdef vector[size_t] pi_len = vector[size_t](n)
@@ -784,4 +789,47 @@ cpdef parallel_stack_policies(object edges, action_t num_actions, int num_thread
     with nogil:
         for i in prange(n, num_threads=num_threads):
             ret_view[i, :pi_len[i]] = mcts_pi_vec[i]
+    return ret
+
+cpdef enum Code:
+    BEFORE = 0
+    AFTER = 1
+    PRE = 2
+    D_PRE = 3
+    POST = 4
+    D_POST = 5
+
+cpdef object parallel_gather_action_info(PyActionSpace py_as, action_ids, py_code, int num_threads):
+    cdef size_t i, j
+    cdef abc_t idx
+    cdef int code = py_code
+
+    cdef size_t n = action_ids.shape[0]
+    cdef size_t m = action_ids.shape[1]
+    cdef long[:, ::1] id_view = action_ids
+    ret = np.zeros([n, m], dtype='long')
+    cdef long[:, ::1] ret_view = ret
+    cdef ActionSpace *action_space = py_as.ptr
+    cdef Action *action
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            for j in range(m):
+                action = action_space.get_action(id_view[i, j])
+                if code == Code.BEFORE:
+                    idx = action.before_id
+                elif code == Code.AFTER:
+                    idx = action.after_id
+                elif code == Code.PRE:
+                    idx = action.get_pre_id()
+                elif code == Code.D_PRE:
+                    idx = action.get_d_pre_id()
+                elif code == Code.POST:
+                    idx = action.get_post_id()
+                else:
+                    idx = action.get_d_post_id()
+                if idx == NULL_abc:
+                    ret_view[i, j] = -1
+                else:
+                    ret_view[i, j] = idx
+
     return ret

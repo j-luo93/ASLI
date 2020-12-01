@@ -105,19 +105,20 @@ class Mcts:
         # Collect states that need evaluation.
         if outstanding_states:
             indices, action_masks, num_actions = parallel_get_sparse_action_masks(outstanding_states, g.num_workers)
-            indices = get_tensor(indices)
+            # indices = get_tensor(indices)
             am_tensor = get_tensor(action_masks)
             id_seqs = parallel_stack_ids(outstanding_states, g.num_workers)
             id_seqs = get_tensor(id_seqs).rename('batch', 'pos', 'word')
             if steps is not None and not isinstance(steps, int):
                 steps = steps[outstanding_idx]
 
-            with ScopedCache('state_repr'):
-                probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
-                if g.use_value_guidance:
-                    agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()
-                else:
-                    agent_values = np.zeros([len(probs)], dtype='float32')
+            # TODO(j_luo) Scoped might be wrong here.
+            # with ScopedCache('state_repr'):
+            probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
+            if g.use_value_guidance:
+                agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()
+            else:
+                agent_values = np.zeros([len(probs)], dtype='float32')
 
             for i, state, p, v, na in zip(outstanding_idx, outstanding_states, probs, agent_values, num_actions):
                 # NOTE(j_luo) Values should be returned even if states are duplicates or have been visited.
@@ -169,6 +170,7 @@ class Mcts:
     def collect_episodes(self, init_state: VocabState, end_state: VocabState, tracker: Tracker) -> List[Trajectory]:
         logging.info(f'{self.num_cached_states} states cached.')
         logging.info(f'{self.env.action_space.cache_size} words cached.')
+        logging.info(f'{len(self.action_space)} actions indexed in the action space.')
         if self.num_cached_states > 300000:
             logging.info(f'Clearing up all the tree nodes.')
             self.clear_subtree(init_state)

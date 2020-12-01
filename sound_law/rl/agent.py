@@ -38,7 +38,7 @@ class AgentInputs:
     next_id_seqs: Optional[LT] = None
     action_ids: Optional[LT] = None
     done: Optional[BT] = None
-    indices: Optional[LT] = None
+    indices: Optional[NDA] = None
     steps: Optional[LT] = None
     trajectories: Optional[List[Trajectory]] = None
     rtgs: Optional[FT] = None
@@ -70,7 +70,7 @@ class AgentInputs:
         rewards = get_tensor(gather('r')).rename('batch')
         if sparse:
             indices, action_masks, _ = parallel_get_sparse_action_masks(states, g.num_workers)
-            indices = get_tensor(indices).rename('batch', 'action')
+            # indices = get_tensor(indices).rename('batch', 'action')
         else:
             action_masks = parallel_get_action_masks(states, action_space, g.num_workers)
             indices = None
@@ -85,13 +85,13 @@ class AgentInputs:
             steps = get_tensor(gather('step'))
         if edges[0].rtg is not None:
             rtgs = get_tensor(gather('rtg')).rename('batch')
-        return AgentInputs(edges, id_seqs, rewards, action_masks,
-                           next_id_seqs=next_id_seqs,
-                           action_ids=action_ids,
-                           done=done,
-                           indices=indices,
-                           steps=steps,
-                           rtgs=rtgs)
+        return cls(edges, id_seqs, rewards, action_masks,
+                   next_id_seqs=next_id_seqs,
+                   action_ids=action_ids,
+                   done=done,
+                   indices=indices,
+                   steps=steps,
+                   rtgs=rtgs)
 
     @classmethod
     def from_trajectories(cls,
@@ -189,7 +189,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
                    state_or_ids: Union[VocabState, LT],
                    action_masks: BT,
                    sparse: bool = False,
-                   indices: Optional[LT] = None) -> Distribution:
+                   indices: Optional[NDA] = None) -> Distribution:
         """Get policy distribution based on current state (and end state)."""
         if isinstance(state_or_ids, VocabState):
             curr_ids = state_or_ids.tensor
