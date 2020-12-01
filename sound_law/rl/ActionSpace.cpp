@@ -83,7 +83,10 @@ vector<action_t> ActionSpace::get_action_allowed(const VocabIdSeq &vocab_i)
         unique_lock<mutex> lock(this->mtx);
         if (this->word_cache.find(key) == this->word_cache.end())
         {
-            this->word_cache[key] = new Word(vocab_i[i], key);
+            Word *new_word = new Word(vocab_i[i], key);
+            this->word_cache[key] = new_word;
+            for (const Site &site : new_word->sites)
+                this->register_site(site);
         }
         const Word *word = this->word_cache[key];
         lock.unlock();
@@ -91,13 +94,13 @@ vector<action_t> ActionSpace::get_action_allowed(const VocabIdSeq &vocab_i)
             graph.add_site(site);
     }
 
-    for (auto const &item : graph.nodes)
-    {
-        const Site &site = item.first;
-        unique_lock<mutex> lock(this->site_mtx);
-        this->register_site(site);
-        lock.unlock();
-    }
+    // for (auto const &item : graph.nodes)
+    // {
+    //     const Site &site = item.first;
+    //     unique_lock<mutex> lock(this->site_mtx);
+    //     this->register_site(site);
+    //     lock.unlock();
+    // }
 
     vector<action_t> action_allowed = vector<action_t>();
     vector<SiteNode *> queue = graph.get_sources();
@@ -121,14 +124,6 @@ vector<action_t> ActionSpace::get_action_allowed(const VocabIdSeq &vocab_i)
         }
         if (to_keep)
         {
-            // cerr << "<<<<<<<<<<<" << '\n';
-            // cerr << get<0>(node->site) << '\n';
-            // cerr << get<1>(node->site) << '\n';
-            // cerr << get<2>(node->site) << '\n';
-            // cerr << get<3>(node->site) << '\n';
-            // cerr << get<4>(node->site) << '\n';
-            // cerr << ">>>>>>>>>>>" << '\n';
-            // assert(this->site_map.find(node->site) != this->site_map.end());
             const vector<action_t> &map_values = this->site_map.at(node->site);
             action_allowed.insert(action_allowed.end(), map_values.begin(), map_values.end());
         }

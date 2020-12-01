@@ -42,34 +42,34 @@ void SiteGraph::add_site(const Site &new_site, SiteNode *parent)
         parent->children.push_back(node);
         ++node->in_degree;
     }
-    abc_t before_id, pre_id, d_pre_id, post_id, d_post_id;
-    tie(before_id, pre_id, d_pre_id, post_id, d_post_id) = node->site;
-    if (pre_id != NULL_abc)
-    {
-        if (d_pre_id != NULL_abc)
-        {
-            Site child_site = Site(before_id, pre_id, NULL_abc, post_id, d_post_id);
-            this->add_site(child_site, node);
-        }
-        else
-        {
-            Site child_site = Site(before_id, NULL_abc, NULL_abc, post_id, d_post_id);
-            this->add_site(child_site, node);
-        }
-    }
-    if (post_id != NULL_abc)
-    {
-        if (d_post_id != NULL_abc)
-        {
-            Site child_site = Site(before_id, pre_id, d_pre_id, post_id, NULL_abc);
-            this->add_site(child_site, node);
-        }
-        else
-        {
-            Site child_site = Site(before_id, pre_id, d_pre_id, NULL_abc, NULL_abc);
-            this->add_site(child_site, node);
-        }
-    }
+    // abc_t before_id, pre_id, d_pre_id, post_id, d_post_id;
+    // tie(before_id, pre_id, d_pre_id, post_id, d_post_id) = node->site;
+    // if (pre_id != NULL_abc)
+    // {
+    //     if (d_pre_id != NULL_abc)
+    //     {
+    //         Site child_site = Site(before_id, pre_id, NULL_abc, post_id, d_post_id);
+    //         this->add_site(child_site, node);
+    //     }
+    //     else
+    //     {
+    //         Site child_site = Site(before_id, NULL_abc, NULL_abc, post_id, d_post_id);
+    //         this->add_site(child_site, node);
+    //     }
+    // }
+    // if (post_id != NULL_abc)
+    // {
+    //     if (d_post_id != NULL_abc)
+    //     {
+    //         Site child_site = Site(before_id, pre_id, d_pre_id, post_id, NULL_abc);
+    //         this->add_site(child_site, node);
+    //     }
+    //     else
+    //     {
+    //         Site child_site = Site(before_id, pre_id, d_pre_id, NULL_abc, NULL_abc);
+    //         this->add_site(child_site, node);
+    //     }
+    // }
 
     // if (site.pre_cond.size() > 0)
     // {
