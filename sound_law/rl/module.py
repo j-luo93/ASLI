@@ -14,7 +14,7 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
-from .mcts_fast import Code, parallel_gather_action_info  # pylint: disable=no-name-in-module
+from .mcts_fast import PyNull_abc, parallel_gather_action_info  # pylint: disable=no-name-in-module
 
 
 class FactorizedProjection(nn.Module):
@@ -23,55 +23,73 @@ class FactorizedProjection(nn.Module):
     def __init__(self, input_size: int, action_space: SoundChangeActionSpace):
         super().__init__()
         num_ids = len(action_space.abc)
-        self.before_potential = nn.Linear(input_size, num_ids)
-        self.after_potential = nn.Linear(input_size, num_ids)
-        if g.use_conditional:
-            self.pre_potential = nn.Linear(input_size, num_ids)
-            self.post_potential = nn.Linear(input_size, num_ids)
-            self.d_pre_potential = nn.Linear(input_size, num_ids)
-            self.d_post_potential = nn.Linear(input_size, num_ids)
+        assert g.use_conditional, 'Blocked potential module expects conditional actions'
+        # self.before_potential = nn.Linear(input_size, num_ids)
+        # self.after_potential = nn.Linear(input_size, num_ids)
+        # if g.use_conditional:
+        #     self.pre_potential = nn.Linear(input_size, num_ids)
+        #     self.post_potential = nn.Linear(input_size, num_ids)
+        #     self.d_pre_potential = nn.Linear(input_size, num_ids)
+        #     self.d_post_potential = nn.Linear(input_size, num_ids)
+        self.potential_block = nn.Linear(input_size, num_ids * 6)
         self.action_space = action_space
 
     def forward(self, inp: FT, sparse: bool = False, indices: Optional[NDA] = None) -> FT:
         is_2d = inp.ndim == 2
         if g.use_conditional and not is_2d:
             raise RuntimeError(f'Not sure why you end up here.')
-
         assert sparse, 'Cannot deal with dense action space.'
 
-        def get_potential(attr: str, code: int):
-            mod = getattr(self, f'{attr}_potential')
-            potential = mod(inp)
-            with NoName(potential):
-                if sparse:
-                    # a2i = (f'{attr}_id', indices)
-                    # a2i = a2i[indices]
-                    a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, code, g.num_workers))
-                    # NOTE(j_luo) For conditional rules, mask out those that are not.
-                    if attr in ['pre', 'd_pre', 'post', 'd_post']:
-                        mask = a2i == -1
-                        a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
-                        ret = potential.gather(1, a2i)
-                        ret = torch.where(mask, torch.zeros_like(ret), ret)
-                        return ret
-                    return potential.gather(1, a2i)
-                elif is_2d:
-                    return potential[:, a2i]
-                else:
-                    return potential[a2i]
+        potentials = self.potential_block(inp)
+        with NoName(potentials):
+            a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, g.num_workers))
+            mask = a2i == PyNull_abc
+            a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
+            ret = potentials.gather(1, a2i)
+            ret = torch.where(mask, torch.zeros_like(ret), ret)
+            ret = ret.view(-1, indices.shape[-1], 6).sum(dim=-1)
+            return ret.rename('batch', 'action')
 
-        bp = get_potential('before', Code.BEFORE)
-        ap = get_potential('after', Code.AFTER)
-        if g.use_conditional:
-            prep = get_potential('pre', Code.PRE)
-            d_prep = get_potential('d_pre', Code.D_PRE)
-            postp = get_potential('post', Code.POST)
-            d_postp = get_potential('d_post', Code.D_POST)
-            ret = bp + ap + prep + d_prep + postp + d_postp
-        else:
-            ret = bp + ap
-        names = ('batch', ) * is_2d + ('action',)
-        return ret.rename(*names)
+    # def forward(self, inp: FT, sparse: bool = False, indices: Optional[NDA] = None) -> FT:
+    #     is_2d = inp.ndim == 2
+    #     if g.use_conditional and not is_2d:
+    #         raise RuntimeError(f'Not sure why you end up here.')
+
+    #     assert sparse, 'Cannot deal with dense action space.'
+
+    #     def get_potential(attr: str, code: int):
+    #         mod = getattr(self, f'{attr}_potential')
+    #         potential = mod(inp)
+    #         with NoName(potential):
+    #             if sparse:
+    #                 # a2i = (f'{attr}_id', indices)
+    #                 # a2i = a2i[indices]
+    #                 a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, code, g.num_workers))
+    #                 # NOTE(j_luo) For conditional rules, mask out those that are not.
+    #                 if attr in ['pre', 'd_pre', 'post', 'd_post']:
+    #                     mask = a2i == -1
+    #                     a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
+    #                     ret = potential.gather(1, a2i)
+    #                     ret = torch.where(mask, torch.zeros_like(ret), ret)
+    #                     return ret
+    #                 return potential.gather(1, a2i)
+    #             elif is_2d:
+    #                 return potential[:, a2i]
+    #             else:
+    #                 return potential[a2i]
+
+    #     bp = get_potential('before', Code.BEFORE)
+    #     ap = get_potential('after', Code.AFTER)
+    #     if g.use_conditional:
+    #         prep = get_potential('pre', Code.PRE)
+    #         d_prep = get_potential('d_pre', Code.D_PRE)
+    #         postp = get_potential('post', Code.POST)
+    #         d_postp = get_potential('d_post', Code.D_POST)
+    #         ret = bp + ap + prep + d_prep + postp + d_postp
+    #     else:
+    #         ret = bp + ap
+    #     names = ('batch', ) * is_2d + ('action',)
+    #     return ret.rename(*names)
 
 
 class SparseProjection(nn.Module):
