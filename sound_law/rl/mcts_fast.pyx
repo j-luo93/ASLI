@@ -143,6 +143,7 @@ cdef extern from "ActionSpace.h":
         size_t size()
         void clear_cache()
         size_t get_cache_size()
+        vector[abc_t] expand_a2i()
 
 ctypedef TreeNode * TNptr
 ctypedef DetachedTreeNode * DTNptr
@@ -585,6 +586,9 @@ cdef class PyActionSpace:
     @property
     def cache_size(self):
         return self.ptr.get_cache_size()
+
+    def expand_a2i(self):
+        return np.asarray(self.ptr.expand_a2i(), dtype='long')
 
 ctypedef Env * Envptr
 

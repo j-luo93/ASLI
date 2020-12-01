@@ -15,6 +15,7 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .mcts_fast import PyNull_abc, parallel_gather_action_info  # pylint: disable=no-name-in-module
+import numpy as np
 
 
 class FactorizedProjection(nn.Module):
@@ -42,10 +43,14 @@ class FactorizedProjection(nn.Module):
 
         potentials = self.potential_block(inp)
         with NoName(potentials):
-            a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, g.num_workers))
+            a2i = self.action_space.a2i.view(-1, 6)[get_tensor(indices)]
+            # a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, g.num_workers))
             mask = a2i == PyNull_abc
             a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
-            ret = potentials.gather(1, a2i)
+            num_ids = len(self.action_space.abc)
+            batch_ids = get_tensor(np.arange(indices.shape[0])).long().view(-1, 1, 1)
+            order = get_tensor(np.arange(6)).long()
+            ret = potentials.view(-1, num_ids, 6)[batch_ids, a2i, order]
             ret = torch.where(mask, torch.zeros_like(ret), ret)
             ret = ret.view(-1, indices.shape[-1], 6).sum(dim=-1)
             return ret.rename('batch', 'action')

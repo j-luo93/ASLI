@@ -114,6 +114,7 @@ class Mcts:
 
             # TODO(j_luo) Scoped might be wrong here.
             # with ScopedCache('state_repr'):
+            self.action_space.expand_a2i()
             probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
             if g.use_value_guidance:
                 agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dev_misc.utils import pbar
 from typing import Dict
+import torch
 from collections import defaultdict
 import pickle
 import logging
@@ -105,3 +106,7 @@ class SoundChangeActionSpace(PyActionSpace):
         #         self.action2d_pre = gather('d_pre_id')
         #         self.action2post = gather('post_id')
         #         self.action2d_post = gather('d_post_id')
+        self.a2i = get_tensor(torch.zeros(0)).long()
+
+    def expand_a2i(self):
+        self.a2i = torch.cat([self.a2i, get_tensor(super().expand_a2i())], dim=-1)

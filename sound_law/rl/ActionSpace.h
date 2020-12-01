@@ -25,6 +25,7 @@ public:
     size_t size();
     void clear_cache();
     size_t get_cache_size();
+    vector<abc_t> expand_a2i();
 
 private:
     void register_site(const Site &);
@@ -33,4 +34,6 @@ private:
     unordered_map<Site, vector<action_t>> site_map;
     mutex mtx;
     mutex site_mtx;
+
+    vector<abc_t> a2i_cache;
 };

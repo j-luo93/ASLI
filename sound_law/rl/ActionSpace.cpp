@@ -13,6 +13,7 @@ ActionSpace::ActionSpace()
     this->word_cache = unordered_map<WordKey, Word *>();
     this->site_map = unordered_map<Site, vector<action_t>>();
     this->edges = unordered_map<abc_t, vector<abc_t>>();
+    this->a2i_cache = vector<abc_t>();
 }
 
 void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
@@ -50,6 +51,12 @@ void ActionSpace::register_site(const Site &site)
         action_t action_id = (action_t)this->actions.size();
         Action *action = new Action(action_id, before_id, after_id, pre_cond, post_cond);
         this->actions.push_back(action);
+        this->a2i_cache.push_back(before_id);
+        this->a2i_cache.push_back(after_id);
+        this->a2i_cache.push_back(pre_id);
+        this->a2i_cache.push_back(d_pre_id);
+        this->a2i_cache.push_back(post_id);
+        this->a2i_cache.push_back(d_post_id);
         this->site_map[site].push_back(action_id);
     }
 }
@@ -149,4 +156,11 @@ void ActionSpace::clear_cache()
 size_t ActionSpace::get_cache_size()
 {
     return this->word_cache.size();
+}
+
+vector<abc_t> ActionSpace::expand_a2i()
+{
+    vector<abc_t> ret = this->a2i_cache;
+    this->a2i_cache.clear();
+    return ret;
 }
