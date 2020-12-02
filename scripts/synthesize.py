@@ -111,6 +111,7 @@ if __name__ == "__main__":
         np.random.seed(args.random_seed)
         for i in range(args.length):
             while True:
+                manager.action_space.set_action_allowed(state)
                 best_i = np.random.choice(len(state.action_allowed))
                 print(len(state.action_allowed), 'allowed.')
                 action_id = state.action_allowed[best_i]

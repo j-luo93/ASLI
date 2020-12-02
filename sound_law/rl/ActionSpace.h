@@ -28,7 +28,7 @@ public:
     vector<abc_t> expand_a2i();
 
 private:
-    void register_site(const Site &);
+    void register_node(SiteNode *);
 
     unordered_map<WordKey, Word *> word_cache;
     unordered_map<Site, vector<action_t>> site_map;
