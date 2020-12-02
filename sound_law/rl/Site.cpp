@@ -1,38 +1,71 @@
 #include <Site.h>
 
-// Site::Site(abc_t before_id,
-//            const vector<abc_t> &pre_cond,
-//            const vector<abc_t> &post_cond,
-//            const SiteKey &key) : before_id(before_id),
-//                                  pre_cond(pre_cond),
-//                                  post_cond(post_cond),
-//                                  key(key) {}
+unordered_map<Site, SiteNode *> SiteNode::all_nodes = unordered_map<Site, SiteNode *>();
+mutex SiteNode::cls_mtx;
 
 SiteGraph::SiteGraph()
 {
     this->nodes = unordered_map<Site, SiteNode *>();
 }
 
-SiteNode::SiteNode(const Site &site) : site(site)
+inline SiteNode *generate_subgraph(abc_t before_id,
+                                   abc_t pre_id,
+                                   abc_t d_pre_id,
+                                   abc_t post_id,
+                                   abc_t d_post_id,
+                                   SiteNode *parent = nullptr)
 {
-    this->children = vector<SiteNode *>();
+    Site site = Site(before_id, pre_id, d_pre_id, post_id, d_post_id);
+    if (SiteNode::all_nodes.find(site) == SiteNode::all_nodes.end())
+    {
+        SiteNode *new_node = new SiteNode();
+        new_node->site = site;
+        SiteNode::all_nodes[site] = new_node;
+        // Generate all its children.
+        if (pre_id != NULL_abc)
+            if (d_pre_id != NULL_abc)
+                new_node->lchild = generate_subgraph(before_id, pre_id, NULL_abc, post_id, d_post_id, new_node);
+            else
+                new_node->lchild = generate_subgraph(before_id, NULL_abc, NULL_abc, post_id, d_post_id, new_node);
+        if (post_id != NULL_abc)
+            if (d_post_id != NULL_abc)
+                new_node->rchild = generate_subgraph(before_id, pre_id, d_pre_id, post_id, NULL_abc, new_node);
+            else
+                new_node->rchild = generate_subgraph(before_id, pre_id, d_pre_id, NULL_abc, NULL_abc, new_node);
+    }
+    return SiteNode::all_nodes.at(site);
 }
 
-void SiteGraph::add_site(const Site &new_site, SiteNode *parent)
+SiteNode *SiteNode::get_site_node(abc_t before_id, abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id)
 {
-    // const SiteKey &key = new_site.key;
-    if (this->nodes.find(new_site) == this->nodes.end())
-    {
-        SiteNode *new_node = new SiteNode(new_site);
-        this->nodes[new_site] = new_node;
-    }
+    Site site = Site(before_id, pre_id, d_pre_id, post_id, d_post_id);
+    unique_lock<mutex> lock(SiteNode::cls_mtx);
+    SiteNode *node = generate_subgraph(before_id, pre_id, d_pre_id, post_id, d_post_id);
+    lock.unlock();
+    return node;
+}
 
-    SiteNode *node = this->nodes[new_site];
+void SiteNode::reset()
+{
+    this->num_sites = 0;
+    this->in_degree = 0;
+    this->visited = false;
+}
+
+void SiteGraph::add_node(SiteNode *node)
+{
+    if (this->nodes.find(node->site) == this->nodes.end())
+        this->nodes[node->site] = node;
     ++node->num_sites;
-    if (parent != nullptr)
+    if (node->lchild != nullptr)
     {
-        parent->children.push_back(node);
-        ++node->in_degree;
+        ++node->lchild->in_degree;
+        this->add_node(node->lchild);
+    }
+    if (node->rchild != nullptr)
+    {
+        ++node->rchild->in_degree;
+        this->add_node(node->rchild);
     }
 }
 
@@ -53,6 +86,6 @@ SiteGraph::~SiteGraph()
 {
     for (auto item : this->nodes)
     {
-        delete item.second;
+        item.second->reset();
     }
 }

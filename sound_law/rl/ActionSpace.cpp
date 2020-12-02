@@ -23,8 +23,9 @@ void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
     this->edges[before_id].push_back(after_id);
 }
 
-void ActionSpace::register_site(const Site &site)
+void ActionSpace::register_node(SiteNode *node)
 {
+    const Site &site = node->site;
     // Do not register duplicate sites.
     if (this->site_map.find(site) != this->site_map.end())
         return;
@@ -59,25 +60,29 @@ void ActionSpace::register_site(const Site &site)
         this->a2i_cache.push_back(d_post_id);
         this->site_map[site].push_back(action_id);
     }
+    if (node->lchild != nullptr)
+        this->register_node(node->lchild);
+    if (node->rchild != nullptr)
+        this->register_node(node->rchild);
 }
-// void ActionSpace::register_action(abc_t before_id,
-//                                   abc_t after_id,
-//                                   const vector<abc_t> &pre_cond = vector<abc_t>(),
-//                                   const vector<abc_t> &post_cond = vector<abc_t>())
-// {
-//     action_t action_id = (action_t)this->actions.size();
-//     Action *action = new Action(action_id, before_id, after_id, pre_cond, post_cond);
-//     this->actions.push_back(action);
-//     SiteKey key = get_site_key(before_id, pre_cond, post_cond);
-//     if (this->site_map.find(key) == this->site_map.end())
-//         this->site_map[key] = vector<action_t>();
-//     // FIXME(j_luo) This is inefficient since it actually only depends on before_id.
-//     this->site_map[key].push_back(action_id);
-// }
 
 Action *ActionSpace::get_action(action_t action_id)
 {
     return this->actions.at(action_id);
+}
+
+bool inline update_queue(vector<SiteNode *> &queue, SiteNode *node, SiteNode *child)
+{
+    if (child == nullptr)
+        return true;
+    --child->in_degree;
+    assert(child->in_degree >= 0);
+    if ((child->in_degree == 0) and (!child->visited))
+    {
+        child->visited = true;
+        queue.push_back(child);
+    }
+    return (node->num_sites != child->num_sites);
 }
 
 void ActionSpace::set_action_allowed(TreeNode *node)
@@ -95,40 +100,35 @@ void ActionSpace::set_action_allowed(TreeNode *node)
         {
             Word *new_word = new Word(vocab_i[i], key);
             this->word_cache[key] = new_word;
-            for (const Site &site : new_word->sites)
-                this->register_site(site);
+            for (SiteNode *root : new_word->site_roots)
+                this->register_node(root);
         }
         const Word *word = this->word_cache[key];
         lock.unlock();
-        for (const Site &site : word->sites)
-            graph.add_site(site);
+        for (SiteNode *root : word->site_roots)
+            graph.add_node(root);
     }
 
     vector<action_t> &action_allowed = node->action_allowed;
     vector<SiteNode *> queue = graph.get_sources();
     while (!queue.empty())
     {
-        SiteNode *node = queue.back();
+        SiteNode *snode = queue.back();
         queue.pop_back();
         // If any child of this node has the same `num_sites`, then this node is discarded.
-        bool to_keep = true;
-        for (SiteNode *child : node->children)
-        {
-            if (node->num_sites == child->num_sites)
-                to_keep = false;
-            --child->in_degree;
-            assert(child->in_degree >= 0);
-            if ((child->in_degree == 0) and (!child->visited))
-            {
-                child->visited = true;
-                queue.push_back(child);
-            }
-        }
-        if (to_keep)
+        if (update_queue(queue, snode, snode->lchild) and update_queue(queue, snode, snode->rchild))
         {
             unique_lock<mutex> lock(this->mtx);
-            const vector<action_t> &map_values = this->site_map.at(node->site);
+            const vector<action_t> &map_values = this->site_map.at(snode->site);
             lock.unlock();
+            // for (action_t action_id : map_values)
+            //     {
+            //         Action * action = this->get_action(action_id);
+            //         for (const IdSeq &id_seq: vocab_i) {
+            //             edit_distance(action->apply_to(id_seq)
+            //         }
+            //         action->apply_to();
+            //     }
             action_allowed.insert(action_allowed.end(), map_values.begin(), map_values.end());
         }
     }
