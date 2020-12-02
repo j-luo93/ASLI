@@ -71,7 +71,7 @@ Action *ActionSpace::get_action(action_t action_id)
     return this->actions.at(action_id);
 }
 
-bool inline update_queue(vector<SiteNode *> &queue, SiteNode *node, SiteNode *child)
+inline bool update_queue(vector<SiteNodeWithStats *> &queue, SiteNodeWithStats *node, SiteNodeWithStats *child)
 {
     if (child == nullptr)
         return true;
@@ -110,25 +110,17 @@ void ActionSpace::set_action_allowed(TreeNode *node)
     }
 
     vector<action_t> &action_allowed = node->action_allowed;
-    vector<SiteNode *> queue = graph.get_sources();
+    vector<SiteNodeWithStats *> queue = graph.get_sources();
     while (!queue.empty())
     {
-        SiteNode *snode = queue.back();
+        SiteNodeWithStats *snode = queue.back();
         queue.pop_back();
         // If any child of this node has the same `num_sites`, then this node is discarded.
         if (update_queue(queue, snode, snode->lchild) and update_queue(queue, snode, snode->rchild))
         {
             unique_lock<mutex> lock(this->mtx);
-            const vector<action_t> &map_values = this->site_map.at(snode->site);
+            const vector<action_t> &map_values = this->site_map.at(snode->base->site);
             lock.unlock();
-            // for (action_t action_id : map_values)
-            //     {
-            //         Action * action = this->get_action(action_id);
-            //         for (const IdSeq &id_seq: vocab_i) {
-            //             edit_distance(action->apply_to(id_seq)
-            //         }
-            //         action->apply_to();
-            //     }
             action_allowed.insert(action_allowed.end(), map_values.begin(), map_values.end());
         }
     }

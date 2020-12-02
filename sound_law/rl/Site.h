@@ -4,6 +4,11 @@
 
 using Site = tuple<abc_t, abc_t, abc_t, abc_t, abc_t>;
 
+void print_site(const Site &site)
+{
+    cerr << get<0>(site) << ' ' << get<1>(site) << ' ' << get<2>(site) << ' ' << get<3>(site) << ' ' << get<4>(site) << '\n';
+}
+
 class SiteNode
 {
 public:
@@ -16,9 +21,20 @@ public:
     Site site;
     SiteNode *lchild = nullptr;
     SiteNode *rchild = nullptr;
+};
+
+// This is the site nodes with thread-local stats.
+class SiteNodeWithStats
+{
+public:
+    SiteNodeWithStats(SiteNode *);
+
+    SiteNode *base;
     size_t num_sites = 0;
     size_t in_degree = 0;
     bool visited = false;
+    SiteNodeWithStats *lchild = nullptr;
+    SiteNodeWithStats *rchild = nullptr;
 };
 
 class SiteGraph
@@ -27,11 +43,10 @@ public:
     SiteGraph();
     ~SiteGraph();
 
-    void add_node(SiteNode *);
-    vector<SiteNode *> get_sources();
-    unordered_map<Site, SiteNode *> nodes;
+    void *add_node(SiteNode *, SiteNode * = nullptr);
+    vector<SiteNodeWithStats *> get_sources();
+    unordered_map<Site, SiteNodeWithStats *> nodes;
 
-    // private:
-    // void add_site(abc_t, const vector<abc_t> &, const vector<abc_t> &, const SiteKey &, SiteNode * = nullptr);
-    // void add_site(const Site &, SiteNode * = nullptr);
+private:
+    inline SiteNodeWithStats *get_wrapped_node(SiteNode *);
 };

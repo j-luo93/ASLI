@@ -107,6 +107,7 @@ if __name__ == "__main__":
         init_n_chars = len(get_all_chars(dl.init_state, manager.tgt_abc))
         print(init_n_chars)
         state = dl.init_state
+        print(get_units(state, manager.tgt_abc))
         path = [state]
         np.random.seed(args.random_seed)
         for i in range(args.length):
@@ -122,14 +123,11 @@ if __name__ == "__main__":
                     continue
                 print(f'step {i + 1} finished.')
                 state = next_state
+                print('-' * 20)
+                print(manager.action_space.get_action(state.prev_action[1]))
+                print(get_units(state, manager.tgt_abc))
                 path.append(state)
                 break
-
-        for i, state in enumerate(path):
-            if i > 0:
-                print(manager.action_space.get_action(state.prev_action[1]))
-            print(get_units(state, manager.tgt_abc))
-            print('-' * 20)
 
         records = list()
         for unit_seq in get_unit_seqs(path[-1].vocab, manager.tgt_abc):

@@ -5,7 +5,7 @@ mutex SiteNode::cls_mtx;
 
 SiteGraph::SiteGraph()
 {
-    this->nodes = unordered_map<Site, SiteNode *>();
+    this->nodes = unordered_map<Site, SiteNodeWithStats *>();
 }
 
 inline SiteNode *generate_subgraph(abc_t before_id,
@@ -45,36 +45,76 @@ SiteNode *SiteNode::get_site_node(abc_t before_id, abc_t pre_id, abc_t d_pre_id,
     return node;
 }
 
-void SiteNode::reset()
+SiteNodeWithStats::SiteNodeWithStats(SiteNode *node) : base(node)
 {
     this->num_sites = 0;
     this->in_degree = 0;
     this->visited = false;
 }
 
-void SiteGraph::add_node(SiteNode *node)
+inline SiteNodeWithStats *SiteGraph::get_wrapped_node(SiteNode *base)
 {
-    if (this->nodes.find(node->site) == this->nodes.end())
-        this->nodes[node->site] = node;
-    ++node->num_sites;
-    if (node->lchild != nullptr)
+    SiteNodeWithStats *node;
+    if (this->nodes.find(base->site) != this->nodes.end())
+        node = this->nodes.at(base->site);
+    else
     {
-        ++node->lchild->in_degree;
-        this->add_node(node->lchild);
+        node = new SiteNodeWithStats(base);
+        this->nodes[base->site] = node;
     }
-    if (node->rchild != nullptr)
+    return node;
+}
+
+void *SiteGraph::add_node(SiteNode *base, SiteNode *parent)
+{
+    // Generate all wrapped nodes first.
+    vector<SiteNodeWithStats *> queue = vector<SiteNodeWithStats *>();
+    SiteNodeWithStats *base_node = this->get_wrapped_node(base);
+    base_node->visited = true;
+    queue.push_back(base_node);
+    size_t i = 0;
+    while (i < queue.size())
     {
-        ++node->rchild->in_degree;
-        this->add_node(node->rchild);
+        SiteNodeWithStats *snode = queue.at(i);
+        const SiteNode *node = snode->base;
+        if (node->lchild != nullptr)
+        {
+            if (snode->lchild == nullptr)
+                snode->lchild = this->get_wrapped_node(node->lchild);
+            snode->lchild->in_degree++;
+            if (!snode->lchild->visited)
+            {
+                queue.push_back(snode->lchild);
+                snode->lchild->visited = true;
+            }
+        }
+        if (node->rchild != nullptr)
+        {
+            if (snode->rchild == nullptr)
+                snode->rchild = this->get_wrapped_node(node->rchild);
+            snode->rchild->in_degree++;
+            if (!snode->rchild->visited)
+            {
+                queue.push_back(snode->rchild);
+                snode->rchild->visited = true;
+            }
+        }
+        ++i;
+    }
+    // Increment every wrapped node and reset visited.
+    for (SiteNodeWithStats *snode : queue)
+    {
+        ++snode->num_sites;
+        snode->visited = false;
     }
 }
 
-vector<SiteNode *> SiteGraph::get_sources()
+vector<SiteNodeWithStats *> SiteGraph::get_sources()
 {
-    vector<SiteNode *> sources = vector<SiteNode *>();
+    vector<SiteNodeWithStats *> sources = vector<SiteNodeWithStats *>();
     for (auto const item : this->nodes)
     {
-        SiteNode *node = item.second;
+        SiteNodeWithStats *node = item.second;
         if (node->in_degree == 0)
             sources.push_back(node);
     }
@@ -84,8 +124,6 @@ vector<SiteNode *> SiteGraph::get_sources()
 
 SiteGraph::~SiteGraph()
 {
-    for (auto item : this->nodes)
-    {
-        item.second->reset();
-    }
+    for (auto const &item : this->nodes)
+        delete item.second;
 }
