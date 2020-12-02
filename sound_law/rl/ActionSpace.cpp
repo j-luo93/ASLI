@@ -126,7 +126,9 @@ void ActionSpace::set_action_allowed(TreeNode *node)
         }
         if (to_keep)
         {
+            unique_lock<mutex> lock(this->mtx);
             const vector<action_t> &map_values = this->site_map.at(node->site);
+            lock.unlock();
             action_allowed.insert(action_allowed.end(), map_values.begin(), map_values.end());
         }
     }
