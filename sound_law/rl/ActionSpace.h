@@ -21,7 +21,7 @@ public:
     void register_edge(abc_t, abc_t);
 
     Action *get_action(action_t);
-    vector<action_t> get_action_allowed(const VocabIdSeq &);
+    void set_action_allowed(TreeNode *);
     size_t size();
     void clear_cache();
     size_t get_cache_size();

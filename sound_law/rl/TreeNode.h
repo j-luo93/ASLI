@@ -17,8 +17,8 @@ public:
     static void set_max_mode(bool);
 
     TreeNode(const VocabIdSeq &);
-    TreeNode(const VocabIdSeq &, TreeNode *, const vector<action_t> &);
-    TreeNode(const VocabIdSeq &, TreeNode *, action_t, action_t, TreeNode *, const vector<action_t> &);
+    TreeNode(const VocabIdSeq &, TreeNode *);
+    TreeNode(const VocabIdSeq &, TreeNode *, action_t, action_t, TreeNode *);
 
     void add_edge(action_t, const pair<TreeNode *, float> &);
     bool has_acted(action_t);

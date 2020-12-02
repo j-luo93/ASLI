@@ -80,9 +80,12 @@ Action *ActionSpace::get_action(action_t action_id)
     return this->actions.at(action_id);
 }
 
-vector<action_t> ActionSpace::get_action_allowed(const VocabIdSeq &vocab_i)
+void ActionSpace::set_action_allowed(TreeNode *node)
 {
+    if (!node->action_allowed.empty())
+        return;
     // Build the graph first.
+    const VocabIdSeq &vocab_i = node->vocab_i;
     SiteGraph graph = SiteGraph();
     for (size_t i = 0; i < vocab_i.size(); ++i)
     {
@@ -101,15 +104,7 @@ vector<action_t> ActionSpace::get_action_allowed(const VocabIdSeq &vocab_i)
             graph.add_site(site);
     }
 
-    // for (auto const &item : graph.nodes)
-    // {
-    //     const Site &site = item.first;
-    //     unique_lock<mutex> lock(this->site_mtx);
-    //     this->register_site(site);
-    //     lock.unlock();
-    // }
-
-    vector<action_t> action_allowed = vector<action_t>();
+    vector<action_t> &action_allowed = node->action_allowed;
     vector<SiteNode *> queue = graph.get_sources();
     while (!queue.empty())
     {
@@ -136,7 +131,6 @@ vector<action_t> ActionSpace::get_action_allowed(const VocabIdSeq &vocab_i)
         }
     }
     assert(!action_allowed.empty());
-    return action_allowed;
 }
 
 size_t ActionSpace::size()

@@ -39,10 +39,9 @@ TreeNode::TreeNode(const VocabIdSeq &vocab_i)
     this->dist_to_end = 0;
     this->parent_node = nullptr;
     this->done = true;
-    this->action_allowed = vector<action_t>();
 };
 
-TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node, const vector<action_t> &action_allowed)
+TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node)
 {
     // This constructor is used for root node only.
     common_init(this, vocab_i);
@@ -50,10 +49,9 @@ TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node, const vector<a
     this->dist_to_end = node_distance(this, end_node, TreeNode::dist_mat, TreeNode::ins_cost);
     this->parent_node = nullptr;
     this->done = (this->vocab_i == end_node->vocab_i);
-    this->action_allowed = action_allowed;
 };
 
-TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node, action_t best_i, action_t action_id, TreeNode *parent_node, const vector<action_t> &action_allowed)
+TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node, action_t best_i, action_t action_id, TreeNode *parent_node)
 {
     // This constructor is used for nodes created by one env step.
     common_init(this, vocab_i);
@@ -62,7 +60,6 @@ TreeNode::TreeNode(const VocabIdSeq &vocab_i, TreeNode *end_node, action_t best_
     this->prev_action = pair<action_t, action_t>(best_i, action_id);
     this->parent_node = parent_node;
     this->done = (this->vocab_i == end_node->vocab_i);
-    this->action_allowed = action_allowed;
 }
 
 void TreeNode::add_edge(action_t action_id, const Edge &edge)

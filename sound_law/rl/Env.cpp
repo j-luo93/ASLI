@@ -24,8 +24,7 @@ Edge Env::step(TreeNode *node, action_t best_i, Action *action)
     {
         vocab_i[i] = action->apply_to(node->vocab_i[i]);
     };
-    vector<action_t> action_allowed = this->action_space->get_action_allowed(vocab_i);
-    TreeNode *new_node = new TreeNode(vocab_i, node->end_node, best_i, action->action_id, node, action_allowed);
+    TreeNode *new_node = new TreeNode(vocab_i, node->end_node, best_i, action->action_id, node);
     float final_reward = new_node->done ? this->final_reward : -this->step_penalty;
     float incremental_reward = (node->dist_to_end - new_node->dist_to_end) / this->starting_dist;
     Edge edge = Edge(new_node, final_reward + incremental_reward);

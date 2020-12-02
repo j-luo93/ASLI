@@ -67,7 +67,7 @@ cdef extern from "TreeNode.h":
         void set_max_mode(bool)
 
         TreeNode(VocabIdSeq) except +
-        TreeNode(VocabIdSeq, TreeNode *, vector[action_t]) except +
+        TreeNode(VocabIdSeq, TreeNode *) except +
 
         bool has_acted(action_t)
         size_t size()
@@ -139,7 +139,7 @@ cdef extern from "ActionSpace.h":
         void register_edge(abc_t, abc_t)
 
         Action *get_action(action_t)
-        vector[action_t] get_action_allowed(VocabIdSeq) except +
+        void set_action_allowed(TreeNode *)
         size_t size()
         void clear_cache()
         size_t get_cache_size()
@@ -218,7 +218,6 @@ cdef class PyTreeNode:
                   *args,
                   object arr = None,
                   object lengths = None,
-                  object action_allowed = None,
                   PyTreeNode end_node = None,
                   bool from_ptr = False,
                   **kwargs):
@@ -234,16 +233,10 @@ cdef class PyTreeNode:
         cdef long[::1] lengths_view = lengths
 
         cdef VocabIdSeq vocab_i = np2vocab(arr_view, lengths_view, n)
-        cdef action_t[::1] aa_view
-        cdef size_t m
-        cdef vector[action_t] aa_vec
         if end_node is None:
             self.ptr = new TreeNode(vocab_i)
         else:
-            m = len(action_allowed)
-            aa_view = action_allowed.astype(np_action_t)
-            aa_vec = np2vector(aa_view, m)
-            self.ptr = new TreeNode(vocab_i, end_node.ptr, aa_vec)
+            self.ptr = new TreeNode(vocab_i, end_node.ptr)
         self.end_node = end_node
 
     def __len__(self):
@@ -524,18 +517,13 @@ cdef class PyActionSpace:
     def set_conditional(bool conditional):
         ActionSpace.set_conditional(conditional)
 
-    def get_action_allowed(self, object arr, object lengths):
-        cdef size_t n = len(arr)
-        cdef long[:, ::1] arr_view = arr
-        cdef long[::1] lengths_view = lengths
-        cdef vector[vector[abc_t]] vocab_i = np2vocab(arr_view, lengths_view, n)
-        cdef vector[action_t] action_allowed = self.ptr.get_action_allowed(vocab_i)
-        return np.asarray(action_allowed, dtype='long')
+    def set_action_allowed(self, PyTreeNode node):
+        self.ptr.set_action_allowed(node.ptr)
 
-    def get_action_mask(self, object arr, object lengths):
-        action_allowed = self.get_action_allowed(arr, lengths)
+    def get_action_mask(self, PyTreeNode node):
+        cdef vector[action_t] action_allowed = node.action_allowed
         ret = np.zeros([len(self)], dtype='bool')
-        for i in range(len(arr)):
+        for i in range(action_allowed.size()):
             ret[action_allowed[i]] = True
         return  ret
 
@@ -660,6 +648,12 @@ cpdef object parallel_select(PyTreeNode py_root,
                 node = edge.first
             selected[i] = node
             steps_left_view[i] = n_steps_left
+        for i in prange(num_sims, num_threads=num_threads):
+            node = selected[i]
+            # This is in-place.
+            node.lock()
+            action_space.set_action_allowed(node)
+            node.unlock()
     tn_cls = type(py_root)
     return [wrap_node(tn_cls, ptr) for ptr in selected], steps_left
 
