@@ -24,6 +24,7 @@ from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
 from sound_law.rl.trajectory import VocabState
+from sound_law.rl.mcts_fast import set_end_words  # pylint: disable=no-name-in-module
 
 from .trainer import MctsTrainer, PolicyGradientTrainer, Trainer
 
@@ -206,6 +207,7 @@ class OnePairManager:
 
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
+            set_end_words(dl.end_state)
             env = SoundChangeEnv(dl.init_state, dl.end_state, self.action_space, g.final_reward, g.step_penalty)
             model = get_model(dl=dl)
             if g.use_mcts:

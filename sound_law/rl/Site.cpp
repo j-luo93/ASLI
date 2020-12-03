@@ -1,4 +1,5 @@
 #include <Site.h>
+#include <Word.h>
 
 unordered_map<Site, SiteNode *> SiteNode::all_nodes = unordered_map<Site, SiteNode *>();
 mutex SiteNode::cls_mtx;
@@ -36,11 +37,41 @@ inline SiteNode *generate_subgraph(abc_t before_id,
     return SiteNode::all_nodes.at(site);
 }
 
-SiteNode *SiteNode::get_site_node(abc_t before_id, abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id)
+inline void link_word(SiteNode *root, Word *word)
+{
+    // Generate all nodes first.
+    vector<SiteNode *> queue = vector<SiteNode *>();
+    root->visited = true;
+    queue.push_back(root);
+    size_t i = 0;
+    while (i < queue.size())
+    {
+        SiteNode *node = queue.at(i);
+        if ((node->lchild != nullptr) and (!node->lchild->visited))
+        {
+            queue.push_back(node->lchild);
+            node->lchild->visited = true;
+        }
+        if ((node->rchild != nullptr) and (!node->rchild->visited))
+        {
+            queue.push_back(node->rchild);
+            node->rchild->visited = true;
+        }
+        ++i;
+    }
+    for (SiteNode *node : queue)
+    {
+        node->visited = false;
+        node->linked_words.push_back(word);
+    }
+}
+
+SiteNode *SiteNode::get_site_node(abc_t before_id, abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id, Word *word)
 {
     Site site = Site(before_id, pre_id, d_pre_id, post_id, d_post_id);
     unique_lock<mutex> lock(SiteNode::cls_mtx);
     SiteNode *node = generate_subgraph(before_id, pre_id, d_pre_id, post_id, d_post_id);
+    link_word(node, word);
     lock.unlock();
     return node;
 }

@@ -158,6 +158,11 @@ cdef extern from "Env.h":
         TreeNode *init_node
         TreeNode *end_node
 
+cdef extern from "Word.h":
+    cdef cppclass Word nogil:
+        @staticmethod
+        void set_end_words(VocabIdSeq)
+
 cdef inline VocabIdSeq np2vocab(long[:, ::1] arr,
                                 long[::1] lengths,
                                 size_t n) except *:
@@ -814,3 +819,7 @@ cpdef object parallel_gather_action_info(PyActionSpace py_as, action_ids, int nu
                 ret_view[i, k + 4] = action.get_post_id()
                 ret_view[i, k + 5] = action.get_d_post_id()
     return ret
+
+cpdef set_end_words(PyTreeNode py_node):
+    cdef TreeNode *node = py_node.ptr
+    Word.set_end_words(node.vocab_i)

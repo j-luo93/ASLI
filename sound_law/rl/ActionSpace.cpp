@@ -91,7 +91,7 @@ void ActionSpace::set_action_allowed(TreeNode *node)
         unique_lock<mutex> lock(this->mtx);
         if (this->word_cache.find(key) == this->word_cache.end())
         {
-            Word *new_word = new Word(vocab_i[i], key);
+            Word *new_word = new Word(vocab_i[i], key, i);
             this->word_cache[key] = new_word;
             for (SiteNode *root : new_word->site_roots)
                 this->register_node(root);
@@ -112,10 +112,25 @@ void ActionSpace::set_action_allowed(TreeNode *node)
             unique_lock<mutex> lock(this->mtx);
             const vector<action_t> &map_values = this->site_map.at(snode->base->site);
             lock.unlock();
-            action_allowed.insert(action_allowed.end(), map_values.begin(), map_values.end());
+            for (action_t action_id : map_values)
+            {
+                Action *action = this->actions.at(action_id);
+                float delta = 0.0;
+                for (Word *word : snode->base->linked_words)
+                {
+                    float orig = edit_distance(word->id_seq, Word::end_words.at(word->order), TreeNode::dist_mat, TreeNode::ins_cost);
+                    delta += edit_distance(action->apply_to(word->id_seq),
+                                           Word::end_words.at(word->order),
+                                           TreeNode::dist_mat,
+                                           TreeNode::ins_cost) -
+                             orig;
+                }
+                if (delta < 0.0)
+                    action_allowed.push_back(action_id);
+            }
         }
     }
-    assert(!action_allowed.empty());
+    // assert(!action_allowed.empty());
 }
 
 size_t ActionSpace::size()

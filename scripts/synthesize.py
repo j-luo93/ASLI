@@ -16,6 +16,7 @@ from sound_law.main import setup
 from sound_law.rl.action import SoundChangeActionSpace
 from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.trajectory import VocabState
+from sound_law.rl.mcts_fast import set_end_words  # pylint: disable=no-name-in-module
 from sound_law.train.manager import OnePairManager
 
 dispatch = dict()
@@ -102,6 +103,7 @@ if __name__ == "__main__":
 
         manager = OnePairManager()
         dl = manager.dl_reg.get_loaders_by_name('rl')
+        set_end_words(dl.end_state)
         env = SoundChangeEnv(dl.init_state, dl.end_state, manager.action_space, g.final_reward, g.step_penalty)
 
         init_n_chars = len(get_all_chars(dl.init_state, manager.tgt_abc))

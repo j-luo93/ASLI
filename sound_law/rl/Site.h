@@ -9,18 +9,22 @@ void print_site(const Site &site)
     cerr << get<0>(site) << ' ' << get<1>(site) << ' ' << get<2>(site) << ' ' << get<3>(site) << ' ' << get<4>(site) << '\n';
 }
 
+class Word;
+
 class SiteNode
 {
 public:
     static mutex cls_mtx;
     static unordered_map<Site, SiteNode *> all_nodes;
-    static SiteNode *get_site_node(abc_t, abc_t, abc_t, abc_t, abc_t);
+    static SiteNode *get_site_node(abc_t, abc_t, abc_t, abc_t, abc_t, Word *);
 
     void reset();
 
     Site site;
     SiteNode *lchild = nullptr;
     SiteNode *rchild = nullptr;
+    bool visited = false;
+    vector<Word *> linked_words;
 };
 
 // This is the site nodes with thread-local stats.
