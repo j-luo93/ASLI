@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
     if args.mode == 'random':
 
-        sys.argv = 'sound_law/main.py --config OPRLFakeR5 --mcts_config LargeSims --no_use_value_guidance --use_conditional'.split()
+        sys.argv = 'sound_law/main.py --config OPRLFakeR30C --mcts_config LargeSims --no_use_value_guidance --use_conditional'.split()
 
         initiator = setup()
         initiator.run()

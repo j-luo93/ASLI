@@ -48,7 +48,6 @@ SiteNode *SiteNode::get_site_node(abc_t before_id, abc_t pre_id, abc_t d_pre_id,
 SiteNodeWithStats::SiteNodeWithStats(SiteNode *node) : base(node)
 {
     this->num_sites = 0;
-    this->in_degree = 0;
     this->visited = false;
 }
 
@@ -81,7 +80,6 @@ void *SiteGraph::add_node(SiteNode *base, SiteNode *parent)
         {
             if (snode->lchild == nullptr)
                 snode->lchild = this->get_wrapped_node(node->lchild);
-            snode->lchild->in_degree++;
             if (!snode->lchild->visited)
             {
                 queue.push_back(snode->lchild);
@@ -92,7 +90,6 @@ void *SiteGraph::add_node(SiteNode *base, SiteNode *parent)
         {
             if (snode->rchild == nullptr)
                 snode->rchild = this->get_wrapped_node(node->rchild);
-            snode->rchild->in_degree++;
             if (!snode->rchild->visited)
             {
                 queue.push_back(snode->rchild);
@@ -101,25 +98,12 @@ void *SiteGraph::add_node(SiteNode *base, SiteNode *parent)
         }
         ++i;
     }
-    // Increment every wrapped node and reset visited.
+    // Increment every wrapped node and reset visited (so that other words might reuse this node).
     for (SiteNodeWithStats *snode : queue)
     {
         ++snode->num_sites;
         snode->visited = false;
     }
-}
-
-vector<SiteNodeWithStats *> SiteGraph::get_sources()
-{
-    vector<SiteNodeWithStats *> sources = vector<SiteNodeWithStats *>();
-    for (auto const item : this->nodes)
-    {
-        SiteNodeWithStats *node = item.second;
-        if (node->in_degree == 0)
-            sources.push_back(node);
-    }
-    assert(!sources.empty());
-    return sources;
 }
 
 SiteGraph::~SiteGraph()

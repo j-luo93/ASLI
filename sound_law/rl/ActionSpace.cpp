@@ -71,17 +71,10 @@ Action *ActionSpace::get_action(action_t action_id)
     return this->actions.at(action_id);
 }
 
-inline bool update_queue(vector<SiteNodeWithStats *> &queue, SiteNodeWithStats *node, SiteNodeWithStats *child)
+inline bool is_more_retrictive(SiteNodeWithStats *node, SiteNodeWithStats *child)
 {
     if (child == nullptr)
         return true;
-    --child->in_degree;
-    assert(child->in_degree >= 0);
-    if ((child->in_degree == 0) and (!child->visited))
-    {
-        child->visited = true;
-        queue.push_back(child);
-    }
     return (node->num_sites != child->num_sites);
 }
 
@@ -110,13 +103,11 @@ void ActionSpace::set_action_allowed(TreeNode *node)
     }
 
     vector<action_t> &action_allowed = node->action_allowed;
-    vector<SiteNodeWithStats *> queue = graph.get_sources();
-    while (!queue.empty())
+    for (auto const item : graph.nodes)
     {
-        SiteNodeWithStats *snode = queue.back();
-        queue.pop_back();
+        SiteNodeWithStats *snode = item.second;
         // If any child of this node has the same `num_sites`, then this node is discarded.
-        if (update_queue(queue, snode, snode->lchild) and update_queue(queue, snode, snode->rchild))
+        if (is_more_retrictive(snode, snode->lchild) and is_more_retrictive(snode, snode->rchild))
         {
             unique_lock<mutex> lock(this->mtx);
             const vector<action_t> &map_values = this->site_map.at(snode->base->site);

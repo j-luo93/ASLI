@@ -31,7 +31,6 @@ public:
 
     SiteNode *base;
     size_t num_sites = 0;
-    size_t in_degree = 0;
     bool visited = false;
     SiteNodeWithStats *lchild = nullptr;
     SiteNodeWithStats *rchild = nullptr;
@@ -44,7 +43,6 @@ public:
     ~SiteGraph();
 
     void *add_node(SiteNode *, SiteNode * = nullptr);
-    vector<SiteNodeWithStats *> get_sources();
     unordered_map<Site, SiteNodeWithStats *> nodes;
 
 private:
