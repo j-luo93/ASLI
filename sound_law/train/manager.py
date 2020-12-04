@@ -47,6 +47,8 @@ add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of
 add_argument('segments_dump_path', dtype='path', msg='Path to the processed Phoible pickle file.')
 add_argument('use_max_value', dtype=bool, default=False, msg='Flag to use max mode in MCTS.')
 add_argument('use_conditional', dtype=bool, default=True, msg='Flag to use conditional rules.')
+add_argument('use_pruning', dtype=bool, default=True, msg='Flag to use pruning.')
+add_argument('pruning_threshold', dtype=float, default=0.0, msg='Pruning threshold.')
 
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
@@ -122,6 +124,9 @@ class OnePairManager:
 
         if g.use_rl:
             SoundChangeActionSpace.set_conditional(g.use_conditional)
+            SoundChangeActionSpace.set_pruning(g.use_pruning)
+            if g.use_pruning:
+                SoundChangeActionSpace.set_pruning_threshold(g.pruning_threshold)
             self.action_space = SoundChangeActionSpace(self.tgt_abc)
             dl_kwargs = {'action_space': self.action_space}
         else:

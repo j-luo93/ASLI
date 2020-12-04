@@ -9,8 +9,12 @@ class ActionSpace
 {
 public:
     static bool use_conditional;
+    static bool use_pruning;
+    static float pruning_threshold;
 
     static void set_conditional(bool);
+    static void set_pruning(bool);
+    static void set_pruning_threshold(float);
 
     ActionSpace();
 

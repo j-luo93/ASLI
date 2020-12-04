@@ -130,6 +130,10 @@ cdef extern from "ActionSpace.h":
     cdef cppclass ActionSpace nogil:
         @staticmethod
         void set_conditional(bool)
+        @staticmethod
+        void set_pruning(bool)
+        @staticmethod
+        void set_pruning_threshold(float)
 
         ActionSpace()
 
@@ -521,6 +525,14 @@ cdef class PyActionSpace:
     @staticmethod
     def set_conditional(bool conditional):
         ActionSpace.set_conditional(conditional)
+
+    @staticmethod
+    def set_pruning(bool pruning):
+        ActionSpace.set_pruning(pruning)
+
+    @staticmethod
+    def set_pruning_threshold(float pruning_threshold):
+        ActionSpace.set_pruning_threshold(pruning_threshold)
 
     def set_action_allowed(self, PyTreeNode node):
         self.ptr.set_action_allowed(node.ptr)

@@ -1,10 +1,22 @@
 #include <ActionSpace.h>
 
 bool ActionSpace::use_conditional = false;
+bool ActionSpace::use_pruning = false;
+float ActionSpace::pruning_threshold = 0.0;
 
 void ActionSpace::set_conditional(bool conditional)
 {
     ActionSpace::use_conditional = conditional;
+}
+
+void ActionSpace::set_pruning(bool pruning)
+{
+    ActionSpace::use_pruning = pruning;
+}
+
+void ActionSpace::set_pruning_threshold(float pruning_threshold)
+{
+    ActionSpace::pruning_threshold = pruning_threshold;
 }
 
 ActionSpace::ActionSpace()
@@ -112,25 +124,28 @@ void ActionSpace::set_action_allowed(TreeNode *node)
             unique_lock<mutex> lock(this->mtx);
             const vector<action_t> &map_values = this->site_map.at(snode->base->site);
             lock.unlock();
-            for (action_t action_id : map_values)
-            {
-                Action *action = this->actions.at(action_id);
-                float delta = 0.0;
-                for (Word *word : snode->base->linked_words)
+            if (ActionSpace::use_pruning)
+                for (action_t action_id : map_values)
                 {
-                    float orig = edit_distance(word->id_seq, Word::end_words.at(word->order), TreeNode::dist_mat, TreeNode::ins_cost);
-                    delta += edit_distance(action->apply_to(word->id_seq),
-                                           Word::end_words.at(word->order),
-                                           TreeNode::dist_mat,
-                                           TreeNode::ins_cost) -
-                             orig;
+                    Action *action = this->actions.at(action_id);
+                    float delta = 0.0;
+                    for (Word *word : snode->base->linked_words)
+                    {
+                        float orig = edit_distance(word->id_seq, Word::end_words.at(word->order), TreeNode::dist_mat, TreeNode::ins_cost);
+                        delta += edit_distance(action->apply_to(word->id_seq),
+                                               Word::end_words.at(word->order),
+                                               TreeNode::dist_mat,
+                                               TreeNode::ins_cost) -
+                                 orig;
+                    }
+                    if (delta < ActionSpace::pruning_threshold)
+                        action_allowed.push_back(action_id);
                 }
-                if (delta < 0.0)
-                    action_allowed.push_back(action_id);
-            }
+            else
+                action_allowed.insert(action_allowed.end(), map_values.begin(), map_values.end());
         }
     }
-    // assert(!action_allowed.empty());
+    assert(!action_allowed.empty());
 }
 
 size_t ActionSpace::size()
