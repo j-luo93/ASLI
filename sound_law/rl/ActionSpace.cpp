@@ -127,7 +127,9 @@ void ActionSpace::set_action_allowed(TreeNode *node)
             if (ActionSpace::use_pruning)
                 for (action_t action_id : map_values)
                 {
+                    unique_lock<mutex> lock(this->mtx);
                     Action *action = this->actions.at(action_id);
+                    lock.unlock();
                     float delta = 0.0;
                     for (Word *word : snode->base->linked_words)
                     {
