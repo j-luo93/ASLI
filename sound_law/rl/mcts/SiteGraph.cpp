@@ -4,12 +4,15 @@ GraphNode::GraphNode(SiteNode *base) : base(base) {}
 
 SiteGraph::SiteGraph(SiteSpace *site_space) : site_space(site_space) {}
 
-void *SiteGraph::add_root(SiteNode *root)
+void *SiteGraph::add_root(SiteNode *root, int order)
 {
     GraphNode *g_node = generate_subgraph(root);
     std::vector<GraphNode *> g_nodes = get_descendants(g_node);
     for (auto g_node : g_nodes)
+    {
         g_node->num_sites++;
+        g_node->linked_words.insert(order);
+    }
 }
 
 GraphNode *SiteGraph::generate_subgraph(SiteNode *s_node)
@@ -47,6 +50,7 @@ std::vector<GraphNode *> SiteGraph::get_descendants(GraphNode *root)
             nodes.push_back(node->rchild);
             node->rchild->visited = true;
         }
+        i++;
     }
     for (auto *node : nodes)
         node->visited = false;

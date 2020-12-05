@@ -4,19 +4,15 @@
 Env::Env(
     WordSpace *word_space,
     ActionSpace *action_space,
-    const VocabIdSeq &start_ids,
-    const VocabIdSeq &end_ids) : word_space(word_space),
-                                 action_space(action_space)
+    const VocabIdSeq &start_ids) : word_space(word_space),
+                                   action_space(action_space)
 {
+    // Obtaining the start here is safe since `word_space` has already taken care of `dist_mat` and `ins_cost`.
     std::vector<Word *> start_words = std::vector<Word *>();
-    std::vector<Word *> end_words = std::vector<Word *>();
-    for (const IdSeq &id_seq : start_ids)
-        start_words.push_back(word_space->get_word(id_seq));
-    for (const IdSeq &id_seq : end_ids)
-        end_words.push_back(word_space->get_word(id_seq));
-
+    for (size_t order = 0; order < start_ids.size(); order++)
+        start_words.push_back(word_space->get_word(start_ids.at(order), order, false));
     start = new TreeNode(start_words);
-    end = new TreeNode(end_words);
+    end = new TreeNode(word_space->end_words);
 }
 
 TreeNode *Env::apply_action(TreeNode *node, const Action &action)
@@ -28,8 +24,8 @@ TreeNode *Env::apply_action(TreeNode *node, const Action &action)
 
     // Obtain new list of words (by using caching whenever possbile).
     std::vector<Word *> new_words = std::vector<Word *>();
-    for (Word *word : node->words)
-        new_words.push_back(word_space->apply_action(word, action));
+    for (size_t order = 0; order < node->words.size(); order++)
+        new_words.push_back(word_space->apply_action(node->words.at(order), action, order));
     TreeNode *new_node = new TreeNode(new_words);
 
     // Store it in neighbors.

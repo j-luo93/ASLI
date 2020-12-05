@@ -1,9 +1,12 @@
 #include "Action.hpp"
 #include "TreeNode.hpp"
 
-ActionSpace::ActionSpace(SiteSpace *site_space) : site_space(site_space) {}
+ActionSpace::ActionSpace(
+    SiteSpace *site_space,
+    WordSpace *word_space) : site_space(site_space),
+                             word_space(word_space) {}
 
-void ActionSpace::register_edges(abc_t before_id, abc_t after_id)
+void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
 {
     edges[before_id].push_back(after_id);
 }
@@ -20,14 +23,17 @@ action_t ActionSpace::get_action_id(const Action &action)
 
 void ActionSpace::set_action_allowed(TreeNode *t_node)
 {
-    assert(!t_node->action_allowed.empty());
+    assert(t_node->action_allowed.empty());
     std::vector<action_t> &aa = t_node->action_allowed;
 
     // Build the graph first.
     SiteGraph graph = SiteGraph(site_space);
-    for (Word *word : t_node->words)
+    for (int i = 0; i < t_node->words.size(); ++i)
+    {
+        Word *word = t_node->words.at(i);
         for (SiteNode *root : word->site_roots)
-            graph.add_root(root);
+            graph.add_root(root, i);
+    }
 
     for (const auto &item : graph.nodes)
     {
@@ -46,7 +52,16 @@ void ActionSpace::set_action_allowed(TreeNode *t_node)
         {
             Action action = Action{before_id, after_id, pre_id, d_pre_id, post_id, d_post_id};
             action_t action_id = get_action_id(action);
-            aa.push_back(action_id);
+            float delta = 0.0;
+            for (int order : g_node->linked_words)
+            {
+                Word *word = t_node->words.at(order);
+                Word *new_word = word_space->apply_action(word, action, order);
+                delta += new_word->dist - word->dist;
+            }
+
+            if (delta < 0.0)
+                aa.push_back(action_id);
         }
     }
     assert(!aa.empty());

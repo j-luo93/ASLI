@@ -2,17 +2,19 @@
 
 #include "common.hpp"
 #include "SiteGraph.hpp"
+#include "Word.hpp"
 
 class TreeNode;
 
 class ActionSpace
 {
 public:
-    ActionSpace(SiteSpace *);
+    ActionSpace(SiteSpace *, WordSpace *);
 
     SiteSpace *site_space;
+    WordSpace *word_space;
 
-    void register_edges(abc_t, abc_t);
+    void register_edge(abc_t, abc_t);
     action_t get_action_id(const Action &);
     void set_action_allowed(TreeNode *);
 

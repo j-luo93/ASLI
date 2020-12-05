@@ -2,8 +2,10 @@
 #include "Site.hpp"
 
 Word::Word(const IdSeq &id_seq,
-           const std::vector<SiteNode *> &site_roots) : id_seq(id_seq),
-                                                        site_roots(site_roots) {}
+           const std::vector<SiteNode *> &site_roots,
+           float dist) : id_seq(id_seq),
+                         site_roots(site_roots),
+                         dist(dist) {}
 
 size_t Word::size() { return id_seq.size(); }
 
@@ -15,9 +17,19 @@ void Word::debug()
     std::cerr << '\n';
 }
 
-WordSpace::WordSpace(SiteSpace *site_space) : site_space(site_space) {}
+WordSpace::WordSpace(
+    SiteSpace *site_space,
+    const std::vector<std::vector<float>> &dist_mat,
+    float ins_cost,
+    const VocabIdSeq &end_ids) : site_space(site_space),
+                                 dist_mat(dist_mat),
+                                 ins_cost(ins_cost)
+{
+    for (size_t order = 0; order < end_ids.size(); order++)
+        end_words.push_back(get_word(end_ids.at(order), order, true));
+}
 
-Word *WordSpace::get_word(const IdSeq &id_seq)
+Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
 {
     if (words.find(id_seq) == words.end())
     {
@@ -32,7 +44,8 @@ Word *WordSpace::get_word(const IdSeq &id_seq)
             abc_t d_post_id = (i < n - 2) ? id_seq.at(i + 2) : NULL_abc;
             site_roots.push_back(site_space->get_node(before, pre_id, d_pre_id, post_id, d_post_id));
         }
-        Word *word = new Word(id_seq, site_roots);
+        float dist = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
+        Word *word = new Word(id_seq, site_roots, dist);
         words[id_seq] = word;
         return word;
     }
@@ -43,7 +56,7 @@ Word *WordSpace::get_word(const IdSeq &id_seq)
     }
 }
 
-Word *WordSpace::apply_action(Word *word, const Action &action)
+Word *WordSpace::apply_action(Word *word, const Action &action, int order)
 {
     boost::unordered_map<Action, Word *> &neighbors = word->neighbors;
     // Return cache if it exists.
@@ -86,9 +99,44 @@ Word *WordSpace::apply_action(Word *word, const Action &action)
     }
 
     // Create new word if necessary and cache it as the neighbor.
-    Word *new_word = get_word(new_id_seq);
+    Word *new_word = get_word(new_id_seq, order, false);
     neighbors[action] = new_word;
     return new_word;
 }
 
 size_t WordSpace::size() { return words.size(); }
+
+float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2)
+{
+    size_t l1 = seq1.size();
+    size_t l2 = seq2.size();
+    float **dist = (float **)malloc((l1 + 1) * sizeof(float **));
+    for (size_t i = 0; i < l1 + 1; ++i)
+        dist[i] = (float *)malloc((l2 + 1) * sizeof(float *));
+
+    for (size_t i = 0; i < l1 + 1; ++i)
+        dist[i][0] = i * ins_cost;
+    for (size_t i = 0; i < l2 + 1; ++i)
+        dist[0][i] = i * ins_cost;
+
+    float sub_cost;
+    bool use_phono_edit_dist = (dist_mat.size() > 0);
+    for (size_t i = 1; i < l1 + 1; ++i)
+        for (size_t j = 1; j < l2 + 1; ++j)
+        {
+            if (use_phono_edit_dist)
+            {
+                sub_cost = dist_mat[seq1[i - 1]][seq2[j - 1]];
+            }
+            else
+            {
+                sub_cost = seq1[i - 1] == seq2[j - 1] ? 0 : 1;
+            }
+            dist[i][j] = std::min(dist[i - 1][j - 1] + sub_cost, std::min(dist[i - 1][j], dist[i][j - 1]) + ins_cost);
+        }
+    float ret = dist[l1][l2];
+    for (size_t i = 0; i < l1 + 1; ++i)
+        free(dist[i]);
+    free(dist);
+    return ret;
+};

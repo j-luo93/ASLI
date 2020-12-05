@@ -9,7 +9,7 @@ class TreeNode;
 class Env
 {
 public:
-    Env(WordSpace *, ActionSpace *, const VocabIdSeq &, const VocabIdSeq &);
+    Env(WordSpace *, ActionSpace *, const VocabIdSeq &);
 
     TreeNode *apply_action(TreeNode *, const Action &);
 

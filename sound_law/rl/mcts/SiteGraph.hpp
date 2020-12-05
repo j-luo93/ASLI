@@ -13,6 +13,7 @@ public:
     GraphNode *lchild = nullptr;
     GraphNode *rchild = nullptr;
     int num_sites = 0;
+    boost::unordered_set<int> linked_words; // the orders for the linked words -- use set since one word might have multiple identical sites
 
 private:
     GraphNode(SiteNode *);
@@ -24,7 +25,7 @@ class SiteGraph
 public:
     SiteGraph(SiteSpace *);
 
-    void *add_root(SiteNode *);
+    void *add_root(SiteNode *, int);
 
     SiteSpace *site_space;
     boost::unordered_map<Site, GraphNode *> nodes;
