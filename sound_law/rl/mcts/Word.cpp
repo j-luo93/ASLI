@@ -1,7 +1,9 @@
 #include "Word.hpp"
 
 Word::Word(const IdSeq &id_seq) : id_seq(id_seq) {}
+
 size_t Word::size() { return id_seq.size(); }
+
 void Word::debug()
 {
     std::cerr << "Debug Word:\n";

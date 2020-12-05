@@ -2,10 +2,18 @@
 
 #include "Word.hpp"
 
+class Env;
+
 class TreeNode
 {
 public:
-    TreeNode(const std::vector<Word *> &);
+    friend class Env;
+
+    void debug();
 
     std::vector<Word *> words;
+    boost::unordered_map<action_t, TreeNode *> neighbors;
+
+private:
+    TreeNode(const std::vector<Word *> &);
 };

@@ -3,12 +3,10 @@
 #include "common.hpp"
 #include "Action.hpp"
 
-using IdSeq = std::vector<abc_t>;
-
 class Word
 {
 public:
-    const IdSeq id_seq;
+    IdSeq id_seq;
     boost::unordered_map<Action, Word *> neighbors;
     size_t size();
     void debug();
