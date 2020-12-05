@@ -1,6 +1,9 @@
 #include "Word.hpp"
+#include "Site.hpp"
 
-Word::Word(const IdSeq &id_seq) : id_seq(id_seq) {}
+Word::Word(const IdSeq &id_seq,
+           const std::vector<SiteNode *> &site_roots) : id_seq(id_seq),
+                                                        site_roots(site_roots) {}
 
 size_t Word::size() { return id_seq.size(); }
 
@@ -12,11 +15,24 @@ void Word::debug()
     std::cerr << '\n';
 }
 
+WordSpace::WordSpace(SiteSpace *site_space) : site_space(site_space) {}
+
 Word *WordSpace::get_word(const IdSeq &id_seq)
 {
     if (words.find(id_seq) == words.end())
     {
-        Word *word = new Word(id_seq);
+        size_t n = id_seq.size();
+        std::vector<SiteNode *> site_roots = std::vector<SiteNode *>();
+        for (size_t i = 0; i < n; i++)
+        {
+            abc_t before = id_seq.at(i);
+            abc_t pre_id = (i > 0) ? id_seq.at(i - 1) : NULL_abc;
+            abc_t d_pre_id = (i > 1) ? id_seq.at(i - 2) : NULL_abc;
+            abc_t post_id = (i < n - 1) ? id_seq.at(i + 1) : NULL_abc;
+            abc_t d_post_id = (i < n - 2) ? id_seq.at(i + 2) : NULL_abc;
+            site_roots.push_back(site_space->get_node(before, pre_id, d_pre_id, post_id, d_post_id));
+        }
+        Word *word = new Word(id_seq, site_roots);
         words[id_seq] = word;
         return word;
     }
