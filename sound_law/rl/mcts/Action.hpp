@@ -1,15 +1,20 @@
 #pragma once
 
 #include "common.hpp"
+#include "SiteGraph.hpp"
 
-using Action = std::array<abc_t, 6>;
-using action_t = uint32_t; // for actions
+class TreeNode;
 
 class ActionSpace
 {
 public:
+    ActionSpace(SiteSpace *);
+
+    SiteSpace *site_space;
+
     void register_edges(abc_t, abc_t);
     action_t get_action_id(const Action &);
+    void set_action_allowed(TreeNode *);
 
 private:
     boost::unordered_map<abc_t, std::vector<abc_t>> edges;

@@ -10,29 +10,6 @@ void SiteNode::debug()
         std::cerr << i << '\n';
 }
 
-std::vector<SiteNode *> SiteSpace::get_descendants(SiteNode *root)
-{
-    std::vector<SiteNode *> nodes = std::vector<SiteNode *>{root};
-    root->visited = true;
-    size_t i = 0;
-    while (i < nodes.size())
-    {
-        SiteNode *node = nodes.at(i);
-        if ((node->lchild != nullptr) && (!node->lchild->visited))
-        {
-            nodes.push_back(node->lchild);
-            node->lchild->visited = true;
-        }
-        if ((node->rchild != nullptr) && (!node->rchild->visited))
-        {
-            nodes.push_back(node->rchild);
-            node->rchild->visited = true;
-        }
-    }
-    for (SiteNode *node : nodes)
-        node->visited = false;
-    return nodes;
-}
 
 SiteNode *SiteSpace::get_node(abc_t before_id,
                               abc_t pre_id,
