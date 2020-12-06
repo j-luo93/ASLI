@@ -4,7 +4,13 @@
 ActionSpace::ActionSpace(
     SiteSpace *site_space,
     WordSpace *word_space) : site_space(site_space),
-                             word_space(word_space) {}
+                             word_space(word_space)
+{
+    // Reserve the first action for the stop action.
+    Action action = Action{NULL_abc, NULL_abc, NULL_abc, NULL_abc, NULL_abc, NULL_abc};
+    actions.push_back(action);
+    a2i[action] = 0;
+}
 
 void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
 {
@@ -26,8 +32,13 @@ Action ActionSpace::get_action(action_t action_id) { return actions.at(action_id
 
 void ActionSpace::set_action_allowed(TreeNode *t_node)
 {
-    assert(t_node->action_allowed.empty());
+    // Skip this if actions have already been set before.
+    if (!t_node->action_allowed.empty())
+        return;
+
     std::vector<action_t> &aa = t_node->action_allowed;
+    // Stop action is almost available.
+    aa.push_back(0);
 
     // Build the graph first.
     SiteGraph graph = SiteGraph(site_space);

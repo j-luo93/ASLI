@@ -57,6 +57,10 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
 
 Word *WordSpace::apply_action(Word *word, const Action &action, int order)
 {
+    // Return nullptr if stop action is being applied.
+    if (action.at(0) == NULL_abc)
+        return nullptr;
+
     boost::unordered_map<Action, Word *> &neighbors = word->neighbors;
     // Return cache if it exists.
     if (neighbors.find(action) != neighbors.end())

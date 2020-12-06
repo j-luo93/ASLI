@@ -21,6 +21,10 @@ Env::Env(
 
 TreeNode *Env::apply_action(TreeNode *node, const Action &action)
 {
+    // Return nullptr if stop action is being applied.
+    if (action.at(0) == NULL_abc)
+        return nullptr;
+
     action_t action_id = action_space->get_action_id(action);
     // Return cache if it exists.
     if (node->neighbors.find(action_id) != node->neighbors.end())

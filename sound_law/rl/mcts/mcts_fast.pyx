@@ -3,6 +3,7 @@ from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, action_t, Action, TNptr
 from cython.parallel import prange
 import numpy as np
 cimport numpy as np
+from libcpp cimport nullptr
 
 
 cdef class PySiteSpace:
@@ -79,10 +80,11 @@ cdef class PyTreeNode:
 
 cdef class PyEnv:
     cdef Env *ptr
-    cdef PyWordSpace word_space
-    cdef PyActionSpace action_space
-    cdef PyTreeNode start
-    cdef PyTreeNode end
+
+    cdef public PyWordSpace word_space
+    cdef public PyActionSpace action_space
+    cdef public PyTreeNode start
+    cdef public PyTreeNode end
 
     tn_cls = PyTreeNode
 
@@ -139,36 +141,12 @@ cpdef object parallel_select(PyTreeNode py_root,
             node.virtual_backup(best_i, game_count, virtual_loss)
             n_steps_left = n_steps_left - 1
             node = next_node
-            if node.done:
+            # Terminate if stop action is chosen or it has reached the end.
+            if node == nullptr or node.done:
                 break
 
         selected[i] = node
         steps_left_view[i] = n_steps_left
 
     tn_cls = type(py_root)
-    return [wrap_node(tn_cls, ptr) for ptr in selected], steps_left
-
-
-cpdef test_env():
-    cdef PySiteSpace py_ss = PySiteSpace()
-    dist_mat = np.random.randn(3, 3).astype('float32')
-    s_arr = np.random.randint(3, size=[10, 10])
-    s_lengths = np.random.randint(10, size=[10]) + 1
-    e_arr = np.random.randint(3, size=[10, 10])
-    e_lengths = np.random.randint(10, size=[10]) + 1
-    cdef PyWordSpace py_ws = PyWordSpace(py_ss, dist_mat, 1.0, s_arr, s_lengths)
-    cdef PyActionSpace py_as = PyActionSpace(py_ss, py_ws)
-    for i in range(2):
-        py_as.register_edge(i, i + 1)
-    for i in range(1, 3):
-        py_as.register_edge(i, i - 1)
-
-    cdef PyEnv py_env = PyEnv(py_ws, py_as, e_arr, e_lengths, 1.0, 0.02)
-    py_as.set_action_allowed(py_env.start)
-    py_env.start.expand(np.random.randn(len(py_env.start.ptr.action_allowed)).astype('float32'))
-    for i in range(10):
-        selected, steps_left = parallel_select(py_env.start, py_env, 10, 1, 10, 1.0, 3, 0.0)
-        for node in selected:
-            py_as.set_action_allowed(node)
-            node.expand(np.random.randn(node.num_actions).astype('float32'))
-        print(steps_left)
+    return [wrap_node(tn_cls, ptr) if ptr != nullptr else None for ptr in selected], steps_left
