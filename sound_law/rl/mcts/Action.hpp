@@ -20,6 +20,8 @@ public:
     void set_action_allowed(TreeNode *);
 
 private:
+    action_t safe_get_action_id(const Action &);
+
     boost::unordered_map<abc_t, std::vector<abc_t>> edges;
     boost::unordered_map<Action, action_t> a2i; // mapping from actions to action ids;
     std::vector<Action> actions;

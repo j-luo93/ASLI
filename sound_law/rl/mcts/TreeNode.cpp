@@ -81,6 +81,15 @@ void TreeNode::clear_stats()
     played = false;
 }
 
+action_t TreeNode::select(float puct_c, int game_count, float virtual_loss)
+{
+    select_mtx.lock();
+    action_t best_i = get_best_i(puct_c);
+    virtual_backup(best_i, game_count, virtual_loss);
+    select_mtx.unlock();
+    return best_i;
+}
+
 void TreeNode::virtual_backup(action_t best_i, int game_count, float virtual_loss)
 {
     action_count[best_i] += game_count;

@@ -33,8 +33,11 @@ WordSpace::WordSpace(
 
 Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
 {
+    // Obtain the read lock for membership test.
+    words_mtx.lock_shared();
     if (words.find(id_seq) == words.end())
     {
+        words_mtx.unlock_shared();
         int n = id_seq.size();
         std::vector<SiteNode *> site_roots = std::vector<SiteNode *>();
         for (int i = 0; i < n; i++)
@@ -48,11 +51,23 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
         }
         float dist = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
         Word *word = new Word(id_seq, site_roots, dist, is_end);
-        words[id_seq] = word;
+        // Obtain the write lock. Release the memeory if it has already been created.
+        words_mtx.lock();
+        if (words.find(id_seq) == words.end())
+            words[id_seq] = word;
+        else {
+            delete word;
+            word = words.at(id_seq);
+        }
+        words_mtx.unlock();
         return word;
     }
     else
-        return words.at(id_seq);
+    {
+        Word *word = words.at(id_seq);
+        words_mtx.unlock_shared();
+        return word;
+    }
 }
 
 Word *WordSpace::apply_action(Word *word, const Action &action, int order)
@@ -62,9 +77,15 @@ Word *WordSpace::apply_action(Word *word, const Action &action, int order)
         return nullptr;
 
     boost::unordered_map<Action, Word *> &neighbors = word->neighbors;
-    // Return cache if it exists.
+    // Return cache if it exists. Obtain the read lock first.
+    word->neighbor_mtx.lock_shared();
     if (neighbors.find(action) != neighbors.end())
-        return neighbors.at(action);
+    {
+        Word *new_word = neighbors.at(action);
+        word->neighbor_mtx.unlock_shared();
+        return new_word;
+    }
+    word->neighbor_mtx.unlock_shared();
 
     // Compute the new id seq.
     const IdSeq &id_seq = word->id_seq;
@@ -103,7 +124,10 @@ Word *WordSpace::apply_action(Word *word, const Action &action, int order)
 
     // Create new word if necessary and cache it as the neighbor.
     Word *new_word = get_word(new_id_seq, order, false);
+    // Obtain the write lock -- no need to release anything here since it should be taken care of by `get_word`.
+    word->neighbor_mtx.lock();
     neighbors[action] = new_word;
+    word->neighbor_mtx.unlock();
     return new_word;
 }
 

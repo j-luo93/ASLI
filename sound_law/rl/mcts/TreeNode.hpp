@@ -13,8 +13,8 @@ public:
     bool is_leaf();
     std::vector<float> get_scores(float);
     action_t get_best_i(float);
+    action_t select(float, int, float);
     void expand(const std::vector<float> &);
-    void virtual_backup(action_t, int, float);
     void backup(float, float, int, float);
     void play();
     std::list<std::pair<action_t, float>> get_path();
@@ -42,4 +42,7 @@ public:
 
 private:
     TreeNode(const std::vector<Word *> &);
+    void virtual_backup(action_t, int, float);
+    boost::mutex select_mtx;
+    boost::shared_mutex neighbor_mtx;
 };

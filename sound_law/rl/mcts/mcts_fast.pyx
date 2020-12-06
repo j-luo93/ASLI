@@ -130,23 +130,23 @@ cpdef object parallel_select(PyTreeNode py_root,
     cdef long[::1] steps_left_view = steps_left
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
 
-    for i in range(num_sims):
-        node = root
-        n_steps_left = depth_limit
-        while n_steps_left > 0 and not node.is_leaf():
-            best_i = node.get_best_i(puct_c)
-            action_id = node.action_allowed.at(best_i)
-            action = env.action_space.get_action(action_id)
-            next_node = env.apply_action(node, action)
-            node.virtual_backup(best_i, game_count, virtual_loss)
-            n_steps_left = n_steps_left - 1
-            node = next_node
-            # Terminate if stop action is chosen or it has reached the end.
-            if node == nullptr or node.done:
-                break
+    with nogil:
+        for i in prange(num_sims, num_threads=num_threads):
+            node = root
+            n_steps_left = depth_limit
+            while n_steps_left > 0 and not node.is_leaf():
+                best_i = node.select(puct_c, game_count, virtual_loss)
+                action_id = node.action_allowed.at(best_i)
+                action = env.action_space.get_action(action_id)
+                next_node = env.apply_action(node, action)
+                n_steps_left = n_steps_left - 1
+                node = next_node
+                # Terminate if stop action is chosen or it has reached the end.
+                if node == nullptr or node.done:
+                    break
 
-        selected[i] = node
-        steps_left_view[i] = n_steps_left
+            selected[i] = node
+            steps_left_view[i] = n_steps_left
 
     tn_cls = type(py_root)
     return [wrap_node(tn_cls, ptr) if ptr != nullptr else None for ptr in selected], steps_left

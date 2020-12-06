@@ -17,7 +17,7 @@ void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
     edges[before_id].push_back(after_id);
 }
 
-action_t ActionSpace::get_action_id(const Action &action)
+action_t ActionSpace::safe_get_action_id(const Action &action)
 {
     if (a2i.find(action) != a2i.end())
         return a2i.at(action);
@@ -27,6 +27,8 @@ action_t ActionSpace::get_action_id(const Action &action)
     actions.push_back(action);
     return action_id;
 }
+
+action_t ActionSpace::get_action_id(const Action &action) { return a2i.at(action); }
 
 Action ActionSpace::get_action(action_t action_id) { return actions.at(action_id); }
 
@@ -65,7 +67,7 @@ void ActionSpace::set_action_allowed(TreeNode *t_node)
         for (abc_t after_id : edges.at(before_id))
         {
             Action action = Action{before_id, after_id, pre_id, d_pre_id, post_id, d_post_id};
-            action_t action_id = get_action_id(action);
+            action_t action_id = safe_get_action_id(action);
             float delta = 0.0;
             for (int order : g_node->linked_words)
             {

@@ -31,5 +31,6 @@ public:
 
 private:
     boost::unordered_map<Site, SiteNode *> nodes;
+    boost::shared_mutex nodes_mtx;
     // Given a root node, return the list of SiteNodes (including the root).
 };

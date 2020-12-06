@@ -21,6 +21,7 @@ public:
 
 private:
     Word(const IdSeq &, const std::vector<SiteNode *> &, float, bool);
+    boost::shared_mutex neighbor_mtx;
 };
 
 class WordSpace
@@ -41,4 +42,5 @@ public:
 private:
     boost::unordered_map<IdSeq, Word *> words;
     float get_edit_dist(const IdSeq &, const IdSeq &);
+    boost::shared_mutex words_mtx;
 };
