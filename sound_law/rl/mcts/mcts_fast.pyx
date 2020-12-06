@@ -145,6 +145,8 @@ cpdef object parallel_select(PyTreeNode py_root,
                 if node == nullptr or node.done:
                     break
 
+            if node != nullptr:
+                env.action_space.set_action_allowed(node)
             selected[i] = node
             steps_left_view[i] = n_steps_left
 

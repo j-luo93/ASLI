@@ -19,12 +19,20 @@ void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
 
 action_t ActionSpace::safe_get_action_id(const Action &action)
 {
+    actions_mtx.lock_shared();
     if (a2i.find(action) != a2i.end())
-        return a2i.at(action);
+    {
+        action_t action_id = a2i.at(action);
+        actions_mtx.unlock_shared();
+        return action_id;
+    }
+    actions_mtx.unlock_shared();
 
+    actions_mtx.lock();
     action_t action_id = (action_t)a2i.size();
     a2i[action] = action_id;
     actions.push_back(action);
+    actions_mtx.unlock();
     return action_id;
 }
 
