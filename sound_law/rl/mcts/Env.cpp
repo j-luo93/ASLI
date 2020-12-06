@@ -4,8 +4,12 @@
 Env::Env(
     WordSpace *word_space,
     ActionSpace *action_space,
-    const VocabIdSeq &start_ids) : word_space(word_space),
-                                   action_space(action_space)
+    const VocabIdSeq &start_ids,
+    float final_reward,
+    float step_penalty) : word_space(word_space),
+                          action_space(action_space),
+                          final_reward(final_reward),
+                          step_penalty(step_penalty)
 {
     // Obtaining the start here is safe since `word_space` has already taken care of `dist_mat` and `ins_cost`.
     std::vector<Word *> start_words = std::vector<Word *>();
@@ -29,6 +33,9 @@ TreeNode *Env::apply_action(TreeNode *node, const Action &action)
     TreeNode *new_node = new TreeNode(new_words);
 
     // Store it in neighbors.
+    float final_reward = new_node->done ? this->final_reward : -this->step_penalty;
+    float incremental_reward = (node->dist - new_node->dist) / start->dist;
     node->neighbors[action_id] = new_node;
+    node->rewards[action_id] = final_reward + incremental_reward;
     return new_node;
 }

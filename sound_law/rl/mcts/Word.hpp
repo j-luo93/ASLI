@@ -15,11 +15,12 @@ public:
 
     const IdSeq id_seq;
     float dist;
+    bool done;
     boost::unordered_map<Action, Word *> neighbors;
     std::vector<SiteNode *> site_roots;
 
 private:
-    Word(const IdSeq &, const std::vector<SiteNode *> &, float);
+    Word(const IdSeq &, const std::vector<SiteNode *> &, float, bool);
 };
 
 class WordSpace

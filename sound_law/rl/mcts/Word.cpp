@@ -3,9 +3,11 @@
 
 Word::Word(const IdSeq &id_seq,
            const std::vector<SiteNode *> &site_roots,
-           float dist) : id_seq(id_seq),
-                         site_roots(site_roots),
-                         dist(dist) {}
+           float dist,
+           bool done) : id_seq(id_seq),
+                        site_roots(site_roots),
+                        dist(dist),
+                        done(done) {}
 
 size_t Word::size() { return id_seq.size(); }
 
@@ -45,7 +47,7 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
             site_roots.push_back(site_space->get_node(before, pre_id, d_pre_id, post_id, d_post_id));
         }
         float dist = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
-        Word *word = new Word(id_seq, site_roots, dist);
+        Word *word = new Word(id_seq, site_roots, dist, is_end);
         words[id_seq] = word;
         return word;
     }

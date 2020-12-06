@@ -18,8 +18,11 @@ action_t ActionSpace::get_action_id(const Action &action)
 
     action_t action_id = (action_t)a2i.size();
     a2i[action] = action_id;
+    actions.push_back(action);
     return action_id;
 }
+
+Action ActionSpace::get_action(action_t action_id) { return actions.at(action_id); }
 
 void ActionSpace::set_action_allowed(TreeNode *t_node)
 {
