@@ -35,9 +35,9 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
 {
     if (words.find(id_seq) == words.end())
     {
-        size_t n = id_seq.size();
+        int n = id_seq.size();
         std::vector<SiteNode *> site_roots = std::vector<SiteNode *>();
-        for (size_t i = 0; i < n; i++)
+        for (int i = 0; i < n; i++)
         {
             abc_t before = id_seq.at(i);
             abc_t pre_id = (i > 0) ? id_seq.at(i - 1) : NULL_abc;

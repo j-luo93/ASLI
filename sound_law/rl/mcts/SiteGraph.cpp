@@ -4,7 +4,7 @@ GraphNode::GraphNode(SiteNode *base) : base(base) {}
 
 SiteGraph::SiteGraph(SiteSpace *site_space) : site_space(site_space) {}
 
-void *SiteGraph::add_root(SiteNode *root, int order)
+void SiteGraph::add_root(SiteNode *root, int order)
 {
     GraphNode *g_node = generate_subgraph(root);
     std::vector<GraphNode *> g_nodes = get_descendants(g_node);

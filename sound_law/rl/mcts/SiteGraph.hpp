@@ -25,7 +25,7 @@ class SiteGraph
 public:
     SiteGraph(SiteSpace *);
 
-    void *add_root(SiteNode *, int);
+    void add_root(SiteNode *, int);
 
     SiteSpace *site_space;
     boost::unordered_map<Site, GraphNode *> nodes;

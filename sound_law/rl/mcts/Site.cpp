@@ -10,7 +10,6 @@ void SiteNode::debug()
         std::cerr << i << '\n';
 }
 
-
 SiteNode *SiteSpace::get_node(abc_t before_id,
                               abc_t pre_id,
                               abc_t d_pre_id,

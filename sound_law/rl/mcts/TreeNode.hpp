@@ -38,8 +38,8 @@ public:
     float max_value;
     int max_index;
     bool played;
+    void clear_stats();
 
 private:
     TreeNode(const std::vector<Word *> &);
-    void clear_stats();
 };

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cstdint>
 #include <vector>
+#include <array>
 #include <limits>
 #include <assert.h>
 #include <boost/unordered_map.hpp>
@@ -15,6 +16,7 @@ using visit_t = int32_t;   // for visit/action counts -- due to virtual games, t
 using Action = std::array<abc_t, 6>;
 using IdSeq = std::vector<abc_t>;
 using VocabIdSeq = std::vector<IdSeq>;
+using Site = std::array<abc_t, 5>;
 
 static const abc_t NULL_abc = -1;
 static const action_t NULL_action = std::numeric_limits<action_t>::max();

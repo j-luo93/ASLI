@@ -1,17 +1,21 @@
+import os
 from Cython.Build import cythonize
 from setuptools import Extension, find_packages, setup
 
 
 def get_ext(*args, **kwargs):
+    extra_args = ['-L/usr/lib/x86_64-linux-gnu/', '-L/usr/local/lib/',
+                  '-I/usr/local/include/', '-std=c++11', '-fopenmp']
     return Extension(*args,
-                     extra_link_args=['-L/usr/lib/x86_64-linux-gnu/', '-std=c++11', '-fopenmp'],
-                     extra_compile_args=['-std=c++11', '-fopenmp'],
+                     extra_link_args=extra_args,
+                     extra_compile_args=extra_args,
                      undef_macros=['NDEBUG'],
                      **kwargs)
 
 
+os.environ["CC"] = "g++"
 ext_modules = [get_ext('sound_law.rl.reward', ['sound_law/rl/reward.pyx']),
-               get_ext('sound_law.rl.mcts_fast', ['sound_law/rl/mcts_fast.pyx'])]
+               get_ext('sound_law.rl.mcts.mcts_fast', ['sound_law/rl/mcts/mcts_fast.pyx'])]
 
 setup(
     name='sound_law',

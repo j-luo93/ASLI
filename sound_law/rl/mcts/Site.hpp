@@ -2,8 +2,6 @@
 
 #include "common.hpp"
 
-using Site = std::array<abc_t, 5>;
-
 class Word;
 
 class SiteNode
