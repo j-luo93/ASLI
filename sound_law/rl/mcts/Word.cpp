@@ -52,10 +52,7 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
         return word;
     }
     else
-    {
-        std::cerr << "reusing word\n";
         return words.at(id_seq);
-    }
 }
 
 Word *WordSpace::apply_action(Word *word, const Action &action, int order)
@@ -122,18 +119,10 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2)
         dist[0][i] = i * ins_cost;
 
     float sub_cost;
-    bool use_phono_edit_dist = (dist_mat.size() > 0);
     for (size_t i = 1; i < l1 + 1; ++i)
         for (size_t j = 1; j < l2 + 1; ++j)
         {
-            if (use_phono_edit_dist)
-            {
-                sub_cost = dist_mat[seq1[i - 1]][seq2[j - 1]];
-            }
-            else
-            {
-                sub_cost = seq1[i - 1] == seq2[j - 1] ? 0 : 1;
-            }
+            sub_cost = dist_mat[seq1.at(i - 1)][seq2.at(j - 1)];
             dist[i][j] = std::min(dist[i - 1][j - 1] + sub_cost, std::min(dist[i - 1][j], dist[i][j - 1]) + ins_cost);
         }
     float ret = dist[l1][l2];

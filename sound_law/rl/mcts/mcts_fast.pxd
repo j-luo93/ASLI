@@ -46,7 +46,6 @@ cdef extern from "common.hpp":
 
 cdef extern from "Word.hpp":
     ctypedef Word * Wptr
-
 cdef extern from "TreeNode.hpp":
     cdef cppclass TreeNode nogil:
         ctypedef TreeNode * TNptr
@@ -78,6 +77,7 @@ cdef extern from "TreeNode.hpp":
         int max_index
         bool played
         void clear_stats()
+ctypedef TreeNode * TNptr
 
 
 cdef extern from "Action.hpp":
@@ -179,3 +179,14 @@ cdef inline VocabIdSeq np2vocab(long[:, ::1] arr,
             id_seq[j] = arr[i, j]
         vocab[i] = id_seq
     return vocab
+
+
+# Convertible types between numpy and c++ template.
+ctypedef fused convertible:
+    float
+cdef inline vector[convertible] np2vector(convertible[::1] arr, size_t n):
+    cdef size_t i
+    cdef vector[convertible] vec = vector[convertible](n)
+    for i in range(n):
+        vec[i] = arr[i]
+    return vec

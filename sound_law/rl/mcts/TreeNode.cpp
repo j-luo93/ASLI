@@ -19,7 +19,6 @@ TreeNode::TreeNode(const std::vector<Word *> &words) : words(words)
 
 void TreeNode::debug()
 {
-
     std::cerr << "Debug TreeNode: #action=" << action_allowed.size() << '\n';
     for (Word *word : words)
     {
@@ -28,7 +27,7 @@ void TreeNode::debug()
     }
 }
 
-bool TreeNode::is_leaf() { return visit_count == 0; }
+bool TreeNode::is_leaf() { return prior.size() == 0; }
 
 std::vector<float> TreeNode::get_scores(float puct_c)
 {
