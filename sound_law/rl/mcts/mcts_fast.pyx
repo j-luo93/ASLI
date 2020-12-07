@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, action_t, Action, TNptr, np2vector, anyTNptr, IdSeq, NULL_abc
+from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, action_t, Action, TNptr, np2vector, anyTNptr, IdSeq
 from libcpp cimport nullptr
 import numpy as np
 cimport numpy as np
@@ -9,6 +9,7 @@ cimport cython
 
 from sound_law.data.alphabet import PAD_ID
 
+cdef abc_t NULL_abc = -1
 PyNull_abc = NULL_abc
 
 
@@ -80,6 +81,8 @@ cdef class PyAction:
 cdef class PyActionSpace:
     cdef ActionSpace *ptr
 
+    action_cls = PyAction
+
     def __cinit__(self, PySiteSpace py_ss, PyWordSpace py_ws, *args, **kwargs):
         self.ptr = new ActionSpace(py_ss.ptr, py_ws.ptr)
 
@@ -97,9 +100,9 @@ cdef class PyActionSpace:
 
     def get_action(self, action_id):
         cdef Action action = self.ptr.get_action(action_id)
-        return PyAction(action_id, action.at(0), action.at(1),
-                        action.at(2), action.at(3), action.at(4),
-                        action.at(5))
+        return self.action_cls(action_id, action.at(0), action.at(1),
+                               action.at(2), action.at(3), action.at(4),
+                               action.at(5))
 
     def expand_a2i(self):
         return np.asarray(self.ptr.expand_a2i(), dtype='long')
@@ -139,6 +142,10 @@ cdef class PyTreeNode:
         cdef size_t n = len(noise)
         cdef vector[float] noise_vec = np2vector(noise, n)
         self.ptr.add_noise(noise_vec, noise_ratio)
+
+    def clear_stats(self, recursive=False):
+        cdef bool c_recursive = recursive
+        self.ptr.clear_stats(c_recursive)
 
     @property
     def num_actions(self):

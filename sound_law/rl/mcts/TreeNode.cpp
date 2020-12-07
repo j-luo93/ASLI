@@ -79,7 +79,7 @@ void TreeNode::expand(const std::vector<float> &prior)
     total_value = std::vector<float>(num_actions, 0.0);
 }
 
-void TreeNode::clear_stats()
+void TreeNode::clear_stats(bool recursive)
 {
     action_count.clear();
     total_value.clear();
@@ -88,6 +88,10 @@ void TreeNode::clear_stats()
     max_index = -1;
     max_action_id = NULL_action;
     played = false;
+
+    if (recursive)
+        for (const auto &item : neighbors)
+            item.second->clear_stats(recursive);
 }
 
 action_t TreeNode::select(float puct_c, int game_count, float virtual_loss)

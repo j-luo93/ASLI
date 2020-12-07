@@ -30,6 +30,9 @@ class SoundChangeAction(PyAction):
     abc: ClassVar[Alphabet] = None
 
     def __repr__(self):
+        if self.action_id == 0:
+            return 'STOP'
+
         def get_cond(cond):
             if self.abc is None:
                 ret = ' + '.join(map(str, cond))
@@ -56,7 +59,8 @@ class SoundChangeAction(PyAction):
 
 class SoundChangeActionSpace(PyActionSpace):
     """The action space, i.e., the space of all sound changes."""
-    # action_cls = SoundChangeAction
+
+    action_cls = SoundChangeAction
 
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
     add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
@@ -64,8 +68,7 @@ class SoundChangeActionSpace(PyActionSpace):
     def __init__(self, py_ss: PySiteSpace, py_ws: PyWordSpace, abc: Alphabet):
         super().__init__()
         # # Set class variable for `SoundChangeAction` here.
-        # self.abc = SoundChangeAction.abc = abc
-        self.abc = abc
+        self.abc = SoundChangeAction.abc = abc
 
         # Register unconditional actions first.
         units = [u for u in self.abc if u not in self.abc.special_units]

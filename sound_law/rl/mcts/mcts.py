@@ -52,12 +52,13 @@ class Mcts:
         # self._total_state_ids: Set[int] = set()
         # self.reset()
 
-    # def reset(self):
-    #     for s in self._states:
-    #         s.reset()
-    #     # logging.debug(f'Total number of states reset: {len(self._states)}.')
-    #     self._state_ids: Set[int] = set()
-    #     self._states: List[VocabState] = list()
+    def reset(self):
+        # for s in self._states:
+        #     s.reset()
+        # logging.debug(f'Total number of states reset: {len(self._states)}.')
+        # self._state_ids: Set[int] = set()
+        # self._states: List[VocabState] = list()
+        self.env.start.clear_stats(recursive=True)
 
     # def unplay(self):
     #     for s in self._states:
@@ -161,9 +162,16 @@ class Mcts:
         # state.play()
         # return probs, action, reward, new_state
         best_i = state.max_index
-        action_id = state.max_action_id
-        action = self.env.action_space.get_action(action_id)
-        new_state, reward = self.env.step(state, best_i, action_id)
+        # This means stop action.
+        if best_i == -1:
+            action_id = 0
+            action = self.env.action_space.get_action(0)
+            new_state = None
+            reward = 0.0
+        else:
+            action_id = state.max_action_id
+            action = self.env.action_space.get_action(action_id)
+            new_state, reward = self.env.step(state, best_i, action_id)
         state.play()
         return probs, action, reward, new_state
 
@@ -187,7 +195,7 @@ class Mcts:
         with self.agent.policy_grad(False), self.agent.value_grad(False):
             for ei in range(g.num_episodes):
                 root = init_state
-                # self.reset()
+                self.reset()
                 steps = 0 if g.use_finite_horizon else None
                 self.env.action_space.set_action_allowed(root)
                 value = self.expand(root, steps=steps)
@@ -210,14 +218,14 @@ class Mcts:
                                 self.backup(state, value)
                         tracker.update('mcts', incr=g.expansion_batch_size)
                     probs, action, reward, new_state = self.play(root)
-                    trajectory.append(action, new_state, new_state.done, reward, mcts_pi=probs)
+                    trajectory.append(action, new_state, reward, mcts_pi=probs)
                     if ri == 0 and ei % g.episode_check_interval == 0:
                         logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(20))))
                         logging.debug(pad_for_log(str(get_tensor(root.q).topk(20))))
                     root = new_state
 
                     tracker.update('rollout')
-                    if root.done:
+                    if root is None or root.done:
                         break
                 if ei % g.episode_check_interval == 0:
                     out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)

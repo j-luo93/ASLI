@@ -40,7 +40,7 @@ public:
     int max_index;
     action_t max_action_id;
     bool played;
-    void clear_stats();
+    void clear_stats(bool = false);
     size_t size();
 
 private:

@@ -36,14 +36,13 @@ cdef extern from "<array>" namespace "std" nogil:
 
 
 cdef extern from "common.hpp":
-    ctypedef unsigned short abc_t
+    ctypedef short abc_t
     ctypedef unsigned int action_t
-    ctypedef short visit_t
+    ctypedef int visit_t
     ctypedef cpp_array[abc_t, six] Action
     ctypedef vector[abc_t] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
     ctypedef cpp_array[abc_t, five] Site
-cdef abc_t NULL_abc = -1
 
 
 cdef extern from "Word.hpp":
@@ -81,7 +80,7 @@ cdef extern from "TreeNode.hpp":
         int max_index
         action_t max_action_id
         bool played
-        void clear_stats()
+        void clear_stats(bool)
 
     cdef cppclass DetachedTreeNode nogil:
         IdSeq get_id_seq(int)

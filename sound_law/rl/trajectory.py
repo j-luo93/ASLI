@@ -125,7 +125,6 @@ class Trajectory(BaseTrajectory):
     def append(self,
                action: a.SoundChangeAction,
                state: VocabState,
-               done: bool,
                reward: float,
                mcts_pi: Optional[NDA] = None):
         if self._done:
@@ -136,7 +135,7 @@ class Trajectory(BaseTrajectory):
         self._rewards.append(reward)
         if mcts_pi is not None:
             self._mcts_pis.append(mcts_pi)
-        self._done = done
+        self._done = state.done if state is not None else False
 
 
 class ReplayTrajectory(BaseTrajectory):
