@@ -46,3 +46,10 @@ private:
     boost::mutex select_mtx;
     boost::shared_mutex neighbor_mtx;
 };
+
+//This class only holds static data without links to other nodes.
+class DetachedTreeNode
+{
+public:
+    std::vector<action_t> action_allowed;
+};

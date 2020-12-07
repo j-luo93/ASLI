@@ -1,9 +1,10 @@
 # distutils: language = c++
-from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, action_t, Action, TNptr, np2vector
-from cython.parallel import prange
+from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, action_t, Action, TNptr, np2vector, anyTNptr
+from libcpp cimport nullptr
 import numpy as np
 cimport numpy as np
-from libcpp cimport nullptr
+from cython.parallel import prange
+cimport cython
 
 
 cdef class PySiteSpace:
@@ -77,6 +78,23 @@ cdef class PyTreeNode:
     def num_actions(self):
         return self.ptr.action_allowed.size()
 
+    # def detach(self):
+    #     cdef DetachedTreeNode *ptr = new DetachedTreeNode(self.ptr)
+    #     cdef PyDetachedTreeNode py_dtn = PyDetachedTreeNode.__new__(PyDetachedTreeNode)
+    #     py_dtn.ptr = ptr
+    #     return py_dtn
+
+
+cdef class PyDetachedTreeNode:
+    cdef DetachedTreeNode *ptr
+
+    def __cinit__(self, *, from_ptr=False):
+        if not from_ptr:
+            raise TypeError(f'Cannot create a PyDetachedTreeNode object unless directly wrapping around a DetachedTreeNode pointer.')
+
+    def __dealloc__(self):
+        del self.ptr
+
 
 cdef class PyEnv:
     cdef Env *ptr
@@ -87,7 +105,6 @@ cdef class PyEnv:
     cdef public PyTreeNode end
 
     tn_cls = PyTreeNode
-
 
     def __cinit__(self, PyWordSpace py_ws, PyActionSpace py_as, arr, lengths, float final_reward, float step_penalty):
         cdef VocabIdSeq vocab = np2vocab(arr, lengths, len(arr))
@@ -108,14 +125,15 @@ cdef inline PyTreeNode wrap_node(cls, TreeNode *ptr):
     return py_tn
 
 
-cpdef object parallel_select(PyTreeNode py_root,
-                             PyEnv py_env,
-                             int num_sims,
-                             int num_threads,
-                             int depth_limit,
-                             float puct_c,
-                             int game_count,
-                             float virtual_loss):
+@cython.boundscheck(False)
+def parallel_select(PyTreeNode py_root,
+                    PyEnv py_env,
+                    int num_sims,
+                    int num_threads,
+                    int depth_limit,
+                    float puct_c,
+                    int game_count,
+                    float virtual_loss):
     if py_root.done:
         raise ValueError('Root is already the terminal state.')
 
@@ -124,7 +142,8 @@ cpdef object parallel_select(PyTreeNode py_root,
 
     cdef int i, n_steps_left
     cdef action_t best_i, action_id
-    cdef TreeNode *node, *next_node
+    cdef TreeNode *node,
+    cdef TreeNode *next_node
     cdef Action action
     steps_left = np.zeros([num_sims], dtype='long')
     cdef long[::1] steps_left_view = steps_left
@@ -152,3 +171,64 @@ cpdef object parallel_select(PyTreeNode py_root,
 
     tn_cls = type(py_root)
     return [wrap_node(tn_cls, ptr) if ptr != nullptr else None for ptr in selected], steps_left
+
+
+@cython.boundscheck(False)
+cdef object c_parallel_get_sparse_action_masks(vector[anyTNptr] nodes, int num_threads):
+    cdef size_t n = nodes.size()
+    cdef int i, j, k
+    cdef anyTNptr node
+
+    # First pass to get the maximum number of actions.
+    lengths = np.zeros([n], dtype='long')
+    cdef long[::1] lengths_view = lengths
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            lengths_view[i] = nodes[i].action_allowed.size()
+    cdef size_t m = max(lengths)
+
+    # Fill in the results
+    arr = np.zeros([n, m], dtype='long')
+    num_actions = np.zeros([n], dtype='long')
+    action_masks = np.ones([n, m], dtype='bool')
+    cdef long[:, ::1] arr_view = arr
+    cdef long[::1] na_view = num_actions
+    cdef bool[:, ::1] am_view = action_masks
+    cdef vector[action_t] action_allowed
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            action_allowed = nodes[i].action_allowed
+            k = action_allowed.size()
+            for j in range(k):
+                arr_view[i, j] = action_allowed[j]
+            na_view[i] = k
+            for j in range(k, m):
+                am_view[i, j] = False
+    return arr, action_masks, num_actions
+
+
+# Use this to circumvent the issue of not being able to specifier a type identifier like vector[PyTreeNode].
+cdef inline TreeNode *get_ptr(PyTreeNode py_node):
+    return py_node.ptr
+cdef inline DetachedTreeNode *get_dptr(PyDetachedTreeNode py_dnode):
+    return py_dnode.ptr
+
+
+@cython.boundscheck(False)
+def parallel_get_sparse_action_masks(py_nodes, int num_threads):
+    # Prepare the vector of (detached) tree nodes first.
+    cdef size_t n = len(py_nodes)
+    cdef vector[TNptr] nodes = vector[TNptr](n)
+    cdef vector[DTNptr] dnodes = vector[DTNptr](n)
+    is_detached = isinstance(py_nodes[0], PyDetachedTreeNode)
+    for i, node in enumerate(py_nodes):
+        if is_detached:
+            dnodes[i] = get_dptr(node)
+        else:
+            nodes[i] = get_ptr(node)
+
+    # Call the c function with the proper vector.
+    if is_detached:
+        return c_parallel_get_sparse_action_masks(dnodes, num_threads)
+    else:
+        return c_parallel_get_sparse_action_masks(nodes, num_threads)

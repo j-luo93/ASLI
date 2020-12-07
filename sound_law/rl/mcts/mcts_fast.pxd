@@ -77,7 +77,14 @@ cdef extern from "TreeNode.hpp":
         int max_index
         bool played
         void clear_stats()
+
+    cdef cppclass DetachedTreeNode nogil:
+        vector[action_t] action_allowed
 ctypedef TreeNode * TNptr
+ctypedef DetachedTreeNode * DTNptr
+ctypedef fused anyTNptr:
+    TNptr
+    DTNptr
 
 
 cdef extern from "Action.hpp":
