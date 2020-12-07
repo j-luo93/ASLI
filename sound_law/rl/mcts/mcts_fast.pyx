@@ -1,10 +1,13 @@
 # distutils: language = c++
-from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, action_t, Action, TNptr, np2vector, anyTNptr
+from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, action_t, Action, TNptr, np2vector, anyTNptr, IdSeq
 from libcpp cimport nullptr
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
+from cython.operator cimport dereference as deref
 cimport cython
+
+from sound_law.data.alphabet import PAD_ID
 
 
 cdef class PySiteSpace:
@@ -232,3 +235,68 @@ def parallel_get_sparse_action_masks(py_nodes, int num_threads):
         return c_parallel_get_sparse_action_masks(dnodes, num_threads)
     else:
         return c_parallel_get_sparse_action_masks(nodes, num_threads)
+
+
+@cython.boundscheck(False)
+cdef object c_parallel_stack_ids(vector[anyTNptr] nodes, int num_threads):
+    cdef int i, j, k
+    cdef size_t n = nodes.size()
+    cdef size_t nw = deref(nodes.at(0)).size()
+
+    # Get the max length first.
+    lengths = np.zeros([n, nw], dtype='long')
+    cdef long[:, ::1] lengths_view = lengths
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            for j in range(nw):
+                lengths_view[i, j] = nodes[i].get_id_seq(j).size()
+    cdef size_t m = lengths.max()
+
+    arr = np.full([n, m, nw], PAD_ID, dtype='long')
+    cdef long[:, :, ::1] arr_view = arr
+    cdef IdSeq id_seq
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            for k in range(nw):
+                id_seq = nodes[i].get_id_seq(k)
+                for j in range(id_seq.size()):
+                    arr_view[i, j, k] = id_seq[j]
+    return arr
+
+
+@cython.boundscheck(False)
+def paralle_stack_ids(py_nodes, int num_threads):
+    # Prepare the vector of (detached) tree nodes first.
+    cdef size_t n = len(py_nodes)
+    cdef vector[TNptr] nodes = vector[TNptr](n)
+    cdef vector[DTNptr] dnodes = vector[DTNptr](n)
+    is_detached = isinstance(py_nodes[0], PyDetachedTreeNode)
+    for i, node in enumerate(py_nodes):
+        if is_detached:
+            dnodes[i] = get_dptr(node)
+        else:
+            nodes[i] = get_ptr(node)
+
+    # Call the c function with the proper vector.
+    if is_detached:
+        return c_parallel_stack_ids(dnodes, num_threads)
+    else:
+        return c_parallel_stack_ids(nodes, num_threads)
+
+
+@cython.boundscheck(False)
+def parallel_stack_policies(edges, action_t num_actions, int num_threads):
+    cdef int n = len(edges)
+    cdef vector[float[::1]] mcts_pi_vec = vector[float[::1]](n)
+    cdef vector[size_t] pi_len = vector[size_t](n)
+    cdef int i = 0
+    for i in range(n):
+        mcts_pi_vec[i] = edges[i].mcts_pi
+        pi_len[i] = len(edges[i].mcts_pi)
+
+    ret = np.zeros([n, num_actions], dtype='float32')
+    cdef float[:, ::1] ret_view = ret
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            ret_view[i, :pi_len[i]] = mcts_pi_vec[i]
+    return ret

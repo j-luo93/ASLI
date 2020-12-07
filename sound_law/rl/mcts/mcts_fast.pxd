@@ -60,6 +60,8 @@ cdef extern from "TreeNode.hpp":
         void play()
         cpp_list[pair[action_t, float]] get_path()
         void add_noise(vector[float], float)
+        IdSeq get_id_seq(int)
+        size_t size()
 
         vector[Wptr] words
         bool done
@@ -79,7 +81,11 @@ cdef extern from "TreeNode.hpp":
         void clear_stats()
 
     cdef cppclass DetachedTreeNode nogil:
+        IdSeq get_id_seq(int)
+        size_t size()
+
         vector[action_t] action_allowed
+
 ctypedef TreeNode * TNptr
 ctypedef DetachedTreeNode * DTNptr
 ctypedef fused anyTNptr:

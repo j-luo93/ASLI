@@ -19,6 +19,7 @@ public:
     void play();
     std::list<std::pair<action_t, float>> get_path();
     void add_noise(const std::vector<float> &, float);
+    IdSeq get_id_seq(int);
 
     // Basic members.
     std::vector<Word *> words;
@@ -39,6 +40,7 @@ public:
     int max_index;
     bool played;
     void clear_stats();
+    size_t size();
 
 private:
     TreeNode(const std::vector<Word *> &);
@@ -51,5 +53,9 @@ private:
 class DetachedTreeNode
 {
 public:
+    IdSeq get_id_seq(int);
+    size_t size();
+
     std::vector<action_t> action_allowed;
+    VocabIdSeq vocab_i;
 };

@@ -155,3 +155,8 @@ void TreeNode::add_noise(const std::vector<float> &noise, float noise_ratio)
     for (size_t i = 0; i < prior.size(); ++i)
         prior[i] = prior[i] * (1.0 - noise_ratio) + noise[i] * noise_ratio;
 }
+
+size_t TreeNode::size() { return words.size(); }
+size_t DetachedTreeNode::size() { return vocab_i.size(); }
+IdSeq TreeNode::get_id_seq(int order) { return words.at(order)->id_seq; }
+IdSeq DetachedTreeNode::get_id_seq(int order) { return vocab_i.at(order); }
