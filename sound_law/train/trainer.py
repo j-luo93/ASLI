@@ -18,7 +18,7 @@ from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
 from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
-from sound_law.rl.mcts import Mcts
+from sound_law.rl.mcts.mcts import Mcts
 # pylint: disable=no-name-in-module
 from sound_law.rl.mcts_fast import parallel_stack_policies
 from sound_law.rl.reward import get_rtgs
@@ -403,7 +403,8 @@ class MctsTrainer(RLTrainer):
 
     def train_one_step(self, dl: OnePairDataLoader):
         # Collect episodes with the latest agent first.
-        new_tr = self.mcts.collect_episodes(dl.init_state, dl.end_state, self.tracker)
+        new_tr = self.mcts.collect_episodes(self.mcts.env.start, self.mcts.env.end, self.tracker)
+        # new_tr = self.mcts.collect_episodes(dl.init_state, dl.end_state, self.tracker)
         tr_rew = Metric('reward', sum(tr.rewards.sum() for tr in new_tr), g.num_episodes)
         tr_len = Metric('trajectory_length', sum(map(len, new_tr)), g.num_episodes)
         success = Metric('success', sum(tr.done for tr in new_tr), g.num_episodes)

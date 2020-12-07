@@ -40,7 +40,8 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
         words_mtx.unlock_shared();
         int n = id_seq.size();
         std::vector<SiteNode *> site_roots = std::vector<SiteNode *>();
-        for (int i = 0; i < n; i++)
+        // Start with 1 and end with n - 1 since both ends are padded.
+        for (int i = 1; i < n - 1; i++)
         {
             abc_t before = id_seq.at(i);
             abc_t pre_id = (i > 0) ? id_seq.at(i - 1) : NULL_abc;
@@ -55,7 +56,8 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
         words_mtx.lock();
         if (words.find(id_seq) == words.end())
             words[id_seq] = word;
-        else {
+        else
+        {
             delete word;
             word = words.at(id_seq);
         }

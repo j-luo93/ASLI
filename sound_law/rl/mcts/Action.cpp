@@ -10,6 +10,12 @@ ActionSpace::ActionSpace(
     Action action = Action{NULL_abc, NULL_abc, NULL_abc, NULL_abc, NULL_abc, NULL_abc};
     actions.push_back(action);
     a2i[action] = 0;
+    a2i_cache.push_back(NULL_abc);
+    a2i_cache.push_back(NULL_abc);
+    a2i_cache.push_back(NULL_abc);
+    a2i_cache.push_back(NULL_abc);
+    a2i_cache.push_back(NULL_abc);
+    a2i_cache.push_back(NULL_abc);
 }
 
 void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
@@ -32,6 +38,12 @@ action_t ActionSpace::safe_get_action_id(const Action &action)
     action_t action_id = (action_t)a2i.size();
     a2i[action] = action_id;
     actions.push_back(action);
+    a2i_cache.push_back(action.at(0));
+    a2i_cache.push_back(action.at(1));
+    a2i_cache.push_back(action.at(2));
+    a2i_cache.push_back(action.at(3));
+    a2i_cache.push_back(action.at(4));
+    a2i_cache.push_back(action.at(5));
     actions_mtx.unlock();
     return action_id;
 }
@@ -89,4 +101,13 @@ void ActionSpace::set_action_allowed(TreeNode *t_node)
         }
     }
     assert(!aa.empty());
+}
+
+size_t ActionSpace::size() { return actions.size(); }
+
+std::vector<abc_t> ActionSpace::expand_a2i()
+{
+    std::vector<abc_t> ret = a2i_cache;
+    a2i_cache.clear();
+    return ret;
 }

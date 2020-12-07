@@ -38,12 +38,15 @@ public:
     visit_t visit_count;
     float max_value;
     int max_index;
+    action_t max_action_id;
     bool played;
     void clear_stats();
     size_t size();
 
 private:
+    void common_init();
     TreeNode(const std::vector<Word *> &);
+    TreeNode(const std::vector<Word *> &, const std::pair<action_t, action_t> &, TreeNode *);
     void virtual_backup(action_t, int, float);
     boost::mutex select_mtx;
     boost::shared_mutex neighbor_mtx;

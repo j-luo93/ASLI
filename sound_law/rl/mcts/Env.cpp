@@ -19,13 +19,18 @@ Env::Env(
     end = new TreeNode(word_space->end_words);
 }
 
-TreeNode *Env::apply_action(TreeNode *node, const Action &action)
+TreeNode *Env::apply_action(TreeNode *node, action_t best_i, action_t action_id)
+{
+    Action action = action_space->get_action(action_id);
+    return apply_action(node, action, best_i, action_id);
+}
+
+TreeNode *Env::apply_action(TreeNode *node, const Action &action, action_t best_i, action_t action_id)
 {
     // Return nullptr if stop action is being applied.
     if (action.at(0) == NULL_abc)
         return nullptr;
 
-    action_t action_id = action_space->get_action_id(action);
     // Return cache if it exists. Obtain a read lock first.
     node->neighbor_mtx.lock_shared();
     if (node->neighbors.find(action_id) != node->neighbors.end())
@@ -40,7 +45,8 @@ TreeNode *Env::apply_action(TreeNode *node, const Action &action)
     std::vector<Word *> new_words = std::vector<Word *>();
     for (size_t order = 0; order < node->words.size(); order++)
         new_words.push_back(word_space->apply_action(node->words.at(order), action, order));
-    TreeNode *new_node = new TreeNode(new_words);
+    std::pair<action_t, action_t> prev_action = std::pair<action_t, action_t>(best_i, action_id);
+    TreeNode *new_node = new TreeNode(new_words, prev_action, node);
 
     // Store it in neighbors.
     float final_reward = new_node->done ? this->final_reward : -this->step_penalty;

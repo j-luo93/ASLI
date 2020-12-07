@@ -1,6 +1,6 @@
 #include "TreeNode.hpp"
 
-TreeNode::TreeNode(const std::vector<Word *> &words) : words(words)
+void TreeNode::common_init()
 {
     dist = 0.0;
     for (auto word : words)
@@ -16,6 +16,14 @@ TreeNode::TreeNode(const std::vector<Word *> &words) : words(words)
 
     clear_stats();
 }
+
+TreeNode::TreeNode(const std::vector<Word *> &words) : words(words) { common_init(); }
+TreeNode::TreeNode(
+    const std::vector<Word *> &words,
+    const std::pair<action_t, action_t> &prev_action,
+    TreeNode *parent_node) : words(words),
+                             parent_node(parent_node),
+                             prev_action(prev_action) { common_init(); }
 
 void TreeNode::debug()
 {
@@ -78,6 +86,7 @@ void TreeNode::clear_stats()
     visit_count = 0;
     max_value = -9999.9;
     max_index = -1;
+    max_action_id = NULL_action;
     played = false;
 }
 
@@ -119,6 +128,7 @@ void TreeNode::backup(float value, float mixing, int game_count, float virtual_l
         {
             parent_node->max_value = new_value;
             parent_node->max_index = best_i;
+            parent_node->max_action_id = action_id;
         }
         parent_node->total_value[best_i] += game_count * virtual_loss + new_value;
         parent_node->visit_count -= game_count - 1;

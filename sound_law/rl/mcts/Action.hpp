@@ -18,6 +18,8 @@ public:
     action_t get_action_id(const Action &);
     Action get_action(action_t);
     void set_action_allowed(TreeNode *);
+    size_t size();
+    std::vector<abc_t> expand_a2i();
 
 private:
     action_t safe_get_action_id(const Action &);
@@ -26,4 +28,5 @@ private:
     boost::unordered_map<Action, action_t> a2i; // mapping from actions to action ids;
     std::vector<Action> actions;
     boost::shared_mutex actions_mtx;
+    std::vector<abc_t> a2i_cache;
 };

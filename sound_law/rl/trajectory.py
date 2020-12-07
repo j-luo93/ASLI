@@ -17,7 +17,7 @@ from dev_misc.utils import (Singleton, cached_property,
 from editdistance import eval_batch
 from sound_law.data.alphabet import PAD_ID, Alphabet
 
-from .mcts_fast import \
+from sound_law.rl.mcts.mcts_fast import \
     PyTreeNode  # pylint: disable=no-name-in-module # IDEA(j_luo) move tree node to another pyx file?
 
 

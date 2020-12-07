@@ -16,6 +16,7 @@ cdef extern from "SiteGraph.cpp": pass
 cdef extern from "<boost/unordered_map.hpp>" namespace "boost" nogil:
     cdef cppclass unordered_map[T, U, HASH=*, PRED=*, ALLOCATOR=*]:
         size_t size()
+        U at(T)
 
 
 cdef extern from "<boost/unordered_set.hpp>" namespace "boost" nogil:
@@ -31,7 +32,7 @@ cdef extern from "<array>" namespace "std" nogil:
         pass
 
     cdef cppclass cpp_array[T, S, ALLOCATOR=*]:
-        pass
+        T at(size_t)
 
 
 cdef extern from "common.hpp":
@@ -42,6 +43,7 @@ cdef extern from "common.hpp":
     ctypedef vector[abc_t] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
     ctypedef cpp_array[abc_t, five] Site
+cdef abc_t NULL_abc = -1
 
 
 cdef extern from "Word.hpp":
@@ -77,6 +79,7 @@ cdef extern from "TreeNode.hpp":
         visit_t visit_count
         float max_value
         int max_index
+        action_t max_action_id
         bool played
         void clear_stats()
 
@@ -104,13 +107,15 @@ cdef extern from "Action.hpp":
         action_t get_action_id(Action)
         Action get_action(action_t)
         void set_action_allowed(TreeNode *)
+        size_t size()
+        vector[abc_t] expand_a2i()
 
 
 cdef extern from "Env.hpp":
     cdef cppclass Env nogil:
         Env(WordSpace *, ActionSpace *, VocabIdSeq, float, float)
 
-        TreeNode *apply_action(TreeNode *, Action)
+        TreeNode *apply_action(TreeNode *, action_t, action_t)
 
         WordSpace *word_space
         ActionSpace *action_space

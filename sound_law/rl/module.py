@@ -14,7 +14,8 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
-from .mcts_fast import PyNull_abc, parallel_gather_action_info  # pylint: disable=no-name-in-module
+# from .mcts_fast import parallel_gather_action_info  # pylint: disable=no-name-in-module
+from .mcts.mcts_fast import PyNull_abc
 import numpy as np
 
 

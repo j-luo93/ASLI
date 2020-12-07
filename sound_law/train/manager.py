@@ -5,6 +5,7 @@ import logging
 import pickle
 from typing import List, Optional, Tuple
 
+import numpy as np
 import torch
 from torch.optim import SGD, Adam
 
@@ -22,9 +23,9 @@ from sound_law.s2s.one_to_many import OneToManyModel
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
-from sound_law.rl.mcts import Mcts
+from sound_law.rl.mcts.mcts import Mcts
 from sound_law.rl.trajectory import VocabState
-from sound_law.rl.mcts_fast import set_end_words  # pylint: disable=no-name-in-module
+from sound_law.rl.mcts.mcts_fast import PyWordSpace, PySiteSpace, PyEnv, PyActionSpace
 
 from .trainer import MctsTrainer, PolicyGradientTrainer, Trainer
 
@@ -68,9 +69,6 @@ class OnePairManager:
             with open(g.segments_dump_path, 'rb') as fin:
                 segments_dump = pickle.load(fin)
             self.src_abc = self.tgt_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang, segments_dump=segments_dump)
-            if g.use_phono_edit_dist:
-                VocabState.set_dist_mat(self.tgt_abc.dist_mat)
-            VocabState.set_max_mode(g.use_max_value)
             VocabState.abc = self.tgt_abc
         elif g.share_src_tgt_abc:
             self.src_abc = cr.prepare_alphabet(g.src_lang, g.tgt_lang)
@@ -122,17 +120,20 @@ class OnePairManager:
             test_setting = create_setting('test', Split('test'), False)
             settings.append(test_setting)
 
-        if g.use_rl:
-            SoundChangeActionSpace.set_conditional(g.use_conditional)
-            SoundChangeActionSpace.set_pruning(g.use_pruning)
-            if g.use_pruning:
-                SoundChangeActionSpace.set_pruning_threshold(g.pruning_threshold)
-            self.action_space = SoundChangeActionSpace(self.tgt_abc)
-            dl_kwargs = {'action_space': self.action_space}
-        else:
-            dl_kwargs = dict()
+        # if g.use_rl:
+        #     # SoundChangeActionSpace.set_conditional(g.use_conditional)
+        #     # SoundChangeActionSpace.set_pruning(g.use_pruning)
+        #     # if g.use_pruning:
+        #     #     SoundChangeActionSpace.set_pruning_threshold(g.pruning_threshold)
+        #     py_ss = PySiteSpace()
+        #     py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 1.0, s_arr, s_lengths)
+        #     self.action_space = SoundChangeActionSpace(self.tgt_abc)
+        #     dl_kwargs = {'action_space': self.action_space}
+        # else:
+        #     dl_kwargs = dict()
         for setting in settings:
-            self.dl_reg.register_data_loader(setting, cr, **dl_kwargs)
+            # self.dl_reg.register_data_loader(setting, cr, **dl_kwargs)
+            self.dl_reg.register_data_loader(setting, cr)
 
     def run(self):
         phono_feat_mat = special_ids = None
@@ -148,7 +149,7 @@ class OnePairManager:
                 'special_ids': special_ids
             }
             if g.use_rl:
-                end_state = dl.end_state
+                end_state = self.env.end
                 agent_cls = VanillaPolicyGradient if g.agent == 'vpg' else A2C
                 model = agent_cls(len(self.tgt_abc), self.action_space, end_state, **phono_kwargs)
             else:
@@ -212,17 +213,27 @@ class OnePairManager:
 
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
-            set_end_words(dl.end_state)
-            env = SoundChangeEnv(dl.init_state, dl.end_state, self.action_space, g.final_reward, g.step_penalty)
+            # set_end_words(dl.end_state)
+            src_seqs = dl.entire_batch.src_seqs
+            s_arr = np.ascontiguousarray(src_seqs.ids.t().cpu().numpy())
+            s_lengths = np.ascontiguousarray(src_seqs.lengths.t().cpu().numpy())
+            tgt_seqs = dl.entire_batch.tgt_seqs
+            t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy())
+            t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
+            py_ss = PySiteSpace()
+            py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 1.0, t_arr, t_lengths)
+            self.action_space = SoundChangeActionSpace(py_ss, py_ws, self.tgt_abc)
+
+            self.env = SoundChangeEnv(py_ws, self.action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
             model = get_model(dl=dl)
             if g.use_mcts:
-                mcts = Mcts(self.action_space, model, env, dl.end_state)
+                mcts = Mcts(self.action_space, model, self.env, self.env.end)
                 trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
             else:
                 collector = TrajectoryCollector(g.batch_size,
                                                 max_rollout_length=g.max_rollout_length,
                                                 truncate_last=True)
-                trainer = get_trainer(model, 'rl', None, None, env=env, collector=collector)
+                trainer = get_trainer(model, 'rl', None, None, env=self.env, collector=collector)
             trainer.train(self.dl_reg)
         elif g.input_format == 'wikt':
             run_once('train', 'dev', 'test')
