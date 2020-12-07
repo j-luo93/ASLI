@@ -21,3 +21,6 @@ using Site = std::array<abc_t, 5>;
 
 static const abc_t NULL_abc = -1;
 static const action_t NULL_action = std::numeric_limits<action_t>::max();
+
+template <class V>
+using ActionMap = boost::unordered_map<Action, V>;

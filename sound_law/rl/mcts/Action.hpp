@@ -25,7 +25,8 @@ private:
     action_t safe_get_action_id(const Action &);
 
     boost::unordered_map<abc_t, std::vector<abc_t>> edges;
-    boost::unordered_map<Action, action_t> a2i; // mapping from actions to action ids;
+    ActionMap<action_t> a2i; // mapping from actions to action ids;
+    // boost::unordered_map<Action, action_t> a2i; // mapping from actions to action ids;
     std::vector<Action> actions;
     boost::shared_mutex actions_mtx;
     std::vector<abc_t> a2i_cache;

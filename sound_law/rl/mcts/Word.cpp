@@ -68,18 +68,18 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
     }
 }
 
-Word *WordSpace::apply_action(Word *word, const Action &action, int order)
+Word *WordSpace::apply_action(Word *word, action_t action_id, const Action &action, int order)
 {
     // Return nullptr if stop action is being applied.
     if (action.at(0) == NULL_abc)
         return nullptr;
 
-    boost::unordered_map<Action, Word *> &neighbors = word->neighbors;
+    boost::unordered_map<action_t, Word *> &neighbors = word->neighbors;
     // Return cache if it exists. Obtain the read lock first.
     {
         boost::shared_lock_guard<boost::shared_mutex> lock(word->neighbor_mtx);
-        if (neighbors.find(action) != neighbors.end())
-            return neighbors.at(action);
+        if (neighbors.find(action_id) != neighbors.end())
+            return neighbors.at(action_id);
     }
 
     // Compute the new id seq.
@@ -121,7 +121,7 @@ Word *WordSpace::apply_action(Word *word, const Action &action, int order)
     Word *new_word = get_word(new_id_seq, order, false);
     // Obtain the write lock -- no need to release anything here since it should be taken care of by `get_word`.
     boost::lock_guard<boost::shared_mutex> lock(word->neighbor_mtx);
-    neighbors[action] = new_word;
+    neighbors[action_id] = new_word;
     return new_word;
 }
 

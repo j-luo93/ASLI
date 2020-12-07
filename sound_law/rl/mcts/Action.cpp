@@ -89,7 +89,7 @@ void ActionSpace::set_action_allowed(TreeNode *t_node)
             for (int order : g_node->linked_words)
             {
                 Word *word = t_node->words.at(order);
-                Word *new_word = word_space->apply_action(word, action, order);
+                Word *new_word = word_space->apply_action(word, action_id, action, order);
                 delta += new_word->dist - word->dist;
             }
 

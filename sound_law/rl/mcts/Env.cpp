@@ -41,7 +41,7 @@ TreeNode *Env::apply_action(TreeNode *node, const Action &action, action_t best_
     // Obtain new list of words (by using cache whenever possbile).
     std::vector<Word *> new_words = std::vector<Word *>();
     for (size_t order = 0; order < node->words.size(); order++)
-        new_words.push_back(word_space->apply_action(node->words.at(order), action, order));
+        new_words.push_back(word_space->apply_action(node->words.at(order), action_id, action, order));
     std::pair<action_t, action_t> prev_action = std::pair<action_t, action_t>(best_i, action_id);
     TreeNode *new_node = new TreeNode(new_words, prev_action, node);
 
