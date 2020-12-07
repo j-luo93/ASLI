@@ -11,9 +11,9 @@
 #include <boost/functional/hash.hpp>
 #include <boost/thread.hpp>
 
-using abc_t = long;    // for alphabets -- this could be negative since -1 is used for marking null.
-using action_t = long; // for actions
-using visit_t = long;  // for visit/action counts -- due to virtual games, this could be negative.
+using abc_t = int16_t;     // for alphabets -- this could be negative since -1 is used for marking null.
+using action_t = uint32_t; // for actions
+using visit_t = int32_t;   // for visit/action counts -- due to virtual games, this could be negative.
 using Action = std::array<abc_t, 6>;
 using IdSeq = std::vector<abc_t>;
 using VocabIdSeq = std::vector<IdSeq>;
