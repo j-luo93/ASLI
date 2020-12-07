@@ -32,16 +32,13 @@ TreeNode *Env::apply_action(TreeNode *node, const Action &action, action_t best_
         return nullptr;
 
     // Return cache if it exists. Obtain a read lock first.
-    node->neighbor_mtx.lock_shared();
-    if (node->neighbors.find(action_id) != node->neighbors.end())
     {
-        TreeNode *new_node = node->neighbors.at(action_id);
-        node->neighbor_mtx.unlock_shared();
-        return new_node;
+        boost::shared_lock_guard<boost::shared_mutex> lock(node->neighbor_mtx);
+        if (node->neighbors.find(action_id) != node->neighbors.end())
+            return node->neighbors.at(action_id);
     }
-    node->neighbor_mtx.unlock_shared();
 
-    // Obtain new list of words (by using caching whenever possbile).
+    // Obtain new list of words (by using cache whenever possbile).
     std::vector<Word *> new_words = std::vector<Word *>();
     for (size_t order = 0; order < node->words.size(); order++)
         new_words.push_back(word_space->apply_action(node->words.at(order), action, order));
@@ -52,17 +49,16 @@ TreeNode *Env::apply_action(TreeNode *node, const Action &action, action_t best_
     float final_reward = new_node->done ? this->final_reward : -this->step_penalty;
     float incremental_reward = (node->dist - new_node->dist) / start->dist;
     // Obtain the write lock before update. Make sure it hasn't been updated before -- otherwise release the memory.
-    node->neighbor_mtx.lock();
+    boost::lock_guard<boost::shared_mutex> lock(node->neighbor_mtx);
     if (node->neighbors.find(action_id) == node->neighbors.end())
     {
         node->neighbors[action_id] = new_node;
         node->rewards[action_id] = final_reward + incremental_reward;
+        return new_node;
     }
     else
     {
         delete new_node;
-        new_node = node->neighbors.at(action_id);
+        return node->neighbors.at(action_id);
     }
-    node->neighbor_mtx.unlock();
-    return new_node;
 }

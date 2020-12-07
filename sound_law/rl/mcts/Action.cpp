@@ -25,16 +25,13 @@ void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
 
 action_t ActionSpace::safe_get_action_id(const Action &action)
 {
-    actions_mtx.lock_shared();
-    if (a2i.find(action) != a2i.end())
     {
-        action_t action_id = a2i.at(action);
-        actions_mtx.unlock_shared();
-        return action_id;
+        boost::shared_lock_guard<boost::shared_mutex> lock(actions_mtx);
+        if (a2i.find(action) != a2i.end())
+            return a2i.at(action);
     }
-    actions_mtx.unlock_shared();
 
-    actions_mtx.lock();
+    boost::lock_guard<boost::shared_mutex> lock(actions_mtx);
     action_t action_id = (action_t)a2i.size();
     a2i[action] = action_id;
     actions.push_back(action);
@@ -44,7 +41,6 @@ action_t ActionSpace::safe_get_action_id(const Action &action)
     a2i_cache.push_back(action.at(3));
     a2i_cache.push_back(action.at(4));
     a2i_cache.push_back(action.at(5));
-    actions_mtx.unlock();
     return action_id;
 }
 
@@ -54,6 +50,7 @@ Action ActionSpace::get_action(action_t action_id) { return actions.at(action_id
 
 void ActionSpace::set_action_allowed(TreeNode *t_node)
 {
+    boost::lock_guard<boost::mutex> lock(t_node->exclusive_mtx);
     // Skip this if actions have already been set before.
     if (!t_node->action_allowed.empty())
         return;

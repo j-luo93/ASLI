@@ -34,41 +34,37 @@ WordSpace::WordSpace(
 Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
 {
     // Obtain the read lock for membership test.
-    words_mtx.lock_shared();
+    {
+        boost::shared_lock_guard<boost::shared_mutex> lock(words_mtx);
+        if (words.find(id_seq) != words.end())
+            return words.at(id_seq);
+    }
+
+    int n = id_seq.size();
+    std::vector<SiteNode *> site_roots = std::vector<SiteNode *>();
+    // Start with 1 and end with n - 1 since both ends are padded.
+    for (int i = 1; i < n - 1; i++)
+    {
+        abc_t before = id_seq.at(i);
+        abc_t pre_id = (i > 1) ? id_seq.at(i - 1) : NULL_abc;
+        abc_t d_pre_id = (i > 2) ? id_seq.at(i - 2) : NULL_abc;
+        abc_t post_id = (i < n - 2) ? id_seq.at(i + 1) : NULL_abc;
+        abc_t d_post_id = (i < n - 3) ? id_seq.at(i + 2) : NULL_abc;
+        site_roots.push_back(site_space->get_node(before, pre_id, d_pre_id, post_id, d_post_id));
+    }
+    float dist = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
+    Word *word = new Word(id_seq, site_roots, dist, is_end);
+    // Obtain the write lock. Release the memeory if it has already been created.
+    boost::lock_guard<boost::shared_mutex> lock(words_mtx);
     if (words.find(id_seq) == words.end())
     {
-        words_mtx.unlock_shared();
-        int n = id_seq.size();
-        std::vector<SiteNode *> site_roots = std::vector<SiteNode *>();
-        // Start with 1 and end with n - 1 since both ends are padded.
-        for (int i = 1; i < n - 1; i++)
-        {
-            abc_t before = id_seq.at(i);
-            abc_t pre_id = (i > 1) ? id_seq.at(i - 1) : NULL_abc;
-            abc_t d_pre_id = (i > 2) ? id_seq.at(i - 2) : NULL_abc;
-            abc_t post_id = (i < n - 2) ? id_seq.at(i + 1) : NULL_abc;
-            abc_t d_post_id = (i < n - 3) ? id_seq.at(i + 2) : NULL_abc;
-            site_roots.push_back(site_space->get_node(before, pre_id, d_pre_id, post_id, d_post_id));
-        }
-        float dist = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
-        Word *word = new Word(id_seq, site_roots, dist, is_end);
-        // Obtain the write lock. Release the memeory if it has already been created.
-        words_mtx.lock();
-        if (words.find(id_seq) == words.end())
-            words[id_seq] = word;
-        else
-        {
-            delete word;
-            word = words.at(id_seq);
-        }
-        words_mtx.unlock();
+        words[id_seq] = word;
         return word;
     }
     else
     {
-        Word *word = words.at(id_seq);
-        words_mtx.unlock_shared();
-        return word;
+        delete word;
+        return words.at(id_seq);
     }
 }
 
@@ -80,14 +76,11 @@ Word *WordSpace::apply_action(Word *word, const Action &action, int order)
 
     boost::unordered_map<Action, Word *> &neighbors = word->neighbors;
     // Return cache if it exists. Obtain the read lock first.
-    word->neighbor_mtx.lock_shared();
-    if (neighbors.find(action) != neighbors.end())
     {
-        Word *new_word = neighbors.at(action);
-        word->neighbor_mtx.unlock_shared();
-        return new_word;
+        boost::shared_lock_guard<boost::shared_mutex> lock(word->neighbor_mtx);
+        if (neighbors.find(action) != neighbors.end())
+            return neighbors.at(action);
     }
-    word->neighbor_mtx.unlock_shared();
 
     // Compute the new id seq.
     const IdSeq &id_seq = word->id_seq;
@@ -98,8 +91,8 @@ Word *WordSpace::apply_action(Word *word, const Action &action, int order)
     abc_t d_pre_id = action.at(3);
     abc_t post_id = action.at(4);
     abc_t d_post_id = action.at(5);
-    size_t n = word->size();
-    for (size_t i = 0; i < n; i++)
+    int n = word->size();
+    for (int i = 0; i < n; i++)
     {
         new_id_seq.push_back(id_seq.at(i));
         if (id_seq.at(i) == before_id)
@@ -127,9 +120,8 @@ Word *WordSpace::apply_action(Word *word, const Action &action, int order)
     // Create new word if necessary and cache it as the neighbor.
     Word *new_word = get_word(new_id_seq, order, false);
     // Obtain the write lock -- no need to release anything here since it should be taken care of by `get_word`.
-    word->neighbor_mtx.lock();
+    boost::lock_guard<boost::shared_mutex> lock(word->neighbor_mtx);
     neighbors[action] = new_word;
-    word->neighbor_mtx.unlock();
     return new_word;
 }
 
@@ -149,8 +141,8 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2)
         dist[0][i] = i * ins_cost;
 
     float sub_cost;
-    for (size_t i = 1; i < l1 + 1; ++i)
-        for (size_t j = 1; j < l2 + 1; ++j)
+    for (int i = 1; i < l1 + 1; ++i)
+        for (int j = 1; j < l2 + 1; ++j)
         {
             sub_cost = dist_mat[seq1.at(i - 1)][seq2.at(j - 1)];
             dist[i][j] = std::min(dist[i - 1][j - 1] + sub_cost, std::min(dist[i - 1][j], dist[i][j - 1]) + ins_cost);

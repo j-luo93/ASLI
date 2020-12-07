@@ -97,10 +97,9 @@ void TreeNode::clear_stats(bool recursive)
 
 action_t TreeNode::select(float puct_c, int game_count, float virtual_loss)
 {
-    select_mtx.lock();
+    boost::lock_guard<boost::mutex> lock(exclusive_mtx);
     action_t best_i = get_best_i(puct_c);
     virtual_backup(best_i, game_count, virtual_loss);
-    select_mtx.unlock();
     return best_i;
 }
 
@@ -125,7 +124,14 @@ void TreeNode::backup(float value, float mixing, int game_count, float virtual_l
         rtg += reward;
         // float mixed_value = (1 - mixing) * value + mixing * reward;
         parent_node->action_count[best_i] -= game_count - 1;
-        assert(parent_node->action_count[best_i] >= 0);
+        // assert(parent_node->action_count[best_i] >= 1);
+        if (parent_node->action_count[best_i] < 1)
+        {
+            std::cerr << best_i << '\n';
+            std::cerr << action_id << '\n';
+            std::cerr << parent_node->action_count[best_i] << '\n';
+            assert(false);
+        }
         // parent_node->total_value[action_id] += game_count * virtual_loss + mixed_value;
         // Update max value of the parent.
         float new_value = value + rtg;

@@ -3,11 +3,13 @@
 #include "Word.hpp"
 
 class Env;
+class ActionSpace;
 
 class TreeNode
 {
 public:
     friend class Env;
+    friend class ActionSpace;
 
     void debug();
     bool is_leaf();
@@ -48,7 +50,7 @@ private:
     TreeNode(const std::vector<Word *> &);
     TreeNode(const std::vector<Word *> &, const std::pair<action_t, action_t> &, TreeNode *);
     void virtual_backup(action_t, int, float);
-    boost::mutex select_mtx;
+    boost::mutex exclusive_mtx;
     boost::shared_mutex neighbor_mtx;
 };
 

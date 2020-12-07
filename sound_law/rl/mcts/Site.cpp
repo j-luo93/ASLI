@@ -19,30 +19,26 @@ SiteNode *SiteSpace::get_node(abc_t before_id,
     // Skip generation if this site has already been seen.
     Site site = Site{before_id, pre_id, d_pre_id, post_id, d_post_id};
     // Obtain the read lock for membership test.
-    nodes_mtx.lock_shared();
-    if (nodes.find(site) != nodes.end())
     {
-        SiteNode *node = nodes.at(site);
-        nodes_mtx.unlock_shared();
-        return node;
+        boost::shared_lock_guard<boost::shared_mutex> lock(nodes_mtx);
+        if (nodes.find(site) != nodes.end())
+            return nodes.at(site);
     }
-    nodes_mtx.unlock_shared();
 
     // Recursively generate the subgraph.
     SiteNode *new_node = new SiteNode(site);
     // Obtain the write lock.
-    nodes_mtx.lock();
-    if (nodes.find(site) == nodes.end())
-        nodes[site] = new_node;
-    else
     {
-        // Release the memory and stop the recursion.
-        delete new_node;
-        new_node = nodes.at(site);
-        nodes_mtx.unlock();
-        return new_node;
+        boost::lock_guard<boost::shared_mutex> lock(nodes_mtx);
+        if (nodes.find(site) == nodes.end())
+            nodes[site] = new_node;
+        else
+        {
+            // Release the memory and stop the recursion.
+            delete new_node;
+            return nodes.at(site);
+        }
     }
-    nodes_mtx.unlock();
     if (pre_id != NULL_abc)
     {
         if (d_pre_id != NULL_abc)

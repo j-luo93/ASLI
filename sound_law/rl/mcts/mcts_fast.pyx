@@ -286,11 +286,13 @@ def parallel_select(PyTreeNode py_root,
                 # Terminate if stop action is chosen or it has reached the end.
                 if node == nullptr or node.done:
                     break
-
-            if node != nullptr:
-                env.action_space.set_action_allowed(node)
             selected[i] = node
             steps_left_view[i] = n_steps_left
+
+        for i in prange(num_sims, num_threads=num_threads):
+            node = selected[i]
+            if node != nullptr:
+                env.action_space.set_action_allowed(node)
 
     tn_cls = type(py_root)
     return [wrap_node(tn_cls, ptr) if ptr != nullptr else None for ptr in selected], steps_left
