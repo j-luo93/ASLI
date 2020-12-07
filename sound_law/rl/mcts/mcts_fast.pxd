@@ -83,6 +83,8 @@ cdef extern from "TreeNode.hpp":
         void clear_stats(bool)
 
     cdef cppclass DetachedTreeNode nogil:
+        DetachedTreeNode(TreeNode *)
+
         IdSeq get_id_seq(int)
         size_t size()
 

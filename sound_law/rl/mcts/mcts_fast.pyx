@@ -115,6 +115,9 @@ cdef class PyTreeNode:
         if not from_ptr:
             raise TypeError(f'Cannot create a PyTreeNode object unless directly wrapping around a TreeNode pointer.')
 
+    def __dealloc__(self):
+        self.ptr = NULL
+
     @property
     def done(self):
         return self.ptr.done
@@ -193,11 +196,11 @@ cdef class PyTreeNode:
     def max_action_id(self):
         return self.ptr.max_action_id
 
-    # def detach(self):
-    #     cdef DetachedTreeNode *ptr = new DetachedTreeNode(self.ptr)
-    #     cdef PyDetachedTreeNode py_dtn = PyDetachedTreeNode.__new__(PyDetachedTreeNode)
-    #     py_dtn.ptr = ptr
-    #     return py_dtn
+    def detach(self):
+        cdef DetachedTreeNode *ptr = new DetachedTreeNode(self.ptr)
+        cdef PyDetachedTreeNode py_dtn = PyDetachedTreeNode.__new__(PyDetachedTreeNode, from_ptr=True)
+        py_dtn.ptr = ptr
+        return py_dtn
 
 
 cdef class PyDetachedTreeNode:

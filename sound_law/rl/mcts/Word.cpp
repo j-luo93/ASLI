@@ -44,10 +44,10 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
         for (int i = 1; i < n - 1; i++)
         {
             abc_t before = id_seq.at(i);
-            abc_t pre_id = (i > 0) ? id_seq.at(i - 1) : NULL_abc;
-            abc_t d_pre_id = (i > 1) ? id_seq.at(i - 2) : NULL_abc;
-            abc_t post_id = (i < n - 1) ? id_seq.at(i + 1) : NULL_abc;
-            abc_t d_post_id = (i < n - 2) ? id_seq.at(i + 2) : NULL_abc;
+            abc_t pre_id = (i > 1) ? id_seq.at(i - 1) : NULL_abc;
+            abc_t d_pre_id = (i > 2) ? id_seq.at(i - 2) : NULL_abc;
+            abc_t post_id = (i < n - 2) ? id_seq.at(i + 1) : NULL_abc;
+            abc_t d_post_id = (i < n - 3) ? id_seq.at(i + 2) : NULL_abc;
             site_roots.push_back(site_space->get_node(before, pre_id, d_pre_id, post_id, d_post_id));
         }
         float dist = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);

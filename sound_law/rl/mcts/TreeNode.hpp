@@ -56,6 +56,8 @@ private:
 class DetachedTreeNode
 {
 public:
+    DetachedTreeNode(TreeNode *);
+
     IdSeq get_id_seq(int);
     size_t size();
 

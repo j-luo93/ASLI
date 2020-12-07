@@ -141,7 +141,7 @@ class Trajectory(BaseTrajectory):
 class ReplayTrajectory(BaseTrajectory):
 
     def __init__(self, tr: Trajectory):
-        self._states = [state.detach() for state in tr._states]
+        self._states = [state.detach() if state is not None else None for state in tr._states]
         self._actions = tr._actions
         self._rewards = tr._rewards
         self._mcts_pis = tr._mcts_pis

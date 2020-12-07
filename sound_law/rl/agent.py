@@ -19,8 +19,8 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
-from .mcts_fast import (  # pylint: disable=no-name-in-module
-    parallel_get_action_masks, parallel_get_sparse_action_masks,
+from .mcts.mcts_fast import (  # pylint: disable=no-name-in-module
+    parallel_get_sparse_action_masks,
     parallel_stack_ids)
 from .module import Cnn1dParams, PolicyNetwork, ValueNetwork
 # pylint: disable=no-name-in-module

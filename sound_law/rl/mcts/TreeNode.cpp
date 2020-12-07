@@ -83,6 +83,7 @@ void TreeNode::clear_stats(bool recursive)
 {
     action_count.clear();
     total_value.clear();
+    prior.clear();
     visit_count = 0;
     max_value = -9999.9;
     max_index = -1;
@@ -174,3 +175,10 @@ size_t TreeNode::size() { return words.size(); }
 size_t DetachedTreeNode::size() { return vocab_i.size(); }
 IdSeq TreeNode::get_id_seq(int order) { return words.at(order)->id_seq; }
 IdSeq DetachedTreeNode::get_id_seq(int order) { return vocab_i.at(order); }
+
+DetachedTreeNode::DetachedTreeNode(TreeNode *node) : action_allowed(node->action_allowed)
+{
+    vocab_i = VocabIdSeq(node->size());
+    for (size_t order = 0; order < node->size(); order++)
+        vocab_i[order] = node->get_id_seq(order);
+}
