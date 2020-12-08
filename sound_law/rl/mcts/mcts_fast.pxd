@@ -39,6 +39,7 @@ cdef extern from "common.hpp":
     ctypedef short abc_t
     ctypedef unsigned int action_t
     ctypedef int visit_t
+    ctypedef long tn_cnt_t
     ctypedef cpp_array[abc_t, six] Action
     ctypedef vector[abc_t] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
@@ -64,7 +65,9 @@ cdef extern from "TreeNode.hpp":
         IdSeq get_id_seq(int)
         size_t size()
 
+        tn_cnt_t idx
         vector[Wptr] words
+        bool stopped
         bool done
         float dist
         vector[action_t] action_allowed

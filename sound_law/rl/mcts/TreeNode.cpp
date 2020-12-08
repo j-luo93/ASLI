@@ -1,5 +1,8 @@
 #include "TreeNode.hpp"
 
+boost::mutex TreeNode::cls_mtx;
+unsigned long TreeNode::cls_cnt = 0;
+
 void TreeNode::common_init()
 {
     dist = 0.0;
@@ -15,15 +18,22 @@ void TreeNode::common_init()
         }
 
     clear_stats();
+
+    {
+        boost::lock_guard<boost::mutex> lock(TreeNode::cls_mtx);
+        idx = TreeNode::cls_cnt++;
+    }
 }
 
 TreeNode::TreeNode(const std::vector<Word *> &words) : words(words) { common_init(); }
 TreeNode::TreeNode(
     const std::vector<Word *> &words,
     const std::pair<action_t, action_t> &prev_action,
-    TreeNode *parent_node) : words(words),
-                             parent_node(parent_node),
-                             prev_action(prev_action) { common_init(); }
+    TreeNode *parent_node,
+    bool stopped) : words(words),
+                    stopped(stopped),
+                    parent_node(parent_node),
+                    prev_action(prev_action) { common_init(); }
 
 void TreeNode::debug()
 {

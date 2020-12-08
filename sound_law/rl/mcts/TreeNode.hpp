@@ -8,6 +8,9 @@ class ActionSpace;
 class TreeNode
 {
 public:
+    static boost::mutex cls_mtx;
+    static tn_cnt_t cls_cnt;
+
     friend class Env;
     friend class ActionSpace;
 
@@ -24,7 +27,9 @@ public:
     IdSeq get_id_seq(int);
 
     // Basic members.
+    tn_cnt_t idx;
     std::vector<Word *> words;
+    bool stopped = false;
     bool done;
     float dist;
     std::vector<action_t> action_allowed;
@@ -48,7 +53,7 @@ public:
 private:
     void common_init();
     TreeNode(const std::vector<Word *> &);
-    TreeNode(const std::vector<Word *> &, const std::pair<action_t, action_t> &, TreeNode *);
+    TreeNode(const std::vector<Word *> &, const std::pair<action_t, action_t> &, TreeNode *, bool);
     void virtual_backup(action_t, int, float);
     boost::mutex exclusive_mtx;
     boost::shared_mutex neighbor_mtx;

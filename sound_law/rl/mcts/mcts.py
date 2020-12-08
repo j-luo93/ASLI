@@ -2,8 +2,6 @@
 """
 
 from __future__ import annotations
-from dev_misc.trainlib import Tracker
-from dev_misc import LT
 
 import logging
 from typing import Dict, List, Optional, Set, Tuple, Union, overload
@@ -11,15 +9,19 @@ from typing import Dict, List, Optional, Set, Tuple, Union, overload
 import numpy as np
 import torch
 
-from dev_misc import NDA, add_argument, g, get_tensor, get_zeros
+from dev_misc import LT, NDA, add_argument, g, get_tensor, get_zeros
+from dev_misc.trainlib import Tracker
 from dev_misc.utils import ScopedCache, pad_for_log
-
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv
-from .mcts_fast import (  # pylint: disable=no-name-in-module
-    parallel_get_sparse_action_masks, parallel_select, parallel_stack_ids)
-from sound_law.rl.trajectory import VocabState, Trajectory
+from sound_law.rl.trajectory import Trajectory, VocabState
+
+# pylint: disable=no-name-in-module
+from .mcts_fast import (parallel_get_sparse_action_masks, parallel_select,
+                        parallel_stack_ids)
+
+# pylint: enable=no-name-in-module
 
 
 class Mcts:
@@ -96,8 +98,7 @@ class Mcts:
         outstanding_states = list()
         # Deal with end states first.
         for i, state in enumerate(states):
-            if state is None or state.done:
-                # if state == self.end_state:
+            if state.stopped or state.done:
                 # NOTE(j_luo) This value is used for backup. If already reaching the end state, the final reward is either accounted for by the step reward, or by the value network. Therefore, we need to set it to 0.0 here.
                 values[i] = 0.0
             else:
@@ -213,9 +214,11 @@ class Mcts:
                         new_states, steps_left = self.parallel_select(root, g.expansion_batch_size, depth_limit)
                         steps = g.max_rollout_length - get_tensor(steps_left) if g.use_finite_horizon else None
                         values = self.expand(new_states, steps=steps)
+                        backed_up_idx = set()
                         for state, value in zip(new_states, values):
-                            if state is not None:
+                            if state.idx not in backed_up_idx:
                                 self.backup(state, value)
+                                backed_up_idx.add(state.idx)
                         tracker.update('mcts', incr=g.expansion_batch_size)
                     probs, action, reward, new_state = self.play(root)
                     trajectory.append(action, new_state, reward, mcts_pi=probs)
@@ -225,7 +228,7 @@ class Mcts:
                     root = new_state
 
                     tracker.update('rollout')
-                    if root is None or root.done:
+                    if root.stopped or root.done:
                         break
                 if ei % g.episode_check_interval == 0:
                     out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)

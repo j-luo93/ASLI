@@ -50,6 +50,10 @@ Action ActionSpace::get_action(action_t action_id) { return actions.at(action_id
 
 void ActionSpace::set_action_allowed(TreeNode *t_node)
 {
+    // Skip this if it has been stopped.
+    if (t_node->stopped)
+        return;
+
     boost::lock_guard<boost::mutex> lock(t_node->exclusive_mtx);
     // Skip this if actions have already been set before.
     if (!t_node->action_allowed.empty())

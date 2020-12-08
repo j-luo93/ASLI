@@ -119,6 +119,10 @@ cdef class PyTreeNode:
         self.ptr = NULL
 
     @property
+    def stopped(self):
+        return self.ptr.stopped
+
+    @property
     def done(self):
         return self.ptr.done
 
@@ -195,6 +199,10 @@ cdef class PyTreeNode:
     @property
     def max_action_id(self):
         return self.ptr.max_action_id
+
+    @property
+    def idx(self):
+        return self.ptr.idx
 
     def detach(self):
         cdef DetachedTreeNode *ptr = new DetachedTreeNode(self.ptr)
@@ -284,15 +292,14 @@ def parallel_select(PyTreeNode py_root,
                 n_steps_left = n_steps_left - 1
                 node = next_node
                 # Terminate if stop action is chosen or it has reached the end.
-                if node == nullptr or node.done:
+                if node.stopped or node.done:
                     break
             selected[i] = node
             steps_left_view[i] = n_steps_left
 
         for i in prange(num_sims, num_threads=num_threads):
             node = selected[i]
-            if node != nullptr:
-                env.action_space.set_action_allowed(node)
+            env.action_space.set_action_allowed(node)
 
     tn_cls = type(py_root)
     return [wrap_node(tn_cls, ptr) if ptr != nullptr else None for ptr in selected], steps_left
