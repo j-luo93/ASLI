@@ -28,7 +28,7 @@ public:
     void add_root(SiteNode *, int);
 
     SiteSpace *site_space;
-    boost::unordered_map<Site, GraphNode *> nodes;
+    UMap<Site, GraphNode *> nodes;
 
 private:
     GraphNode *generate_subgraph(SiteNode *);

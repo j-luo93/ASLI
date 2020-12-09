@@ -16,7 +16,7 @@ public:
     const IdSeq id_seq;
     float dist;
     bool done;
-    boost::unordered_map<action_t, Word *> neighbors;
+    UMap<action_t, Word *> neighbors;
     // ActionMap<Word *> neighbors;
     std::vector<SiteNode *> site_roots;
 
@@ -41,7 +41,7 @@ public:
     size_t size();
 
 private:
-    boost::unordered_map<IdSeq, Word *> words;
+    UMap<IdSeq, Word *> words;
     float get_edit_dist(const IdSeq &, const IdSeq &);
     boost::shared_mutex words_mtx;
 };

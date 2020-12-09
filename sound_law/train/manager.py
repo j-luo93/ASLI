@@ -222,7 +222,7 @@ class OnePairManager:
             t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
             py_ss = PySiteSpace()
             py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 1.0, t_arr, t_lengths)
-            self.action_space = SoundChangeActionSpace(py_ss, py_ws, self.tgt_abc)
+            self.action_space = SoundChangeActionSpace(py_ss, py_ws, g.num_workers, self.tgt_abc)
 
             self.env = SoundChangeEnv(py_ws, self.action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
             model = get_model(dl=dl)

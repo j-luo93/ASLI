@@ -74,7 +74,7 @@ Word *WordSpace::apply_action(Word *word, action_t action_id, const Action &acti
     if (action.at(0) == NULL_abc)
         return nullptr;
 
-    boost::unordered_map<action_t, Word *> &neighbors = word->neighbors;
+    UMap<action_t, Word *> &neighbors = word->neighbors;
     // Return cache if it exists. Obtain the read lock first.
     {
         boost::shared_lock_guard<boost::shared_mutex> lock(word->neighbor_mtx);

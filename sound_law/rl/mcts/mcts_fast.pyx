@@ -83,8 +83,8 @@ cdef class PyActionSpace:
 
     action_cls = PyAction
 
-    def __cinit__(self, PySiteSpace py_ss, PyWordSpace py_ws, *args, **kwargs):
-        self.ptr = new ActionSpace(py_ss.ptr, py_ws.ptr)
+    def __cinit__(self, PySiteSpace py_ss, PyWordSpace py_ws, int num_threads, *args, **kwargs):
+        self.ptr = new ActionSpace(py_ss.ptr, py_ws.ptr, num_threads)
 
     def __dealloc__(self):
         del self.ptr
@@ -297,9 +297,11 @@ def parallel_select(PyTreeNode py_root,
             selected[i] = node
             steps_left_view[i] = n_steps_left
 
-        for i in prange(num_sims, num_threads=num_threads):
-            node = selected[i]
-            env.action_space.set_action_allowed(node)
+        env.action_space.set_action_allowed(selected, num_threads)
+
+        # for i in prange(num_sims, num_threads=num_threads):
+        #     node = selected[i]
+        #     env.action_space.set_action_allowed(node)
 
     tn_cls = type(py_root)
     return [wrap_node(tn_cls, ptr) if ptr != nullptr else None for ptr in selected], steps_left

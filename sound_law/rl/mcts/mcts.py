@@ -167,6 +167,7 @@ class Mcts:
         if best_i == -1:
             action_id = 0
             action = self.env.action_space.get_action(0)
+            # FIXME(j_luo) new state is wrong.
             new_state = None
             reward = 0.0
         else:

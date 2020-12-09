@@ -3,8 +3,9 @@
 
 ActionSpace::ActionSpace(
     SiteSpace *site_space,
-    WordSpace *word_space) : site_space(site_space),
-                             word_space(word_space)
+    WordSpace *word_space,
+    int num_threads) : site_space(site_space),
+                       word_space(word_space)
 {
     // Reserve the first action for the stop action.
     Action action = Action{NULL_abc, NULL_abc, NULL_abc, NULL_abc, NULL_abc, NULL_abc};
@@ -16,6 +17,9 @@ ActionSpace::ActionSpace(
     a2i_cache.push_back(NULL_abc);
     a2i_cache.push_back(NULL_abc);
     a2i_cache.push_back(NULL_abc);
+
+    // Initialize thread pool.
+    tp.resize(num_threads);
 }
 
 void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
@@ -55,6 +59,11 @@ void ActionSpace::set_action_allowed(TreeNode *t_node)
         return;
 
     boost::lock_guard<boost::mutex> lock(t_node->exclusive_mtx);
+    set_action_allowed_no_lock(t_node);
+}
+
+void ActionSpace::set_action_allowed_no_lock(TreeNode *t_node)
+{
     // Skip this if actions have already been set before.
     if (!t_node->action_allowed.empty())
         return;
@@ -102,6 +111,29 @@ void ActionSpace::set_action_allowed(TreeNode *t_node)
         }
     }
     assert(!aa.empty());
+}
+
+void ActionSpace::set_action_allowed(const std::vector<TreeNode *> &nodes)
+{
+    // Filter out the duplicates.
+    auto unique_idx = boost::unordered_set<tn_cnt_t>();
+    auto unique_nodes = std::vector<TreeNode *>();
+    for (const auto node : nodes)
+        if (unique_idx.find(node->idx) == unique_idx.end())
+        {
+            unique_idx.insert(node->idx);
+            unique_nodes.push_back(node);
+        }
+
+    // Since they are all unique, we can be lock-free.
+    std::vector<std::future<void>> results(unique_nodes.size());
+    for (int i = 0; i < unique_nodes.size(); i++)
+    {
+        auto node = unique_nodes.at(i);
+        results[i] = tp.push([this, node](int id) { this->set_action_allowed_no_lock(node); });
+    }
+    for (int i = 0; i < unique_nodes.size(); i++)
+        results[i].get();
 }
 
 size_t ActionSpace::size() { return actions.size(); }

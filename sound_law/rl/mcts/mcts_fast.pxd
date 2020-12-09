@@ -106,11 +106,13 @@ cdef extern from "Action.hpp":
 
         SiteSpace *site_space
         WordSpace *word_space
+        int num_threads
 
         void register_edge(abc_t, abc_t)
         action_t get_action_id(Action)
         Action get_action(action_t)
         void set_action_allowed(TreeNode *)
+        void set_action_allowed(vector[TNptr])
         size_t size()
         vector[abc_t] expand_a2i()
 

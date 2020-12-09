@@ -35,14 +35,16 @@ TreeNode::TreeNode(
                     parent_node(parent_node),
                     prev_action(prev_action) { common_init(); }
 
-void TreeNode::debug()
+void TreeNode::debug(bool show_words)
 {
     std::cerr << "Debug TreeNode: #action=" << action_allowed.size() << '\n';
-    for (Word *word : words)
-    {
-        std::cerr << "---------\n";
-        word->debug();
-    }
+    std::cerr << "stopped: " << stopped << " done: " << done << '\n';
+    if (show_words)
+        for (Word *word : words)
+        {
+            std::cerr << "---------\n";
+            word->debug();
+        }
 }
 
 bool TreeNode::is_leaf() { return prior.size() == 0; }

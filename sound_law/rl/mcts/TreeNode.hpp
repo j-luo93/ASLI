@@ -14,7 +14,7 @@ public:
     friend class Env;
     friend class ActionSpace;
 
-    void debug();
+    void debug(bool = true);
     bool is_leaf();
     std::vector<float> get_scores(float);
     action_t get_best_i(float);
@@ -35,8 +35,8 @@ public:
     std::vector<action_t> action_allowed;
     TreeNode *parent_node = nullptr;
     std::pair<action_t, action_t> prev_action;
-    boost::unordered_map<action_t, TreeNode *> neighbors;
-    boost::unordered_map<action_t, float> rewards;
+    UMap<action_t, TreeNode *> neighbors;
+    UMap<action_t, float> rewards;
     // Stored after evaluation.
     std::vector<float> prior;
     // Game stats.
