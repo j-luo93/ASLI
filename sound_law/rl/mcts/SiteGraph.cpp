@@ -17,7 +17,7 @@ void SiteGraph::add_root(SiteNode *root, int order)
 
 GraphNode *SiteGraph::generate_subgraph(SiteNode *s_node)
 {
-    const Site &site = s_node->site;
+    usi_t site = s_node->site;
     if (nodes.find(site) == nodes.end())
     {
         GraphNode *g_node = new GraphNode(s_node);

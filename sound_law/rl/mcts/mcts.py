@@ -117,7 +117,6 @@ class Mcts:
 
             # TODO(j_luo) Scoped might be wrong here.
             # with ScopedCache('state_repr'):
-            self.action_space.expand_a2i()
             probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
             if g.use_value_guidance:
                 agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()
@@ -185,7 +184,7 @@ class Mcts:
     def collect_episodes(self, init_state: VocabState, end_state: VocabState, tracker: Tracker) -> List[Trajectory]:
         # logging.info(f'{self.num_cached_states} states cached.')
         # logging.info(f'{self.env.action_space.cache_size} words cached.')
-        logging.info(f'{len(self.action_space)} actions indexed in the action space.')
+        # logging.info(f'{len(self.action_space)} actions indexed in the action space.')
         # if self.num_cached_states > 300000:
         #     logging.info(f'Clearing up all the tree nodes.')
         # self.clear_subtree(init_state)

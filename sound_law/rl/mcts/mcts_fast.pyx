@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, action_t, Action, TNptr, np2vector, anyTNptr, IdSeq
+from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, TNptr, np2vector, anyTNptr, IdSeq, uai_t, combine, get_before_id, get_after_id, get_pre_id, get_d_pre_id, get_post_id, get_d_post_id
 from libcpp cimport nullptr
 import numpy as np
 cimport numpy as np
@@ -9,8 +9,16 @@ cimport cython
 
 from sound_law.data.alphabet import PAD_ID
 
-cdef abc_t NULL_abc = -1
-PyNull_abc = NULL_abc
+cdef extern from "limits.h":
+    cdef abc_t USHRT_MAX
+    cdef uai_t ULONG_MAX
+
+cdef abc_t NULL_ABC = USHRT_MAX
+cdef uai_t NULL_ACTION = ULONG_MAX
+cdef uai_t STOP = combine(NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC)
+
+PyNull_abc = NULL_ABC
+PyNull_action = NULL_ACTION
 
 
 cdef class PySiteSpace:
@@ -49,14 +57,14 @@ cdef class PyWordSpace:
 
 
 cdef class PyAction:
-    cdef public action_t action_id
+    cdef public uai_taction_id
     cdef public abc_t before_id
     cdef public abc_t after_id
     cdef public vector[abc_t] pre_cond
     cdef public vector[abc_t] post_cond
 
     def __cinit__(self,
-                  action_t action_id,
+                  uai_t action_id,
                   abc_t before_id,
                   abc_t after_id,
                   abc_t pre_id,
@@ -68,13 +76,13 @@ cdef class PyAction:
         self.after_id = after_id
         self.pre_cond = vector[abc_t]()
         self.post_cond = vector[abc_t]()
-        if d_pre_id != NULL_abc:
+        if d_pre_id != NULL_ABC:
             self.pre_cond.push_back(d_pre_id)
-        if pre_id != NULL_abc:
+        if pre_id != NULL_ABC:
             self.pre_cond.push_back(pre_id)
-        if post_id != NULL_abc:
+        if post_id != NULL_ABC:
             self.post_cond.push_back(post_id)
-        if d_post_id != NULL_abc:
+        if d_post_id != NULL_ABC:
             self.post_cond.push_back(d_post_id)
 
 
@@ -89,9 +97,6 @@ cdef class PyActionSpace:
     def __dealloc__(self):
         del self.ptr
 
-    def __len__(self):
-        return self.ptr.size()
-
     def register_edge(self, abc_t before_id, abc_t after_id):
         self.ptr.register_edge(before_id, after_id)
 
@@ -99,13 +104,9 @@ cdef class PyActionSpace:
         self.ptr.set_action_allowed(node.ptr)
 
     def get_action(self, action_id):
-        cdef Action action = self.ptr.get_action(action_id)
-        return self.action_cls(action_id, action.at(0), action.at(1),
-                               action.at(2), action.at(3), action.at(4),
-                               action.at(5))
-
-    def expand_a2i(self):
-        return np.asarray(self.ptr.expand_a2i(), dtype='long')
+        return self.action_cls(action_id, get_before_id(action_id), get_after_id(action_id),
+                               get_pre_id(action_id), get_d_pre_id(action_id),
+                               get_post_id(action_id), get_d_post_id(action_id))
 
 
 cdef class PyTreeNode:
@@ -244,7 +245,7 @@ cdef class PyEnv:
     def __dealloc__(self):
         del self.ptr
 
-    def step(self, PyTreeNode node, action_t best_i, action_t action_id):
+    def step(self, PyTreeNode node, int best_i, uai_t action_id):
         new_node = self.ptr.apply_action(node.ptr, best_i, action_id)
         reward = node.ptr.rewards.at(action_id)
         tn_cls = type(node)
@@ -272,11 +273,10 @@ def parallel_select(PyTreeNode py_root,
     cdef TreeNode *root = py_root.ptr
     cdef Env *env = py_env.ptr
 
-    cdef int i, n_steps_left
-    cdef action_t best_i, action_id
+    cdef int i, n_steps_left, best_i
+    cdef uai_t action_id
     cdef TreeNode *node,
     cdef TreeNode *next_node
-    cdef Action action
     steps_left = np.zeros([num_sims], dtype='long')
     cdef long[::1] steps_left_view = steps_left
     cdef vector[TNptr] selected = vector[TNptr](num_sims)
@@ -297,7 +297,7 @@ def parallel_select(PyTreeNode py_root,
             selected[i] = node
             steps_left_view[i] = n_steps_left
 
-        env.action_space.set_action_allowed(selected, num_threads)
+        env.action_space.set_action_allowed(selected)
 
         # for i in prange(num_sims, num_threads=num_threads):
         #     node = selected[i]
@@ -328,7 +328,7 @@ cdef object c_parallel_get_sparse_action_masks(vector[anyTNptr] nodes, int num_t
     cdef long[:, ::1] arr_view = arr
     cdef long[::1] na_view = num_actions
     cdef bool[:, ::1] am_view = action_masks
-    cdef vector[action_t] action_allowed
+    cdef vector[uai_t] action_allowed
     with nogil:
         for i in prange(n, num_threads=num_threads):
             action_allowed = nodes[i].action_allowed
@@ -416,7 +416,7 @@ def parallel_stack_ids(py_nodes, int num_threads):
 
 
 @cython.boundscheck(False)
-def parallel_stack_policies(edges, action_t num_actions, int num_threads):
+def parallel_stack_policies(edges, int num_actions, int num_threads):
     cdef int n = len(edges)
     cdef vector[float[::1]] mcts_pi_vec = vector[float[::1]](n)
     cdef vector[size_t] pi_len = vector[size_t](n)

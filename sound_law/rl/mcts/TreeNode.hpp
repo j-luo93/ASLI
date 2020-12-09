@@ -17,14 +17,16 @@ public:
     void debug(bool = true);
     bool is_leaf();
     std::vector<float> get_scores(float);
-    action_t get_best_i(float);
-    action_t select(float, int, float);
+    int get_best_i(float);
+    int select(float, int, float);
     void expand(const std::vector<float> &);
     void backup(float, float, int, float);
     void play();
-    std::list<std::pair<action_t, float>> get_path();
+    std::list<std::pair<uai_t, float>> get_path();
     void add_noise(const std::vector<float> &, float);
     IdSeq get_id_seq(int);
+    void clear_stats(bool = false);
+    size_t size();
 
     // Basic members.
     tn_cnt_t idx;
@@ -32,11 +34,11 @@ public:
     bool stopped = false;
     bool done;
     float dist;
-    std::vector<action_t> action_allowed;
+    std::vector<uai_t> action_allowed;
     TreeNode *parent_node = nullptr;
-    std::pair<action_t, action_t> prev_action;
-    UMap<action_t, TreeNode *> neighbors;
-    UMap<action_t, float> rewards;
+    std::pair<int, uai_t> prev_action;
+    ActionMap<TreeNode *> neighbors;
+    ActionMap<float> rewards;
     // Stored after evaluation.
     std::vector<float> prior;
     // Game stats.
@@ -45,16 +47,14 @@ public:
     visit_t visit_count;
     float max_value;
     int max_index;
-    action_t max_action_id;
+    uai_t max_action_id;
     bool played;
-    void clear_stats(bool = false);
-    size_t size();
 
 private:
     void common_init();
     TreeNode(const std::vector<Word *> &);
-    TreeNode(const std::vector<Word *> &, const std::pair<action_t, action_t> &, TreeNode *, bool);
-    void virtual_backup(action_t, int, float);
+    TreeNode(const std::vector<Word *> &, const std::pair<int, uai_t> &, TreeNode *, bool);
+    void virtual_backup(int, int, float);
     boost::mutex exclusive_mtx;
     boost::shared_mutex neighbor_mtx;
 };
@@ -68,6 +68,6 @@ public:
     IdSeq get_id_seq(int);
     size_t size();
 
-    std::vector<action_t> action_allowed;
+    std::vector<uai_t> action_allowed;
     VocabIdSeq vocab_i;
 };

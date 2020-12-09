@@ -28,7 +28,7 @@ void TreeNode::common_init()
 TreeNode::TreeNode(const std::vector<Word *> &words) : words(words) { common_init(); }
 TreeNode::TreeNode(
     const std::vector<Word *> &words,
-    const std::pair<action_t, action_t> &prev_action,
+    const std::pair<int, uai_t> &prev_action,
     TreeNode *parent_node,
     bool stopped) : words(words),
                     stopped(stopped),
@@ -64,20 +64,20 @@ std::vector<float> TreeNode::get_scores(float puct_c)
     return scores;
 }
 
-action_t TreeNode::get_best_i(float puct_c)
+int TreeNode::get_best_i(float puct_c)
 {
-    action_t best_i = NULL_action;
+    int best_i = -1;
     float best_v;
     std::vector<float> scores = this->get_scores(puct_c);
     for (size_t i = 0; i < this->prior.size(); ++i)
     {
-        if ((best_i == NULL_action) or (scores[i] > best_v))
+        if ((best_i == -1) or (scores[i] > best_v))
         {
             best_v = scores[i];
             best_i = i;
         };
     }
-    assert(best_i != NULL_action);
+    assert(best_i != -1);
     return best_i;
 }
 
@@ -99,7 +99,7 @@ void TreeNode::clear_stats(bool recursive)
     visit_count = 0;
     max_value = -9999.9;
     max_index = -1;
-    max_action_id = NULL_action;
+    max_action_id = NULL_ACTION;
     played = false;
 
     if (recursive)
@@ -107,15 +107,15 @@ void TreeNode::clear_stats(bool recursive)
             item.second->clear_stats(recursive);
 }
 
-action_t TreeNode::select(float puct_c, int game_count, float virtual_loss)
+int TreeNode::select(float puct_c, int game_count, float virtual_loss)
 {
     boost::lock_guard<boost::mutex> lock(exclusive_mtx);
-    action_t best_i = get_best_i(puct_c);
+    int best_i = get_best_i(puct_c);
     virtual_backup(best_i, game_count, virtual_loss);
     return best_i;
 }
 
-void TreeNode::virtual_backup(action_t best_i, int game_count, float virtual_loss)
+void TreeNode::virtual_backup(int best_i, int game_count, float virtual_loss)
 {
     action_count[best_i] += game_count;
     total_value[best_i] -= game_count * virtual_loss;
@@ -129,9 +129,9 @@ void TreeNode::backup(float value, float mixing, int game_count, float virtual_l
     float rtg = 0.0;
     while ((parent_node != nullptr) and (!parent_node->played))
     {
-        std::pair<action_t, action_t> &pa = node->prev_action;
-        action_t best_i = pa.first;
-        action_t action_id = pa.second;
+        std::pair<int, uai_t> &pa = node->prev_action;
+        int best_i = pa.first;
+        uai_t action_id = pa.second;
         float reward = parent_node->rewards.at(action_id);
         rtg += reward;
         // float mixed_value = (1 - mixing) * value + mixing * reward;
@@ -166,15 +166,15 @@ void TreeNode::play()
     played = true;
 }
 
-std::list<std::pair<action_t, float>> TreeNode::get_path()
+std::list<std::pair<uai_t, float>> TreeNode::get_path()
 {
     TreeNode *node = this;
-    std::list<std::pair<action_t, float>> path = std::list<std::pair<action_t, float>>();
+    auto path = std::list<std::pair<uai_t, float>>();
     while (node->parent_node != nullptr)
     {
-        action_t action_id = node->prev_action.second;
+        uai_t action_id = node->prev_action.second;
         float reward = node->parent_node->rewards.at(action_id);
-        std::pair<action_t, float> path_edge = std::pair<action_t, float>{action_id, reward};
+        auto path_edge = std::pair<uai_t, float>{action_id, reward};
         path.push_front(path_edge);
         node = node->parent_node;
     }

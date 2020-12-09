@@ -8,11 +8,9 @@ class Word;
 class SiteNode
 {
 public:
-    SiteNode(const Site &);
+    SiteNode(usi_t);
 
-    void debug();
-
-    const Site site;
+    const usi_t site;
     SiteNode *lchild = nullptr;
     SiteNode *rchild = nullptr;
     friend class SiteSpace;
@@ -27,6 +25,6 @@ public:
     SiteNode *get_node(abc_t, abc_t, abc_t, abc_t, abc_t);
 
 private:
-    UMap<Site, SiteNode *> nodes;
+    UMap<usi_t, SiteNode *> nodes;
     boost::shared_mutex nodes_mtx;
 };

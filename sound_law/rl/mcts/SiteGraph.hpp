@@ -28,7 +28,7 @@ public:
     void add_root(SiteNode *, int);
 
     SiteSpace *site_space;
-    UMap<Site, GraphNode *> nodes;
+    UMap<usi_t, GraphNode *> nodes;
 
 private:
     GraphNode *generate_subgraph(SiteNode *);

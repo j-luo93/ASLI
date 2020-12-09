@@ -19,13 +19,7 @@ Env::Env(
     end = new TreeNode(word_space->end_words);
 }
 
-TreeNode *Env::apply_action(TreeNode *node, action_t best_i, action_t action_id)
-{
-    Action action = action_space->get_action(action_id);
-    return apply_action(node, action, best_i, action_id);
-}
-
-TreeNode *Env::apply_action(TreeNode *node, const Action &action, action_t best_i, action_t action_id)
+TreeNode *Env::apply_action(TreeNode *node, int best_i, uai_t action_id)
 {
     // Return cache if it exists. Obtain a read lock first.
     {
@@ -34,12 +28,12 @@ TreeNode *Env::apply_action(TreeNode *node, const Action &action, action_t best_
             return node->neighbors.at(action_id);
     }
 
-    std::pair<action_t, action_t> prev_action = std::pair<action_t, action_t>(best_i, action_id);
+    auto prev_action = std::pair<int, uai_t>(best_i, action_id);
     TreeNode *new_node;
     float reward;
 
     // Special treatment for stop action.
-    if (action.at(0) == NULL_abc)
+    if (action_id == action::STOP)
     {
         new_node = new TreeNode(node->words, prev_action, node, true);
         // Still need to apply this for the last step.
@@ -50,7 +44,7 @@ TreeNode *Env::apply_action(TreeNode *node, const Action &action, action_t best_
         // Obtain new list of words (by using cache whenever possbile).
         std::vector<Word *> new_words = std::vector<Word *>();
         for (size_t order = 0; order < node->words.size(); order++)
-            new_words.push_back(word_space->apply_action(node->words.at(order), action_id, action, order));
+            new_words.push_back(word_space->apply_action(node->words.at(order), action_id, order));
         new_node = new TreeNode(new_words, prev_action, node, false);
 
         // Store it in neighbors.

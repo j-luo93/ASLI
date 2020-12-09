@@ -43,6 +43,7 @@ class FactorizedProjection(nn.Module):
         assert sparse, 'Cannot deal with dense action space.'
 
         potentials = self.potential_block(inp)
+        # FIXME(j_luo)
         with NoName(potentials):
             a2i = self.action_space.a2i.view(-1, 6)[get_tensor(indices)]
             # a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, g.num_workers))
@@ -55,47 +56,6 @@ class FactorizedProjection(nn.Module):
             ret = torch.where(mask, torch.zeros_like(ret), ret)
             ret = ret.view(-1, indices.shape[-1], 6).sum(dim=-1)
             return ret.rename('batch', 'action')
-
-    # def forward(self, inp: FT, sparse: bool = False, indices: Optional[NDA] = None) -> FT:
-    #     is_2d = inp.ndim == 2
-    #     if g.use_conditional and not is_2d:
-    #         raise RuntimeError(f'Not sure why you end up here.')
-
-    #     assert sparse, 'Cannot deal with dense action space.'
-
-    #     def get_potential(attr: str, code: int):
-    #         mod = getattr(self, f'{attr}_potential')
-    #         potential = mod(inp)
-    #         with NoName(potential):
-    #             if sparse:
-    #                 # a2i = (f'{attr}_id', indices)
-    #                 # a2i = a2i[indices]
-    #                 a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, code, g.num_workers))
-    #                 # NOTE(j_luo) For conditional rules, mask out those that are not.
-    #                 if attr in ['pre', 'd_pre', 'post', 'd_post']:
-    #                     mask = a2i == -1
-    #                     a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
-    #                     ret = potential.gather(1, a2i)
-    #                     ret = torch.where(mask, torch.zeros_like(ret), ret)
-    #                     return ret
-    #                 return potential.gather(1, a2i)
-    #             elif is_2d:
-    #                 return potential[:, a2i]
-    #             else:
-    #                 return potential[a2i]
-
-    #     bp = get_potential('before', Code.BEFORE)
-    #     ap = get_potential('after', Code.AFTER)
-    #     if g.use_conditional:
-    #         prep = get_potential('pre', Code.PRE)
-    #         d_prep = get_potential('d_pre', Code.D_PRE)
-    #         postp = get_potential('post', Code.POST)
-    #         d_postp = get_potential('d_post', Code.D_POST)
-    #         ret = bp + ap + prep + d_prep + postp + d_postp
-    #     else:
-    #         ret = bp + ap
-    #     names = ('batch', ) * is_2d + ('action',)
-    #     return ret.rename(*names)
 
 
 class SparseProjection(nn.Module):
@@ -201,7 +161,6 @@ class PolicyNetwork(nn.Module):
                     action_space: SoundChangeActionSpace) -> PolicyNetwork:
         enc = StateEncoder.from_params(emb_params, cnn1d_params)
         input_size = cnn1d_params.hidden_size
-        num_actions = len(action_space)
         hidden = nn.Sequential(
             nn.Linear(input_size, input_size // 2),
             nn.Tanh(),
@@ -209,6 +168,7 @@ class PolicyNetwork(nn.Module):
         if g.factorize_actions:
             proj = FactorizedProjection(input_size // 2, action_space)
         else:
+            num_actions = len(action_space)
             proj = SparseProjection(input_size // 2, num_actions)
         return cls(enc, hidden, proj, action_space)
 

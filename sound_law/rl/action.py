@@ -65,7 +65,7 @@ class SoundChangeActionSpace(PyActionSpace):
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
     add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
 
-    def __init__(self, py_ss: PySiteSpace, py_ws: PyWordSpace, abc: Alphabet):
+    def __init__(self, py_ss: PySiteSpace, py_ws: PyWordSpace, num_threads: int, abc: Alphabet):
         super().__init__()
         # # Set class variable for `SoundChangeAction` here.
         self.abc = SoundChangeAction.abc = abc
@@ -87,10 +87,3 @@ class SoundChangeActionSpace(PyActionSpace):
             for u1, u2 in product(units, repeat=2):
                 if u1 != u2:
                     register_uncondional_action(u1, u2)
-
-        logging.info(f'Number of actions in action space: {len(self)}.')
-
-        self.a2i = get_tensor(torch.zeros(0)).long()
-
-    def expand_a2i(self):
-        self.a2i = torch.cat([self.a2i, get_tensor(super().expand_a2i())], dim=-1)

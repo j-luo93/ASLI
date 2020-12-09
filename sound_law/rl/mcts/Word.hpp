@@ -16,8 +16,7 @@ public:
     const IdSeq id_seq;
     float dist;
     bool done;
-    UMap<action_t, Word *> neighbors;
-    // ActionMap<Word *> neighbors;
+    ActionMap<Word *> neighbors;
     std::vector<SiteNode *> site_roots;
 
 private:
@@ -37,7 +36,7 @@ public:
 
     Word *get_word(const IdSeq &, int, bool);
     // Apply action to the word. Order information is needed to compute the edit distance (against end word).
-    Word *apply_action(Word *, action_t, const Action &, int);
+    Word *apply_action(Word *, uai_t, int);
     size_t size();
 
 private:
