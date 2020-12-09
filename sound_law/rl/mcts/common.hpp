@@ -58,11 +58,11 @@ namespace action
     inline uai_t combine_after_id(usi_t site, abc_t after_id) { return ((site << 10) | static_cast<abc_t>(after_id)); }
     inline uai_t combine(abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id, abc_t before_id, abc_t after_id)
     {
-        return ((static_cast<uai_t>(pre_id) << 50) &
-                (static_cast<uai_t>(d_pre_id) << 40) &
-                (static_cast<uai_t>(post_id) << 30) &
-                (static_cast<uai_t>(d_post_id) << 20) &
-                (static_cast<uai_t>(before_id) << 10) &
+        return ((static_cast<uai_t>(pre_id) << 50) |
+                (static_cast<uai_t>(d_pre_id) << 40) |
+                (static_cast<uai_t>(post_id) << 30) |
+                (static_cast<uai_t>(d_post_id) << 20) |
+                (static_cast<uai_t>(before_id) << 10) |
                 static_cast<uai_t>(after_id));
     }
 
@@ -71,7 +71,7 @@ namespace action
     inline abc_t get_d_post_id(uai_t action) { return static_cast<abc_t>((action >> 20) & last_10); }
     inline abc_t get_post_id(uai_t action) { return static_cast<abc_t>((action >> 30) & last_10); }
     inline abc_t get_d_pre_id(uai_t action) { return static_cast<abc_t>((action >> 40) & last_10); }
-    inline abc_t get_pre_id(uai_t action) { return static_cast<abc_t>((action >> 50) & last_10); }
+    inline abc_t get_pre_id(uai_t action) { return static_cast<abc_t>(action >> 50); }
     static const uai_t STOP = combine(NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC);
 
 } // namespace action
@@ -81,10 +81,10 @@ namespace site
     inline abc_t get_before_id(usi_t site) { return static_cast<abc_t>(site & last_10); }
     inline usi_t combine(abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id, abc_t before_id)
     {
-        return ((static_cast<usi_t>(pre_id) << 40) &
-                (static_cast<usi_t>(d_pre_id) << 30) &
-                (static_cast<usi_t>(post_id) << 20) &
-                (static_cast<usi_t>(d_post_id) << 10) &
+        return ((static_cast<usi_t>(pre_id) << 40) |
+                (static_cast<usi_t>(d_pre_id) << 30) |
+                (static_cast<usi_t>(post_id) << 20) |
+                (static_cast<usi_t>(d_post_id) << 10) |
                 static_cast<usi_t>(before_id));
     }
 } // namespace site

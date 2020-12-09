@@ -10,10 +10,9 @@ cimport cython
 from sound_law.data.alphabet import PAD_ID
 
 cdef extern from "limits.h":
-    cdef abc_t USHRT_MAX
     cdef uai_t ULONG_MAX
 
-cdef abc_t NULL_ABC = USHRT_MAX
+cdef abc_t NULL_ABC = (1 << 10) - 1
 cdef uai_t NULL_ACTION = ULONG_MAX
 cdef uai_t STOP = combine(NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC)
 

@@ -43,9 +43,16 @@ class FactorizedProjection(nn.Module):
         assert sparse, 'Cannot deal with dense action space.'
 
         potentials = self.potential_block(inp)
-        # FIXME(j_luo)
+        last_10 = (1 << 10) - 1
         with NoName(potentials):
-            a2i = self.action_space.a2i.view(-1, 6)[get_tensor(indices)]
+            indices = get_tensor(indices)
+            after_id = indices & last_10
+            before_id = (indices >> 10) & last_10
+            d_post_id = (indices >> 20) & last_10
+            post_id = (indices >> 30) & last_10
+            d_pre_id = (indices >> 40) & last_10
+            pre_id = indices >> 50
+            a2i = torch.stack([before_id, after_id, pre_id, d_pre_id, post_id, d_post_id], dim=-1)
             # a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, g.num_workers))
             mask = a2i == PyNull_abc
             a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
