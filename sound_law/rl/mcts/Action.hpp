@@ -18,6 +18,11 @@ public:
     void register_edge(abc_t, abc_t);
     void set_action_allowed(TreeNode *);
     void set_action_allowed(const std::vector<TreeNode *> &);
+    void find_potential_actions(TreeNode *,
+                                std::vector<uai_t> &,
+                                std::vector<std::vector<int>> &,
+                                std::vector<uai_t> &,
+                                std::vector<std::vector<int>> &);
 
 private:
     void set_action_allowed_no_lock(TreeNode *);

@@ -81,7 +81,16 @@ Word *WordSpace::apply_action(Word *word, uai_t action_id, int order)
             return neighbors.at(action_id);
     }
 
-    // Compute the new id seq.
+    // Create new word if necessary and cache it as the neighbor.
+    auto new_word = apply_action_no_lock(word, action_id, order);
+    // Obtain the write lock -- no need to release anything here since it should be taken care of by `get_word`.
+    boost::lock_guard<boost::shared_mutex> lock(word->neighbor_mtx);
+    neighbors[action_id] = new_word;
+    return new_word;
+}
+
+Word *WordSpace::apply_action_no_lock(Word *word, uai_t action_id, int order)
+{
     const IdSeq &id_seq = word->id_seq;
     IdSeq new_id_seq = std::vector<abc_t>();
     abc_t before_id = action::get_before_id(action_id);
@@ -116,12 +125,7 @@ Word *WordSpace::apply_action(Word *word, uai_t action_id, int order)
         }
     }
 
-    // Create new word if necessary and cache it as the neighbor.
-    Word *new_word = get_word(new_id_seq, order, false);
-    // Obtain the write lock -- no need to release anything here since it should be taken care of by `get_word`.
-    boost::lock_guard<boost::shared_mutex> lock(word->neighbor_mtx);
-    neighbors[action_id] = new_word;
-    return new_word;
+    return get_word(new_id_seq, order, false);
 }
 
 size_t WordSpace::size() { return words.size(); }

@@ -62,6 +62,55 @@ inline void set_affected_action_words_pairs(
     }
 }
 
+void ActionSpace::find_potential_actions(TreeNode *t_node,
+                                         std::vector<uai_t> &potential_actions,
+                                         std::vector<std::vector<int>> &potential_orders,
+                                         std::vector<uai_t> &unseen_actions,
+                                         std::vector<std::vector<int>> &unseen_orders)
+{
+    // Build the graph first.
+    SiteGraph graph = SiteGraph(site_space);
+    for (int i = 0; i < t_node->words.size(); ++i)
+    {
+        Word *word = t_node->words.at(i);
+        for (SiteNode *root : word->site_roots)
+            graph.add_root(root, i);
+    }
+    // Get all unseen action-words pairs.
+    for (const auto &item : graph.nodes)
+    {
+        GraphNode *g_node = item.second;
+        if ((g_node->lchild != nullptr) && (g_node->lchild->num_sites == g_node->num_sites))
+            continue;
+        if ((g_node->rchild != nullptr) && (g_node->rchild->num_sites == g_node->num_sites))
+            continue;
+
+        usi_t site = g_node->base->site;
+        abc_t before_id = site::get_before_id(site);
+        // FIXME(j_luo) This can be further optimized.
+        for (abc_t after_id : edges.at(before_id))
+        {
+            uai_t action_id = action::combine_after_id(site, after_id);
+            potential_actions.push_back(action_id);
+            auto po = std::vector<int>();
+            auto uo = std::vector<int>();
+            for (auto order : g_node->linked_words)
+            {
+                auto word = t_node->words.at(order);
+                po.push_back(order);
+                if (word->neighbors.find(action_id) == word->neighbors.end())
+                    uo.push_back(order);
+            }
+            potential_orders.push_back(po);
+            if (!uo.empty())
+            {
+                unseen_actions.push_back(action_id);
+                unseen_orders.push_back(uo);
+            }
+        }
+    }
+}
+
 void ActionSpace::set_action_allowed_no_lock(TreeNode *t_node)
 {
     // Skip this if actions have already been set before.

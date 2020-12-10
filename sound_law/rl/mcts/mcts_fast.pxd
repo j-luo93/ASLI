@@ -15,13 +15,33 @@ cdef extern from "SiteGraph.cpp": pass
 
 cdef extern from "<boost/unordered_map.hpp>" namespace "boost" nogil:
     cdef cppclass unordered_map[T, U, HASH=*, PRED=*, ALLOCATOR=*]:
+        unordered_map() except +
         size_t size()
-        U at(T)
+        U& at(const T&)
+        U& operator[](T&)
+        cppclass iterator:
+            pair[T, U]& operator*()
+            iterator operator++()
+            bint operator==(iterator)
+            bint operator!=(iterator)
+        iterator find(T&)
+        iterator begin()
+        iterator end()
 
 
 cdef extern from "<boost/unordered_set.hpp>" namespace "boost" nogil:
     cdef cppclass unordered_set[T, HASH=*, PRED=*, ALLOCATOR=*]:
-        pass
+        unordered_set() except +
+        cppclass iterator:
+            T& operator*()
+            iterator operator++()
+            bint operator==(iterator)
+            bint operator!=(iterator)
+        iterator find(T&)
+        iterator begin()
+        iterator end()
+        pair[iterator, bint] insert(T&)
+        size_t size()
 
 
 cdef extern from "common.hpp":
@@ -43,7 +63,8 @@ cdef extern from "common.hpp" namespace "action":
 
 
 cdef extern from "Word.hpp":
-    ctypedef Word * Wptr
+    # Use different name to avoid redeclaration.
+    ctypedef Word * fwd_Wptr
 cdef extern from "TreeNode.hpp":
     cdef cppclass TreeNode nogil:
         ctypedef TreeNode * TNptr
@@ -64,7 +85,7 @@ cdef extern from "TreeNode.hpp":
         size_t size()
 
         tn_cnt_t idx
-        vector[Wptr] words
+        vector[fwd_Wptr] words
         bool stopped
         bool done
         float dist
@@ -109,6 +130,7 @@ cdef extern from "Action.hpp":
         void set_action_allowed(TreeNode *)
         void set_action_allowed(vector[TNptr])
         size_t size()
+        void find_potential_actions(TreeNode *, vector[uai_t], vector[vector[int]], vector[uai_t], vector[vector[int]])
 
 
 cdef extern from "Env.hpp":
@@ -128,6 +150,8 @@ cdef extern from "Env.hpp":
 cdef extern from "Word.hpp":
     ctypedef SiteNode * SNptr
     cdef cppclass Word nogil:
+        # This does not seem to trigger redeclaration error.
+        ctypedef Word * Wptr
 
         size_t size()
         void debug()
@@ -139,6 +163,7 @@ cdef extern from "Word.hpp":
         vector[SNptr] site_roots
 
     cdef cppclass WordSpace nogil:
+        ctypedef Word * Wptr
         WordSpace(SiteSpace *, vector[vector[float]], float, VocabIdSeq)
 
         SiteSpace *site_space
@@ -148,7 +173,10 @@ cdef extern from "Word.hpp":
 
         Word *get_word(IdSeq, int, bool)
         Word *apply_action(Word *, uai_t, int)
+        Word *apply_action_no_lock(Word *, uai_t, int)
         size_t size()
+# Only the module-level ctypedef can be imported by pyx file.
+ctypedef Word * Wptr
 
 
 cdef extern from "Site.hpp":

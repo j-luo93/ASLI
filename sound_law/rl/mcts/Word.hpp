@@ -37,6 +37,7 @@ public:
     Word *get_word(const IdSeq &, int, bool);
     // Apply action to the word. Order information is needed to compute the edit distance (against end word).
     Word *apply_action(Word *, uai_t, int);
+    Word *apply_action_no_lock(Word *, uai_t, int);
     size_t size();
 
 private:
