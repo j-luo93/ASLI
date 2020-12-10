@@ -296,11 +296,11 @@ def parallel_select(PyTreeNode py_root,
             selected[i] = node
             steps_left_view[i] = n_steps_left
 
-        env.action_space.set_action_allowed(selected)
+        # env.action_space.set_action_allowed(selected)
 
-        # for i in prange(num_sims, num_threads=num_threads):
-        #     node = selected[i]
-        #     env.action_space.set_action_allowed(node)
+        for i in prange(num_sims, num_threads=num_threads):
+            node = selected[i]
+            env.action_space.set_action_allowed(node)
 
     tn_cls = type(py_root)
     return [wrap_node(tn_cls, ptr) if ptr != nullptr else None for ptr in selected], steps_left

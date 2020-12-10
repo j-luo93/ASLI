@@ -24,5 +24,4 @@ private:
 
     ctpl::thread_pool tp;
     UMap<abc_t, std::vector<abc_t>> edges;
-    boost::shared_mutex actions_mtx;
 };
