@@ -16,7 +16,7 @@ from sound_law.main import setup
 from sound_law.rl.action import SoundChangeActionSpace
 from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.trajectory import VocabState
-from sound_law.rl.mcts_fast import set_end_words  # pylint: disable=no-name-in-module
+from sound_law.rl.mcts.mcts_fast import PyWordSpace, PySiteSpace, PyEnv, PyActionSpace
 from sound_law.train.manager import OnePairManager
 
 dispatch = dict()
@@ -103,30 +103,38 @@ if __name__ == "__main__":
 
         manager = OnePairManager()
         dl = manager.dl_reg.get_loaders_by_name('rl')
-        set_end_words(dl.end_state)
-        env = SoundChangeEnv(dl.init_state, dl.end_state, manager.action_space, g.final_reward, g.step_penalty)
+        src_seqs = dl.entire_batch.src_seqs
+        s_arr = np.ascontiguousarray(src_seqs.ids.t().cpu().numpy())
+        s_lengths = np.ascontiguousarray(src_seqs.lengths.t().cpu().numpy())
+        tgt_seqs = dl.entire_batch.tgt_seqs
+        t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy())
+        t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
+        py_ss = PySiteSpace()
+        py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 1.0, t_arr, t_lengths)
+        action_space = SoundChangeActionSpace(py_ss, py_ws, g.num_workers, manager.tgt_abc)
+        env = SoundChangeEnv(py_ws, action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
 
-        init_n_chars = len(get_all_chars(dl.init_state, manager.tgt_abc))
+        init_n_chars = len(get_all_chars(env.start, manager.tgt_abc))
         print(init_n_chars)
-        state = dl.init_state
+        state = env.start
         print(get_units(state, manager.tgt_abc))
         path = [state]
         np.random.seed(args.random_seed)
         for i in range(args.length):
             while True:
-                manager.action_space.set_action_allowed(state)
+                env.action_space.set_action_allowed(state)
                 best_i = np.random.choice(len(state.action_allowed))
                 print(len(state.action_allowed), 'allowed.')
                 action_id = state.action_allowed[best_i]
-                action = manager.action_space.get_action(action_id)
-                next_state, done, reward = env.step(state, best_i, action)
+                action = env.action_space.get_action(action_id)
+                next_state, reward = env.step(state, best_i, action_id)
                 if abs(len(get_all_chars(next_state, manager.tgt_abc)) - init_n_chars) > 3:
                     print('Too many characters have changed, retrying...')
                     continue
                 print(f'step {i + 1} finished.')
                 state = next_state
                 print('-' * 20)
-                print(manager.action_space.get_action(state.prev_action[1]))
+                print(env.action_space.get_action(state.prev_action[1]))
                 print(get_units(state, manager.tgt_abc))
                 path.append(state)
                 break

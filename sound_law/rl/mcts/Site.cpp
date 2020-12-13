@@ -36,14 +36,15 @@ SiteNode *SiteSpace::get_node(abc_t before_id,
     {
         if (d_pre_id != NULL_ABC)
             new_node->lchild = get_node(before_id, pre_id, NULL_ABC, post_id, d_post_id);
-        new_node->lchild = get_node(before_id, NULL_ABC, NULL_ABC, post_id, d_post_id);
+        else
+            new_node->lchild = get_node(before_id, NULL_ABC, NULL_ABC, post_id, d_post_id);
     }
     if (post_id != NULL_ABC)
     {
         if (d_post_id != NULL_ABC)
             new_node->rchild = get_node(before_id, pre_id, d_pre_id, post_id, NULL_ABC);
-
-        new_node->rchild = get_node(before_id, pre_id, d_pre_id, NULL_ABC, NULL_ABC);
+        else
+            new_node->rchild = get_node(before_id, pre_id, d_pre_id, NULL_ABC, NULL_ABC);
     }
     return new_node;
 }

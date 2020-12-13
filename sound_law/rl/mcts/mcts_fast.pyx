@@ -187,6 +187,10 @@ cdef class PyTreeNode:
         return vocab
 
     @property
+    def action_allowed(self):
+        return np.asarray(self.ptr.action_allowed, dtype='long')
+
+    @property
     def action_count(self):
         return np.asarray(self.ptr.action_count, dtype='long')
 
@@ -201,6 +205,10 @@ cdef class PyTreeNode:
     @property
     def max_action_id(self):
         return self.ptr.max_action_id
+
+    @property
+    def prev_action(self):
+        return self.ptr.prev_action
 
     @property
     def idx(self):
@@ -390,13 +398,6 @@ def parallel_select(PyTreeNode py_root,
                         delta = delta + new_word.dist - word.dist
                     if delta < 0.0:
                         action_allowed.push_back(action_id)
-
-    # with nogil:
-    #     # env.action_space.set_action_allowed(selected)
-
-    #     for i in prange(num_sims, num_threads=num_threads):
-    #         node = selected[i]
-    #         env.action_space.set_action_allowed(node)
 
     tn_cls = type(py_root)
     return [wrap_node(tn_cls, ptr) if ptr != nullptr else None for ptr in selected], steps_left
