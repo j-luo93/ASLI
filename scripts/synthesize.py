@@ -120,7 +120,7 @@ if __name__ == "__main__":
         t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy())
         t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
         py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID)
-        py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 1.0, t_arr, t_lengths)
+        py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 2.0, t_arr, t_lengths)
         action_space = SoundChangeActionSpace(py_ss, py_ws, g.prune_threshold, g.num_workers, manager.tgt_abc)
         env = SoundChangeEnv(py_ws, action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
 
@@ -128,6 +128,7 @@ if __name__ == "__main__":
         print(init_n_chars)
         state = env.start
         print(get_units(state, manager.tgt_abc))
+        print(f'Distance: {state.dist:.3f}')
         path = [state]
         np.random.seed(args.random_seed)
         for i in range(args.length):
@@ -146,6 +147,7 @@ if __name__ == "__main__":
                 print('-' * 20)
                 print(env.action_space.get_action(state.prev_action[1]))
                 print(get_units(state, manager.tgt_abc))
+                print(f'Distance: {state.dist:.3f}')
                 path.append(state)
                 break
 

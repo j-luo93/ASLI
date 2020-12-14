@@ -215,6 +215,10 @@ cdef class PyTreeNode:
     def idx(self):
         return self.ptr.idx
 
+    @property
+    def dist(self):
+        return self.ptr.dist
+
     def detach(self):
         cdef DetachedTreeNode *ptr = new DetachedTreeNode(self.ptr)
         cdef PyDetachedTreeNode py_dtn = PyDetachedTreeNode.__new__(PyDetachedTreeNode, from_ptr=True)
