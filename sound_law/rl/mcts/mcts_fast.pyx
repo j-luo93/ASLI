@@ -20,13 +20,14 @@ cdef uai_t STOP = combine(NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL
 
 PyNull_abc = NULL_ABC
 PyNull_action = NULL_ACTION
+PyStop = STOP
 
 
 cdef class PySiteSpace:
     cdef SiteSpace *ptr
 
-    def __cinit__(self):
-        self.ptr = new SiteSpace()
+    def __cinit__(self, abc_t sot_id, abc_t eot_id, abc_t any_id):
+        self.ptr = new SiteSpace(sot_id, eot_id, any_id)
 
     def __dealloc__(self):
         del self.ptr

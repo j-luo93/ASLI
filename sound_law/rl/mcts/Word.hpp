@@ -44,4 +44,5 @@ private:
     UMap<IdSeq, Word *> words;
     float get_edit_dist(const IdSeq &, const IdSeq &);
     boost::shared_mutex words_mtx;
+    bool match(abc_t, abc_t);
 };

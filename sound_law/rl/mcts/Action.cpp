@@ -82,7 +82,11 @@ void ActionSpace::find_potential_actions(TreeNode *t_node,
         GraphNode *g_node = item.second;
         if ((g_node->lchild != nullptr) && (g_node->lchild->num_sites == g_node->num_sites))
             continue;
+        if ((g_node->lxchild != nullptr) && (g_node->lxchild->num_sites == g_node->num_sites))
+            continue;
         if ((g_node->rchild != nullptr) && (g_node->rchild->num_sites == g_node->num_sites))
+            continue;
+        if ((g_node->rxchild != nullptr) && (g_node->rxchild->num_sites == g_node->num_sites))
             continue;
 
         usi_t site = g_node->base->site;

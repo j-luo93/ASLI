@@ -18,9 +18,9 @@ import numpy as np
 import sound_law.rl.trajectory as tr
 from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import Singleton
-from sound_law.data.alphabet import Alphabet
+from sound_law.data.alphabet import Alphabet, SOT_ID, EOT_ID, ANY_ID
 
-from .mcts.mcts_fast import PyAction, PyActionSpace, PyWordSpace, PySiteSpace  # pylint: disable=no-name-in-module
+from .mcts.mcts_fast import PyStop, PyAction, PyActionSpace, PyWordSpace, PySiteSpace  # pylint: disable=no-name-in-module
 # from .mcts_fast import (PyAction,  # pylint: disable=no-name-in-module
 #                         PyActionSpace)
 
@@ -30,14 +30,21 @@ class SoundChangeAction(PyAction):
     abc: ClassVar[Alphabet] = None
 
     def __repr__(self):
-        if self.action_id == 0:
+        if self.action_id == PyStop:
             return 'STOP'
+
+        def get_str(idx: int):
+            if idx in [SOT_ID, EOT_ID]:
+                return '#'
+            elif idx == ANY_ID:
+                return '.'
+            return self.abc[idx]  # pylint: disable=unsubscriptable-object
 
         def get_cond(cond):
             if self.abc is None:
                 ret = ' + '.join(map(str, cond))
             else:
-                ret = ' + '.join(map(str, [self.abc[i] for i in cond]))  # pylint: disable=unsubscriptable-object
+                ret = ' + '.join(map(str, [get_str(i) for i in cond]))
             if ret:
                 ret = f'({ret})'
             return ret
@@ -49,10 +56,8 @@ class SoundChangeAction(PyAction):
         if post:
             post = f' + {post}'
 
-        before = str(
-            self.before_id) if self.abc is None else self.abc[self.before_id]  # pylint: disable=unsubscriptable-object
-        after = str(
-            self.after_id) if self.abc is None else self.abc[self.after_id]  # pylint: disable=unsubscriptable-object
+        before = str(self.before_id) if self.abc is None else get_str(self.before_id)
+        after = str(self.after_id) if self.abc is None else get_str(self.after_id)
 
         return f'{pre}{before}{post} > {after}'
 

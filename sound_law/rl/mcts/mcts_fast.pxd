@@ -190,6 +190,7 @@ cdef extern from "Site.hpp":
         SiteNode *rchild
 
     cdef cppclass SiteSpace nogil:
+        SiteSpace(abc_t, abc_t, abc_t)
         SiteNode *get_node(abc_t, abc_t, abc_t, abc_t, abc_t)
 
 

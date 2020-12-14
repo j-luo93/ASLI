@@ -24,8 +24,12 @@ GraphNode *SiteGraph::generate_subgraph(SiteNode *s_node)
         nodes[site] = g_node;
         if (s_node->lchild != nullptr)
             g_node->lchild = generate_subgraph(s_node->lchild);
+        if (s_node->lxchild != nullptr)
+            g_node->lxchild = generate_subgraph(s_node->lxchild);
         if (s_node->rchild != nullptr)
             g_node->rchild = generate_subgraph(s_node->rchild);
+        if (s_node->rxchild != nullptr)
+            g_node->rxchild = generate_subgraph(s_node->rxchild);
         return g_node;
     }
     else
@@ -45,10 +49,20 @@ std::vector<GraphNode *> SiteGraph::get_descendants(GraphNode *root)
             nodes.push_back(node->lchild);
             node->lchild->visited = true;
         }
+        if ((node->lxchild != nullptr) && (!node->lxchild->visited))
+        {
+            nodes.push_back(node->lxchild);
+            node->lxchild->visited = true;
+        }
         if ((node->rchild != nullptr) && (!node->rchild->visited))
         {
             nodes.push_back(node->rchild);
             node->rchild->visited = true;
+        }
+        if ((node->rxchild != nullptr) && (!node->rxchild->visited))
+        {
+            nodes.push_back(node->rxchild);
+            node->rxchild->visited = true;
         }
         i++;
     }

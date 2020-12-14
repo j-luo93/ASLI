@@ -46,10 +46,10 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
     for (int i = 1; i < n - 1; i++)
     {
         abc_t before = id_seq.at(i);
-        abc_t pre_id = (i > 1) ? id_seq.at(i - 1) : NULL_ABC;
-        abc_t d_pre_id = (i > 2) ? id_seq.at(i - 2) : NULL_ABC;
-        abc_t post_id = (i < n - 2) ? id_seq.at(i + 1) : NULL_ABC;
-        abc_t d_post_id = (i < n - 3) ? id_seq.at(i + 2) : NULL_ABC;
+        abc_t pre_id = (i > 0) ? id_seq.at(i - 1) : NULL_ABC;
+        abc_t d_pre_id = (i > 1) ? id_seq.at(i - 2) : NULL_ABC;
+        abc_t post_id = (i < n - 1) ? id_seq.at(i + 1) : NULL_ABC;
+        abc_t d_post_id = (i < n - 2) ? id_seq.at(i + 2) : NULL_ABC;
         site_roots.push_back(site_space->get_node(before, pre_id, d_pre_id, post_id, d_post_id));
     }
     float dist = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
@@ -70,9 +70,6 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
 
 Word *WordSpace::apply_action(Word *word, uai_t action_id, int order)
 {
-    // Should never deal with stop action here.
-    assert(action_id != action::STOP);
-
     ActionMap<Word *> &neighbors = word->neighbors;
     // Return cache if it exists. Obtain the read lock first.
     {
@@ -89,8 +86,18 @@ Word *WordSpace::apply_action(Word *word, uai_t action_id, int order)
     return new_word;
 }
 
+inline bool WordSpace::match(abc_t idx, abc_t target)
+{
+    if (target == site_space->any_id)
+        return ((idx != site_space->sot_id) && (idx != site_space->eot_id));
+    return (idx == target);
+}
+
 Word *WordSpace::apply_action_no_lock(Word *word, uai_t action_id, int order)
 {
+    // Should never deal with stop action here.
+    assert(action_id != action::STOP);
+
     const IdSeq &id_seq = word->id_seq;
     IdSeq new_id_seq = std::vector<abc_t>();
     abc_t before_id = action::get_before_id(action_id);
@@ -102,29 +109,25 @@ Word *WordSpace::apply_action_no_lock(Word *word, uai_t action_id, int order)
     int n = word->size();
     for (int i = 0; i < n; i++)
     {
-        new_id_seq.push_back(id_seq.at(i));
-        if (id_seq.at(i) == before_id)
+        bool applied = (id_seq.at(i) == before_id);
+        if (applied && (pre_id != NULL_ABC))
         {
-            if (pre_id != NULL_ABC)
-            {
-                if ((i == 0) || (id_seq.at(i - 1) != pre_id))
-                    continue;
-                if (d_pre_id != NULL_ABC)
-                    if ((i <= 1) || (id_seq.at(i - 2) != d_pre_id))
-                        continue;
-            }
-            if (post_id != NULL_ABC)
-            {
-                if ((i == n - 1) || (id_seq.at(i + 1) != post_id))
-                    continue;
-                if (d_post_id != NULL_ABC)
-                    if ((i >= n - 2) || (id_seq.at(i + 2) != d_post_id))
-                        continue;
-            }
-            new_id_seq[i] = after_id;
+            if ((i < 1) || (!match(id_seq.at(i - 1), pre_id)))
+                applied = false;
+            if (applied && (d_pre_id != NULL_ABC))
+                if ((i < 2) || (!match(id_seq.at(i - 2), d_pre_id)))
+                    applied = false;
         }
+        if (applied && (post_id != NULL_ABC))
+        {
+            if ((i > n - 1) || (!match(id_seq.at(i + 1), post_id)))
+                applied = false;
+            if (applied && (d_post_id != NULL_ABC))
+                if ((i > n - 2) || (!match(id_seq.at(i + 2), d_post_id)))
+                    applied = false;
+        }
+        new_id_seq.push_back(applied ? after_id : id_seq.at(i));
     }
-
     return get_word(new_id_seq, order, false);
 }
 

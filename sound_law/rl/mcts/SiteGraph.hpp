@@ -12,6 +12,8 @@ public:
     SiteNode *base;
     GraphNode *lchild = nullptr;
     GraphNode *rchild = nullptr;
+    GraphNode *lxchild = nullptr;
+    GraphNode *rxchild = nullptr;
     int num_sites = 0;
     boost::unordered_set<int> linked_words; // the orders for the linked words -- use set since one word might have multiple identical sites
 

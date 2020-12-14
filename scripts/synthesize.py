@@ -12,6 +12,7 @@ from dev_misc import g
 from dev_misc.arglib import disable_duplicate_check, set_argument
 from dev_misc.trainlib.base_trainer import BaseTrainer
 from sound_law.data.cognate import CognateRegistry
+from sound_law.data.alphabet import SOT_ID, EOT_ID, ANY_ID
 from sound_law.main import setup
 from sound_law.rl.action import SoundChangeActionSpace
 from sound_law.rl.env import SoundChangeEnv
@@ -109,7 +110,7 @@ if __name__ == "__main__":
         tgt_seqs = dl.entire_batch.tgt_seqs
         t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy())
         t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
-        py_ss = PySiteSpace()
+        py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID)
         py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 1.0, t_arr, t_lengths)
         action_space = SoundChangeActionSpace(py_ss, py_ws, g.num_workers, manager.tgt_abc)
         env = SoundChangeEnv(py_ws, action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
