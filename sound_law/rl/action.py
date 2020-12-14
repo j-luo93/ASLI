@@ -70,7 +70,7 @@ class SoundChangeActionSpace(PyActionSpace):
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
     add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
 
-    def __init__(self, py_ss: PySiteSpace, py_ws: PyWordSpace, num_threads: int, abc: Alphabet):
+    def __init__(self, py_ss: PySiteSpace, py_ws: PyWordSpace, prune_threshold: float, num_threads: int, abc: Alphabet):
         super().__init__()
         # # Set class variable for `SoundChangeAction` here.
         self.abc = SoundChangeAction.abc = abc

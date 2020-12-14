@@ -49,7 +49,7 @@ add_argument('segments_dump_path', dtype='path', msg='Path to the processed Phoi
 add_argument('use_max_value', dtype=bool, default=False, msg='Flag to use max mode in MCTS.')
 add_argument('use_conditional', dtype=bool, default=True, msg='Flag to use conditional rules.')
 add_argument('use_pruning', dtype=bool, default=True, msg='Flag to use pruning.')
-add_argument('pruning_threshold', dtype=float, default=0.0, msg='Pruning threshold.')
+add_argument('prune_threshold', dtype=float, default=0.0, msg='Pruning threshold.')
 
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
@@ -222,7 +222,7 @@ class OnePairManager:
             t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
             py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID)
             py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 1.0, t_arr, t_lengths)
-            self.action_space = SoundChangeActionSpace(py_ss, py_ws, g.num_workers, self.tgt_abc)
+            self.action_space = SoundChangeActionSpace(py_ss, py_ws, g.prune_threshold, g.num_workers, self.tgt_abc)
 
             self.env = SoundChangeEnv(py_ws, self.action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
             model = get_model(dl=dl)

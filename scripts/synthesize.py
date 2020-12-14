@@ -89,11 +89,19 @@ if __name__ == "__main__":
     parser.add_argument('mode', type=str, help='Configuration name.')
     parser.add_argument('--length', type=int, help='Length of synthesizing random rules.')
     parser.add_argument('--random_seed', type=int, default=1234, help='Random seed')
+    parser.add_argument('--options', default='', type=str, help='Extra options')
     args = parser.parse_args()
 
     if args.mode == 'random':
 
-        sys.argv = 'sound_law/main.py --config OPRLFakeR30C --mcts_config LargeSims --no_use_value_guidance --use_conditional --no_use_pruning'.split()
+        sys.argv = f'''
+        sound_law/main.py
+            --config OPRLFakeR30C
+            --mcts_config LargeSims
+            --no_use_value_guidance
+            --use_conditional
+            {args.options}
+        '''.split()
 
         initiator = setup()
         initiator.run()
@@ -112,7 +120,7 @@ if __name__ == "__main__":
         t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
         py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID)
         py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 1.0, t_arr, t_lengths)
-        action_space = SoundChangeActionSpace(py_ss, py_ws, g.num_workers, manager.tgt_abc)
+        action_space = SoundChangeActionSpace(py_ss, py_ws, g.prune_threshold, g.num_workers, manager.tgt_abc)
         env = SoundChangeEnv(py_ws, action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
 
         init_n_chars = len(get_all_chars(env.start, manager.tgt_abc))

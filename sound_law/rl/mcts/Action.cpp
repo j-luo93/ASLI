@@ -4,8 +4,10 @@
 ActionSpace::ActionSpace(
     SiteSpace *site_space,
     WordSpace *word_space,
+    float prune_threshold,
     int num_threads) : site_space(site_space),
-                       word_space(word_space)
+                       word_space(word_space),
+                       prune_threshold(prune_threshold)
 {
     // Initialize thread pool.
     tp.resize(num_threads);
@@ -141,7 +143,7 @@ void ActionSpace::set_action_allowed_no_lock(TreeNode *t_node)
             delta += new_word->dist - word->dist;
         }
 
-        if (delta < 0.0)
+        if (delta < prune_threshold)
             aa.push_back(action_id);
     }
     assert(!aa.empty());
@@ -177,57 +179,4 @@ inline void get_unseen_neighbors(std::vector<Word *> &unseen_words,
             }
         }
     }
-}
-
-void ActionSpace::set_action_allowed(const std::vector<TreeNode *> &nodes)
-{
-    // Filter out the duplicates and those already explored.
-    auto unique_idx = boost::unordered_set<tn_cnt_t>();
-    auto unique_nodes = std::vector<TreeNode *>();
-    for (const auto node : nodes)
-        if ((node->action_allowed.empty()) && (unique_idx.find(node->idx) == unique_idx.end()))
-        {
-            unique_idx.insert(node->idx);
-            unique_nodes.push_back(node);
-        }
-
-    // Since they are all unique, we can be lock-free.
-    size_t num_jobs = unique_nodes.size();
-    auto results = std::vector<std::future<void>>(num_jobs);
-    //Build the graphs first.
-    auto graphs = std::vector<SiteGraph *>(num_jobs);
-    // for (int job_idx = 0; job_idx < num_jobs; job_idx++)
-    // {
-    //     auto node = unique_nodes.at(job_idx);
-    //     results[job_idx] = tp.push([this, node, job_idx, &graphs](int id) { graphs[job_idx] = this->get_graph(node); });
-    // }
-    for (int job_idx = 0; job_idx < num_jobs; job_idx++)
-        results[job_idx].get();
-    // Get unseen word-action pairs.
-    auto unseen_words = std::vector<std::vector<Word *>>(num_jobs);
-    auto unseen_actions = std::vector<std::vector<uai_t>>(num_jobs);
-    for (int job_idx = 0; job_idx < num_jobs; job_idx++)
-    {
-        auto node = unique_nodes.at(job_idx);
-        // Use this hack to get around the weird lambda constraint: https://stackoverflow.com/questions/32922053/c-lambda-capture-member-variable.
-        auto &edges = this->edges;
-        results[job_idx] = tp.push([node, job_idx,
-                                    &edges,
-                                    &unseen_words,
-                                    &unseen_actions,
-                                    &graphs](int id) { get_unseen_neighbors(unseen_words[job_idx],
-                                                                            unseen_actions[job_idx],
-                                                                            graphs[job_idx],
-                                                                            node, edges); });
-    }
-    for (int job_idx = 0; job_idx < num_jobs; job_idx++)
-        results[job_idx].get();
-
-    // for (int i = 0; i < unique_nodes.size(); i++)
-    // {
-    //     auto node = unique_nodes.at(i);
-    //     results[i] = tp.push([this, node](int id) { this->set_action_allowed_no_lock(node); });
-    // }
-    // for (int i = 0; i < unique_nodes.size(); i++)
-    //     results[i].get();
 }
