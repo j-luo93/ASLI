@@ -31,6 +31,7 @@ public:
     const abc_t eot_id;
     const abc_t any_id;
     const abc_t emp_id;
+    size_t size();
 
 private:
     UMap<usi_t, SiteNode *> nodes;

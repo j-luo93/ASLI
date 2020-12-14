@@ -32,11 +32,17 @@ cdef class PySiteSpace:
     def __dealloc__(self):
         del self.ptr
 
+    def __len__(self):
+        return self.ptr.size()
+
 
 cdef class PyWordSpace:
     cdef WordSpace *ptr
 
+    cdef public PySiteSpace site_space
+
     def __cinit__(self, PySiteSpace py_ss, np_dist_mat, float ins_cost, arr, lengths):
+        self.site_space = py_ss
         # Convert numpy dist_mat to vector.
         cdef float[:, ::1] dist_mat_view = np_dist_mat
         cdef size_t n = np_dist_mat.shape[0]
@@ -56,6 +62,9 @@ cdef class PyWordSpace:
 
     def __dealloc__(self):
         del self.ptr
+
+    def __len__(self):
+        return self.ptr.size()
 
 
 cdef class PyAction:
@@ -224,6 +233,12 @@ cdef class PyTreeNode:
         cdef PyDetachedTreeNode py_dtn = PyDetachedTreeNode.__new__(PyDetachedTreeNode, from_ptr=True)
         py_dtn.ptr = ptr
         return py_dtn
+
+    def get_num_descendants(self):
+        return self.ptr.get_num_descendants()
+
+    def clear_cache(self, ratio_threshold):
+        return self.ptr.clear_cache(ratio_threshold)
 
 
 cdef class PyDetachedTreeNode:

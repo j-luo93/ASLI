@@ -72,3 +72,5 @@ SiteNode *SiteSpace::get_node(abc_t before_id,
     }
     return new_node;
 }
+
+size_t SiteSpace::size() { return nodes.size(); }

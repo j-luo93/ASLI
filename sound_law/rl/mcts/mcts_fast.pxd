@@ -83,6 +83,8 @@ cdef extern from "TreeNode.hpp":
         IdSeq get_id_seq(int)
         void clear_stats(bool)
         size_t size()
+        size_t get_num_descendants()
+        size_t clear_cache(float)
 
         tn_cnt_t idx
         vector[fwd_Wptr] words
@@ -191,6 +193,7 @@ cdef extern from "Site.hpp":
     cdef cppclass SiteSpace nogil:
         SiteSpace(abc_t, abc_t, abc_t, abc_t)
         SiteNode *get_node(abc_t, abc_t, abc_t, abc_t, abc_t)
+        size_t size()
 
 
 cdef extern from "SiteGraph.hpp":

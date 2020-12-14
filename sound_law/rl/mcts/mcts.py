@@ -191,6 +191,8 @@ class Mcts:
         # if self.env.action_space.cache_size > 300000:
         #     logging.info(f'Clearing up all the cached words.')
         #     self.env.action_space.clear_cache()
+        logging.info(
+            f'{len(self.env.word_space.site_space)} sites, {len(self.env.word_space)} words, {init_state.get_num_descendants()} nodes in total.')
         trajectories = list()
         self.agent.eval()
         with self.agent.policy_grad(False), self.agent.value_grad(False):
@@ -236,5 +238,8 @@ class Mcts:
 
                 trajectories.append(trajectory)
                 tracker.update('episode')
+                # orig_size = init_state.clear_cache(0.2)
+                # new_size = init_state.get_num_descendants()
+                # logging.info(f'Clearing node cache {orig_size} -> {new_size}.')
 
         return trajectories

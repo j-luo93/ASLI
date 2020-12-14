@@ -26,6 +26,7 @@ class SiteGraph
 {
 public:
     SiteGraph(SiteSpace *);
+    ~SiteGraph();
 
     void add_root(SiteNode *, int);
 

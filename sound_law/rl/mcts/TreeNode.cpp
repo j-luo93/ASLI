@@ -189,6 +189,37 @@ void TreeNode::add_noise(const std::vector<float> &noise, float noise_ratio)
         prior[i] = prior[i] * (1.0 - noise_ratio) + noise[i] * noise_ratio;
 }
 
+size_t TreeNode::get_num_descendants()
+{
+    size_t ret = 1;
+    for (const auto &item : neighbors)
+    {
+        ret += item.second->get_num_descendants();
+    }
+    return ret;
+}
+
+size_t TreeNode::clear_cache(float ratio_threshold)
+{
+    size_t num_desc = 1;
+    auto to_remove = std::vector<uai_t>();
+    for (const auto &item : neighbors)
+    {
+        auto neighbor = item.second;
+        size_t inc = neighbor->clear_cache(ratio_threshold);
+        float ratio = static_cast<float>(neighbor->visit_count) / static_cast<float>(inc);
+        if (ratio < ratio_threshold)
+            to_remove.push_back(item.first);
+        num_desc += inc;
+    }
+    for (const auto action_id : to_remove)
+    {
+        delete neighbors.at(action_id);
+        neighbors.erase(action_id);
+    }
+    return num_desc;
+}
+
 size_t TreeNode::size() { return words.size(); }
 size_t DetachedTreeNode::size() { return vocab_i.size(); }
 IdSeq TreeNode::get_id_seq(int order) { return words.at(order)->id_seq; }

@@ -70,3 +70,9 @@ std::vector<GraphNode *> SiteGraph::get_descendants(GraphNode *root)
         node->visited = false;
     return nodes;
 }
+
+SiteGraph::~SiteGraph()
+{
+    for (auto &item : nodes)
+        delete item.second;
+}

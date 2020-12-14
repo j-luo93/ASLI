@@ -27,6 +27,8 @@ public:
     IdSeq get_id_seq(int);
     void clear_stats(bool = false);
     size_t size();
+    size_t get_num_descendants(); // Including `this`.
+    size_t clear_cache(float);    // Returns num of descendants.
 
     // Basic members.
     tn_cnt_t idx;
