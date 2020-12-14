@@ -5,9 +5,11 @@ SiteNode::SiteNode(usi_t site) : site(site) {}
 
 SiteSpace::SiteSpace(abc_t sot_id,
                      abc_t eot_id,
-                     abc_t any_id) : sot_id(sot_id),
+                     abc_t any_id,
+                     abc_t emp_id) : sot_id(sot_id),
                                      eot_id(eot_id),
-                                     any_id(any_id) {}
+                                     any_id(any_id),
+                                     emp_id(emp_id) {}
 
 SiteNode *SiteSpace::get_node(abc_t before_id,
                               abc_t pre_id,

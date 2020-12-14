@@ -1,25 +1,24 @@
-from typing import List, Tuple
-from dev_misc import NDA
-from typing import Optional
 import logging
 from collections import Counter, defaultdict
-from typing import List, Union, overload
+from typing import List, Optional, Tuple, Union, overload
 
 import numpy as np
 import pandas as pd
 import torch
-from panphon.featuretable import FeatureTable
 
-from dev_misc import LT, g
+from dev_misc import LT, NDA, g
+from panphon.featuretable import FeatureTable
 
 SOT = '<SOT>'
 EOT = '<EOT>'
 PAD = '<pad>'
 ANY = '<any>'
+EMP = '<emp>'
 SOT_ID = 0
 EOT_ID = 1
 PAD_ID = 2
 ANY_ID = 3
+EMP_ID = 4
 
 _ft = FeatureTable()
 
@@ -67,8 +66,8 @@ class Alphabet:
             self._u2u = u2u
 
         units = sorted(cnt.keys())
-        self.special_units = [SOT, EOT, PAD, ANY]
-        self.special_ids = [SOT_ID, EOT_ID, PAD_ID, ANY_ID]
+        self.special_units = [SOT, EOT, PAD, ANY, EMP]
+        self.special_ids = [SOT_ID, EOT_ID, PAD_ID, ANY_ID, EMP_ID]
         self._id2unit = self.special_units + units
         self._unit2id = dict(zip(self.special_units, self.special_ids))
         self._unit2id.update({c: i for i, c in enumerate(units, len(self.special_units))})

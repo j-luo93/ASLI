@@ -134,11 +134,18 @@ void ActionSpace::set_action_allowed_no_lock(TreeNode *t_node)
     for (size_t i = 0; i < unseen_words.size(); i++)
     {
         uai_t action_id = unseen_actions.at(i);
+        bool epenthesis = (action::get_after_id(action_id) == site_space->emp_id);
         const auto &words = unseen_words.at(i);
         float delta = 0.0;
         for (const auto order : words)
         {
             Word *word = t_node->words.at(order);
+            // Cannot delete anything if the word has only one character (other than SOT and EOT).
+            if (epenthesis && (word->size() == 3))
+            {
+                delta = 9999999999.9;
+                break;
+            }
             Word *new_word = word_space->apply_action(word, action_id, order);
             delta += new_word->dist - word->dist;
         }

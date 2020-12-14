@@ -2,27 +2,25 @@
 """
 from __future__ import annotations
 
-from dev_misc.utils import pbar
-from typing import Dict
-import torch
-from collections import defaultdict
-import pickle
 import logging
+import pickle
+from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import product
-from typing import ClassVar, Iterator, List, Set, Union
+from typing import ClassVar, Dict, Iterator, List, Set, Union
 
 import numpy as np
+import torch
 
 import sound_law.rl.trajectory as tr
 from dev_misc import BT, add_argument, g, get_tensor, get_zeros
-from dev_misc.utils import Singleton
-from sound_law.data.alphabet import Alphabet, SOT_ID, EOT_ID, ANY_ID
+from dev_misc.utils import Singleton, pbar
+from sound_law.data.alphabet import (ANY_ID, EMP, EMP_ID, EOT_ID, SOT_ID,
+                                     Alphabet)
 
-from .mcts.mcts_fast import PyStop, PyAction, PyActionSpace, PyWordSpace, PySiteSpace  # pylint: disable=no-name-in-module
-# from .mcts_fast import (PyAction,  # pylint: disable=no-name-in-module
-#                         PyActionSpace)
+from .mcts.mcts_fast import PyAction  # pylint: disable=no-name-in-module
+from .mcts.mcts_fast import PyActionSpace, PySiteSpace, PyStop, PyWordSpace
 
 
 class SoundChangeAction(PyAction):
@@ -38,6 +36,8 @@ class SoundChangeAction(PyAction):
                 return '#'
             elif idx == ANY_ID:
                 return '.'
+            elif idx == EMP_ID:
+                return 'Ø'
             return self.abc[idx]  # pylint: disable=unsubscriptable-object
 
         def get_cond(cond):
@@ -88,6 +88,8 @@ class SoundChangeActionSpace(PyActionSpace):
         if g.use_mcts:
             for u1, u2 in abc.edges:
                 register_uncondional_action(u1, u2)
+            for u in units:
+                register_uncondional_action(u, EMP)
         else:
             for u1, u2 in product(units, repeat=2):
                 if u1 != u2:
