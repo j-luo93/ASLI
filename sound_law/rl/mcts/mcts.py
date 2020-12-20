@@ -225,8 +225,9 @@ class Mcts:
                     probs, action, reward, new_state = self.play(root)
                     trajectory.append(action, new_state, reward, mcts_pi=probs)
                     if ri == 0 and ei % g.episode_check_interval == 0:
-                        logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(20))))
-                        logging.debug(pad_for_log(str(get_tensor(root.q).topk(20))))
+                        k = min(20, root.num_actions)
+                        logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(k))))
+                        logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
                     root = new_state
 
                     tracker.update('rollout')

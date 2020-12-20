@@ -136,6 +136,10 @@ if __name__ == "__main__":
                 env.action_space.set_action_allowed(state)
                 best_i = np.random.choice(len(state.action_allowed))
                 print(len(state.action_allowed), 'allowed.')
+                for i, a in enumerate(state.action_allowed):
+                    new, _ = env.step(state, i, a)
+                    from sound_law.rl.mcts.mcts_fast import PyStop
+                    assert new.dist < state.dist or PyStop == a, new.dist
                 action_id = state.action_allowed[best_i]
                 action = env.action_space.get_action(action_id)
                 next_state, reward = env.step(state, best_i, action_id)

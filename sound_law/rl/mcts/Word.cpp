@@ -108,7 +108,8 @@ Word *WordSpace::apply_action_no_lock(Word *word, uai_t action_id, int order)
     abc_t d_post_id = action::get_d_post_id(action_id);
     bool epenthesis = (after_id == site_space->emp_id);
     int n = word->size();
-    for (int i = 0; i < n; i++)
+    new_id_seq.push_back(site_space->sot_id);
+    for (int i = 1; i < n - 1; i++)
     {
         bool applied = (id_seq.at(i) == before_id);
         if (applied && (pre_id != NULL_ABC))
@@ -121,10 +122,10 @@ Word *WordSpace::apply_action_no_lock(Word *word, uai_t action_id, int order)
         }
         if (applied && (post_id != NULL_ABC))
         {
-            if ((i > n - 1) || (!match(id_seq.at(i + 1), post_id)))
+            if ((i > n - 2) || (!match(id_seq.at(i + 1), post_id)))
                 applied = false;
             if (applied && (d_post_id != NULL_ABC))
-                if ((i > n - 2) || (!match(id_seq.at(i + 2), d_post_id)))
+                if ((i > n - 3) || (!match(id_seq.at(i + 2), d_post_id)))
                     applied = false;
         }
         if (applied)
@@ -135,6 +136,7 @@ Word *WordSpace::apply_action_no_lock(Word *word, uai_t action_id, int order)
         else
             new_id_seq.push_back(id_seq.at(i));
     }
+    new_id_seq.push_back(site_space->eot_id);
     return get_word(new_id_seq, order, false);
 }
 

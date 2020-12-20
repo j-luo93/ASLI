@@ -16,6 +16,8 @@ from ipapy.ipastring import IPAString
 from lingpy.sequence.sound_classes import ipa2tokens
 from loguru import logger
 
+from sound_law.data.ipa import PGmc_ipa_trans
+
 
 # IPA tokenization including removing leading * (reconstructed terms) and normalizing symbols (done by ipapy).
 @lru_cache(maxsize=None)
@@ -51,52 +53,6 @@ lookup = pycountry.languages.lookup
 # Copied from https://stackoverflow.com/questions/48255244/python-check-if-a-string-contains-cyrillic-characters.
 def has_cyrillic(text):
     return bool(re.search('[\u0400-\u04FF]', text))
-
-
-@lru_cache(maxsize=None)
-def PGmc_ipa_trans(word: str) -> str:  # only for latin-transliterated Gothic and Greek without diacritics
-    # NOTE(j_luo) Based on Frederik's code, with minor modifications.
-    word = word.lower()
-    word = word.replace('₂', '')
-    # vowels
-    word = re.sub(r"ē", "eː", word)
-    word = re.sub(r"ō", "ɔː", word)
-    word = re.sub(r"ā", "aː", word)
-    word = re.sub(r"ī", "iː", word)
-    word = re.sub(r"ū", "uː", word)
-
-    word = re.sub(r"ô", "ɔːː", word)
-    word = re.sub(r"ê", "eːː", word)
-
-    word = re.sub(r'ǭ', 'ɔ̃ː', word)
-    word = re.sub(r'ą', 'ã', word)
-    word = re.sub(r'į̄', 'ĩː', word)
-
-    # consonants
-    word = re.sub(r"h", "x", word)
-    word = re.sub(r"f", "ɸ", word)
-    word = re.sub(r"xw", "hʷ", word)
-    word = re.sub(r"kw", "kʷ", word)
-    word = re.sub(r"þ", "θ", word)
-
-    # alternations
-    word = re.sub(r"d", "ð", word)
-    word = re.sub(r"nð", "nd", word)
-    word = re.sub(r"lð", "ld", word)
-    word = re.sub(r"zð", "zd", word)
-    word = re.sub(r"^ð", "d", word)
-
-    word = re.sub(r"b", "β", word)
-    word = re.sub(r"^β", "b", word)
-
-    word = re.sub(r"g", "ɣ", word)
-    word = re.sub(r"ɣw", "gʷ", word)
-
-    word = re.sub(r"nk", "ŋk", word)
-    word = re.sub(r"ng", "ŋg", word)
-    word = re.sub(r"ng", "ŋg", word)
-
-    return word
 
 
 G2P_func = Callable[[str], str]  # Grapheme-to-phoneme.

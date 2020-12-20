@@ -257,6 +257,13 @@ class OPRLFakeR5i(OPRLFake):
     tgt_lang: str = 'fake2-r5i'
 
 
+@reg
+class OPRLPgmcGot(OPRLFake):
+    src_lang: str = 'pgmc'
+    tgt_lang: str = 'got'
+    max_rollout_length: int = 20
+
+
 @mcts_reg
 class BasicMcts:
     use_mcts: bool = True
