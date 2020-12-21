@@ -6,8 +6,11 @@ unsigned long TreeNode::cls_cnt = 0;
 void TreeNode::common_init()
 {
     dist = 0.0;
-    for (auto word : words)
-        dist += word->dist;
+    for (int order = 0; order < words.size(); order++)
+    {
+        auto word = words.at(order);
+        dist += word->dists.at(order);
+    }
 
     done = true;
     for (auto word : words)

@@ -14,13 +14,13 @@ public:
     void debug();
 
     const IdSeq id_seq;
-    float dist;
+    UMap<int, float> dists;
     bool done;
     ActionMap<Word *> neighbors;
     std::vector<SiteNode *> site_roots;
 
 private:
-    Word(const IdSeq &, const std::vector<SiteNode *> &, float, bool);
+    Word(const IdSeq &, const std::vector<SiteNode *> &, int, float, bool);
     boost::shared_mutex neighbor_mtx;
 };
 

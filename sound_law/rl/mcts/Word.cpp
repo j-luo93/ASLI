@@ -3,11 +3,14 @@
 
 Word::Word(const IdSeq &id_seq,
            const std::vector<SiteNode *> &site_roots,
+           int order,
            float dist,
            bool done) : id_seq(id_seq),
                         site_roots(site_roots),
-                        dist(dist),
-                        done(done) {}
+                        done(done)
+{
+    dists[order] = dist;
+}
 
 size_t Word::size() { return id_seq.size(); }
 
@@ -28,7 +31,7 @@ WordSpace::WordSpace(
                                  ins_cost(ins_cost)
 {
     for (size_t order = 0; order < end_ids.size(); order++)
-        end_words.push_back(get_word(end_ids.at(order), order, true));
+        end_words.emplace_back(get_word(end_ids.at(order), order, true));
 }
 
 Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
@@ -37,7 +40,16 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
     {
         boost::shared_lock_guard<boost::shared_mutex> lock(words_mtx);
         if (words.find(id_seq) != words.end())
+        {
+            auto word = words.at(id_seq);
+            // Compute the edit dist against the right order.
+            auto &dists = word->dists;
+            if (dists.find(order) == dists.end())
+            {
+                dists[order] = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
+            }
             return words.at(id_seq);
+        }
     }
 
     int n = id_seq.size();
@@ -53,7 +65,7 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
         site_roots.push_back(site_space->get_node(before, pre_id, d_pre_id, post_id, d_post_id));
     }
     float dist = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
-    Word *word = new Word(id_seq, site_roots, dist, is_end);
+    Word *word = new Word(id_seq, site_roots, order, dist, is_end);
     // Obtain the write lock. Release the memeory if it has already been created.
     boost::lock_guard<boost::shared_mutex> lock(words_mtx);
     if (words.find(id_seq) == words.end())

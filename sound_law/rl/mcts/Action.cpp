@@ -209,7 +209,7 @@ void ActionSpace::set_action_allowed_no_lock(TreeNode *node,
                 break;
             }
             auto new_word = word->neighbors.at(action_id);
-            delta += new_word->dist - word->dist;
+            delta += new_word->dists.at(order) - word->dists.at(order);
         }
         if (delta < prune_threshold)
         {
