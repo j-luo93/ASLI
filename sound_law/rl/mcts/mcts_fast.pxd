@@ -130,8 +130,7 @@ cdef extern from "Action.hpp":
 
         void register_edge(abc_t, abc_t)
         void set_action_allowed(TreeNode *)
-        size_t size()
-        void find_potential_actions(TreeNode *, vector[uai_t], vector[vector[int]], vector[uai_t], vector[vector[int]])
+        void set_action_allowed(vector[TNptr])
 
 
 cdef extern from "Env.hpp":
