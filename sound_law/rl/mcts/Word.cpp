@@ -115,7 +115,7 @@ Word *WordSpace::apply_action_no_lock(Word *word, uai_t action_id, int order)
     abc_t before_id = action::get_before_id(action_id);
     abc_t after_id = action::get_after_id(action_id);
     abc_t pre_id = action::get_pre_id(action_id);
-    abc_t d_pre_id = action::get_d_post_id(action_id);
+    abc_t d_pre_id = action::get_d_pre_id(action_id);
     abc_t post_id = action::get_post_id(action_id);
     abc_t d_post_id = action::get_d_post_id(action_id);
     bool epenthesis = (after_id == site_space->emp_id);
