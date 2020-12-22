@@ -10,7 +10,7 @@ void TreeNode::common_init()
     for (int order = 0; order < words.size(); order++)
     {
         auto word = words.at(order);
-        dist += word->dists.at(order);
+        dist += word->get_dist(order);
     }
 
     done = true;

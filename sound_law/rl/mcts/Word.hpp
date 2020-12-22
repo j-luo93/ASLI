@@ -23,7 +23,10 @@ public:
 private:
     Word(const IdSeq &, const std::vector<SiteNode *> &, int, float, bool);
     boost::shared_mutex neighbor_mtx;
-    UMap<int, float> dists;
+    // UMap<int, float> dists;
+    std::vector<int> orders;
+    std::vector<float> dists;
+    float get_dist(int);
 };
 
 class WordSpace

@@ -9,7 +9,9 @@ Word::Word(const IdSeq &id_seq,
                         site_roots(site_roots),
                         done(done)
 {
-    dists[order] = dist;
+    // dists[order] = dist;
+    orders.push_back(order);
+    dists.push_back(dist);
 }
 
 size_t Word::size() { return id_seq.size(); }
@@ -43,11 +45,12 @@ Word *WordSpace::get_word(const IdSeq &id_seq, int order, bool is_end)
         {
             auto word = words.at(id_seq);
             // Compute the edit dist against the right order.
-            auto &dists = word->dists;
-            if (dists.find(order) == dists.end())
-            {
-                dists[order] = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
-            }
+            get_dist(word, order);
+            // auto &dists = word->dists;
+            // if (dists.find(order) == dists.end())
+            // {
+            //     dists[order] = is_end ? 0.0 : get_edit_dist(id_seq, end_words.at(order)->id_seq);
+            // }
             return words.at(id_seq);
         }
     }
@@ -181,12 +184,36 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2)
     return ret;
 };
 
+float Word::get_dist(int order)
+{
+    auto o_it = orders.begin();
+    auto d_it = dists.begin();
+    while (o_it != orders.end())
+    {
+        if (*o_it == order)
+            return *d_it;
+        o_it++;
+        d_it++;
+    }
+    throw std::out_of_range("Cannot find this order for this word.");
+}
+
 float WordSpace::get_dist(Word *word, int order)
 {
-    auto &dists = word->dists;
-    if (dists.find(order) == dists.end())
+    try
     {
-        dists[order] = get_edit_dist(word->id_seq, end_words.at(order)->id_seq);
+        return word->get_dist(order);
     }
-    return dists[order];
+    catch (std::out_of_range e)
+    {
+        word->orders.push_back(order);
+        auto dist = get_edit_dist(word->id_seq, end_words.at(order)->id_seq);
+        word->dists.push_back(dist);
+        return dist;
+    }
+    // if (dists.find(order) == dists.end())
+    // {
+    //     dists[order] = get_edit_dist(word->id_seq, end_words.at(order)->id_seq);
+    // }
+    // return dists[order];
 }
