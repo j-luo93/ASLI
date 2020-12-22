@@ -13,7 +13,7 @@ cdef extern from "Site.cpp": pass
 cdef extern from "SiteGraph.cpp": pass
 
 
-cdef extern from "<boost/unordered_map.hpp>" namespace "boost" nogil:
+cdef extern from "robin_hood.h" namespace "robin_hood" nogil:
     cdef cppclass unordered_map[T, U, HASH=*, PRED=*, ALLOCATOR=*]:
         unordered_map() except +
         size_t size()
@@ -28,8 +28,6 @@ cdef extern from "<boost/unordered_map.hpp>" namespace "boost" nogil:
         iterator begin()
         iterator end()
 
-
-cdef extern from "<boost/unordered_set.hpp>" namespace "boost" nogil:
     cdef cppclass unordered_set[T, HASH=*, PRED=*, ALLOCATOR=*]:
         unordered_set() except +
         cppclass iterator:

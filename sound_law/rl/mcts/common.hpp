@@ -11,6 +11,8 @@
 #include <boost/functional/hash.hpp>
 #include <boost/thread.hpp>
 
+#include "robin_hood.h"
+
 // using abc_t = int16_t;     // for alphabets -- this could be negative since -1 is used for marking null.
 // using action_t = uint32_t; // for actions
 // using visit_t = int32_t;   // for visit/action counts -- due to virtual games, this could be negative.
@@ -38,17 +40,17 @@ using VocabIdSeq = std::vector<IdSeq>;
 using uai_t = uint64_t; // for actions -- short for unique action identifier
 using usi_t = uint64_t; // for sites -- short for unique site identifier
 
-template <class K, class V>
-using UMap = boost::unordered_map<K, V>;
-
-template <class K>
-using USet = boost::unordered_set<K>;
-
 // template <class K, class V>
-// using UMap = robin_hood::unordered_map<K, V>;
+// using UMap = boost::unordered_map<K, V>;
 
 // template <class K>
-// using USet = robin_hood::unordered_set<K>;
+// using USet = boost::unordered_set<K>;
+
+template <class K, class V>
+using UMap = robin_hood::unordered_map<K, V>;
+
+template <class K>
+using USet = robin_hood::unordered_set<K>;
 
 template <class V>
 using ActionMap = UMap<uai_t, V>;
