@@ -181,16 +181,14 @@ void ActionSpace::find_potential_actions(TreeNode *t_node,
         {
             uai_t action_id = action::combine_after_id(site, after_id);
             potential_actions.push_back(action_id);
-            auto po = std::vector<int>();
             auto uo = std::vector<int>();
             for (auto order : g_node->linked_words)
             {
                 auto word = t_node->words.at(order);
-                po.push_back(order);
                 if (word->neighbors.find(action_id) == word->neighbors.end())
                     uo.push_back(order);
             }
-            potential_orders.push_back(po);
+            potential_orders.emplace_back(std::vector<int>{g_node->linked_words.begin(), g_node->linked_words.end()});
             if (!uo.empty())
             {
                 unseen_actions.push_back(action_id);
