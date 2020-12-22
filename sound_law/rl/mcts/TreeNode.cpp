@@ -1,4 +1,5 @@
 #include "TreeNode.hpp"
+#include "Word.hpp"
 
 boost::mutex TreeNode::cls_mtx;
 unsigned long TreeNode::cls_cnt = 0;

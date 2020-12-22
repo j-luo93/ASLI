@@ -197,19 +197,19 @@ void ActionSpace::set_action_allowed_no_lock(TreeNode *node,
     for (int j = 0; j < potential_actions.size(); j++)
     {
         auto action_id = potential_actions.at(j);
-        bool epenthesis = (action::get_after_id(action_id) == site_space->emp_id);
+        bool syncope = (action::get_after_id(action_id) == site_space->emp_id);
         auto &po = potential_orders.at(j);
         float delta = 0.0;
         for (auto order : po)
         {
             auto word = node->words.at(order);
-            if (epenthesis && (word->size() == 3))
+            if (syncope && (word->size() == 3))
             {
                 delta = 9999999999.9;
                 break;
             }
             auto new_word = word->neighbors.at(action_id);
-            delta += new_word->dists.at(order) - word->dists.at(order);
+            delta += word_space->get_dist(new_word, order) - word_space->get_dist(word, order);
         }
         if (delta < prune_threshold)
         {

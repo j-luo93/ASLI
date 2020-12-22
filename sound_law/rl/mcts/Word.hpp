@@ -4,17 +4,18 @@
 #include "Site.hpp"
 
 class SiteNode;
+class TreeNode;
 
 class Word
 {
 public:
     friend class WordSpace;
+    friend class TreeNode;
 
     size_t size();
     void debug();
 
     const IdSeq id_seq;
-    UMap<int, float> dists;
     bool done;
     ActionMap<Word *> neighbors;
     std::vector<SiteNode *> site_roots;
@@ -22,6 +23,7 @@ public:
 private:
     Word(const IdSeq &, const std::vector<SiteNode *> &, int, float, bool);
     boost::shared_mutex neighbor_mtx;
+    UMap<int, float> dists;
 };
 
 class WordSpace
@@ -39,6 +41,7 @@ public:
     Word *apply_action(Word *, uai_t, int);
     Word *apply_action_no_lock(Word *, uai_t, int);
     size_t size();
+    float get_dist(Word *, int);
 
 private:
     UMap<IdSeq, Word *> words;

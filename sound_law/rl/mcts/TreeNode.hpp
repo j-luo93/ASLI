@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Word.hpp"
+#include "common.hpp"
 
 class Env;
 class ActionSpace;
+class Word;
 
 class TreeNode
 {

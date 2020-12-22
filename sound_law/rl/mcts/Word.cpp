@@ -180,3 +180,13 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2)
     free(dist);
     return ret;
 };
+
+float WordSpace::get_dist(Word *word, int order)
+{
+    auto &dists = word->dists;
+    if (dists.find(order) == dists.end())
+    {
+        dists[order] = get_edit_dist(word->id_seq, end_words.at(order)->id_seq);
+    }
+    return dists[order];
+}
