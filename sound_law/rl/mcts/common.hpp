@@ -38,8 +38,17 @@ using VocabIdSeq = std::vector<IdSeq>;
 using uai_t = uint64_t; // for actions -- short for unique action identifier
 using usi_t = uint64_t; // for sites -- short for unique site identifier
 
-template <class T, class V>
-using UMap = boost::unordered_map<T, V>;
+template <class K, class V>
+using UMap = boost::unordered_map<K, V>;
+
+template <class K>
+using USet = boost::unordered_set<K>;
+
+// template <class K, class V>
+// using UMap = robin_hood::unordered_map<K, V>;
+
+// template <class K>
+// using USet = robin_hood::unordered_set<K>;
 
 template <class V>
 using ActionMap = UMap<uai_t, V>;

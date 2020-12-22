@@ -15,6 +15,7 @@ public:
     SiteSpace *site_space;
     WordSpace *word_space;
     const float prune_threshold;
+    const int num_threads;
 
     void register_edge(abc_t, abc_t);
     void set_action_allowed(TreeNode *);

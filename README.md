@@ -15,3 +15,5 @@ For instance, for the Germanic language family, run
 ```
 python scripts/process_data_wikt.py --data_path data/Germanic.tsv --source gem-pro --targets eng deu isl nor swe dan nld --no_need_transcriber
 ```
+# Dependencies
+* various packages in `requirements.txt`. Run `pip install -r requirements.txt`.

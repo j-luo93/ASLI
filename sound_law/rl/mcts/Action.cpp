@@ -7,7 +7,8 @@ ActionSpace::ActionSpace(
     float prune_threshold,
     int num_threads) : site_space(site_space),
                        word_space(word_space),
-                       prune_threshold(prune_threshold)
+                       prune_threshold(prune_threshold),
+                       num_threads(num_threads)
 {
     // Initialize thread pool.
     tp.resize(num_threads);
@@ -27,7 +28,7 @@ void ActionSpace::set_action_allowed(const std::vector<TreeNode *> &nodes)
 {
     // Get the unique set of nodes to set action allowed for.
     auto unique_nodes = std::vector<TreeNode *>();
-    auto unique_idx = boost::unordered_set<tn_cnt_t>();
+    auto unique_idx = USet<tn_cnt_t>();
     for (const auto node : nodes)
         if ((!node->stopped) && (!node->done) && (node->action_allowed.empty()) && (unique_idx.find(node->idx) == unique_idx.end()))
         {
@@ -50,13 +51,17 @@ void ActionSpace::set_action_allowed(const std::vector<TreeNode *> &nodes)
         auto &po = para_potential_orders[i];
         auto &ua = para_unseen_actions[i];
         auto &uo = para_unseen_orders[i];
-        p_results[i] = tp.push([this, node, &pa, &po, &ua, &uo](int) { this->find_potential_actions(node, pa, po, ua, uo); });
+        if (num_threads == 1)
+            this->find_potential_actions(node, pa, po, ua, uo);
+        else
+            p_results[i] = tp.push([this, node, &pa, &po, &ua, &uo](int) { this->find_potential_actions(node, pa, po, ua, uo); });
     }
-    for (int i = 0; i < num_nodes; i++)
-        p_results[i].get();
+    if (num_threads > 1)
+        for (int i = 0; i < num_nodes; i++)
+            p_results[i].get();
 
     // Gather all unique unseen applications.
-    auto unique_unseen_actions = boost::unordered_map<Word *, boost::unordered_map<int, boost::unordered_set<uai_t>>>();
+    auto unique_unseen_actions = UMap<Word *, UMap<int, USet<uai_t>>>();
     for (int i = 0; i < num_nodes; i++)
     {
         auto node = unique_nodes.at(i);
@@ -99,10 +104,14 @@ void ActionSpace::set_action_allowed(const std::vector<TreeNode *> &nodes)
         auto word = unseen_words.at(i);
         auto &uo = unseen_orders.at(i);
         auto &ua = unseen_actions.at(i);
-        w_results[i] = tp.push([this, word, &uo, &ua](int) { this->apply_new_word_no_lock(word, uo, ua); });
+        if (num_threads == 1)
+            this->apply_new_word_no_lock(word, uo, ua);
+        else
+            w_results[i] = tp.push([this, word, &uo, &ua](int) { this->apply_new_word_no_lock(word, uo, ua); });
     }
-    for (int i = 0; i < num_words; i++)
-        w_results[i].get();
+    if (num_threads > 1)
+        for (int i = 0; i < num_words; i++)
+            w_results[i].get();
 
     // Actually set values to everything.
     std::vector<std::future<void>> a_results(num_nodes);
@@ -111,10 +120,14 @@ void ActionSpace::set_action_allowed(const std::vector<TreeNode *> &nodes)
         auto node = unique_nodes.at(i);
         auto &pa = para_potential_actions.at(i);
         auto &po = para_potential_orders.at(i);
-        a_results[i] = tp.push([this, node, &pa, &po](int) { set_action_allowed_no_lock(node, pa, po); });
+        if (num_threads == 1)
+            set_action_allowed_no_lock(node, pa, po);
+        else
+            a_results[i] = tp.push([this, node, &pa, &po](int) { set_action_allowed_no_lock(node, pa, po); });
     }
-    for (int i = 0; i < num_nodes; i++)
-        a_results[i].get();
+    if (num_threads > 1)
+        for (int i = 0; i < num_nodes; i++)
+            a_results[i].get();
 }
 
 void ActionSpace::apply_new_word_no_lock(Word *word,
