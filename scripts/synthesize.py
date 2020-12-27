@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
         sys.argv = f'''
         sound_law/main.py
-            --config OPRLFakeR30C
+            --config OPRLPgmcGot
             --mcts_config LargeSims
             --no_use_value_guidance
             --use_conditional
@@ -121,7 +121,8 @@ if __name__ == "__main__":
         t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
         py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID)
         py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 2.0, t_arr, t_lengths)
-        action_space = SoundChangeActionSpace(py_ss, py_ws, g.prune_threshold, g.num_workers, manager.tgt_abc)
+        action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold,
+                                              g.site_threshold, g.num_workers, manager.tgt_abc)
         env = SoundChangeEnv(py_ws, action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
 
         init_n_chars = len(get_all_chars(env.start, manager.tgt_abc))
@@ -136,10 +137,12 @@ if __name__ == "__main__":
                 env.action_space.set_action_allowed(state)
                 best_i = np.random.choice(len(state.action_allowed))
                 print(len(state.action_allowed), 'allowed.')
-                for i, a in enumerate(state.action_allowed):
-                    new, _ = env.step(state, i, a)
-                    from sound_law.rl.mcts.mcts_fast import PyStop
-                    assert new.dist < state.dist or PyStop == a, new.dist
+                # for i, a in enumerate(state.action_allowed):
+                #     new, _ = env.step(state, i, a)
+                #     from sound_law.rl.mcts.mcts_fast import PyStop
+                #     print(env.action_space.get_action(a))
+                # 1 / 0
+                #assert new.dist < state.dist or PyStop == a, new.dist
                 action_id = state.action_allowed[best_i]
                 action = env.action_space.get_action(action_id)
                 next_state, reward = env.step(state, best_i, action_id)

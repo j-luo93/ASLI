@@ -4,10 +4,12 @@
 ActionSpace::ActionSpace(
     SiteSpace *site_space,
     WordSpace *word_space,
-    float prune_threshold,
+    float dist_threshold,
+    int site_threshold,
     int num_threads) : site_space(site_space),
                        word_space(word_space),
-                       prune_threshold(prune_threshold),
+                       dist_threshold(dist_threshold),
+                       site_threshold(site_threshold),
                        num_threads(num_threads)
 {
     // Initialize thread pool.
@@ -165,6 +167,8 @@ void ActionSpace::find_potential_actions(TreeNode *t_node,
     for (const auto &item : graph.nodes)
     {
         GraphNode *g_node = item.second;
+        if (g_node->num_sites < site_threshold)
+            continue;
         if ((g_node->lchild != nullptr) && (g_node->lchild->num_sites == g_node->num_sites))
             continue;
         if ((g_node->lxchild != nullptr) && (g_node->lxchild->num_sites == g_node->num_sites))
@@ -222,7 +226,7 @@ void ActionSpace::set_action_allowed_no_lock(TreeNode *node,
             auto new_word = word->neighbors.at(action_id);
             delta += word_space->get_dist(new_word, order) - word_space->get_dist(word, order);
         }
-        if (delta < prune_threshold)
+        if (delta < dist_threshold)
         {
             aa.push_back(action_id);
         }

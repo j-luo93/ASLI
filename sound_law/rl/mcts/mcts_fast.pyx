@@ -102,8 +102,8 @@ cdef class PyActionSpace:
 
     action_cls = PyAction
 
-    def __cinit__(self, PySiteSpace py_ss, PyWordSpace py_ws, float prune_threshold, int num_threads, *args, **kwargs):
-        self.ptr = new ActionSpace(py_ss.ptr, py_ws.ptr, prune_threshold, num_threads)
+    def __cinit__(self, PySiteSpace py_ss, PyWordSpace py_ws, float dist_threshold, int site_threshold, int num_threads, *args, **kwargs):
+        self.ptr = new ActionSpace(py_ss.ptr, py_ws.ptr, dist_threshold, site_threshold, num_threads)
 
     def __dealloc__(self):
         del self.ptr

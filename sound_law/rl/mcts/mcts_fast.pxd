@@ -120,7 +120,7 @@ ctypedef fused anyTNptr:
 
 cdef extern from "Action.hpp":
     cdef cppclass ActionSpace nogil:
-        ActionSpace(SiteSpace *, WordSpace *, float, int)
+        ActionSpace(SiteSpace *, WordSpace *, float, int, int)
 
         SiteSpace *site_space
         WordSpace *word_space
