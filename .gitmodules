@@ -6,3 +6,9 @@
 	path = editdistance
 	url = https://github.com/j-luo93/editdistance.git
 	branch = master
+[submodule "mcts_cpp"]
+	path = mcts_cpp
+	url = /scratch2/j_luo/decipher/mcts_cpp/
+[submodule "sound_law/rl/mcts_cpp"]
+	path = sound_law/rl/mcts_cpp
+	url = /scratch2/j_luo/decipher/mcts_cpp/
