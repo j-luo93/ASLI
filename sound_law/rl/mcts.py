@@ -190,7 +190,7 @@ class Mcts(PyMcts):
                 trajectory = Trajectory(root, end_state)
                 # Episodes have max rollout length.
                 for ri in range(g.max_rollout_length):
-                    if ri == 2:
+                    if ri == 0:
                         self.enable_timer()
 
                     self.add_noise(root)
@@ -220,7 +220,7 @@ class Mcts(PyMcts):
                     tracker.update('rollout')
                     if root.stopped or root.done:
                         break
-                    if ri == 2:
+                    if ri == 0:
                         self.show_timer_stats()
                 if ei % g.episode_check_interval == 0:
                     out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
