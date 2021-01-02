@@ -240,7 +240,6 @@ class VSOnePairDataLoader(BaseOnePairDataLoader):  # VS stands for vocab state.
     def __init__(self,
                  setting: Setting,
                  cog_reg: CognateRegistry,
-                #  action_space: SoundChangeActionSpace,
                  lang2id: Dict[str, int] = None):
         if setting.src_sot != setting.tgt_sot:
             raise ValueError(f'Expect equal values, but got {setting.src_sot} and {setting.tgt_sot}.')
@@ -255,7 +254,6 @@ class VSOnePairDataLoader(BaseOnePairDataLoader):  # VS stands for vocab state.
                          batch_sampler=batch_sampler)
         # This is used to cache the entire batch.
         self._entire_batch: OnePairBatch = None
-        # self.action_space = action_space
 
     @property
     def entire_batch(self) -> OnePairBatch:
@@ -272,16 +270,6 @@ class VSOnePairDataLoader(BaseOnePairDataLoader):  # VS stands for vocab state.
             self._entire_batch.tgt_seqs.ids.rename_(batch='word')
 
         return self._entire_batch
-
-    # @cached_property
-    # def init_state(self) -> tr.VocabState:
-    #     vss = tr.VocabStateSpace()
-    #     return vss.get_state(seqs=self.entire_batch.src_seqs, end_state=self.end_state, action_space=self.action_space)
-
-    # @cached_property
-    # def end_state(self) -> tr.VocabState:
-    #     vss = tr.VocabStateSpace()
-    #     return vss.get_state(seqs=self.entire_batch.tgt_seqs)
 
     def __iter__(self) -> Iterator[OnePairBatch]:
         yield self._postprocess_batch(self.entire_batch)

@@ -16,22 +16,24 @@ from sound_law.data.alphabet import PAD_ID
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, VanillaPolicyGradient
-from .mcts.mcts_fast import PyEnv, PyWordSpace  # pylint: disable=no-name-in-module
+from .mcts_cpp.mcts_cpp import (PyEnv,  # pylint: disable=no-name-in-module
+                                PyWordSpace)
 from .trajectory import Trajectory, VocabState
 
 
 class SoundChangeEnv(nn.Module, PyEnv):
 
-    tn_cls = VocabState
+    tnode_cls = VocabState
 
     add_argument(f'final_reward', default=1.0, dtype=float, msg='Final reward for reaching the end.')
     add_argument(f'step_penalty', default=0.02, dtype=float, msg='Penalty for each step if not the end state.')
 
     # pylint: disable=unused-argument
     def __init__(self,
-                 word_space: PyWordSpace,
                  action_space: SoundChangeActionSpace,
-                 arr, lengths,
+                 word_space: PyWordSpace,
+                 s_arr, s_lengths,
+                 e_arr, e_lengths,
                  final_reward: float,
                  step_penalty: float):
         nn.Module.__init__(self)

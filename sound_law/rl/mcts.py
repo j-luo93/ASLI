@@ -18,13 +18,13 @@ from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.trajectory import Trajectory, VocabState
 
 # pylint: disable=no-name-in-module
-from .mcts_fast import (parallel_get_sparse_action_masks, parallel_select,
-                        parallel_stack_ids)
+from .mcts_cpp.mcts_cpp import (PyMcts, parallel_get_sparse_action_masks,
+                                parallel_stack_ids)
 
 # pylint: enable=no-name-in-module
 
 
-class Mcts:
+class Mcts(PyMcts):
 
     """Monte Carlo Tree Search class. Everything should be done on cpu except for evaluation.
     Use numpy arrays by default since we can potentially speed up some process through cython
@@ -40,15 +40,14 @@ class Mcts:
     add_argument('noise_ratio', default=0.25, dtype=float, msg='Mixing ratio for the Dirichlet noise.')
 
     def __init__(self,
-                 action_space: SoundChangeActionSpace,
-                 agent: BasePG,
                  env: SoundChangeEnv,
-                 end_state: VocabState):
-        self.action_space = action_space
-        self.agent = agent
+                 puct_c: float,
+                 game_count: int,
+                 virtual_loss: float,
+                 num_threads: int,
+                 agent: BasePG):
         self.env = env
-        self.end_state = end_state
-
+        self.agent = agent
         # NOTE(j_luo) This keeps track all selected states in history.
         # self._states: List[VocabState] = list()
         # self._total_state_ids: Set[int] = set()
@@ -61,24 +60,6 @@ class Mcts:
         # self._state_ids: Set[int] = set()
         # self._states: List[VocabState] = list()
         self.env.start.clear_stats(recursive=True)
-
-    # def unplay(self):
-    #     for s in self._states:
-    #         s.unplay()
-
-    # @profile
-    def parallel_select(self, root: VocabState, num_sims: int, depth_limit: int) -> List[VocabState]:
-        return parallel_select(root, self.env,
-                               num_sims, g.num_workers, depth_limit,
-                               g.puct_c, g.game_count, g.virtual_loss)
-
-    # def clear_subtree(self, state: VocabState):
-    #     self._total_state_ids.clear()
-    #     state.clear_subtree()
-
-    # @property
-    # def num_cached_states(self) -> int:
-    #     return len(self._total_state_ids)
 
     @overload
     def expand(self, state: VocabState) -> float: ...
@@ -143,10 +124,10 @@ class Mcts:
             return values
         return values[0]
 
-    def backup(self,
-               state: VocabState,
-               value: float):
-        state.backup(value, g.mixing, g.game_count, g.virtual_loss)
+    # def backup(self,
+    #            state: VocabState,
+    #            value: float):
+    #     state.backup(value, g.mixing, g.game_count, g.virtual_loss)
 
     def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, float, VocabState]:
         exp = np.power(state.action_count.astype('float32'), 1.0)
@@ -161,19 +142,20 @@ class Mcts:
         # # Set `state.played` to True. This would prevent future backups from going further up.
         # state.play()
         # return probs, action, reward, new_state
-        best_i = state.max_index
-        # This means stop action.
-        if best_i == -1:
-            action_id = 0
-            action = self.env.action_space.get_action(0)
-            # FIXME(j_luo) new state is wrong.
-            new_state = None
-            reward = 0.0
-        else:
-            action_id = state.max_action_id
-            action = self.env.action_space.get_action(action_id)
-            new_state, reward = self.env.step(state, best_i, action_id)
-        state.play()
+        # best_i = state.max_index
+        # # This means stop action.
+        # if best_i == -1:
+        #     action_id = 0
+        #     action = self.env.action_space.get_action(0)
+        #     # FIXME(j_luo) new state is wrong.
+        #     new_state = None
+        #     reward = 0.0
+        # else:
+        #     action_id = state.max_action_id
+        #     action = self.env.action_space.get_action(action_id)
+        #     new_state, reward = self.env.step(state, best_i, action_id)
+        action_id, new_state, reward = super().play(state)
+        action = self.env.action_space.get_action(action_id)
         return probs, action, reward, new_state
 
     def add_noise(self, state: VocabState):
@@ -200,9 +182,9 @@ class Mcts:
                 root = init_state
                 self.reset()
                 steps = 0 if g.use_finite_horizon else None
-                self.env.action_space.set_action_allowed(root)
+                # self.env.action_space.set_action_allowed(root)
                 value = self.expand(root, steps=steps)
-                self.backup(root, value)
+                self.backup([root], [value])
 
                 trajectory = Trajectory(root, end_state)
                 # Episodes have max rollout length.
@@ -213,14 +195,15 @@ class Mcts:
                     # would be evaluated and expanded after batched selection.
                     num_batches = g.num_mcts_sims // g.expansion_batch_size
                     for _ in range(num_batches):
-                        new_states, steps_left = self.parallel_select(root, g.expansion_batch_size, depth_limit)
+                        new_states, steps_left = self.select(root, g.expansion_batch_size, depth_limit)
                         steps = g.max_rollout_length - get_tensor(steps_left) if g.use_finite_horizon else None
                         values = self.expand(new_states, steps=steps)
-                        backed_up_idx = set()
-                        for state, value in zip(new_states, values):
-                            if state.idx not in backed_up_idx:
-                                self.backup(state, value)
-                                backed_up_idx.add(state.idx)
+                        self.backup(new_states, values)
+                        # backed_up_idx = set()
+                        # for state, value in zip(new_states, values):
+                        #     if state.idx not in backed_up_idx:
+                        #         self.backup(state, value)
+                        #         backed_up_idx.add(state.idx)
                         tracker.update('mcts', incr=g.expansion_batch_size)
                     probs, action, reward, new_state = self.play(root)
                     trajectory.append(action, new_state, reward, mcts_pi=probs)

@@ -18,7 +18,7 @@ from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
 from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
-from sound_law.rl.mcts.mcts import Mcts
+from sound_law.rl.mcts import Mcts
 # pylint: disable=no-name-in-module
 from sound_law.rl.mcts_fast import parallel_stack_policies
 from sound_law.rl.reward import get_rtgs

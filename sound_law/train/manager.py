@@ -20,9 +20,9 @@ from sound_law.evaluate.evaluator import Evaluator
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
-from sound_law.rl.mcts.mcts import Mcts
-from sound_law.rl.mcts.mcts_fast import (PyActionSpace, PyEnv, PySiteSpace,
-                                         PyWordSpace)
+from sound_law.rl.mcts import Mcts
+from sound_law.rl.mcts_cpp.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
+                                            PyWordSpace)
 from sound_law.rl.trajectory import VocabState
 from sound_law.s2s.module import CharEmbedding, EmbParams, PhonoEmbedding
 from sound_law.s2s.one_pair import OnePairModel
@@ -217,20 +217,20 @@ class OnePairManager:
             dl = self.dl_reg.get_loaders_by_name('rl')
             # set_end_words(dl.end_state)
             src_seqs = dl.entire_batch.src_seqs
-            s_arr = np.ascontiguousarray(src_seqs.ids.t().cpu().numpy())
+            s_arr = np.ascontiguousarray(src_seqs.ids.t().cpu().numpy()).astype('uint16')
             s_lengths = np.ascontiguousarray(src_seqs.lengths.t().cpu().numpy())
             tgt_seqs = dl.entire_batch.tgt_seqs
-            t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy())
+            t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype('uint16')
             t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
             py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID)
-            py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 2.0, t_arr, t_lengths)
-            self.action_space = SoundChangeActionSpace(
-                py_ss, py_ws, g.dist_threshold, g.site_threshold, g.num_workers, self.tgt_abc)
+            py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 2.0)
+            self.action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold, g.site_threshold, self.tgt_abc)
 
-            self.env = SoundChangeEnv(py_ws, self.action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
+            self.env = SoundChangeEnv(self.action_space, py_ws, s_arr, s_lengths,
+                                      t_arr, t_lengths, g.final_reward, g.step_penalty)
             model = get_model(dl=dl)
             if g.use_mcts:
-                mcts = Mcts(self.action_space, model, self.env, self.env.end)
+                mcts = Mcts(self.env, g.puct_c, g.game_count, g.virtual_loss, g.num_workers, model)
                 trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
             else:
                 collector = TrajectoryCollector(g.batch_size,

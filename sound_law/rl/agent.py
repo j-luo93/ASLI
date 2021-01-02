@@ -19,14 +19,13 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
-from .mcts.mcts_fast import (  # pylint: disable=no-name-in-module
-    parallel_get_sparse_action_masks,
-    parallel_stack_ids)
-from .module import Cnn1dParams, PolicyNetwork, ValueNetwork
 # pylint: disable=no-name-in-module
-from .reward import get_rtgs_dense, get_rtgs_list
+from .mcts_cpp.mcts_cpp import (parallel_get_sparse_action_masks,
+                                parallel_stack_ids)
 # pylint: enable=no-name-in-module
-from .trajectory import Trajectory, VocabState, TrEdge
+from .module import Cnn1dParams, PolicyNetwork, ValueNetwork
+from .reward import get_rtgs_dense, get_rtgs_list
+from .trajectory import Trajectory, TrEdge, VocabState
 
 
 @dataclass

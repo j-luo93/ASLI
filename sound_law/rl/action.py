@@ -19,8 +19,11 @@ from dev_misc.utils import Singleton, pbar
 from sound_law.data.alphabet import (ANY_ID, EMP, EMP_ID, EOT_ID, SOT_ID,
                                      Alphabet)
 
-from .mcts.mcts_fast import PyAction  # pylint: disable=no-name-in-module
-from .mcts.mcts_fast import PyActionSpace, PySiteSpace, PyStop, PyWordSpace
+# pylint: disable=no-name-in-module
+from .mcts_cpp.mcts_cpp import (PyAction, PyActionSpace, PySiteSpace, PyStop,
+                                PyWordSpace)
+
+# pylint: enable=no-name-in-module
 
 
 class SoundChangeAction(PyAction):
@@ -70,7 +73,7 @@ class SoundChangeActionSpace(PyActionSpace):
     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
     add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
 
-    def __init__(self, py_ss: PySiteSpace, py_ws: PyWordSpace, dist_threshold: float, site_threshold: int, num_threads: int, abc: Alphabet):
+    def __init__(self, py_ss: PySiteSpace, py_ws: PyWordSpace, dist_threshold: float, site_threshold: int, abc: Alphabet):
         super().__init__()
         # # Set class variable for `SoundChangeAction` here.
         self.abc = SoundChangeAction.abc = abc

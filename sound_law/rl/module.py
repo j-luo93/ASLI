@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar, List, Optional, Sequence, Tuple, Union
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.distributions.distribution import Distribution
@@ -14,9 +15,7 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
-# from .mcts_fast import parallel_gather_action_info  # pylint: disable=no-name-in-module
-from .mcts.mcts_fast import PyNull_abc
-import numpy as np
+from .mcts_cpp.mcts_cpp import PyNull_abc  # pylint: disable=no-name-in-module
 
 
 class FactorizedProjection(nn.Module):

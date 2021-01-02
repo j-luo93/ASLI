@@ -71,6 +71,6 @@ public:
     IdSeq get_id_seq(int);
     size_t size();
 
-    std::vector<uai_t> action_allowed;
+    vec<uai_t> action_allowed;
     VocabIdSeq vocab_i;
 };
