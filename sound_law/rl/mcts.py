@@ -178,6 +178,7 @@ class Mcts(PyMcts):
         trajectories = list()
         self.agent.eval()
         with self.agent.policy_grad(False), self.agent.value_grad(False):
+            self.disable_timer()
             for ei in range(g.num_episodes):
                 root = init_state
                 self.reset()
@@ -189,6 +190,9 @@ class Mcts(PyMcts):
                 trajectory = Trajectory(root, end_state)
                 # Episodes have max rollout length.
                 for ri in range(g.max_rollout_length):
+                    if ri == 2:
+                        self.enable_timer()
+
                     self.add_noise(root)
                     depth_limit = g.max_rollout_length - ri
                     # Run many simulations before take one action. Simulations take place in batches. Each batch
@@ -216,6 +220,8 @@ class Mcts(PyMcts):
                     tracker.update('rollout')
                     if root.stopped or root.done:
                         break
+                    if ri == 2:
+                        self.show_timer_stats()
                 if ei % g.episode_check_interval == 0:
                     out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
                     logging.debug(pad_for_log(out))
