@@ -16,8 +16,8 @@ from sound_law.data.cognate import CognateRegistry
 from sound_law.main import setup
 from sound_law.rl.action import SoundChangeActionSpace
 from sound_law.rl.env import SoundChangeEnv
-from sound_law.rl.mcts.mcts_fast import (PyActionSpace, PyEnv, PySiteSpace,
-                                         PyWordSpace)
+from sound_law.rl.mcts_cpp.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
+                                            PyWordSpace)
 from sound_law.rl.trajectory import VocabState
 from sound_law.train.manager import OnePairManager
 
@@ -114,16 +114,16 @@ if __name__ == "__main__":
         manager = OnePairManager()
         dl = manager.dl_reg.get_loaders_by_name('rl')
         src_seqs = dl.entire_batch.src_seqs
-        s_arr = np.ascontiguousarray(src_seqs.ids.t().cpu().numpy())
+        s_arr = np.ascontiguousarray(src_seqs.ids.t().cpu().numpy()).astype("uint16")
         s_lengths = np.ascontiguousarray(src_seqs.lengths.t().cpu().numpy())
         tgt_seqs = dl.entire_batch.tgt_seqs
-        t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy())
+        t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype("uint16")
         t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
         py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID)
-        py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 2.0, t_arr, t_lengths)
+        py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 2.0)
         action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold,
-                                              g.site_threshold, g.num_workers, manager.tgt_abc)
-        env = SoundChangeEnv(py_ws, action_space, s_arr, s_lengths, g.final_reward, g.step_penalty)
+                                              g.site_threshold, manager.tgt_abc)
+        env = SoundChangeEnv(action_space, py_ws, s_arr, s_lengths, t_arr, t_lengths, g.final_reward, g.step_penalty)
 
         init_n_chars = len(get_all_chars(env.start, manager.tgt_abc))
         print(init_n_chars)
@@ -135,8 +135,8 @@ if __name__ == "__main__":
         for i in range(args.length):
             while True:
                 env.action_space.set_action_allowed(state)
-                best_i = np.random.choice(len(state.action_allowed))
-                print(len(state.action_allowed), 'allowed.')
+                best_i = np.random.choice(state.num_actions)
+                print(state.num_actions, 'allowed.')
                 # for i, a in enumerate(state.action_allowed):
                 #     new, _ = env.step(state, i, a)
                 #     from sound_law.rl.mcts.mcts_fast import PyStop
@@ -145,7 +145,7 @@ if __name__ == "__main__":
                 #assert new.dist < state.dist or PyStop == a, new.dist
                 action_id = state.action_allowed[best_i]
                 action = env.action_space.get_action(action_id)
-                next_state, reward = env.step(state, best_i, action_id)
+                next_state = env.step(state, best_i, action_id)
                 if abs(len(get_all_chars(next_state, manager.tgt_abc)) - init_n_chars) > 3:
                     print('Too many characters have changed, retrying...')
                     continue

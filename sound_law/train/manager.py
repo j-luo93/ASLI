@@ -52,6 +52,8 @@ add_argument('use_conditional', dtype=bool, default=True, msg='Flag to use condi
 add_argument('use_pruning', dtype=bool, default=True, msg='Flag to use pruning.')
 add_argument('dist_threshold', dtype=float, default=0.0, msg='Distance threshold for pruning.')
 add_argument('site_threshold', dtype=int, default=1, msg='Site threshold for pruning.')
+add_argument('mcts_verbose_level', dtype=int, default=0, msg="Verbose level for debugging MCTS.")
+add_argument('mcts_log_to_file', dtype=bool, default=False, msg="Flag to log to file for debugging MCTS.")
 
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
@@ -231,6 +233,7 @@ class OnePairManager:
             model = get_model(dl=dl)
             if g.use_mcts:
                 mcts = Mcts(self.env, g.puct_c, g.game_count, g.virtual_loss, g.num_workers, model)
+                mcts.set_logging_options(g.mcts_verbose_level, g.mcts_log_to_file)
                 trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
             else:
                 collector = TrajectoryCollector(g.batch_size,

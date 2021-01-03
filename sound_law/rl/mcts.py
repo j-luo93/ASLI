@@ -194,12 +194,11 @@ class Mcts(PyMcts):
                         self.enable_timer()
 
                     self.add_noise(root)
-                    depth_limit = g.max_rollout_length - ri
                     # Run many simulations before take one action. Simulations take place in batches. Each batch
                     # would be evaluated and expanded after batched selection.
                     num_batches = g.num_mcts_sims // g.expansion_batch_size
                     for _ in range(num_batches):
-                        new_states, steps_left = self.select(root, g.expansion_batch_size, depth_limit)
+                        new_states, steps_left = self.select(root, g.expansion_batch_size, g.max_rollout_length)
                         steps = g.max_rollout_length - get_tensor(steps_left) if g.use_finite_horizon else None
                         values = self.expand(new_states, steps=steps)
                         self.backup(new_states, values)
