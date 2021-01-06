@@ -1,11 +1,9 @@
 # distutils: language = c++
-from .mcts_fast cimport SiteSpace, VocabIdSeq, np2vocab, TNptr, np2vector, anyTNptr, IdSeq, uai_t, combine, get_before_id, get_after_id, get_pre_id, get_d_pre_id, get_post_id, get_d_post_id, unordered_set, tn_cnt_t, unordered_map, Word, Wptr
-from libcpp cimport nullptr
+from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
 from cython.operator cimport dereference as deref, preincrement as inc
-from libc.stdio cimport printf
 
 cimport cython
 
@@ -35,37 +33,27 @@ cdef class PySiteSpace:
     def __len__(self):
         return self.ptr.size()
 
-
 cdef class PyWordSpace:
     cdef WordSpace *ptr
 
     cdef public PySiteSpace site_space
 
-    def __cinit__(self, PySiteSpace py_ss, np_dist_mat, float ins_cost, arr, lengths):
-        self.site_space = py_ss
+    def __cinit__(self, PySiteSpace py_ss, float[:, ::1] np_dist_mat, float ins_cost):
         # Convert numpy dist_mat to vector.
-        cdef float[:, ::1] dist_mat_view = np_dist_mat
         cdef size_t n = np_dist_mat.shape[0]
         cdef size_t m = np_dist_mat.shape[1]
-        cdef vector[vector[float]] dist_mat = vector[vector[float]](n)
-        cdef size_t i, j
-        cdef vector[float] vec
-        for i in range(n):
-            vec = vector[float](m)
-            for j in range(m):
-                vec[j] = dist_mat_view[i, j]
-            dist_mat[i] = vec
-
-        # Obtain vocab
-        cdef VocabIdSeq vocab = np2vocab(arr, lengths, len(arr))
-        self.ptr = new WordSpace(py_ss.ptr, dist_mat, ins_cost, vocab)
+        lengths = np.zeros(n, dtype='long')
+        lengths.fill(m)
+        cdef long[::1] lengths_view = lengths
+        cdef vector[vector[float]] dist_mat = np2nested(np_dist_mat, lengths_view)
+        self.ptr = new WordSpace(py_ss.ptr, dist_mat, ins_cost)
+        self.site_space = py_ss
 
     def __dealloc__(self):
         del self.ptr
 
     def __len__(self):
         return self.ptr.size()
-
 
 cdef class PyAction:
     cdef public uai_taction_id
@@ -96,14 +84,11 @@ cdef class PyAction:
         if d_post_id != NULL_ABC:
             self.post_cond.push_back(d_post_id)
 
-
 cdef class PyActionSpace:
     cdef ActionSpace *ptr
 
-    action_cls = PyAction
-
-    def __cinit__(self, PySiteSpace py_ss, PyWordSpace py_ws, float dist_threshold, int site_threshold, int num_threads, *args, **kwargs):
-        self.ptr = new ActionSpace(py_ss.ptr, py_ws.ptr, dist_threshold, site_threshold, num_threads)
+    def __cinit__(self, PySiteSpace py_ss, PyWordSpace py_ws, float dist_threshold, int site_threshold, *args, **kwargs):
+        self.ptr = new ActionSpace(py_ss.ptr, py_ws.ptr, dist_threshold, site_threshold)
 
     def __dealloc__(self):
         del self.ptr
@@ -111,81 +96,52 @@ cdef class PyActionSpace:
     def register_edge(self, abc_t before_id, abc_t after_id):
         self.ptr.register_edge(before_id, after_id)
 
-    def set_action_allowed(self, PyTreeNode node):
-        self.ptr.set_action_allowed(node.ptr)
-
     def get_action(self, action_id):
         return self.action_cls(action_id, get_before_id(action_id), get_after_id(action_id),
                                get_pre_id(action_id), get_d_pre_id(action_id),
                                get_post_id(action_id), get_d_post_id(action_id))
 
+    def set_action_allowed(self, PyTreeNode tnode):
+        self.ptr.set_action_allowed(tnode.ptr)
+
 
 cdef class PyTreeNode:
     cdef TreeNode *ptr
 
-    def __cinit__(self, *, from_ptr=False):
+    def __cinit__(self, from_ptr=False):
         if not from_ptr:
             raise TypeError(f'Cannot create a PyTreeNode object unless directly wrapping around a TreeNode pointer.')
 
     def __dealloc__(self):
+        # Set ptr to NULL instead of destroying it.
         self.ptr = NULL
 
+    def get_num_descendants(self):
+        return self.ptr.get_num_descendants()
+
+    def clear_stats(self, recursive: bool = False):
+        self.ptr.clear_stats(recursive)
+
     @property
-    def stopped(self):
+    def stopped(self) -> bool:
         return self.ptr.stopped
 
     @property
-    def done(self):
+    def done(self) -> bool:
         return self.ptr.done
-
-    @property
-    def parent(self):
-        tn_cls = type(self)
-        return wrap_node(tn_cls, self.ptr.parent_node)
-
-    def is_leaf(self):
-        return self.ptr.is_leaf()
-
-    def expand(self, prior):
-        cdef size_t n = len(prior)
-        cdef vector[float] prior_vec = np2vector(prior, n)
-        self.ptr.expand(prior_vec)
-
-    def play(self):
-        self.ptr.play()
-
-    def backup(self, float value, float mixing, int game_count, float virtual_loss):
-        self.ptr.backup(value, mixing, game_count, virtual_loss)
-
-    def add_noise(self, noise, float noise_ratio):
-        cdef size_t n = len(noise)
-        cdef vector[float] noise_vec = np2vector(noise, n)
-        self.ptr.add_noise(noise_vec, noise_ratio)
-
-    def clear_stats(self, recursive=False):
-        cdef bool c_recursive = recursive
-        self.ptr.clear_stats(c_recursive)
-
-    @property
-    def num_actions(self):
-        return self.ptr.action_allowed.size()
 
     @property
     def vocab_array(self):
         # Find the longest sequence.
         cdef int n = self.ptr.size()
-        cdef int m = 0
-        cdef int i, j
-        for i in range(n):
-            m = max(m, self.ptr.get_id_seq(i).size())
+        cdef int m = max([self.ptr.get_id_seq(i).size() for i in range(n)])
         # Fill in the array.
         arr = np.full([n, m], PAD_ID, dtype='long')
-        cdef long[:, ::1] arr_view = arr
         cdef IdSeq id_seq
         for i in range(n):
             id_seq = self.ptr.get_id_seq(i)
             for j in range(id_seq.size()):
-                arr_view[i, j] = id_seq[j]
+                arr[i, j] = id_seq[j]
         return arr
 
     @property
@@ -197,16 +153,31 @@ cdef class PyTreeNode:
         return vocab
 
     @property
+    def dist(self) -> float:
+        return self.ptr.dist
+
+    def is_leaf(self) -> bool:
+        return self.ptr.is_leaf()
+
+    def expand(self, float[::1] prior):
+        cdef vector[float] prior_vec = np2vector(prior)
+        self.ptr.expand(prior_vec)
+
+    def add_noise(self, float[::1] noise, float noise_ratio):
+        cdef vector[float] noise_vec = np2vector(noise)
+        self.ptr.add_noise(noise_vec, noise_ratio)
+
+    @property
+    def num_actions(self):
+        return self.ptr.action_allowed.size()
+
+    @property
     def action_allowed(self):
         return np.asarray(self.ptr.action_allowed, dtype='long')
 
     @property
     def action_count(self):
         return np.asarray(self.ptr.action_count, dtype='long')
-
-    @property
-    def total_value(self):
-        return np.asarray(self.ptr.total_value, dtype='float32')
 
     @property
     def max_index(self):
@@ -217,29 +188,18 @@ cdef class PyTreeNode:
         return self.ptr.max_action_id
 
     @property
+    def total_value(self):
+        return np.asarray(self.ptr.total_value, dtype='float32')
+
+    @property
     def prev_action(self):
         return self.ptr.prev_action
-
-    @property
-    def idx(self):
-        return self.ptr.idx
-
-    @property
-    def dist(self):
-        return self.ptr.dist
 
     def detach(self):
         cdef DetachedTreeNode *ptr = new DetachedTreeNode(self.ptr)
         cdef PyDetachedTreeNode py_dtn = PyDetachedTreeNode.__new__(PyDetachedTreeNode, from_ptr=True)
         py_dtn.ptr = ptr
         return py_dtn
-
-    def get_num_descendants(self):
-        return self.ptr.get_num_descendants()
-
-    def clear_cache(self, ratio_threshold):
-        return self.ptr.clear_cache(ratio_threshold)
-
 
 cdef class PyDetachedTreeNode:
     cdef DetachedTreeNode *ptr
@@ -251,6 +211,10 @@ cdef class PyDetachedTreeNode:
     def __dealloc__(self):
         del self.ptr
 
+cdef inline PyTreeNode wrap_node(cls, TreeNode *ptr):
+    cdef PyTreeNode py_tn = cls.__new__(cls, from_ptr=True)
+    py_tn.ptr = ptr
+    return py_tn
 
 cdef class PyEnv:
     cdef Env *ptr
@@ -260,75 +224,75 @@ cdef class PyEnv:
     cdef public PyTreeNode start
     cdef public PyTreeNode end
 
-    tn_cls = PyTreeNode
+    tnode_cls = PyTreeNode
 
-    def __cinit__(self, PyWordSpace py_ws, PyActionSpace py_as, arr, lengths, float final_reward, float step_penalty):
-        cdef VocabIdSeq vocab = np2vocab(arr, lengths, len(arr))
-        self.ptr = new Env(py_ws.ptr, py_as.ptr, vocab, final_reward, step_penalty)
+    def __cinit__(self, PyActionSpace py_as, PyWordSpace py_ws,
+                  abc_t[:, ::1] np_start_ids, long[::1] start_lengths,
+                  abc_t[:, ::1] np_end_ids, long[::1] end_lengths,
+                  float final_reward, float step_penalty):
+        cdef vector[vector[abc_t]] start_ids = np2nested(np_start_ids, start_lengths)
+        cdef vector[vector[abc_t]] end_ids = np2nested(np_end_ids, end_lengths)
+        self.ptr = new Env(py_as.ptr, py_ws.ptr, start_ids, end_ids, final_reward, step_penalty)
+        tnode_cls = type(self).tnode_cls
         self.word_space = py_ws
         self.action_space = py_as
-        tn_cls = type(self).tn_cls
-        self.start = wrap_node(tn_cls, self.ptr.start)
-        self.end = wrap_node(tn_cls, self.ptr.end)
+        self.start = wrap_node(tnode_cls, self.ptr.start)
+        self.end = wrap_node(tnode_cls, self.ptr.end)
 
     def __dealloc__(self):
         del self.ptr
 
     def step(self, PyTreeNode node, int best_i, uai_t action_id):
         new_node = self.ptr.apply_action(node.ptr, best_i, action_id)
-        reward = node.ptr.rewards.at(action_id)
-        tn_cls = type(node)
-        return wrap_node(tn_cls, new_node), reward
+        tnode_cls = type(node)
+        return wrap_node(tnode_cls, new_node)
 
+cdef class PyMcts:
+    cdef Mcts *ptr
 
-cdef inline PyTreeNode wrap_node(cls, TreeNode *ptr):
-    cdef PyTreeNode py_tn = cls.__new__(cls, from_ptr=True)
-    py_tn.ptr = ptr
-    return py_tn
+    def __cinit__(self, PyEnv py_env, float puct_c, int game_count, float virtual_loss, int num_threads, *args, **kwargs):
+        self.ptr = new Mcts(py_env.ptr, puct_c, game_count, virtual_loss, num_threads)
 
+    def __dealloc__(self):
+        del self.ptr
 
-@cython.boundscheck(False)
-def parallel_select(PyTreeNode py_root,
-                    PyEnv py_env,
-                    int num_sims,
-                    int num_threads,
-                    int depth_limit,
-                    float puct_c,
-                    int game_count,
-                    float virtual_loss):
-    if py_root.done:
-        raise ValueError('Root is already the terminal state.')
+    def select(self, PyTreeNode py_tnode, int num_sims, int depth_limit):
+        cdef vector[TNptr] selected = self.ptr.select(py_tnode.ptr, num_sims, depth_limit)
+        cdef vector[int] steps_left_vec = vector[int](selected.size())
+        cdef size_t i
+        for i in range(selected.size()):
+            steps_left_vec[i] = selected[i].depth
+        steps_left = np.asarray(steps_left_vec, dtype='long')
+        tnode_cls = type(py_tnode)
+        return [wrap_node(tnode_cls, node) for node in selected], steps_left
 
-    cdef TreeNode *root = py_root.ptr
-    cdef Env *env = py_env.ptr
+    def backup(self, states, values):
+        cdef size_t n = len(states)
+        cdef vector[TNptr] states_vec = vector[TNptr](n)
+        for i in range(n):
+            states_vec[i] = get_ptr(states[i])
+        cdef float[::1] np_values = np.asarray(values, dtype='float32')
+        cdef vector[float] values_vec = np2vector(np_values)
+        self.ptr.backup(states_vec, values_vec)
 
-    cdef int i, n_steps_left, best_i, j, k, order
-    cdef uai_t action_id
-    cdef TreeNode *node,
-    cdef TreeNode *next_node
-    steps_left = np.zeros([num_sims], dtype='long')
-    cdef long[::1] steps_left_view = steps_left
-    cdef vector[TNptr] selected = vector[TNptr](num_sims)
+    def play(self, PyTreeNode py_tnode):
+        cdef uai_t action_id = self.ptr.play(py_tnode.ptr)
+        cdef float reward = py_tnode.ptr.rewards.at(action_id)
+        cdef TreeNode *new_node = py_tnode.ptr.neighbors.at(action_id)
+        tnode_cls = type(py_tnode)
+        return action_id, wrap_node(tnode_cls, new_node), reward
 
-    with nogil:
-        for i in prange(num_sims, num_threads=num_threads):
-            node = root
-            n_steps_left = depth_limit
-            while n_steps_left > 0 and not node.is_leaf():
-                best_i = node.select(puct_c, game_count, virtual_loss)
-                action_id = node.action_allowed.at(best_i)
-                next_node = env.apply_action(node, best_i, action_id)
-                n_steps_left = n_steps_left - 1
-                node = next_node
-                # Terminate if stop action is chosen or it has reached the end.
-                if node.stopped or node.done:
-                    break
-            selected[i] = node
-            steps_left_view[i] = n_steps_left
-        env.action_space.set_action_allowed(selected)
+    def enable_timer(self):
+        self.ptr.env.action_space.timer.enable()
 
-    tn_cls = type(py_root)
-    return [wrap_node(tn_cls, ptr) if ptr != nullptr else None for ptr in selected], steps_left
+    def disable_timer(self):
+        self.ptr.env.action_space.timer.disable()
+
+    def show_timer_stats(self):
+        self.ptr.env.action_space.timer.show_stats()
+
+    def set_logging_options(self, int verbose_level, bool log_to_file):
+        self.ptr.set_logging_options(verbose_level, log_to_file)
 
 
 @cython.boundscheck(False)
