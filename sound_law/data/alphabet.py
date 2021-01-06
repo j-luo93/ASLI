@@ -5,9 +5,9 @@ from typing import List, Optional, Tuple, Union, overload
 import numpy as np
 import pandas as pd
 import torch
+from panphon.featuretable import FeatureTable
 
 from dev_misc import LT, NDA, g
-from panphon.featuretable import FeatureTable
 
 SOT = '<SOT>'
 EOT = '<EOT>'

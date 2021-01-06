@@ -9,3 +9,6 @@
 [submodule "sound_law/rl/mcts_cpp/parallel-hashmap"]
 	path = sound_law/rl/mcts_cpp/parallel-hashmap
 	url = git@github.com:greg7mdp/parallel-hashmap.git
+[submodule "pypheature"]
+	path = pypheature
+	url = git@github.com:j-luo93/pypheature.git
