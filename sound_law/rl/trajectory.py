@@ -15,7 +15,7 @@ from dev_misc.utils import (Singleton, cached_property,
                             is_main_process_and_thread)
 from editdistance import eval_batch
 from sound_law.data.alphabet import PAD_ID, Alphabet
-from sound_law.rl.mcts_cpp.mcts_cpp import \
+from sound_law.rl.mcts_cpp import \
     PyTreeNode  # pylint: disable=no-name-in-module
 
 

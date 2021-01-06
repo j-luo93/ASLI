@@ -15,7 +15,7 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction, SoundChangeActionSpace
-from .mcts_cpp.mcts_cpp import PyNull_abc  # pylint: disable=no-name-in-module
+from .mcts_cpp import PyNull_abc  # pylint: disable=no-name-in-module
 
 
 class FactorizedProjection(nn.Module):

@@ -6,3 +6,6 @@
 	path = editdistance
 	url = https://github.com/j-luo93/editdistance.git
 	branch = master
+[submodule "sound_law/rl/mcts_cpp/parallel-hashmap"]
+	path = sound_law/rl/mcts_cpp/parallel-hashmap
+	url = git@github.com:greg7mdp/parallel-hashmap.git

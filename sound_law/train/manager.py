@@ -21,8 +21,10 @@ from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
-from sound_law.rl.mcts_cpp.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
-                                            PyWordSpace)
+# pylint: disable=no-name-in-module
+from sound_law.rl.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
+                                   PyWordSpace)
+# pylint: enable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.s2s.module import CharEmbedding, EmbParams, PhonoEmbedding
 from sound_law.s2s.one_pair import OnePairModel

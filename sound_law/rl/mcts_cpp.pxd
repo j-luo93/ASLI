@@ -5,56 +5,25 @@ from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp cimport bool
 
-cdef extern from "site.cpp": pass
-cdef extern from "word.cpp": pass
-cdef extern from "tree_node.cpp": pass
-cdef extern from "action.cpp": pass
-cdef extern from "env.cpp": pass
-cdef extern from "mcts.cpp": pass
+cdef extern from "mcts_cpp/site.cpp": pass
+cdef extern from "mcts_cpp/word.cpp": pass
+cdef extern from "mcts_cpp/tree_node.cpp": pass
+cdef extern from "mcts_cpp/action.cpp": pass
+cdef extern from "mcts_cpp/env.cpp": pass
+cdef extern from "mcts_cpp/mcts.cpp": pass
 
-# cdef extern from "<boost/unordered_map.hpp>" namespace "boost" nogil:
-#     cdef cppclass unordered_map[T, U]:
-#         U& at(const T&)
-
-# cdef extern from "<boost/unordered_set.hpp>" namespace "boost" nogil:
-#     cdef cppclass unordered_set[T]:
-#         pass
-
-# cdef extern from "robin-map/include/tsl/robin_map.h"  namespace "tsl" nogil:
-#     cdef cppclass unordered_map[T, U]:
-#         U& at(const T&)
-
-# cdef extern from "robin-map/include/tsl/robin_set.h"  namespace "tsl" nogil:
-#     cdef cppclass unordered_set[T]:
-#         pass
-
-# cdef extern from "<tsl/robin_map.h>"  namespace "tsl" nogil:
-#     cdef cppclass unordered_map[T, U]:
-#         U& at(const T&)
-
-# cdef extern from "<tsl/robin_set.h>"  namespace "tsl" nogil:
-#     cdef cppclass unordered_set[T]:
-#         pass
-
-# cdef extern from "robin_hood.h"  namespace "robin_hood" nogil:
-#     cdef cppclass unordered_map[T, U]:
-#         U& at(const T&)
-
-#     cdef cppclass unordered_set[T]:
-#         pass
-
-cdef extern from "parallel-hashmap/parallel_hashmap/phmap.h"  namespace "phmap" nogil:
+cdef extern from "mcts_cpp/parallel-hashmap/parallel_hashmap/phmap.h"  namespace "phmap" nogil:
     cdef cppclass flat_hash_map[T, U]:
         U& at(const T&)
 
     cdef cppclass flat_hash_set[T]:
         pass
 
-cdef extern from "ctpl.h" namespace "ctpl" nogil:
+cdef extern from "mcts_cpp/ctpl.h" namespace "ctpl" nogil:
     cdef cppclass threadpool:
         pass
 
-cdef extern from "common.hpp":
+cdef extern from "mcts_cpp/common.hpp":
     ctypedef unsigned short abc_t
     ctypedef int visit_t
     ctypedef vector[abc_t] IdSeq
@@ -70,7 +39,7 @@ cdef extern from "common.hpp":
         void disable()
         void show_stats()
 
-cdef extern from "common.hpp" namespace "action":
+cdef extern from "mcts_cpp/common.hpp" namespace "action":
     uai_t combine(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t)
     abc_t get_after_id(uai_t)
     abc_t get_before_id(uai_t)
@@ -79,7 +48,7 @@ cdef extern from "common.hpp" namespace "action":
     abc_t get_d_pre_id(uai_t)
     abc_t get_pre_id(uai_t)
 
-cdef extern from "site.hpp":
+cdef extern from "mcts_cpp/site.hpp":
     cdef cppclass SiteNode nogil:
         usi_t site
 
@@ -110,7 +79,7 @@ cdef extern from "site.hpp":
         flat_hash_map[usi_t, GNptr] nodes
         void add_root(SiteNode *, int)
 
-cdef extern from "word.hpp":
+cdef extern from "mcts_cpp/word.hpp":
     ctypedef Word * Wptr
     cdef cppclass Word nogil:
         IdSeq id_seq
@@ -132,7 +101,7 @@ cdef extern from "word.hpp":
         size_t size()
         void set_end_words(vector[Wptr])
 
-cdef extern from "tree_node.hpp":
+cdef extern from "mcts_cpp/tree_node.hpp":
     cdef cppclass TreeNode nogil:
         ctypedef TreeNode * TNptr
 
@@ -182,7 +151,7 @@ ctypedef fused anyTNptr:
     TNptr
     DTNptr
 
-cdef extern from "action.hpp":
+cdef extern from "mcts_cpp/action.hpp":
     cdef cppclass ActionSpace nogil:
         SiteSpace *site_space
         WordSpace *word_space
@@ -197,7 +166,7 @@ cdef extern from "action.hpp":
         void set_action_allowed(TreeNode *)
         IdSeq apply_action(IdSeq, uai_t)
 
-cdef extern from "env.hpp":
+cdef extern from "mcts_cpp/env.hpp":
     cdef cppclass Env nogil:
         ActionSpace *action_space
         WordSpace *word_space
@@ -210,7 +179,7 @@ cdef extern from "env.hpp":
 
         TreeNode *apply_action(TreeNode *, int, uai_t)
 
-cdef extern from "mcts.hpp":
+cdef extern from "mcts_cpp/mcts.hpp":
     cdef cppclass Mcts nogil:
         Env *env
         float puct_c

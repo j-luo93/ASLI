@@ -16,8 +16,10 @@ from sound_law.data.cognate import CognateRegistry
 from sound_law.main import setup
 from sound_law.rl.action import SoundChangeActionSpace
 from sound_law.rl.env import SoundChangeEnv
-from sound_law.rl.mcts_cpp.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
-                                            PyWordSpace)
+# pylint: disable=no-name-in-module
+from sound_law.rl.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
+                                   PyWordSpace)
+# pylint: enable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.train.manager import OnePairManager
 

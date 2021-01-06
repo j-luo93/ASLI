@@ -18,8 +18,8 @@ from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.trajectory import Trajectory, VocabState
 
 # pylint: disable=no-name-in-module
-from .mcts_cpp.mcts_cpp import (PyMcts, parallel_get_sparse_action_masks,
-                                parallel_stack_ids)
+from .mcts_cpp import (PyMcts, parallel_get_sparse_action_masks,
+                       parallel_stack_ids)
 
 # pylint: enable=no-name-in-module
 

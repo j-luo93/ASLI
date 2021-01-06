@@ -10,13 +10,13 @@ def get_ext(*args, **kwargs):
     return Extension(*args,
                      extra_link_args=extra_args,
                      extra_compile_args=extra_args,
-                     undef_macros=['NDEBUG'],
+                     #  undef_macros=['NDEBUG'],
                      **kwargs)
 
 
 os.environ["CC"] = "g++"
 ext_modules = [get_ext('sound_law.rl.reward', ['sound_law/rl/reward.pyx']),
-               get_ext('sound_law.rl.mcts_cpp.mcts_cpp', ['sound_law/rl/mcts_cpp/mcts_cpp.pyx'])]
+               get_ext('sound_law.rl.mcts_cpp', ['sound_law/rl/mcts_cpp.pyx'])]
 
 setup(
     name='sound_law',

@@ -20,8 +20,7 @@ from sound_law.data.alphabet import (ANY_ID, EMP, EMP_ID, EOT_ID, SOT_ID,
                                      Alphabet)
 
 # pylint: disable=no-name-in-module
-from .mcts_cpp.mcts_cpp import (PyAction, PyActionSpace, PySiteSpace, PyStop,
-                                PyWordSpace)
+from .mcts_cpp import PyAction, PyActionSpace, PySiteSpace, PyStop, PyWordSpace
 
 # pylint: enable=no-name-in-module
 

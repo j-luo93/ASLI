@@ -16,8 +16,7 @@ from sound_law.data.alphabet import PAD_ID
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, VanillaPolicyGradient
-from .mcts_cpp.mcts_cpp import (PyEnv,  # pylint: disable=no-name-in-module
-                                PyWordSpace)
+from .mcts_cpp import PyEnv, PyWordSpace  # pylint: disable=no-name-in-module
 from .trajectory import Trajectory, VocabState
 
 

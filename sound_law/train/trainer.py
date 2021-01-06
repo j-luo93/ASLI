@@ -20,7 +20,7 @@ from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
 # pylint: disable=no-name-in-module
-from sound_law.rl.mcts_fast import parallel_stack_policies
+from sound_law.rl.mcts_cpp import parallel_stack_policies
 from sound_law.rl.reward import get_rtgs
 # pylint: enable=no-name-in-module
 from sound_law.rl.trajectory import ReplayTrajectory, Trajectory, TrEdge
