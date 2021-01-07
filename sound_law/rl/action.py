@@ -8,7 +8,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import product
-from typing import ClassVar, Dict, Iterator, List, Sequence, Set, Union
+from typing import (ClassVar, Dict, Iterator, List, Optional, Sequence, Set,
+                    Union)
 
 import numpy as np
 import torch
@@ -20,7 +21,8 @@ from sound_law.data.alphabet import (ANY_ID, EMP, EMP_ID, EOT_ID, SOT_ID,
                                      Alphabet)
 
 # pylint: disable=no-name-in-module
-from .mcts_cpp import PyAction, PyActionSpace, PySiteSpace, PyStop, PyWordSpace
+from .mcts_cpp import (PyAction, PyActionSpace, PyNull_abc, PySiteSpace,
+                       PyStop, PyWordSpace)
 
 # pylint: enable=no-name-in-module
 
@@ -28,6 +30,32 @@ from .mcts_cpp import PyAction, PyActionSpace, PySiteSpace, PyStop, PyWordSpace
 class SoundChangeAction(PyAction):
     """One sound change rule."""
     abc: ClassVar[Alphabet] = None
+
+    @classmethod
+    def from_str(cls, before: str, after: str,
+                 pre: Optional[str] = None,
+                 d_pre: Optional[str] = None,
+                 post: Optional[str] = None,
+                 d_post: Optional[str] = None) -> SoundChangeAction:
+        if cls.abc is None:
+            raise RuntimeError(f"No alphabet has been specified.")
+        if d_pre is not None and pre is None:
+            raise ValueError(f"`pre` must be present for `d_pre`.")
+        if d_post is not None and post is None:
+            raise ValueError(f"`post` must be present for `d_post`.")
+
+        def to_int(unit: Union[None, str], before_or_after: str) -> int:
+            if unit == "empty":
+                return EMP_ID
+            if unit == "#":
+                return SOT_ID if before_or_after == 'b' else EOT_ID
+            if unit is None:
+                return PyNull_abc
+            return cls.abc[unit]
+
+        return cls(cls.abc[before], to_int(after, 'a'),
+                   to_int(pre, 'b'), to_int(d_pre, 'b'),
+                   to_int(post, 'a'), to_int(d_post, 'a'))
 
     def __repr__(self):
         if self.action_id == PyStop:

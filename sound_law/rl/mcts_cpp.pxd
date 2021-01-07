@@ -100,6 +100,7 @@ cdef extern from "mcts_cpp/word.hpp":
         void get_words(Pool *, vector[Wptr], vector[IdSeq])
         size_t size()
         void set_end_words(vector[Wptr])
+        float get_edit_dist(IdSeq, IdSeq)
 
 cdef extern from "mcts_cpp/tree_node.hpp":
     cdef cppclass TreeNode nogil:

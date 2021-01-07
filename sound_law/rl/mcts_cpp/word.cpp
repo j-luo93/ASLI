@@ -61,10 +61,13 @@ void WordSpace::get_words(Pool *tp, vec<Word *> &outputs, const vec<IdSeq> &inpu
         inputs);
 }
 
-float WordSpace::get_edit_dist(Word *word1, Word *word2)
+inline float WordSpace::get_edit_dist(Word *word1, Word *word2)
 {
-    const IdSeq &seq1 = word1->id_seq;
-    const IdSeq &seq2 = word2->id_seq;
+    return get_edit_dist(word1->id_seq, word2->id_seq);
+}
+
+inline float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2)
+{
     size_t l1 = seq1.size();
     size_t l2 = seq2.size();
     float **dist = (float **)malloc((l1 + 1) * sizeof(float **));

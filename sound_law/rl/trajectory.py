@@ -62,6 +62,14 @@ class VocabState(PyTreeNode):
             words.append(''.join(self.abc[i] for i in id_seq[1:-1]))  # pylint: disable=unsubscriptable-object
         return words
 
+    @property
+    def segment_list(self) -> List[List[str]]:
+        assert self.abc is not None
+        words = list()
+        for id_seq in self.vocab:
+            words.append([self.abc[i] for i in id_seq])  # pylint: disable=unsubscriptable-object
+        return words
+
 
 @dataclass
 class TrEdge:

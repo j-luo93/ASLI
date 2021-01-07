@@ -55,6 +55,13 @@ cdef class PyWordSpace:
     def __len__(self):
         return self.ptr.size()
 
+    def get_edit_dist(self, seq1, seq2):
+        cdef abc_t[::1] np_seq1 = np.asarray(seq1, dtype="ushort")
+        cdef abc_t[::1] np_seq2 = np.asarray(seq2, dtype="ushort")
+        cdef vector[abc_t] seq_vec1 = np2vector(np_seq1)
+        cdef vector[abc_t] seq_vec2 = np2vector(np_seq2)
+        return self.ptr.get_edit_dist(seq_vec1, seq_vec2)
+
 cdef class PyAction:
     cdef public uai_t action_id
     cdef public abc_t before_id
@@ -96,9 +103,11 @@ cdef class PyAction:
 
 cdef class PyActionSpace:
     cdef ActionSpace *ptr
+    cdef public PyWordSpace word_space
 
     def __cinit__(self, PySiteSpace py_ss, PyWordSpace py_ws, float dist_threshold, int site_threshold, *args, **kwargs):
         self.ptr = new ActionSpace(py_ss.ptr, py_ws.ptr, dist_threshold, site_threshold)
+        self.word_space = py_ws
 
     def __dealloc__(self):
         del self.ptr

@@ -141,6 +141,23 @@ class OnePairManager:
             # self.dl_reg.register_data_loader(setting, cr, **dl_kwargs)
             self.dl_reg.register_data_loader(setting, cr)
 
+        # Get the RL environment if needed.
+        if g.use_rl:
+            dl = self.dl_reg.get_loaders_by_name('rl')
+            # set_end_words(dl.end_state)
+            src_seqs = dl.entire_batch.src_seqs
+            s_arr = np.ascontiguousarray(src_seqs.ids.t().cpu().numpy()).astype('uint16')
+            s_lengths = np.ascontiguousarray(src_seqs.lengths.t().cpu().numpy())
+            tgt_seqs = dl.entire_batch.tgt_seqs
+            t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype('uint16')
+            t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
+            py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID)
+            py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 2.0)
+            self.action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold, g.site_threshold, self.tgt_abc)
+
+            self.env = SoundChangeEnv(self.action_space, py_ws, s_arr, s_lengths,
+                                      t_arr, t_lengths, g.final_reward, g.step_penalty)
+
     def run(self):
         phono_feat_mat = special_ids = None
         if g.use_phono_features:
@@ -218,20 +235,6 @@ class OnePairManager:
                 trainer.train(self.dl_reg)
 
         if g.use_rl:
-            dl = self.dl_reg.get_loaders_by_name('rl')
-            # set_end_words(dl.end_state)
-            src_seqs = dl.entire_batch.src_seqs
-            s_arr = np.ascontiguousarray(src_seqs.ids.t().cpu().numpy()).astype('uint16')
-            s_lengths = np.ascontiguousarray(src_seqs.lengths.t().cpu().numpy())
-            tgt_seqs = dl.entire_batch.tgt_seqs
-            t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype('uint16')
-            t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
-            py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID)
-            py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 2.0)
-            self.action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold, g.site_threshold, self.tgt_abc)
-
-            self.env = SoundChangeEnv(self.action_space, py_ws, s_arr, s_lengths,
-                                      t_arr, t_lengths, g.final_reward, g.step_penalty)
             model = get_model(dl=dl)
             if g.use_mcts:
                 mcts = Mcts(self.env, g.puct_c, g.game_count, g.virtual_loss, g.num_workers, model)

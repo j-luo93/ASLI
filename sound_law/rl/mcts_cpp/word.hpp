@@ -44,4 +44,5 @@ public:
     size_t size() const;
     void set_end_words(const vec<Word *> &);
     float safe_get_dist(Word *, int);
+    float get_edit_dist(const IdSeq &, const IdSeq &);
 };
