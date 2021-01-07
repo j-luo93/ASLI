@@ -8,7 +8,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import product
-from typing import ClassVar, Dict, Iterator, List, Set, Union
+from typing import ClassVar, Dict, Iterator, List, Sequence, Set, Union
 
 import numpy as np
 import torch
@@ -96,3 +96,8 @@ class SoundChangeActionSpace(PyActionSpace):
             for u1, u2 in product(units, repeat=2):
                 if u1 != u2:
                     register_uncondional_action(u1, u2)
+
+    def apply_action(self, unit_seq: Sequence[str], action: SoundChangeAction) -> List[str]:
+        id_seq = [self.abc[u] for u in unit_seq]
+        new_id_seq = super().apply_action(id_seq, action)
+        return [self.abc[i] for i in new_id_seq]

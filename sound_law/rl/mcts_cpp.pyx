@@ -56,23 +56,30 @@ cdef class PyWordSpace:
         return self.ptr.size()
 
 cdef class PyAction:
-    cdef public uai_taction_id
+    cdef public uai_t action_id
     cdef public abc_t before_id
     cdef public abc_t after_id
+    cdef public abc_t pre_id
+    cdef public abc_t d_pre_id
+    cdef public abc_t post_id
+    cdef public abc_t d_post_id
     cdef public vector[abc_t] pre_cond
     cdef public vector[abc_t] post_cond
 
     def __cinit__(self,
-                  uai_t action_id,
                   abc_t before_id,
                   abc_t after_id,
                   abc_t pre_id,
                   abc_t d_pre_id,
                   abc_t post_id,
-                  abc_t d_post_id):
-        self.action_id = action_id
+                  abc_t d_post_id,
+                  action_id = None):
         self.before_id = before_id
         self.after_id = after_id
+        self.pre_id = pre_id
+        self.d_pre_id = d_pre_id
+        self.post_id = post_id
+        self.d_post_id = d_post_id
         self.pre_cond = vector[abc_t]()
         self.post_cond = vector[abc_t]()
         if d_pre_id != NULL_ABC:
@@ -83,6 +90,9 @@ cdef class PyAction:
             self.post_cond.push_back(post_id)
         if d_post_id != NULL_ABC:
             self.post_cond.push_back(d_post_id)
+        if action_id is None:
+            action_id = combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id)
+        self.action_id = action_id
 
 cdef class PyActionSpace:
     cdef ActionSpace *ptr
@@ -97,13 +107,18 @@ cdef class PyActionSpace:
         self.ptr.register_edge(before_id, after_id)
 
     def get_action(self, action_id):
-        return self.action_cls(action_id, get_before_id(action_id), get_after_id(action_id),
+        return self.action_cls(get_before_id(action_id), get_after_id(action_id),
                                get_pre_id(action_id), get_d_pre_id(action_id),
-                               get_post_id(action_id), get_d_post_id(action_id))
+                               get_post_id(action_id), get_d_post_id(action_id), action_id)
 
     def set_action_allowed(self, PyTreeNode tnode):
         self.ptr.set_action_allowed(tnode.ptr)
 
+    def apply_action(self, id_seq, PyAction action):
+        cdef abc_t[::1] np_id_seq = np.asarray(id_seq, dtype="ushort")
+        cdef vector[abc_t] id_vec = np2vector(np_id_seq);
+        cdef vector[abc_t] new_id_seq = self.ptr.apply_action(id_vec, action.action_id)
+        return np.asarray(new_id_seq, dtype='ushort')
 
 cdef class PyTreeNode:
     cdef TreeNode *ptr

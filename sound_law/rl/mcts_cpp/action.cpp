@@ -87,7 +87,6 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
     }
 }
 
-
 inline bool ActionSpace::match(abc_t idx, abc_t target)
 {
     if (target == site_space->any_id)
