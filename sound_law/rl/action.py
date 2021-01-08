@@ -31,6 +31,12 @@ class SoundChangeAction(PyAction):
     """One sound change rule."""
     abc: ClassVar[Alphabet] = None
 
+    def __hash__(self):
+        return self.action_id
+
+    def __eq__(self, other: SoundChangeAction):
+        return self.action_id == other.action_id
+
     @classmethod
     def from_str(cls, before: str, after: str,
                  pre: Optional[str] = None,
