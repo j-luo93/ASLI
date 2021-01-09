@@ -301,6 +301,7 @@ class LanguageEmbedding(nn.Embedding):
                 # the wals data uses 2-letter ISO codes instead of 3-letter codes, so we have to convert. luckily, lang2vec implements this conversion, and we are already importing lang2vec
                 iso_corrector = l2v.LETTER_CODES # maps ISO 639-1 and -2 codes to ISO 639-3 codes. That is, it maps 2 letter -> 3 letter codes, and deprecated 3 letter -> 3 letter
 
+                # FIXME() what to do if a target lang isn't in wals_emb? specifically Catalan is missing
                 with gzip.open('data/wals_udv1.pkl.gz', 'rb') as f: # fix path
                     wals_emb = pickle.load(f) # maps 2 letter ISO codes to WALS embeddings
                 # FIXME() hacky temp fix for Catalan being absent: Catalan happens to share all its WALS features with Spanish. Ideally fix later by creating a new wals file.
