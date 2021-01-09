@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import (ClassVar, Dict, Iterator, List, NewType, Optional,
                     Sequence, Set, Tuple, Union)
 
@@ -124,6 +125,11 @@ class BaseTrajectory:
         if self._done:
             out += ' DONE'
         return out
+
+    def save(self, log_dir: str):
+        with open(Path(log_dir) / 'path.txt', 'w', encoding='utf8') as fout:
+            for edge in self:
+                fout.write(str(edge.a) + '\n')
 
 
 class Trajectory(BaseTrajectory):

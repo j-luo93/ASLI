@@ -163,7 +163,8 @@ class Mcts(PyMcts):
         noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(state.num_actions)).astype('float32')
         state.add_noise(noise, g.noise_ratio)
 
-    def collect_episodes(self, init_state: VocabState, end_state: VocabState, tracker: Tracker) -> List[Trajectory]:
+    def collect_episodes(self, init_state: VocabState, end_state: VocabState,
+                         tracker: Optional[Tracker] = None, num_episodes: int = 0) -> List[Trajectory]:
         # logging.info(f'{self.num_cached_states} states cached.')
         # logging.info(f'{self.env.action_space.cache_size} words cached.')
         # logging.info(f'{len(self.action_space)} actions indexed in the action space.')
@@ -177,9 +178,10 @@ class Mcts(PyMcts):
             f'{len(self.env.word_space.site_space)} sites, {len(self.env.word_space)} words, {init_state.get_num_descendants()} nodes in total.')
         trajectories = list()
         self.agent.eval()
+        num_episodes = num_episodes or g.num_episodes
         with self.agent.policy_grad(False), self.agent.value_grad(False):
             # self.disable_timer()
-            for ei in range(g.num_episodes):
+            for ei in range(num_episodes):
                 root = init_state
                 self.reset()
                 steps = 0 if g.use_finite_horizon else None
@@ -207,7 +209,8 @@ class Mcts(PyMcts):
                         #     if state.idx not in backed_up_idx:
                         #         self.backup(state, value)
                         #         backed_up_idx.add(state.idx)
-                        tracker.update('mcts', incr=g.expansion_batch_size)
+                        if tracker is not None:
+                            tracker.update('mcts', incr=g.expansion_batch_size)
                     probs, action, reward, new_state = self.play(root)
                     trajectory.append(action, new_state, reward, mcts_pi=probs)
                     if ri == 0 and ei % g.episode_check_interval == 0:
@@ -216,7 +219,8 @@ class Mcts(PyMcts):
                         logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
                     root = new_state
 
-                    tracker.update('rollout')
+                    if tracker is not None:
+                        tracker.update('rollout')
                     if root.stopped or root.done:
                         break
                     # if ri == 0:
@@ -226,7 +230,8 @@ class Mcts(PyMcts):
                     logging.debug(pad_for_log(out))
 
                 trajectories.append(trajectory)
-                tracker.update('episode')
+                if tracker is not None:
+                    tracker.update('episode')
                 # orig_size = init_state.clear_cache(0.2)
                 # new_size = init_state.get_num_descendants()
                 # logging.info(f'Clearing node cache {orig_size} -> {new_size}.')

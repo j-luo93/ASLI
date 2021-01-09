@@ -51,8 +51,10 @@ class SoundChangeAction(PyAction):
             raise ValueError(f"`post` must be present for `d_post`.")
 
         def to_int(unit: Union[None, str], before_or_after: str) -> int:
-            if unit == "empty":
+            if unit in ["empty", 'Ø']:
                 return EMP_ID
+            if unit == '.':
+                return ANY_ID
             if unit == "#":
                 return SOT_ID if before_or_after == 'b' else EOT_ID
             if unit is None:

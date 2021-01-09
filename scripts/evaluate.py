@@ -235,6 +235,7 @@ class PlainState:
 
 
 if __name__ == "__main__":
+    add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     # Get alphabet and action space.
     initiator = setup()
     initiator.run()
@@ -244,11 +245,17 @@ if __name__ == "__main__":
     _fp.load_repository(dump['proto_ph_map'].keys())
 
     # Get the list of rules.
-    df = pd.read_csv('data/test_annotations.csv')
-    df = df.dropna(subset=['ref no.'])
-    got_df_rules = df[df['ref no.'].str.startswith('B')]['v0.4']
-    got_rows = df[df['ref no.'].str.startswith('B')]
-    gold = get_actions(got_rows['v0.4'], got_rows['order'])
+    if g.in_path:
+        with open(g.in_path, 'r', encoding='utf8') as fin:
+            lines = [line.strip() for line in fin.readlines()]
+            gold = get_actions(lines, range(len(lines)))
+
+    else:
+        df = pd.read_csv('data/test_annotations.csv')
+        df = df.dropna(subset=['ref no.'])
+        got_df_rules = df[df['ref no.'].str.startswith('B')]['v0.4']
+        got_rows = df[df['ref no.'].str.startswith('B')]
+        gold = get_actions(got_rows['v0.4'], got_rows['order'])
 
     # Simulate the actions and get the distance.
     state = PlainState.from_vocab_state(manager.env.start)

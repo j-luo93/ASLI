@@ -235,11 +235,17 @@ class OnePairManager:
                 trainer.train(self.dl_reg)
 
         if g.use_rl:
+            dl = self.dl_reg.get_loaders_by_name('rl')
             model = get_model(dl=dl)
             if g.use_mcts:
                 mcts = Mcts(self.env, g.puct_c, g.game_count, g.virtual_loss, g.num_workers, model)
                 mcts.set_logging_options(g.mcts_verbose_level, g.mcts_log_to_file)
-                trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
+                if g.evaluate_only:
+                    tr = mcts.collect_episodes(mcts.env.start, mcts.env.end, num_episodes=1)[0]
+                    tr.save(g.log_dir)
+                    return
+                else:
+                    trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
             else:
                 collector = TrajectoryCollector(g.batch_size,
                                                 max_rollout_length=g.max_rollout_length,
