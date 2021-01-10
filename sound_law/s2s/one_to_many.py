@@ -14,7 +14,7 @@ from .module import LanguageEmbedding
 class OneToManyModel(BaseModel):
 
     add_argument('lang_emb_mode', default='mean', dtype=str,
-                 choices=['random', 'mean', 'mean_lang2vec'], msg='Mode for the language embedding module.')
+                 choices=['random', 'mean', 'lang2vec', 'wals'], msg='Mode for the language embedding module.')
     add_argument('l2v_feature_set', default=None, dtype=str,
                  choices=['phonology_average', 'phonology_wals', 'phonology_ethnologue', 'learned'], msg='Which feature set to use for the lang2vec language embeddings.')
 
