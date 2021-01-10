@@ -14,8 +14,9 @@ from sound_law.data.alphabet import EOT_ID, Alphabet
 Number = Union[int, float]
 
 
-def translate(token_ids: Sequence[int], abc: Alphabet) -> Tuple[str, int]:
+def translate(token_ids: Sequence[int], abc: Alphabet) -> Tuple[str, int, bool]:
     ret = list()
+    properly_ended = False  # This indicates whether an EOT has been predicted, as opposed to truncation due to length.
     for tid in token_ids:
         if tid != EOT_ID:
             if g.comp_mode in ['units', 'str', 'ids_gpu']:
@@ -23,12 +24,13 @@ def translate(token_ids: Sequence[int], abc: Alphabet) -> Tuple[str, int]:
             else:
                 ret.append(tid)
         else:
+            properly_ended = True
             break
 
     if g.comp_mode in ['units', 'ids']:
-        return ret, len(ret)
+        return ret, len(ret), properly_ended
     else:
-        return ''.join(ret), len(ret)
+        return ''.join(ret), len(ret), properly_ended
 
 
 def edit_dist(seq_0: str, seq_1: str, mode: str) -> Number:
@@ -45,7 +47,7 @@ def edit_dist(seq_0: str, seq_1: str, mode: str) -> Number:
 
 def edit_dist_all(seqs_0: Sequence[str], seqs_1: Sequence[str], mode: str) -> NDA:
     if mode == 'ed':
-        return ed_eval_all(seqs_0, seqs_1, g.num_threads)
+        return ed_eval_all(seqs_0, seqs_1, g.num_workers)
 
     ret = list()
     for seq_0 in seqs_0:
@@ -57,7 +59,7 @@ def edit_dist_batch(seqs_0: Sequence[str], seqs_1: Sequence[str], mode: str) -> 
     if len(seqs_0) != len(seqs_1):
         raise ValueError(f'Expect equal values, but got {len(seqs_0)} and {len(seqs_1)}.')
     if mode == 'ed':
-        return ed_eval_batch(seqs_0, seqs_1, g.num_threads)
+        return ed_eval_batch(seqs_0, seqs_1, g.num_workers)
 
     ret = [edit_dist(seq_0, seq_1, mode) for seq_0, seq_1 in zip(seqs_0, seqs_1)]
     return np.asarray(ret)

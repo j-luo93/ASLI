@@ -1,3 +1,4 @@
+import random
 import re
 import unicodedata
 from argparse import ArgumentParser
@@ -14,6 +15,8 @@ from epitran import Epitran
 from ipapy.ipastring import IPAString
 from lingpy.sequence.sound_classes import ipa2tokens
 from loguru import logger
+
+from sound_law.data.ipa import PGmc_ipa_trans
 
 
 # IPA tokenization including removing leading * (reconstructed terms) and normalizing symbols (done by ipapy).
@@ -50,52 +53,6 @@ lookup = pycountry.languages.lookup
 # Copied from https://stackoverflow.com/questions/48255244/python-check-if-a-string-contains-cyrillic-characters.
 def has_cyrillic(text):
     return bool(re.search('[\u0400-\u04FF]', text))
-
-
-@lru_cache(maxsize=None)
-def PGmc_ipa_trans(word: str) -> str:  # only for latin-transliterated Gothic and Greek without diacritics
-    # NOTE(j_luo) Based on Frederik's code, with minor modifications.
-    word = word.lower()
-    word = word.replace('₂', '')
-    # vowels
-    word = re.sub(r"ē", "eː", word)
-    word = re.sub(r"ō", "ɔː", word)
-    word = re.sub(r"ā", "aː", word)
-    word = re.sub(r"ī", "iː", word)
-    word = re.sub(r"ū", "uː", word)
-
-    word = re.sub(r"ô", "ɔːː", word)
-    word = re.sub(r"ê", "eːː", word)
-
-    word = re.sub(r'ǭ', 'ɔ̃ː', word)
-    word = re.sub(r'ą', 'ã', word)
-    word = re.sub(r'į̄', 'ĩː', word)
-
-    # consonants
-    word = re.sub(r"h", "x", word)
-    word = re.sub(r"f", "ɸ", word)
-    word = re.sub(r"xw", "hʷ", word)
-    word = re.sub(r"kw", "kʷ", word)
-    word = re.sub(r"þ", "θ", word)
-
-    # alternations
-    word = re.sub(r"d", "ð", word)
-    word = re.sub(r"nð", "nd", word)
-    word = re.sub(r"lð", "ld", word)
-    word = re.sub(r"zð", "zd", word)
-    word = re.sub(r"^ð", "d", word)
-
-    word = re.sub(r"b", "β", word)
-    word = re.sub(r"^β", "b", word)
-
-    word = re.sub(r"g", "ɣ", word)
-    word = re.sub(r"ɣw", "gʷ", word)
-
-    word = re.sub(r"nk", "ŋk", word)
-    word = re.sub(r"ng", "ŋg", word)
-    word = re.sub(r"ng", "ŋg", word)
-
-    return word
 
 
 G2P_func = Callable[[str], str]  # Grapheme-to-phoneme.
@@ -182,18 +139,24 @@ class Field:
         }
 
 
+@lru_cache(maxsize=None)
+def _get_split(src_word: str) -> str:
+    r = random.random()
+    if r >= 0.8:
+        return 'test'
+    elif r >= 0.7:
+        return 'dev'
+    else:
+        return 'train'
+
+
 def add_splits(src_df: pd.DataFrame, tgt_df: pd.DataFrame, random_seed: int):
-    """Add split column in-place."""
-    np.random.seed(random_seed)
-    r = np.random.rand(len(src_df))
+    """Add split column in-place. To make sure that splits are consistent for the same source word, we use the cached random seed (keyed by the source word) if possible."""
+    random.seed(random_seed)
     splits = list()
-    for f in r:
-        if f >= 0.8:
-            splits.append('test')
-        elif f >= 0.7:
-            splits.append('dev')
-        else:
-            splits.append('train')
+    for src_word in src_df['ipa']:
+        split = _get_split(src_word)
+        splits.append(split)
     src_df['split'] = splits
     tgt_df['split'] = splits
 

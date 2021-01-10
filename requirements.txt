@@ -9,3 +9,6 @@ lang2vec
 graphviz
 loguru
 inflection
+altair
+prompt_toolkit
+Cython==3.0a6

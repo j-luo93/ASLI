@@ -3,7 +3,7 @@ This file contains models for one pair of src-tgt languags.
 """
 
 from abc import abstractmethod
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -11,12 +11,22 @@ import torch.nn as nn
 from dev_misc import FT, LT, add_argument, add_condition, g, get_zeros
 from dev_misc.devlib.named_tensor import NoName, Rename
 from dev_misc.utils import pbar
-from sound_law.data.data_loader import OnePairBatch, PaddedUnitSeqs
+from sound_law.data.data_loader import (OnePairBatch, PaddedUnitSeqs,
+                                        SourceOnlyBatch)
 from sound_law.data.dataset import SOT_ID
 
 from .decoder import DecParams, Hypotheses, LstmDecoder
 from .encoder import CnnEncoder, CnnParams, LstmEncoder
 from .module import EmbParams, LstmParams
+
+
+def get_emb_params(num_chars: int,
+                   phono_feat_mat: Optional[LT],
+                   special_ids: Optional[Sequence[int]]) -> EmbParams:
+    return EmbParams(num_chars, g.char_emb_size, g.dropout,
+                     phono_feat_mat=phono_feat_mat,
+                     special_ids=special_ids,
+                     separate_output=g.separate_output)
 
 
 class BaseModel(nn.Module):
@@ -42,18 +52,15 @@ class BaseModel(nn.Module):
 
         super().__init__()
 
-        def get_emb_params(num_chars: int) -> EmbParams:
-            return EmbParams(num_chars, g.char_emb_size, g.dropout,
-                             phono_feat_mat=phono_feat_mat,
-                             special_ids=special_ids,
-                             separate_output=g.separate_output)
-
         def get_lstm_params(input_size: int, bidirectional: bool) -> LstmParams:
             return LstmParams(input_size, g.hidden_size,
                               g.num_layers, g.dropout,
                               bidirectional=bidirectional)
 
-        enc_emb_params = get_emb_params(num_src_chars)
+        def get_emb_params_inner(num_chars: int):
+            return get_emb_params(num_chars, phono_feat_mat, special_ids)
+
+        enc_emb_params = get_emb_params_inner(num_src_chars)
         if g.model_encoder_type == 'lstm':
             enc_lstm_params = get_lstm_params(g.char_emb_size, True)
             self.encoder = LstmEncoder.from_params(enc_emb_params, enc_lstm_params)
@@ -65,7 +72,7 @@ class BaseModel(nn.Module):
             dec_emb_params = None
             dec_embedding = self.encoder.embedding
         else:
-            dec_emb_params = get_emb_params(num_tgt_chars)
+            dec_emb_params = get_emb_params_inner(num_tgt_chars)
             dec_embedding = None
         # NOTE(j_luo) Input size is the sum of `g.char_emb_size` and `g.hidden_size` if input feeding is used.
         dec_input_size = g.char_emb_size + (g.hidden_size if g.input_feeding else 0)
@@ -131,7 +138,7 @@ class BaseModel(nn.Module):
         scores = torch.cat(scores, dim='tgt_vocab')
         return scores
 
-    def predict(self, batch: OnePairBatch) -> Hypotheses:
+    def predict(self, batch: Union[SourceOnlyBatch, OnePairBatch]) -> Hypotheses:
         src_emb, (output, state) = self.encoder(batch.src_seqs.ids, batch.src_seqs.lengths)
         src_emb = src_emb.refine_names('pos', 'batch', 'src_emb')
         output = output.refine_names('pos', 'batch', 'output')

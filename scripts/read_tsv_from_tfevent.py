@@ -23,17 +23,18 @@ def get_event_file_paths(directory):
     # return glob.glob(os.path.join(directory, '*', '*', 'event*'))
 
 
-def read_event_file(path):
+def read_event_file(out_folder, path):
     header = ['step', 'tag', 'value']
     # what is represented by 'value' depends on the tag — it could be loss, or accuracy, or the gradient norm
-
-    if not os.path.exists('processed_log'):
-        os.mkdir('processed_log')
+    
+    out_folder = Path(out_folder)
+    out_folder.mkdir(parents=True, exist_ok=True)
     # this loses info about the full path; alternative below
-    name = path.replace("/", '__')
-    file_name = os.path.join('processed_log', name + '.tsv')
     # file_name = path.replace('/', '_') + '.tsv' # preserves all info about the full path but creates very long filenames
     # maybe a smarter alternative would be just to have a two-line header, with the first line being the full filepath. This is slightly unconventional but it's smart here.
+    # NOTE(j_luo) I'm going with the long file name to perserve more information.
+    name = path.replace("/", '__')
+    file_name = (out_folder / name).with_suffix('.tsv')
 
     with open(file_name, 'w') as f:
         writer = csv.writer(f, delimiter='\t')
@@ -52,6 +53,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', required=True,
                         help='date-level directory to export tfevents files from (eg log/2020-08-18)')
     parser.add_argument('-v', '--verbose', action='store_true', help='increase output verbosity')
+    parser.add_argument('--out_folder', type=str, default='processed_log', help='Output folder for the processed files.')
 
     args = parser.parse_args()
 
@@ -61,6 +63,6 @@ if __name__ == '__main__':
     for path in paths:
         if args.verbose:
             print('\t' + path)
-        read_event_file(path)
+        read_event_file(args.out_folder, path)
     if args.verbose:
-        print("Saved .tsv files under processed_log/")
+        print(f"Saved .tsv files under {args.out_folder}.")
