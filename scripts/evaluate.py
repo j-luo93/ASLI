@@ -290,3 +290,42 @@ if __name__ == "__main__":
     ruleset_containment = (n_shared_actions + (.5 * n_similar_actions)) / len(gold)
     print('candidate ruleset contains ' + str(ruleset_containment) + '\% of the gold rules')
     # is there a way to combine this metric with the one below? i.e., to say that a given rule is only 'partially contained' within candidate if it's present, but in the wrong order relative to other dependent actions [actions it could feed or bleed]?
+
+    # assume that candidate is a ruleset that contains the same rules as the gold ruleset but has them in a different order.
+    # first, identify which pairs of actions are in the wrong order in candidate
+    # this is a very simple O(n) alg for doing this, but it's not that space efficient since it uses a dictionary. Investigate improvements.
+    act_to_index = {act: i for i, act in enumerate(gold)}
+    swaps = 0 # number of pairs that are out of order in an impactful way
+    # it's easier to think of rules that rule A could feed or bleed than the reverse. We want to identify when A feeds B but B precedes A in order of application; and so the easiest way to do this is to iterate over the rules in reverse.
+    # assuming actions are applied in the order 0 to end
+    for i, act1 in enumerate(candidate):
+        dependent_strings = []
+
+        before_string = act1.before
+        after_string = act1.after
+        if act1.pre:
+            before_string = act1.pre + before_string
+            after_string = act1.pre + after_string
+            if act1.d_pre:
+                before_string = act1.d_pre + before_string
+                after_string = act1.d_pre + after_string
+        if act1.post:
+            before_string = before_string + act1.post
+            after_string = after_string + act1.post
+            if act1.d_post:
+                before_string = before_string + act1.d_post
+                after_string = after_string + act1.d_post
+        # try all possible cycles of the string, which constitute all possible dependent rule shapes
+        for i in range(len(after_string)):
+            cycled_str = after_string[i:] + after_string[:i]
+            dependent_strings.append(cycled_str)
+            dependent_strings.extend(find_simpler_actions(cycled_str)) # this isn't quite right since find_simpler_actions will presumably take an action instead of a string, but work with it for now
+
+        # identify those actions which could be fed/bled by act1 but precede act1 — a relationship that could happen but does not occur
+        for act2 in candidate[:i]:
+            if act2 in dependent_strings:
+                # act2 could possibly be fed/bled by act1, but we must confirm that the order is also incongruous with the gold standard
+                if act_to_index[act1] < act_to_index[act2]:
+                    swaps += 1
+    
+    print(str(swaps) + ' pairs of rules in wrong order in candidate')
