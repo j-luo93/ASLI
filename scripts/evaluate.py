@@ -273,3 +273,20 @@ if __name__ == "__main__":
                 state = state.apply_action(a)
                 print(a)
                 print(state.dist)
+
+    # compute the similarity between the candidate ruleset and the gold standard ruleset
+    candidate: List[Action] = None # let this be the model's ruleset, which we are comparing to gold 
+    # first, what % of the gold ruleset is present in candidate?
+    n_shared_actions = 0
+    n_similar_actions = 0 # similar actions get half credit. We count separately so these are stored as int
+    for action in gold:
+        similar_actions = get_similar_actions(action)
+        for candidate_act in candidate:
+            if candidate_act == action:
+                n_shared_actions += 1
+            # problem: what if an exact rule and a similar rule are both in candidate? then you could get more than 100% similarity.
+            if candidate_act in similar_actions:
+                n_similar_actions += 1
+    ruleset_containment = (n_shared_actions + (.5 * n_similar_actions)) / len(gold)
+    print('candidate ruleset contains ' + str(ruleset_containment) + '\% of the gold rules')
+    # is there a way to combine this metric with the one below? i.e., to say that a given rule is only 'partially contained' within candidate if it's present, but in the wrong order relative to other dependent actions [actions it could feed or bleed]?
