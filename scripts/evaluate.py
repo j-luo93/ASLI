@@ -290,7 +290,7 @@ if __name__ == "__main__":
         for candidate_act in candidate:
             if candidate_act == action:
                 n_shared_actions += 1
-            # problem: what if an exact rule and a similar rule are both in candidate? then you could get more than 100% similarity.
+            # TODO problem: what if an exact rule and a similar rule are both in candidate? then you could get more than 100% similarity.
             if candidate_act in similar_actions:
                 n_similar_actions += 1
     ruleset_containment = (n_shared_actions + (.5 * n_similar_actions)) / len(gold)
@@ -309,3 +309,7 @@ if __name__ == "__main__":
                 if order_matters(act1, act2, initial_state):
                     swaps += 1
     print(str(swaps) + ' pairs of rules in wrong order in candidate')
+    # TODO two improvements for this metric:
+    # 1. we currently use initial_state to test ordering, but should the state that we test the orderings on not evolve as we apply more rules? it may be that the context where the ordering matters only comes up after some rules have been applied; or that by the time the 2 rules in question are applied, any contexts such that the order matters are destroyed. So maybe each step we should change the state by the current action. 
+    # 2. there may be situations where A->B->C, that is that the ordering of A and B matter and the ordering of B and C matter, but the ordering of A and C do not matter. However, because of how the relationship is, we should care about the relative ordering of A and C; but this model won't detect that directly. One counterpoint: if A and C are in the wrong order, then at least one of them is in the wrong order relative to B, so it will be detected. But even still, perhaps the penalty should be higher than the penalty you normally accrue for swapping two rules, as the ordering of A and C are also wrong.
+    # a complicated fix to the above would be to make a graph of actions and then use that to discover if a path A to C exists (and that therefore relative order matters) but it's unclear if this could be done for each of the n choose 2 ~ O(n^2) pairs of rules in a computationally efficient matter. One slightly good thing is that you can memoize to reduce the amount of searches to perhaps visiting each vertex exactly once.
