@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, List, Optional, Union
+from typing import ClassVar, List, Set, Optional, Union
 
 import pandas as pd
 
@@ -234,6 +234,11 @@ class PlainState:
         return dist
 
 
+def order_matters(a: Action, b: Action, state: PlainState) -> bool:
+    '''Checks whether the order in which two actions are applied to a state changes the outcome.'''
+    ordering1 = state.apply_action(a).apply_action(b) # apply A then B
+    ordering2 = state.apply_action(b).apply_action(a) # apply B then A
+    return ordering1.segments == ordering2.segments
 if __name__ == "__main__":
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     # Get alphabet and action space.
@@ -262,6 +267,7 @@ if __name__ == "__main__":
     PlainState.action_space = manager.action_space
     PlainState.end_state = PlainState.from_vocab_state(manager.env.end)
     PlainState.abc = manager.tgt_abc
+    initial_state = state # keep a pointer to this, we'll reuse it later for checking rule ordering
     print(state.dist)
     for action in gold:
         if isinstance(action, SoundChangeAction):
@@ -293,39 +299,13 @@ if __name__ == "__main__":
 
     # assume that candidate is a ruleset that contains the same rules as the gold ruleset but has them in a different order.
     # first, identify which pairs of actions are in the wrong order in candidate
-    # this is a very simple O(n) alg for doing this, but it's not that space efficient since it uses a dictionary. Investigate improvements.
     act_to_index = {act: i for i, act in enumerate(gold)}
     swaps = 0 # number of pairs that are out of order in an impactful way
-    # it's easier to think of rules that rule A could feed or bleed than the reverse. We want to identify when A feeds B but B precedes A in order of application; and so the easiest way to do this is to iterate over the rules in reverse.
     # assuming actions are applied in the order 0 to end
     for i, act1 in enumerate(candidate):
-        dependent_strings = []
-
-        before_string = act1.before
-        after_string = act1.after
-        if act1.pre:
-            before_string = act1.pre + before_string
-            after_string = act1.pre + after_string
-            if act1.d_pre:
-                before_string = act1.d_pre + before_string
-                after_string = act1.d_pre + after_string
-        if act1.post:
-            before_string = before_string + act1.post
-            after_string = after_string + act1.post
-            if act1.d_post:
-                before_string = before_string + act1.d_post
-                after_string = after_string + act1.d_post
-        # try all possible cycles of the string, which constitute all possible dependent rule shapes
-        for i in range(len(after_string)):
-            cycled_str = after_string[i:] + after_string[:i]
-            dependent_strings.append(cycled_str)
-            dependent_strings.extend(find_simpler_actions(cycled_str)) # this isn't quite right since find_simpler_actions will presumably take an action instead of a string, but work with it for now
-
-        # identify those actions which could be fed/bled by act1 but precede act1 — a relationship that could happen but does not occur
-        for act2 in candidate[:i]:
-            if act2 in dependent_strings:
-                # act2 could possibly be fed/bled by act1, but we must confirm that the order is also incongruous with the gold standard
-                if act_to_index[act1] < act_to_index[act2]:
+        for act2 in candidate[i+1:]:
+            if act_to_index[act1] > act_to_index[act2]:
+                # we do the checks in this order because the below is more computationally intensive than the above
+                if order_matters(act1, act2, initial_state):
                     swaps += 1
-    
     print(str(swaps) + ' pairs of rules in wrong order in candidate')
