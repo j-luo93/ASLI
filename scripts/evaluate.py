@@ -301,13 +301,15 @@ if __name__ == "__main__":
     # first, identify which pairs of actions are in the wrong order in candidate
     act_to_index = {act: i for i, act in enumerate(gold)}
     swaps = 0 # number of pairs that are out of order in an impactful way
+    current_state = initial_state
     # assuming actions are applied in the order 0 to end
     for i, act1 in enumerate(candidate):
         for act2 in candidate[i+1:]:
             if act_to_index[act1] > act_to_index[act2]:
                 # we do the checks in this order because the below is more computationally intensive than the above
-                if order_matters(act1, act2, initial_state):
+                if order_matters(act1, act2, current_state):
                     swaps += 1
+        current_state.apply_action(act1)
     print(str(swaps) + ' pairs of rules in wrong order in candidate')
     # TODO two improvements for this metric:
     # 1. we currently use initial_state to test ordering, but should the state that we test the orderings on not evolve as we apply more rules? it may be that the context where the ordering matters only comes up after some rules have been applied; or that by the time the 2 rules in question are applied, any contexts such that the order matters are destroyed. So maybe each step we should change the state by the current action. 
