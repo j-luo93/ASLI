@@ -264,6 +264,13 @@ class OPRLPgmcGot(OPRLFake):
     max_rollout_length: int = 20
 
 
+@reg
+class OPRLPgmcNon(OPRLFake):
+    src_lang: str = 'pgmc'
+    tgt_lang: str = 'non'
+    max_rollout_length: int = 40
+
+
 @mcts_reg
 class BasicMcts:
     use_mcts: bool = True

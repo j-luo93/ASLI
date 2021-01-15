@@ -78,9 +78,13 @@ post_cond_pat = ''.join([
 
 pat = re.compile(fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
 
-error_codes = {'BDR', 'SCP', 'NC', 'SS', 'EPTh', 'MS', 'MTTh', 'IRG', 'OPT', 'LD', 'CIS', 'OOS', 'ALPh'}
+error_codes = {'OOS', 'IRG', 'CIS', 'EPTh'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
 # Gothic: B, ON: A-E, OHG: A-C-F, OE: NW-D.1-D.2-G
+ref_no = {
+    'got': ['B'],
+    'non': ['A', 'E'],
+}
 
 
 class Boundary:
@@ -249,13 +253,16 @@ if __name__ == "__main__":
         with open(g.in_path, 'r', encoding='utf8') as fin:
             lines = [line.strip() for line in fin.readlines()]
             gold = get_actions(lines, range(len(lines)))
-
     else:
         df = pd.read_csv('data/test_annotations.csv')
         df = df.dropna(subset=['ref no.'])
-        got_df_rules = df[df['ref no.'].str.startswith('B')]['v0.4']
-        got_rows = df[df['ref no.'].str.startswith('B')]
-        gold = get_actions(got_rows['v0.4'], got_rows['order'])
+        # got_df_rules = df[df['ref no.'].str.startswith('B')]['v0.4']
+        # got_rows = df[df['ref no.'].str.startswith('B')]
+        # gold = get_actions(got_rows['v0.4'], got_rows['order'])
+        gold = list()
+        for ref in ref_no[g.tgt_lang]:
+            rows = df[df['ref no.'].str.startswith(ref)]
+            gold.extend(get_actions(rows['w/o SS'], rows['order']))
 
     # Simulate the actions and get the distance.
     state = PlainState.from_vocab_state(manager.env.start)
