@@ -100,6 +100,26 @@ class ZSPgmcDeuPhono(ZSPgmcDeu, UsePhono, Size220):
     pass
 
 
+@reg
+class ZSLatIta440(ZSLatIta, Size440):
+    pass
+
+
+@reg
+class ZSLatIta880(ZSLatIta, Size880):
+    pass
+
+
+@reg
+class ZSLatItaPhono440(ZSLatIta, UsePhono, Size440):
+    pass
+
+
+@reg
+class ZSLatItaPhono880(ZSLatIta, UsePhono, Size880):
+    pass
+
+
 # Programmatically create several configs.
 
 def iter_tgt_lang(all_langs: List[str]) -> Iterator[Tuple[str, Tuple[str, ...]]]:

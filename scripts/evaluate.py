@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, List, Optional, Union
+from typing import ClassVar, List, Optional, Set, Union
 
 import pandas as pd
 
@@ -238,6 +238,13 @@ class PlainState:
         return dist
 
 
+def order_matters(a: Action, b: Action, state: PlainState) -> bool:
+    '''Checks whether the order in which two actions are applied to a state changes the outcome.'''
+    ordering1 = state.apply_action(a).apply_action(b)  # apply A then B
+    ordering2 = state.apply_action(b).apply_action(a)  # apply B then A
+    return ordering1.segments == ordering2.segments
+
+
 if __name__ == "__main__":
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     # Get alphabet and action space.
@@ -269,6 +276,7 @@ if __name__ == "__main__":
     PlainState.action_space = manager.action_space
     PlainState.end_state = PlainState.from_vocab_state(manager.env.end)
     PlainState.abc = manager.tgt_abc
+    initial_state = state  # keep a pointer to this, we'll reuse it later for checking rule ordering
     print(state.dist)
     for action in gold:
         if isinstance(action, SoundChangeAction):
@@ -280,3 +288,39 @@ if __name__ == "__main__":
                 state = state.apply_action(a)
                 print(a)
                 print(state.dist)
+
+    # compute the similarity between the candidate ruleset and the gold standard ruleset
+    candidate: List[Action] = None  # let this be the model's ruleset, which we are comparing to gold
+    # first, what % of the gold ruleset is present in candidate?
+    n_shared_actions = 0
+    n_similar_actions = 0  # similar actions get half credit. We count separately so these are stored as int
+    for action in gold:
+        similar_actions = get_similar_actions(action)
+        for candidate_act in candidate:
+            if candidate_act == action:
+                n_shared_actions += 1
+            # TODO problem: what if an exact rule and a similar rule are both in candidate? then you could get more than 100% similarity.
+            if candidate_act in similar_actions:
+                n_similar_actions += 1
+    ruleset_containment = (n_shared_actions + (.5 * n_similar_actions)) / len(gold)
+    print('candidate ruleset contains ' + str(ruleset_containment) + '\% of the gold rules')
+    # is there a way to combine this metric with the one below? i.e., to say that a given rule is only 'partially contained' within candidate if it's present, but in the wrong order relative to other dependent actions [actions it could feed or bleed]?
+
+    # assume that candidate is a ruleset that contains the same rules as the gold ruleset but has them in a different order.
+    # first, identify which pairs of actions are in the wrong order in candidate
+    act_to_index = {act: i for i, act in enumerate(gold)}
+    swaps = 0  # number of pairs that are out of order in an impactful way
+    current_state = initial_state
+    # assuming actions are applied in the order 0 to end
+    for i, act1 in enumerate(candidate):
+        for act2 in candidate[i + 1:]:
+            if act_to_index[act1] > act_to_index[act2]:
+                # we do the checks in this order because the below is more computationally intensive than the above
+                if order_matters(act1, act2, current_state):
+                    swaps += 1
+        current_state.apply_action(act1)
+    print(str(swaps) + ' pairs of rules in wrong order in candidate')
+    # TODO two improvements for this metric:
+    # 1. we currently use initial_state to test ordering, but should the state that we test the orderings on not evolve as we apply more rules? it may be that the context where the ordering matters only comes up after some rules have been applied; or that by the time the 2 rules in question are applied, any contexts such that the order matters are destroyed. So maybe each step we should change the state by the current action.
+    # 2. there may be situations where A->B->C, that is that the ordering of A and B matter and the ordering of B and C matter, but the ordering of A and C do not matter. However, because of how the relationship is, we should care about the relative ordering of A and C; but this model won't detect that directly. One counterpoint: if A and C are in the wrong order, then at least one of them is in the wrong order relative to B, so it will be detected. But even still, perhaps the penalty should be higher than the penalty you normally accrue for swapping two rules, as the ordering of A and C are also wrong.
+    # a complicated fix to the above would be to make a graph of actions and then use that to discover if a path A to C exists (and that therefore relative order matters) but it's unclear if this could be done for each of the n choose 2 ~ O(n^2) pairs of rules in a computationally efficient matter. One slightly good thing is that you can memoize to reduce the amount of searches to perhaps visiting each vertex exactly once.

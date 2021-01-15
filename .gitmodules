@@ -8,7 +8,10 @@
 	branch = master
 [submodule "sound_law/rl/mcts_cpp/parallel-hashmap"]
 	path = sound_law/rl/mcts_cpp/parallel-hashmap
-	url = git@github.com:greg7mdp/parallel-hashmap.git
+	url = https://github.com/greg7mdp/parallel-hashmap.git
+	branch = master
 [submodule "pypheature"]
 	path = pypheature
-	url = git@github.com:j-luo93/pypheature.git
+	url = https://github.com/j-luo93/pypheature.git
+	branch = master
+
