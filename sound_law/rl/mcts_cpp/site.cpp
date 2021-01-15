@@ -82,7 +82,7 @@ void SiteSpace::get_nodes(Pool *tp, vec<vec<SiteNode *>> &outputs, const vec<vec
 
 GraphNode::GraphNode(SiteNode *base) : base(base) {}
 
-void SiteGraph::add_root(SiteNode *root, int order)
+GraphNode * SiteGraph::add_root(SiteNode *root, int order)
 {
     GraphNode *gnode = generate_subgraph(root);
     vec<GraphNode *> gnodes = get_descendants(gnode);
@@ -93,6 +93,7 @@ void SiteGraph::add_root(SiteNode *root, int order)
         gnode->num_sites++;
         gnode->linked_words.insert(order);
     }
+    return gnode;
 }
 
 inline GraphNode *SiteGraph::generate_subgraph(SiteNode *snode)

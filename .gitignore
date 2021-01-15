@@ -110,6 +110,7 @@ processed_log/
 notebooks/
 *.prof
 *.cpp
+!sound_law/rl/mcts_cpp/*.cpp
 scripts/*
 dump/*
 cmdl/*

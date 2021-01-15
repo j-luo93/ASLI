@@ -152,3 +152,20 @@ void ActionSpace::apply_action(Word *&output, Word *word, uai_t action_id)
     word->neighbors.try_emplace_l(
         action_id, [](Word *value) {}, output);
 }
+
+vec<uai_t> ActionSpace::get_similar_actions(uai_t action)
+{
+    auto site = action::get_site(action);
+    auto after_id = action::get_after_id(action);
+
+    SiteNode *site_node;
+    site_space->get_node(site_node, site);
+    auto graph = SiteGraph();
+    auto root = graph.add_root(site_node, -1); // `order` doesn't matter here.
+    auto desc = graph.get_descendants(root);
+
+    auto ret = vec<uai_t>();
+    for (const auto node : desc)
+        ret.push_back(action::combine_after_id(node->base->site, after_id));
+    return ret;
+}

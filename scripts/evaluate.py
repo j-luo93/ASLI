@@ -277,25 +277,30 @@ if __name__ == "__main__":
     PlainState.end_state = PlainState.from_vocab_state(manager.env.end)
     PlainState.abc = manager.tgt_abc
     initial_state = state  # keep a pointer to this, we'll reuse it later for checking rule ordering
+    expanded_gold = list()
     print(state.dist)
     for action in gold:
         if isinstance(action, SoundChangeAction):
             state = state.apply_action(action)
             print(action)
             print(state.dist)
+            expanded_gold.append(action)
         else:
             for a in action.specialize(state):
                 state = state.apply_action(a)
                 print(a)
                 print(state.dist)
+                expanded_gold.append(a)
+    # NOTE(j_luo) We can only score based on expanded rules (i.e., excluding ExpandableAction).
+    gold = expanded_gold
 
     # compute the similarity between the candidate ruleset and the gold standard ruleset
-    candidate: List[Action] = None  # let this be the model's ruleset, which we are comparing to gold
+    candidate: List[SoundChangeAction] = None  # let this be the model's ruleset, which we are comparing to gold
     # first, what % of the gold ruleset is present in candidate?
     n_shared_actions = 0
     n_similar_actions = 0  # similar actions get half credit. We count separately so these are stored as int
     for action in gold:
-        similar_actions = get_similar_actions(action)
+        similar_actions = manager.action_space.get_similar_actions(action)
         for candidate_act in candidate:
             if candidate_act == action:
                 n_shared_actions += 1

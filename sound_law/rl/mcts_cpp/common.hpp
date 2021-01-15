@@ -218,6 +218,7 @@ namespace action
     inline abc_t get_pre_id(uai_t action) { return static_cast<abc_t>(action >> 50); }
 
     // Obtain a UAI by combining a USI with after_id;
+    inline usi_t get_site(uai_t action) { return action >> 10; }
     inline uai_t combine_after_id(usi_t site, abc_t after_id) { return ((site << 10) | static_cast<abc_t>(after_id)); }
     inline uai_t combine(abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id, abc_t before_id, abc_t after_id)
     {
