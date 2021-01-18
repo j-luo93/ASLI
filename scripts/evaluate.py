@@ -221,17 +221,24 @@ class PlainState:
             new_segments.append(cls.action_space.apply_action(seg, action))
         return cls(new_segments)
 
-    @property
-    def dist(self) -> float:
+    def dist_from(self, tgt_segments: List[List[str]]):
+        '''Returns the distance between the current state and a specified state of segments'''
         cls = type(self)
-        assert cls.end_state is not None
         assert cls.abc is not None
+        assert tgt_segments is not None
         dist = 0.0
-        for s1, s2 in zip(self.segments, cls.end_state.segments):
+        for s1, s2 in zip(self.segments, tgt_segments):
             s1 = [cls.abc[u] for u in s1]  # pylint: disable=unsubscriptable-object
             s2 = [cls.abc[u] for u in s2]  # pylint: disable=unsubscriptable-object
             dist += cls.action_space.word_space.get_edit_dist(s1, s2)
         return dist
+
+    @property
+    def dist(self) -> float:
+        '''Returns the distance between the current state and the end state'''
+        cls = type(self)
+        assert cls.end_state is not None
+        return self.dist_from(cls.end_state.segments)
 
 
 def order_matters(a: Action, b: Action, state: PlainState) -> bool:
