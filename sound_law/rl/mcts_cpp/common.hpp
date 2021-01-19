@@ -205,6 +205,12 @@ void find_unique(vec<K> &outputs, const vec<vec<K>> &inputs, const UMap<K, V> &c
         }
 }
 
+enum class SpecialType : uai_t
+{
+    CLL = (static_cast<uai_t>(1) << 60),
+    CLR = (static_cast<uai_t>(2) << 60),
+};
+
 namespace action
 {
     // Each action has the following format:
@@ -230,6 +236,10 @@ namespace action
                 static_cast<uai_t>(after_id));
     }
     static const uai_t STOP = combine(NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC);
+    inline uai_t combine_special(abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id, abc_t before_id, abc_t after_id, SpecialType st)
+    {
+        return (combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id) | static_cast<uai_t>(st));
+    }
 
     inline std::string str(uai_t action)
     {

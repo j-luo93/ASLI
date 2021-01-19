@@ -42,7 +42,8 @@ class SoundChangeAction(PyAction):
                  pre: Optional[str] = None,
                  d_pre: Optional[str] = None,
                  post: Optional[str] = None,
-                 d_post: Optional[str] = None) -> SoundChangeAction:
+                 d_post: Optional[str] = None,
+                 special_type: Optional[str] = None) -> SoundChangeAction:
         if cls.abc is None:
             raise RuntimeError(f"No alphabet has been specified.")
         if d_pre is not None and pre is None:
@@ -63,7 +64,8 @@ class SoundChangeAction(PyAction):
 
         return cls(cls.abc[before], to_int(after, 'a'),
                    to_int(pre, 'b'), to_int(d_pre, 'b'),
-                   to_int(post, 'a'), to_int(d_post, 'a'))
+                   to_int(post, 'a'), to_int(d_post, 'a'),
+                   special_type=special_type)
 
     def __repr__(self):
         if self.action_id == PyStop:
@@ -115,19 +117,22 @@ class SoundChangeActionSpace(PyActionSpace):
 
         # Register unconditional actions first.
         units = [u for u in self.abc if u not in self.abc.special_units]
-        possible_path: Dict[str, List[str]] = defaultdict(list)
 
-        def register_uncondional_action(u1: str, u2: str):
+        def register_uncondional_action(u1: str, u2: str, cl: bool = False):
             id1 = abc[u1]
             id2 = abc[u2]
-            self.register_edge(id1, id2)
-            possible_path[id1].append(id2)
+            if cl:
+                self.register_cl_map(id1, id2)
+            else:
+                self.register_edge(id1, id2)
 
         if g.use_mcts:
             for u1, u2 in abc.edges:
                 register_uncondional_action(u1, u2)
             for u in units:
                 register_uncondional_action(u, EMP)
+            for u1, u2 in abc.cl_map.items():
+                register_uncondional_action(u1, u2, cl=True)
         else:
             for u1, u2 in product(units, repeat=2):
                 if u1 != u2:

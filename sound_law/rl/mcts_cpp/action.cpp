@@ -14,6 +14,11 @@ void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
     edges[before_id].push_back(after_id);
 }
 
+void ActionSpace::register_cl_map(abc_t before_id, abc_t after_id)
+{
+    cl_map[before_id] = after_id;
+}
+
 void ActionSpace::set_action_allowed(Pool *tp, const vec<TreeNode *> &tnodes)
 {
     // Find unique tree nodes first.

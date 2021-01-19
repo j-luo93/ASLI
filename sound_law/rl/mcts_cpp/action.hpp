@@ -13,6 +13,7 @@ using GraphOutput = tup<ParaAction, ParaOrder, UnseenAction>;
 class ActionSpace
 {
     UMap<abc_t, vec<abc_t>> edges;
+    UMap<abc_t, abc_t> cl_map;
 
     bool match(abc_t, abc_t);
 
@@ -26,6 +27,7 @@ public:
     ActionSpace(SiteSpace *, WordSpace *, float, int);
 
     void register_edge(abc_t, abc_t);
+    void register_cl_map(abc_t, abc_t); // compensatory length edge.
     void set_action_allowed(Pool *, const vec<TreeNode *> &);
     void set_action_allowed(TreeNode *);
     void apply_action(Word *&, Word *, uai_t);

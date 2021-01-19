@@ -32,6 +32,9 @@ cdef extern from "mcts_cpp/common.hpp":
     ctypedef unsigned long uai_t
     ctypedef unsigned long usi_t
 
+    cdef cppclass SpecialType:
+        pass
+
     ctypedef threadpool Pool
 
     cdef cppclass Timer nogil:
@@ -39,8 +42,13 @@ cdef extern from "mcts_cpp/common.hpp":
         void disable()
         void show_stats()
 
+cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
+    cdef SpecialType CLL
+    cdef SpecialType CLR
+
 cdef extern from "mcts_cpp/common.hpp" namespace "action":
     uai_t combine(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t)
+    uai_t combine_special(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType)
     abc_t get_after_id(uai_t)
     abc_t get_before_id(uai_t)
     abc_t get_d_post_id(uai_t)
@@ -163,6 +171,7 @@ cdef extern from "mcts_cpp/action.hpp":
         ActionSpace(SiteSpace *, WordSpace *, float, int)
 
         void register_edge(abc_t, abc_t)
+        void register_cl_map(abc_t, abc_t)
         void set_action_allowed(Pool *, vector[TNptr])
         void set_action_allowed(TreeNode *)
         IdSeq apply_action(IdSeq, uai_t)

@@ -3,13 +3,13 @@ from __future__ import annotations
 import pickle
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, List, Optional, Set, Union
+from typing import ClassVar, List, Optional, Set, Tuple, Union
 
 import pandas as pd
 
 from dev_misc import add_argument, g
 from pypheature.nphthong import Nphthong
-from pypheature.process import FeatureProcessor
+from pypheature.process import FeatureProcessor, NoMappingFound, NonUniqueMapping
 from pypheature.segment import Segment
 from sound_law.data.alphabet import Alphabet
 from sound_law.main import setup
@@ -28,7 +28,7 @@ def named_ph(name: str) -> str:
         '('
         r'[^+\(\)\[\] ]+',           # acceptable characters (everything except '+', ' ', '(' and ')')
         '|',
-        r'\[[\w ,\+\-]+\]',
+        r'\[[\w ,\+\-!]+\]',
         ')',
         ')'                   # capture group end
     ])
@@ -78,12 +78,13 @@ post_cond_pat = ''.join([
 
 pat = re.compile(fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
 
-error_codes = {'OOS', 'IRG', 'CIS', 'EPTh'}
+error_codes = {'OOS', 'IRG', 'CIS', 'EPTh', 'MTTh', 'SS'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
-# Gothic: B, ON: A-E, OHG: A-C-F, OE: NW-D.1-D.2-G
+# Gothic: B, ON: A-E, OHG: A-C-F, OE: A-D.1-D.2-G
 ref_no = {
     'got': ['B'],
     'non': ['A', 'E'],
+    'ang': ['A', 'D.1', 'D.2', 'G']
 }
 
 
@@ -123,6 +124,31 @@ class Expandable:
         return self.raw == str(segment)
 
 
+def get_special_type(after: str, pre: Union[None, str], post: Union[None, str]) -> Tuple[bool, str, str]:
+    """
+    Returns:
+        is_valid: whether it is valid to have a special rule if it is specified as such. `True` if it's a normal rule.
+        special_type: the special type (str).
+        after: the concrete `after` segment (str).
+    """
+
+    special_type = None
+    is_valid = True
+    if after in ['CLL', 'CLR']:
+        special_type = after
+        if after == 'CLL':
+            tgt = pre
+        else:
+            tgt = post
+
+        seg = _fp.process(tgt)
+        if isinstance(seg, Segment) and seg.is_short():
+            after = tgt + "ː"
+        else:
+            is_valid = False
+    return is_valid, special_type, after
+
+
 @dataclass
 class ExpandableAction:
     """This is under-specified and would be specialized into `SoundChangeAction` later and be indexed."""
@@ -156,15 +182,22 @@ class ExpandableAction:
                     applied = i < n - 2 and self.d_post.match(segments[i + 2])
 
                 if applied:
-                    if self.after.expandable:
-                        after = str(_fp.change_features(seg, self.after.fv))
-                    else:
-                        after = self.after.raw
                     pre = str(segments[i - 1]) if self.pre.exists() else None
                     d_pre = str(segments[i - 2]) if self.d_pre.exists() else None
                     post = str(segments[i + 1]) if self.post.exists() else None
                     d_post = str(segments[i + 2]) if self.d_post.exists() else None
-                    ret.add(SoundChangeAction.from_str(str(seg), after, pre, d_pre, post, d_post))
+
+                    is_valid, special_type, after = get_special_type(self.after.raw, pre, post)
+                    if not is_valid:
+                        continue
+
+                    if self.after.expandable:
+                        try:
+                            after = str(_fp.change_features(seg, self.after.fv))
+                        except (NonUniqueMapping, NoMappingFound):
+                            continue
+                    ret.add(SoundChangeAction.from_str(str(seg), after, pre,
+                                                       d_pre, post, d_post, special_type=special_type))
         return list(ret)
 
 
@@ -182,7 +215,11 @@ def get_action(raw_line: str) -> Action:
 
     if '[' in raw_line:
         return ExpandableAction(Expandable(before), Expandable(after), Expandable(pre), Expandable(d_pre), Expandable(post), Expandable(d_post))
-    return SoundChangeAction.from_str(before, after, pre, d_pre, post, d_post)
+
+    # For special types, we need to substitute `after` with proper segments.
+    is_valid, special_type, after = get_special_type(after, pre, post)
+    assert is_valid
+    return SoundChangeAction.from_str(before, after, pre, d_pre, post, d_post, special_type=special_type)
 
 
 def get_actions(series, orders) -> List[Action]:
