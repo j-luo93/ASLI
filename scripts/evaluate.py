@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, List, Set, Optional, Union
+from typing import ClassVar, List, Set, Dict, Optional, Union
 
 import pandas as pd
 
@@ -246,6 +246,44 @@ def order_matters(a: Action, b: Action, state: PlainState) -> bool:
     ordering1 = state.apply_action(a).apply_action(b) # apply A then B
     ordering2 = state.apply_action(b).apply_action(a) # apply B then A
     return ordering1.segments == ordering2.segments
+
+
+def build_action_graph(actions: List[Action], state: PlainState) -> Dict[Action, Set[Action]]:
+    '''Builds a directed graph in which nodes are actions and edge u->v exists if the order of actions u and v on the state matter, and u precedes v in actions'''
+    # FIXME the function signature isn't correct since it uses action_id in the dict, not actions themselves.
+    nodes = {act.action_id for act in gold}
+    edges = {} # maps an action_id to a set of action_ids that it has edges to
+    current_state = initial_state
+    for i, act1 in enumerate(gold):
+        for act2 in gold[i+1:]:
+            if order_matters(act1, act2, current_state):
+                if act1.action_id not in edges:
+                    edges[act1.action_id] = set()
+                edges[act1.action_id].add(act2.action_id)
+        current_state = current_state.apply_action(act1) # evolve the system
+    # for each node, we BFS from it to identify all nodes reachable from it. We memoize to make this computationally efficient — we only need to visit each node once.
+    reachable = {} # maps an action_id to /all/ action_id that action can reach in the graph
+    for act in nodes:
+      stack = []
+    # TODO implement
+    # when you reach a node already in reachable, just extend that node's reachable nodes.
+    return edges
+
+
+def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[Action]]:
+    # FIXME the function signature isn't correct since it uses action_id in the dicts, not actions themselves.
+    descendants = {} # maps an action_id to a set of all action_id that are reachable from it
+    queue = [edges[next(edges.keys())]]
+    visited = set()
+    # run BFS on the graph using the queue
+    while len(queue) > 0:
+        node = queue.pop()
+        children = edges[node]
+        queue.extend(children)
+    # TODO implement
+    return descendants
+
+
 if __name__ == "__main__":
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     # Get alphabet and action space.
@@ -292,12 +330,12 @@ if __name__ == "__main__":
     # first, what % of the gold ruleset is present in candidate?
     n_shared_actions = 0
     n_similar_actions = 0 # similar actions get half credit. We count separately so these are stored as int
+    # TODO: weight "partial credit" based on how similar the effects of the rules are.
     for action in gold:
         similar_actions = get_similar_actions(action)
         for candidate_act in candidate:
             if candidate_act == action:
                 n_shared_actions += 1
-            # TODO problem: what if an exact rule and a similar rule are both in candidate? then you could get more than 100% similarity.
             if candidate_act in similar_actions:
                 n_similar_actions += 1
     ruleset_containment = (n_shared_actions + (.5 * n_similar_actions)) / len(gold)
@@ -344,3 +382,5 @@ if __name__ == "__main__":
         unmatched_rule_indices.remove(lowest_dist_ind)
         current_state = next_state
 
+    # evaluate how similar each rule in the pairing is by evaluating each of the paired rules and comparing how similar the results are
+    # TODO
