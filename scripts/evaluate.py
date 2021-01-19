@@ -316,7 +316,7 @@ if __name__ == "__main__":
                 # we do the checks in this order because the below is more computationally intensive than the above
                 if order_matters(act1, act2, current_state):
                     swaps += 1
-        current_state.apply_action(act1)
+        current_state.apply_action(gold[i]) # update current state using gold action
     print(str(swaps) + ' pairs of rules in wrong order in candidate')
     # TODO two improvements for this metric:
     # 1. we currently use initial_state to test ordering, but should the state that we test the orderings on not evolve as we apply more rules? it may be that the context where the ordering matters only comes up after some rules have been applied; or that by the time the 2 rules in question are applied, any contexts such that the order matters are destroyed. So maybe each step we should change the state by the current action. 
