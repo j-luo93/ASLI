@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, List, Optional, Set, Union
+from typing import ClassVar, List, Set, Dict, Optional, Union
 
 import pandas as pd
 
@@ -225,17 +225,24 @@ class PlainState:
             new_segments.append(cls.action_space.apply_action(seg, action))
         return cls(new_segments)
 
-    @property
-    def dist(self) -> float:
+    def dist_from(self, tgt_segments: List[List[str]]):
+        '''Returns the distance between the current state and a specified state of segments'''
         cls = type(self)
-        assert cls.end_state is not None
         assert cls.abc is not None
+        assert tgt_segments is not None
         dist = 0.0
-        for s1, s2 in zip(self.segments, cls.end_state.segments):
+        for s1, s2 in zip(self.segments, tgt_segments):
             s1 = [cls.abc[u] for u in s1]  # pylint: disable=unsubscriptable-object
             s2 = [cls.abc[u] for u in s2]  # pylint: disable=unsubscriptable-object
             dist += cls.action_space.word_space.get_edit_dist(s1, s2)
         return dist
+
+    @property
+    def dist(self) -> float:
+        '''Returns the distance between the current state and the end state'''
+        cls = type(self)
+        assert cls.end_state is not None
+        return self.dist_from(cls.end_state.segments)
 
 
 def order_matters(a: Action, b: Action, state: PlainState) -> bool:
@@ -243,6 +250,42 @@ def order_matters(a: Action, b: Action, state: PlainState) -> bool:
     ordering1 = state.apply_action(a).apply_action(b)  # apply A then B
     ordering2 = state.apply_action(b).apply_action(a)  # apply B then A
     return ordering1.segments == ordering2.segments
+
+
+def build_action_graph(actions: List[Action], state: PlainState) -> Dict[Action, Set[Action]]:
+    '''Builds a directed graph in which nodes are actions and edge u->v exists if the order of actions u and v on the state matter, and u precedes v in actions'''
+    # FIXME the function signature isn't correct since it uses action_id in the dict, not actions themselves.
+    nodes = {act.action_id for act in gold}
+    edges = {} # maps an action_id to a set of action_ids that it has edges to
+    current_state = initial_state
+    for i, act1 in enumerate(gold):
+        for act2 in gold[i+1:]:
+            if order_matters(act1, act2, current_state):
+                if act1.action_id not in edges:
+                    edges[act1.action_id] = set()
+                edges[act1.action_id].add(act2.action_id)
+        current_state = current_state.apply_action(act1) # evolve the system
+    # for each node, we BFS from it to identify all nodes reachable from it. We memoize to make this computationally efficient — we only need to visit each node once.
+    reachable = {} # maps an action_id to /all/ action_id that action can reach in the graph
+    for act in nodes:
+      stack = []
+    # TODO implement
+    # when you reach a node already in reachable, just extend that node's reachable nodes.
+    return edges
+
+
+def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[Action]]:
+    # FIXME the function signature isn't correct since it uses action_id in the dicts, not actions themselves.
+    descendants = {} # maps an action_id to a set of all action_id that are reachable from it
+    queue = [edges[next(edges.keys())]]
+    visited = set()
+    # run BFS on the graph using the queue
+    while len(queue) > 0:
+        node = queue.pop()
+        children = edges[node]
+        queue.extend(children)
+    # TODO implement
+    return descendants
 
 
 if __name__ == "__main__":
@@ -298,13 +341,13 @@ if __name__ == "__main__":
     candidate: List[SoundChangeAction] = None  # let this be the model's ruleset, which we are comparing to gold
     # first, what % of the gold ruleset is present in candidate?
     n_shared_actions = 0
-    n_similar_actions = 0  # similar actions get half credit. We count separately so these are stored as int
+    n_similar_actions = 0 # similar actions get half credit. We count separately so these are stored as int
+    # TODO: weight "partial credit" based on how similar the effects of the rules are.
     for action in gold:
         similar_actions = manager.action_space.get_similar_actions(action)
         for candidate_act in candidate:
             if candidate_act == action:
                 n_shared_actions += 1
-            # TODO problem: what if an exact rule and a similar rule are both in candidate? then you could get more than 100% similarity.
             if candidate_act in similar_actions:
                 n_similar_actions += 1
     ruleset_containment = (n_shared_actions + (.5 * n_similar_actions)) / len(gold)
@@ -323,9 +366,33 @@ if __name__ == "__main__":
                 # we do the checks in this order because the below is more computationally intensive than the above
                 if order_matters(act1, act2, current_state):
                     swaps += 1
-        current_state.apply_action(act1)
+        current_state.apply_action(gold[i]) # update current state using gold action
     print(str(swaps) + ' pairs of rules in wrong order in candidate')
     # TODO two improvements for this metric:
     # 1. we currently use initial_state to test ordering, but should the state that we test the orderings on not evolve as we apply more rules? it may be that the context where the ordering matters only comes up after some rules have been applied; or that by the time the 2 rules in question are applied, any contexts such that the order matters are destroyed. So maybe each step we should change the state by the current action.
     # 2. there may be situations where A->B->C, that is that the ordering of A and B matter and the ordering of B and C matter, but the ordering of A and C do not matter. However, because of how the relationship is, we should care about the relative ordering of A and C; but this model won't detect that directly. One counterpoint: if A and C are in the wrong order, then at least one of them is in the wrong order relative to B, so it will be detected. But even still, perhaps the penalty should be higher than the penalty you normally accrue for swapping two rules, as the ordering of A and C are also wrong.
     # a complicated fix to the above would be to make a graph of actions and then use that to discover if a path A to C exists (and that therefore relative order matters) but it's unclear if this could be done for each of the n choose 2 ~ O(n^2) pairs of rules in a computationally efficient matter. One slightly good thing is that you can memoize to reduce the amount of searches to perhaps visiting each vertex exactly once.
+
+    # greedily match the rules one-to-one
+    unmatched_rule_indices = set(range(len(candidate)))
+    rule_pairings = {} # maps the index of a rule in gold to the index of its matched rule in candidate
+    current_state = initial_state
+    for i, act1 in enumerate(gold):
+        next_state = current_state.apply_action(act1)
+        next_segments = next_state.segments
+        # greedily identify the most similar action to act1, ie the act that results in the most similar next state
+        lowest_dist = None
+        lowest_dist_ind = None
+        for j in unmatched_rule_indices:
+            act2 = candidate[j]
+            dist = current_state.apply_action(act2).dist_from(next_segments)
+            if dist < lowest_dist or lowest_dist is None:
+                lowest_dist = dist
+                lowest_dist_ind = j
+
+        rule_pairings[i] = lowest_dist_ind
+        unmatched_rule_indices.remove(lowest_dist_ind)
+        current_state = next_state
+
+    # evaluate how similar each rule in the pairing is by evaluating each of the paired rules and comparing how similar the results are
+    # TODO
