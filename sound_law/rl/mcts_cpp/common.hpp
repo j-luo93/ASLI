@@ -70,10 +70,11 @@ using Pool = ctpl::thread_pool;
 template <class T>
 inline void show_size(const T &obj, std::string msg) { SPDLOG_INFO("{0} size: {1}", msg, obj.size()); }
 
-static const uint64_t last_10 = (1 << 10) - 1;
-static const abc_t NULL_ABC = static_cast<abc_t>(last_10);
-static const uai_t NULL_ACTION = std::numeric_limits<uai_t>::max();
-static const usi_t NULL_SITE = std::numeric_limits<usi_t>::max();
+constexpr uint64_t last_10 = (static_cast<uint64_t>(1) << 10) - 1;
+constexpr uint64_t first_4 = ((static_cast<uint64_t>(1) << 4) - 1) << 60;
+constexpr abc_t NULL_ABC = static_cast<abc_t>(last_10);
+constexpr uai_t NULL_ACTION = std::numeric_limits<uai_t>::max();
+constexpr usi_t NULL_SITE = std::numeric_limits<usi_t>::max();
 
 template <class... TupleArgs>
 auto get_tuple_at(size_t index, const std::tuple<TupleArgs...> &inputs_tuple)
@@ -207,8 +208,10 @@ void find_unique(vec<K> &outputs, const vec<vec<K>> &inputs, const UMap<K, V> &c
 
 enum class SpecialType : uai_t
 {
+    NONE = static_cast<uai_t>(0),
     CLL = (static_cast<uai_t>(1) << 60),
     CLR = (static_cast<uai_t>(2) << 60),
+    SS = (static_cast<uai_t>(3) << 60),
 };
 
 namespace action
@@ -221,7 +224,8 @@ namespace action
     inline abc_t get_d_post_id(uai_t action) { return static_cast<abc_t>((action >> 20) & last_10); }
     inline abc_t get_post_id(uai_t action) { return static_cast<abc_t>((action >> 30) & last_10); }
     inline abc_t get_d_pre_id(uai_t action) { return static_cast<abc_t>((action >> 40) & last_10); }
-    inline abc_t get_pre_id(uai_t action) { return static_cast<abc_t>(action >> 50); }
+    inline abc_t get_pre_id(uai_t action) { return static_cast<abc_t>((action >> 50) & last_10); }
+    inline SpecialType get_special_type(uai_t action) { return static_cast<SpecialType>(action & first_4); }
 
     // Obtain a UAI by combining a USI with after_id;
     inline usi_t get_site(uai_t action) { return action >> 10; }

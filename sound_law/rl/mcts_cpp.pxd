@@ -45,6 +45,7 @@ cdef extern from "mcts_cpp/common.hpp":
 cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
     cdef SpecialType CLL
     cdef SpecialType CLR
+    cdef SpecialType SS
 
 cdef extern from "mcts_cpp/common.hpp" namespace "action":
     uai_t combine(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t)

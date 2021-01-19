@@ -9,7 +9,8 @@ import pandas as pd
 
 from dev_misc import add_argument, g
 from pypheature.nphthong import Nphthong
-from pypheature.process import FeatureProcessor, NoMappingFound, NonUniqueMapping
+from pypheature.process import (FeatureProcessor, NoMappingFound,
+                                NonUniqueMapping)
 from pypheature.segment import Segment
 from sound_law.data.alphabet import Alphabet
 from sound_law.main import setup
@@ -84,7 +85,7 @@ error_codes = {'OOS', 'IRG', 'CIS', 'EPTh', 'MTTh', 'SS'}
 ref_no = {
     'got': ['B'],
     'non': ['A', 'E'],
-    'ang': ['A', 'D.1', 'D.2', 'G']
+    'ang': ['A', 'C', 'D.1', 'D.2', 'G']
 }
 
 
@@ -158,6 +159,7 @@ class ExpandableAction:
     d_pre: Expandable
     post: Expandable
     d_post: Expandable
+    use_syl: bool = False
 
     def __post_init__(self):
         if self.d_pre is not None and self.pre is None:
@@ -187,9 +189,13 @@ class ExpandableAction:
                     post = str(segments[i + 1]) if self.post.exists() else None
                     d_post = str(segments[i + 2]) if self.d_post.exists() else None
 
-                    is_valid, special_type, after = get_special_type(self.after.raw, pre, post)
-                    if not is_valid:
-                        continue
+                    if self.use_syl:
+                        special_type = 'SS'
+                    else:
+                        is_valid, special_type, after = get_special_type(self.after.raw, pre, post)
+                        # In some cases, you cannot get compensatory lengthening if the segment is already long.
+                        if not is_valid:
+                            continue
 
                     if self.after.expandable:
                         try:
@@ -205,6 +211,10 @@ Action = Union[SoundChangeAction, ExpandableAction]
 
 
 def get_action(raw_line: str) -> Action:
+    use_syl = raw_line.startswith('SS:')
+    if use_syl:
+        raw_line = raw_line[3:]
+
     result = pat.match(raw_line)
     d_pre = result.group('d_pre')
     pre = result.group('pre')
@@ -214,11 +224,14 @@ def get_action(raw_line: str) -> Action:
     after = result.group('after')
 
     if '[' in raw_line:
-        return ExpandableAction(Expandable(before), Expandable(after), Expandable(pre), Expandable(d_pre), Expandable(post), Expandable(d_post))
+        return ExpandableAction(Expandable(before), Expandable(after), Expandable(pre), Expandable(d_pre), Expandable(post), Expandable(d_post), use_syl=use_syl)
 
     # For special types, we need to substitute `after` with proper segments.
-    is_valid, special_type, after = get_special_type(after, pre, post)
-    assert is_valid
+    if use_syl:
+        special_type = 'SS'
+    else:
+        is_valid, special_type, after = get_special_type(after, pre, post)
+        assert is_valid
     return SoundChangeAction.from_str(before, after, pre, d_pre, post, d_post, special_type=special_type)
 
 

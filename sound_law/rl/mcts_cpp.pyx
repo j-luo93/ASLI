@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR
+from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, SS
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -109,6 +109,8 @@ cdef class PyAction:
                 action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, CLL)
             elif special_type == 'CLR':
                 action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, CLR)
+            elif special_type == 'SS':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, SS)
             else:
                 action_id = combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id)
         self.action_id = action_id

@@ -109,6 +109,7 @@ inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
     abc_t post_id = action::get_post_id(action_id);
     abc_t d_post_id = action::get_d_post_id(action_id);
     bool syncope = (after_id == site_space->emp_id);
+    SpecialType st = action::get_special_type(action_id);
     int n = id_seq.size();
     new_id_seq.push_back(site_space->sot_id);
     for (int i = 1; i < n - 1; i++)
@@ -134,7 +135,22 @@ inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
             if (syncope)
                 continue;
             else
-                new_id_seq.push_back(after_id);
+            {
+                switch (st)
+                {
+                case SpecialType::NONE:
+                    new_id_seq.push_back(after_id);
+                    break;
+                case SpecialType::CLL:
+                    new_id_seq.pop_back();
+                    new_id_seq.push_back(after_id);
+                    break;
+                case SpecialType::CLR:
+                    new_id_seq.push_back(after_id);
+                    i++;
+                    break;
+                }
+            }
         else
             new_id_seq.push_back(id_seq.at(i));
     }
