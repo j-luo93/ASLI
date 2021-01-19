@@ -105,6 +105,8 @@ cdef class PyActionSpace:
     cdef ActionSpace *ptr
     cdef public PyWordSpace word_space
 
+    action_cls = PyAction
+
     def __cinit__(self, PySiteSpace py_ss, PyWordSpace py_ws, float dist_threshold, int site_threshold, *args, **kwargs):
         self.ptr = new ActionSpace(py_ss.ptr, py_ws.ptr, dist_threshold, site_threshold)
         self.word_space = py_ws
@@ -128,6 +130,14 @@ cdef class PyActionSpace:
         cdef vector[abc_t] id_vec = np2vector(np_id_seq);
         cdef vector[abc_t] new_id_seq = self.ptr.apply_action(id_vec, action.action_id)
         return np.asarray(new_id_seq, dtype='ushort')
+
+    def get_similar_actions(self, PyAction action):
+        cdef uai_t action_id = action.action_id
+        ret = list()
+        for sim_action_id in self.ptr.get_similar_actions(action_id):
+            ret.append(self.get_action(sim_action_id))
+        return ret
+
 
 cdef class PyTreeNode:
     cdef TreeNode *ptr

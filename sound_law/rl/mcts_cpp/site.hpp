@@ -58,8 +58,12 @@ public:
     USet<int> linked_words; // the orders for the linked words -- use set since one word might have multiple identical sites
 };
 
+class ActionSpace;
+
 class SiteGraph
 {
+    friend class ActionSpace;
+
     GraphNode *generate_subgraph(SiteNode *);
     vec<GraphNode *> get_descendants(GraphNode *);
     void visit(vec<GraphNode *> &, GraphNode *);
@@ -69,5 +73,5 @@ public:
 
     ~SiteGraph();
 
-    void add_root(SiteNode *, int);
+    GraphNode *add_root(SiteNode *, int);
 };

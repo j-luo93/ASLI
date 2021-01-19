@@ -166,6 +166,7 @@ cdef extern from "mcts_cpp/action.hpp":
         void set_action_allowed(Pool *, vector[TNptr])
         void set_action_allowed(TreeNode *)
         IdSeq apply_action(IdSeq, uai_t)
+        vector[uai_t] get_similar_actions(uai_t)
 
 cdef extern from "mcts_cpp/env.hpp":
     cdef cppclass Env nogil:

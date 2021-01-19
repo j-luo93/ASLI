@@ -30,4 +30,5 @@ public:
     void set_action_allowed(TreeNode *);
     void apply_action(Word *&, Word *, uai_t);
     IdSeq apply_action(const IdSeq &, uai_t);
+    vec<uai_t> get_similar_actions(uai_t);
 };

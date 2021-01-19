@@ -78,9 +78,13 @@ post_cond_pat = ''.join([
 
 pat = re.compile(fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
 
-error_codes = {'BDR', 'SCP', 'NC', 'SS', 'EPTh', 'MS', 'MTTh', 'IRG', 'OPT', 'LD', 'CIS', 'OOS', 'ALPh'}
+error_codes = {'OOS', 'IRG', 'CIS', 'EPTh'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
 # Gothic: B, ON: A-E, OHG: A-C-F, OE: NW-D.1-D.2-G
+ref_no = {
+    'got': ['B'],
+    'non': ['A', 'E'],
+}
 
 
 class Boundary:
@@ -243,8 +247,8 @@ class PlainState:
 
 def order_matters(a: Action, b: Action, state: PlainState) -> bool:
     '''Checks whether the order in which two actions are applied to a state changes the outcome.'''
-    ordering1 = state.apply_action(a).apply_action(b) # apply A then B
-    ordering2 = state.apply_action(b).apply_action(a) # apply B then A
+    ordering1 = state.apply_action(a).apply_action(b)  # apply A then B
+    ordering2 = state.apply_action(b).apply_action(a)  # apply B then A
     return ordering1.segments == ordering2.segments
 
 
@@ -299,40 +303,48 @@ if __name__ == "__main__":
         with open(g.in_path, 'r', encoding='utf8') as fin:
             lines = [line.strip() for line in fin.readlines()]
             gold = get_actions(lines, range(len(lines)))
-
     else:
         df = pd.read_csv('data/test_annotations.csv')
         df = df.dropna(subset=['ref no.'])
-        got_df_rules = df[df['ref no.'].str.startswith('B')]['v0.4']
-        got_rows = df[df['ref no.'].str.startswith('B')]
-        gold = get_actions(got_rows['v0.4'], got_rows['order'])
+        # got_df_rules = df[df['ref no.'].str.startswith('B')]['v0.4']
+        # got_rows = df[df['ref no.'].str.startswith('B')]
+        # gold = get_actions(got_rows['v0.4'], got_rows['order'])
+        gold = list()
+        for ref in ref_no[g.tgt_lang]:
+            rows = df[df['ref no.'].str.startswith(ref)]
+            gold.extend(get_actions(rows['w/o SS'], rows['order']))
 
     # Simulate the actions and get the distance.
     state = PlainState.from_vocab_state(manager.env.start)
     PlainState.action_space = manager.action_space
     PlainState.end_state = PlainState.from_vocab_state(manager.env.end)
     PlainState.abc = manager.tgt_abc
-    initial_state = state # keep a pointer to this, we'll reuse it later for checking rule ordering
+    initial_state = state  # keep a pointer to this, we'll reuse it later for checking rule ordering
+    expanded_gold = list()
     print(state.dist)
     for action in gold:
         if isinstance(action, SoundChangeAction):
             state = state.apply_action(action)
             print(action)
             print(state.dist)
+            expanded_gold.append(action)
         else:
             for a in action.specialize(state):
                 state = state.apply_action(a)
                 print(a)
                 print(state.dist)
+                expanded_gold.append(a)
+    # NOTE(j_luo) We can only score based on expanded rules (i.e., excluding ExpandableAction).
+    gold = expanded_gold
 
     # compute the similarity between the candidate ruleset and the gold standard ruleset
-    candidate: List[Action] = None # let this be the model's ruleset, which we are comparing to gold 
+    candidate: List[SoundChangeAction] = None  # let this be the model's ruleset, which we are comparing to gold
     # first, what % of the gold ruleset is present in candidate?
     n_shared_actions = 0
     n_similar_actions = 0 # similar actions get half credit. We count separately so these are stored as int
     # TODO: weight "partial credit" based on how similar the effects of the rules are.
     for action in gold:
-        similar_actions = get_similar_actions(action)
+        similar_actions = manager.action_space.get_similar_actions(action)
         for candidate_act in candidate:
             if candidate_act == action:
                 n_shared_actions += 1
@@ -345,11 +357,11 @@ if __name__ == "__main__":
     # assume that candidate is a ruleset that contains the same rules as the gold ruleset but has them in a different order.
     # first, identify which pairs of actions are in the wrong order in candidate
     act_to_index = {act: i for i, act in enumerate(gold)}
-    swaps = 0 # number of pairs that are out of order in an impactful way
+    swaps = 0  # number of pairs that are out of order in an impactful way
     current_state = initial_state
     # assuming actions are applied in the order 0 to end
     for i, act1 in enumerate(candidate):
-        for act2 in candidate[i+1:]:
+        for act2 in candidate[i + 1:]:
             if act_to_index[act1] > act_to_index[act2]:
                 # we do the checks in this order because the below is more computationally intensive than the above
                 if order_matters(act1, act2, current_state):
@@ -357,7 +369,7 @@ if __name__ == "__main__":
         current_state.apply_action(gold[i]) # update current state using gold action
     print(str(swaps) + ' pairs of rules in wrong order in candidate')
     # TODO two improvements for this metric:
-    # 1. we currently use initial_state to test ordering, but should the state that we test the orderings on not evolve as we apply more rules? it may be that the context where the ordering matters only comes up after some rules have been applied; or that by the time the 2 rules in question are applied, any contexts such that the order matters are destroyed. So maybe each step we should change the state by the current action. 
+    # 1. we currently use initial_state to test ordering, but should the state that we test the orderings on not evolve as we apply more rules? it may be that the context where the ordering matters only comes up after some rules have been applied; or that by the time the 2 rules in question are applied, any contexts such that the order matters are destroyed. So maybe each step we should change the state by the current action.
     # 2. there may be situations where A->B->C, that is that the ordering of A and B matter and the ordering of B and C matter, but the ordering of A and C do not matter. However, because of how the relationship is, we should care about the relative ordering of A and C; but this model won't detect that directly. One counterpoint: if A and C are in the wrong order, then at least one of them is in the wrong order relative to B, so it will be detected. But even still, perhaps the penalty should be higher than the penalty you normally accrue for swapping two rules, as the ordering of A and C are also wrong.
     # a complicated fix to the above would be to make a graph of actions and then use that to discover if a path A to C exists (and that therefore relative order matters) but it's unclear if this could be done for each of the n choose 2 ~ O(n^2) pairs of rules in a computationally efficient matter. One slightly good thing is that you can memoize to reduce the amount of searches to perhaps visiting each vertex exactly once.
 
