@@ -2,10 +2,12 @@
 
 SiteNode::SiteNode(usi_t site) : site(site) {}
 
-SiteSpace::SiteSpace(abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id) : sot_id(sot_id),
-                                                                               eot_id(eot_id),
-                                                                               any_id(any_id),
-                                                                               emp_id(emp_id) {}
+SiteSpace::SiteSpace(abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id, abc_t syl_eot_id) : sot_id(sot_id),
+                                                                                                 eot_id(eot_id),
+                                                                                                 any_id(any_id),
+                                                                                                 emp_id(emp_id),
+                                                                                                 syl_eot_id(syl_eot_id) {}
+
 size_t SiteSpace::size() const { return nodes.size(); }
 
 void SiteSpace::get_node(SiteNode *&output, usi_t site)
@@ -82,7 +84,7 @@ void SiteSpace::get_nodes(Pool *tp, vec<vec<SiteNode *>> &outputs, const vec<vec
 
 GraphNode::GraphNode(SiteNode *base) : base(base) {}
 
-GraphNode * SiteGraph::add_root(SiteNode *root, int order)
+GraphNode *SiteGraph::add_root(SiteNode *root, int order)
 {
     GraphNode *gnode = generate_subgraph(root);
     vec<GraphNode *> gnodes = get_descendants(gnode);

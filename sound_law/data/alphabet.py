@@ -1,6 +1,6 @@
 import logging
 from collections import Counter, defaultdict
-from typing import List, Optional, Tuple, Union, overload
+from typing import Dict, List, Optional, Tuple, Union, overload
 
 import numpy as np
 import pandas as pd
@@ -14,11 +14,13 @@ EOT = '<EOT>'
 PAD = '<pad>'
 ANY = '<any>'
 EMP = '<emp>'
+SYL_EOT = '<syl_EOT>'
 SOT_ID = 0
 EOT_ID = 1
 PAD_ID = 2
 ANY_ID = 3
 EMP_ID = 4
+SYL_EOT_ID = 5
 
 _ft = FeatureTable()
 
@@ -28,7 +30,8 @@ class Alphabet:
 
     def __init__(self, lang: str, contents: List[List[str]], sources: Union[str, List[str]],
                  dist_mat: Optional[NDA] = None,
-                 edges: Optional[List[Tuple[str, str]]] = None):
+                 edges: Optional[List[Tuple[str, str]]] = None,
+                 cl_map: Optional[Dict[str, str]] = None):
         if sources is not None:
             if isinstance(sources, str):
                 sources = [sources] * len(contents)
@@ -72,7 +75,7 @@ class Alphabet:
         self._unit2id = dict(zip(self.special_units, self.special_ids))
         self._unit2id.update({c: i for i, c in enumerate(units, len(self.special_units))})
         self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
-        self.dist_mat = None
+        self.dist_mat = self.edges = self.cl_map = None
         if dist_mat is not None:
             # Pad the dist_mat for special units.
             self.dist_mat = np.full([len(self), len(self)], 99999, dtype='float32')
@@ -82,6 +85,7 @@ class Alphabet:
             orig_ids = np.asarray([self[u] for u in contents[0]])
             self.dist_mat[orig_ids.reshape(-1, 1), orig_ids] = dist_mat
             self.edges = edges
+            self.cl_map = cl_map
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
         self.lang = lang

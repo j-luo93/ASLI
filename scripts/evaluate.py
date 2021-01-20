@@ -3,13 +3,14 @@ from __future__ import annotations
 import pickle
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, List, Set, Dict, Optional, Union
+from typing import ClassVar, Dict, List, Optional, Set, Tuple, Union
 
 import pandas as pd
 
 from dev_misc import add_argument, g
 from pypheature.nphthong import Nphthong
-from pypheature.process import FeatureProcessor
+from pypheature.process import (FeatureProcessor, NoMappingFound,
+                                NonUniqueMapping)
 from pypheature.segment import Segment
 from sound_law.data.alphabet import Alphabet
 from sound_law.main import setup
@@ -28,7 +29,7 @@ def named_ph(name: str) -> str:
         '('
         r'[^+\(\)\[\] ]+',           # acceptable characters (everything except '+', ' ', '(' and ')')
         '|',
-        r'\[[\w ,\+\-]+\]',
+        r'\[[\w ,\+\-!]+\]',
         ')',
         ')'                   # capture group end
     ])
@@ -78,12 +79,13 @@ post_cond_pat = ''.join([
 
 pat = re.compile(fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
 
-error_codes = {'OOS', 'IRG', 'CIS', 'EPTh'}
+error_codes = {'OOS', 'IRG', 'CIS', 'EPTh', 'MTTh'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
-# Gothic: B, ON: A-E, OHG: A-C-F, OE: NW-D.1-D.2-G
+# Gothic: B, ON: A-E, OHG: A-C-F, OE: A-D.1-D.2-G
 ref_no = {
     'got': ['B'],
     'non': ['A', 'E'],
+    'ang': ['A', 'C', 'D.1', 'D.2', 'G']
 }
 
 
@@ -123,6 +125,31 @@ class Expandable:
         return self.raw == str(segment)
 
 
+def get_special_type(after: str, pre: Union[None, str], post: Union[None, str]) -> Tuple[bool, str, str]:
+    """
+    Returns:
+        is_valid: whether it is valid to have a special rule if it is specified as such. `True` if it's a normal rule.
+        special_type: the special type (str).
+        after: the concrete `after` segment (str).
+    """
+
+    special_type = None
+    is_valid = True
+    if after in ['CLL', 'CLR']:
+        special_type = after
+        if after == 'CLL':
+            tgt = pre
+        else:
+            tgt = post
+
+        seg = _fp.process(tgt)
+        if isinstance(seg, Segment) and seg.is_short():
+            after = tgt + "ː"
+        else:
+            is_valid = False
+    return is_valid, special_type, after
+
+
 @dataclass
 class ExpandableAction:
     """This is under-specified and would be specialized into `SoundChangeAction` later and be indexed."""
@@ -132,6 +159,7 @@ class ExpandableAction:
     d_pre: Expandable
     post: Expandable
     d_post: Expandable
+    use_vowel: bool = False
 
     def __post_init__(self):
         if self.d_pre is not None and self.pre is None:
@@ -156,15 +184,26 @@ class ExpandableAction:
                     applied = i < n - 2 and self.d_post.match(segments[i + 2])
 
                 if applied:
-                    if self.after.expandable:
-                        after = str(_fp.change_features(seg, self.after.fv))
-                    else:
-                        after = self.after.raw
                     pre = str(segments[i - 1]) if self.pre.exists() else None
                     d_pre = str(segments[i - 2]) if self.d_pre.exists() else None
                     post = str(segments[i + 1]) if self.post.exists() else None
                     d_post = str(segments[i + 2]) if self.d_post.exists() else None
-                    ret.add(SoundChangeAction.from_str(str(seg), after, pre, d_pre, post, d_post))
+
+                    if self.use_vowel:
+                        special_type = 'VS'
+                    else:
+                        is_valid, special_type, after = get_special_type(self.after.raw, pre, post)
+                        # In some cases, you cannot get compensatory lengthening if the segment is already long.
+                        if not is_valid:
+                            continue
+
+                    if self.after.expandable:
+                        try:
+                            after = str(_fp.change_features(seg, self.after.fv))
+                        except (NonUniqueMapping, NoMappingFound):
+                            continue
+                    ret.add(SoundChangeAction.from_str(str(seg), after, pre,
+                                                       d_pre, post, d_post, special_type=special_type))
         return list(ret)
 
 
@@ -172,6 +211,10 @@ Action = Union[SoundChangeAction, ExpandableAction]
 
 
 def get_action(raw_line: str) -> Action:
+    use_vowel = raw_line.startswith('VS:')
+    if use_vowel:
+        raw_line = raw_line[3:].strip()
+
     result = pat.match(raw_line)
     d_pre = result.group('d_pre')
     pre = result.group('pre')
@@ -181,13 +224,20 @@ def get_action(raw_line: str) -> Action:
     after = result.group('after')
 
     if '[' in raw_line:
-        return ExpandableAction(Expandable(before), Expandable(after), Expandable(pre), Expandable(d_pre), Expandable(post), Expandable(d_post))
-    return SoundChangeAction.from_str(before, after, pre, d_pre, post, d_post)
+        return ExpandableAction(Expandable(before), Expandable(after), Expandable(pre), Expandable(d_pre), Expandable(post), Expandable(d_post), use_vowel=use_vowel)
+
+    # For special types, we need to substitute `after` with proper segments.
+    if use_vowel:
+        special_type = 'VS'
+    else:
+        is_valid, special_type, after = get_special_type(after, pre, post)
+        assert is_valid
+    return SoundChangeAction.from_str(before, after, pre, d_pre, post, d_post, special_type=special_type)
 
 
 def get_actions(series, orders) -> List[Action]:
     rules = [None] * len(series)
-    for i, (cell, order) in enumerate(zip(series, orders)):
+    for i, (cell, order) in enumerate(zip(series, orders), 1):
         if not pd.isnull(cell):
             cell_results = list()
             for line in cell.strip().split('\n'):
@@ -256,19 +306,19 @@ def build_action_graph(actions: List[Action], state: PlainState) -> Dict[Action,
     '''Builds a directed graph in which nodes are actions and edge u->v exists if the order of actions u and v on the state matter, and u precedes v in actions'''
     # FIXME the function signature isn't correct since it uses action_id in the dict, not actions themselves.
     nodes = {act.action_id for act in gold}
-    edges = {} # maps an action_id to a set of action_ids that it has edges to
+    edges = {}  # maps an action_id to a set of action_ids that it has edges to
     current_state = initial_state
     for i, act1 in enumerate(gold):
-        for act2 in gold[i+1:]:
+        for act2 in gold[i + 1:]:
             if order_matters(act1, act2, current_state):
                 if act1.action_id not in edges:
                     edges[act1.action_id] = set()
                 edges[act1.action_id].add(act2.action_id)
-        current_state = current_state.apply_action(act1) # evolve the system
+        current_state = current_state.apply_action(act1)  # evolve the system
     # for each node, we BFS from it to identify all nodes reachable from it. We memoize to make this computationally efficient — we only need to visit each node once.
-    reachable = {} # maps an action_id to /all/ action_id that action can reach in the graph
+    reachable = {}  # maps an action_id to /all/ action_id that action can reach in the graph
     for act in nodes:
-      stack = []
+        stack = []
     # TODO implement
     # when you reach a node already in reachable, just extend that node's reachable nodes.
     return edges
@@ -276,7 +326,7 @@ def build_action_graph(actions: List[Action], state: PlainState) -> Dict[Action,
 
 def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[Action]]:
     # FIXME the function signature isn't correct since it uses action_id in the dicts, not actions themselves.
-    descendants = {} # maps an action_id to a set of all action_id that are reachable from it
+    descendants = {}  # maps an action_id to a set of all action_id that are reachable from it
     queue = [edges[next(edges.keys())]]
     visited = set()
     # run BFS on the graph using the queue
@@ -288,7 +338,7 @@ def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[A
     return descendants
 
 
-if __name__ == "__main__":
+def simulate() -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState]]:
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     add_argument("calc_metric", dtype=bool, default=False, msg="Whether to calculate the metrics.")
     # Get alphabet and action space.
@@ -320,8 +370,9 @@ if __name__ == "__main__":
     PlainState.action_space = manager.action_space
     PlainState.end_state = PlainState.from_vocab_state(manager.env.end)
     PlainState.abc = manager.tgt_abc
-    initial_state = state  # keep a pointer to this, we'll reuse it later for checking rule ordering
+    states = list()
     expanded_gold = list()
+    states.append(state)
     print(state.dist)
     for action in gold:
         if isinstance(action, SoundChangeAction):
@@ -329,21 +380,30 @@ if __name__ == "__main__":
             print(action)
             print(state.dist)
             expanded_gold.append(action)
+            states.append(state)
         else:
             for a in action.specialize(state):
                 state = state.apply_action(a)
                 print(a)
                 print(state.dist)
                 expanded_gold.append(a)
+                states.append(state)
     # NOTE(j_luo) We can only score based on expanded rules (i.e., excluding ExpandableAction).
     gold = expanded_gold
+    return manager, gold, states
+
+
+if __name__ == "__main__":
+
+    manager, gold, states = simulate()
+    initial_state = states[0]
 
     if g.calc_metric:
         # compute the similarity between the candidate ruleset and the gold standard ruleset
         candidate: List[SoundChangeAction] = None  # let this be the model's ruleset, which we are comparing to gold
         # first, what % of the gold ruleset is present in candidate?
         n_shared_actions = 0
-        n_similar_actions = 0 # similar actions get half credit. We count separately so these are stored as int
+        n_similar_actions = 0  # similar actions get half credit. We count separately so these are stored as int
         # TODO(djwyen) weight "partial credit" based on how similar the effects of the rules are, which can be calculated off distance
         for action in gold:
             similar_actions = manager.action_space.get_similar_actions(action)
@@ -368,7 +428,7 @@ if __name__ == "__main__":
                     # we do the checks in this order because the below is more computationally intensive than the above
                     if order_matters(act1, act2, current_state):
                         swaps += 1
-            current_state.apply_action(gold[i]) # update current state using gold action
+            current_state.apply_action(gold[i])  # update current state using gold action
         print(str(swaps) + ' pairs of rules in wrong order in candidate')
         # TODO two improvements for this metric:
         # 1. we currently use initial_state to test ordering, but should the state that we test the orderings on not evolve as we apply more rules? it may be that the context where the ordering matters only comes up after some rules have been applied; or that by the time the 2 rules in question are applied, any contexts such that the order matters are destroyed. So maybe each step we should change the state by the current action.
@@ -377,7 +437,7 @@ if __name__ == "__main__":
 
         # greedily match the rules one-to-one
         unmatched_rule_indices = set(range(len(candidate)))
-        rule_pairings = {} # maps the index of a rule in gold to the index of its matched rule in candidate
+        rule_pairings = {}  # maps the index of a rule in gold to the index of its matched rule in candidate
         current_state = initial_state
         for i, act1 in enumerate(gold):
             next_state = current_state.apply_action(act1)

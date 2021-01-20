@@ -12,7 +12,8 @@ from torch.optim import SGD, Adam
 from dev_misc import add_argument, add_condition, g, get_tensor
 from dev_misc.devlib.helper import has_gpus
 from dev_misc.trainlib.tb_writer import MetricWriter
-from sound_law.data.alphabet import ANY_ID, EMP_ID, EOT_ID, SOT_ID, Alphabet
+from sound_law.data.alphabet import (ANY_ID, EMP_ID, EOT_ID, SOT_ID,
+                                     SYL_EOT_ID, Alphabet)
 from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.setting import Setting, Split
@@ -151,7 +152,7 @@ class OnePairManager:
             tgt_seqs = dl.entire_batch.tgt_seqs
             t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype('uint16')
             t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
-            py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID)
+            py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID, SYL_EOT_ID)
             py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 2.0)
             self.action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold, g.site_threshold, self.tgt_abc)
 

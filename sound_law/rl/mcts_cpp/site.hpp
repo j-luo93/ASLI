@@ -32,8 +32,9 @@ public:
     const abc_t eot_id;
     const abc_t any_id;
     const abc_t emp_id;
+    const abc_t syl_eot_id;
 
-    SiteSpace(abc_t, abc_t, abc_t, abc_t);
+    SiteSpace(abc_t, abc_t, abc_t, abc_t, abc_t);
 
     size_t size() const;
     void get_node(SiteNode *&, usi_t);

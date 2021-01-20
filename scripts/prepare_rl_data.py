@@ -176,7 +176,7 @@ if __name__ == "__main__":
         form_col = 'desc_form'
         # NOTE(j_luo) Use the simple `a` phoneme to conform to other transcribers.
         desc[ipa_col] = desc[form_col].apply(lambda s: oe(
-            s.strip('-'))).apply(i2t).apply(lambda s: [ss.replace('ɑ', 'a') for ss in s])
+            s.strip('-')).replace('g', 'ɡ')).apply(i2t).apply(lambda s: [ss.replace('ɑ', 'a') for ss in s])
     elif args.lang == 'non':
         ipa_col = 'non_ipa'
         form_col = 'desc_form'

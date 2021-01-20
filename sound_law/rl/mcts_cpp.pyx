@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector
+from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -7,6 +7,7 @@ from cython.operator cimport dereference as deref, preincrement as inc
 
 cimport cython
 
+from typing import Optional
 from sound_law.data.alphabet import PAD_ID
 
 cdef extern from "limits.h":
@@ -24,8 +25,8 @@ PyStop = STOP
 cdef class PySiteSpace:
     cdef SiteSpace *ptr
 
-    def __cinit__(self, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id):
-        self.ptr = new SiteSpace(sot_id, eot_id, any_id, emp_id)
+    def __cinit__(self, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id, abc_t syl_eot_id):
+        self.ptr = new SiteSpace(sot_id, eot_id, any_id, emp_id, syl_eot_id)
 
     def __dealloc__(self):
         del self.ptr
@@ -80,7 +81,11 @@ cdef class PyAction:
                   abc_t d_pre_id,
                   abc_t post_id,
                   abc_t d_post_id,
-                  action_id = None):
+                  action_id = None,
+                  special_type: Optional[str] = None):
+        if action_id is not None:
+            assert special_type is None, "Do not provide `special_type` if `action_id` is known."
+
         self.before_id = before_id
         self.after_id = after_id
         self.pre_id = pre_id
@@ -97,8 +102,17 @@ cdef class PyAction:
             self.post_cond.push_back(post_id)
         if d_post_id != NULL_ABC:
             self.post_cond.push_back(d_post_id)
+
+        self.special_type = special_type
         if action_id is None:
-            action_id = combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id)
+            if special_type == 'CLL':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, CLL)
+            elif special_type == 'CLR':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, CLR)
+            elif special_type == 'VS':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, VS)
+            else:
+                action_id = combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id)
         self.action_id = action_id
 
 cdef class PyActionSpace:
@@ -116,6 +130,13 @@ cdef class PyActionSpace:
 
     def register_edge(self, abc_t before_id, abc_t after_id):
         self.ptr.register_edge(before_id, after_id)
+
+    def register_cl_map(self, abc_t before_id, abc_t after_id):
+        self.ptr.register_cl_map(before_id, after_id)
+
+    def set_vowel_mask(self, bool[::1] vowel_mask):
+        cdef vector[bool] vowel_mask_vec = np2vector(vowel_mask)
+        self.ptr.set_vowel_mask(vowel_mask_vec)
 
     def get_action(self, action_id):
         return self.action_cls(get_before_id(action_id), get_after_id(action_id),

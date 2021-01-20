@@ -14,6 +14,16 @@ void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
     edges[before_id].push_back(after_id);
 }
 
+void ActionSpace::register_cl_map(abc_t before_id, abc_t after_id)
+{
+    cl_map[before_id] = after_id;
+}
+
+void ActionSpace::set_vowel_mask(const vec<bool> &vowel_mask)
+{
+    this->vowel_mask = vowel_mask;
+}
+
 void ActionSpace::set_action_allowed(Pool *tp, const vec<TreeNode *> &tnodes)
 {
     // Find unique tree nodes first.
@@ -90,7 +100,7 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
 inline bool ActionSpace::match(abc_t idx, abc_t target)
 {
     if (target == site_space->any_id)
-        return ((idx != site_space->sot_id) && (idx != site_space->eot_id));
+        return ((idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
     return (idx == target);
 }
 
@@ -104,34 +114,111 @@ inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
     abc_t post_id = action::get_post_id(action_id);
     abc_t d_post_id = action::get_d_post_id(action_id);
     bool syncope = (after_id == site_space->emp_id);
+    SpecialType st = action::get_special_type(action_id);
     int n = id_seq.size();
+    auto vowel_seq = IdSeq();
+    auto orig_idx = vec<int>();
+    bool use_vowel_seq = (st == SpecialType::VS);
     new_id_seq.push_back(site_space->sot_id);
-    for (int i = 1; i < n - 1; i++)
+    if (use_vowel_seq)
     {
-        bool applied = (id_seq.at(i) == before_id);
-        if (applied && (pre_id != NULL_ABC))
+        vowel_seq.reserve(id_seq.size());
+        orig_idx.reserve(id_seq.size());
+        vowel_seq.push_back(site_space->sot_id);
+        for (int i = 1; i < n - 1; i++)
+            if (vowel_mask[id_seq[i]])
+            {
+                vowel_seq.push_back(id_seq[i]);
+                orig_idx.push_back(i);
+            }
+        vowel_seq.push_back((vowel_mask[id_seq[n - 2]]) ? site_space->syl_eot_id : site_space->eot_id);
+        int m = vowel_seq.size();
+        int j = 1;
+        for (int i = 1; i < m - 1; i++)
         {
-            if ((i < 1) || (!match(id_seq.at(i - 1), pre_id)))
-                applied = false;
-            if (applied && (d_pre_id != NULL_ABC))
-                if ((i < 2) || (!match(id_seq.at(i - 2), d_pre_id)))
+            bool applied = (vowel_seq[i] == before_id);
+            if (applied && (pre_id != NULL_ABC))
+            {
+                if ((i < 1) || (!match(vowel_seq[i - 1], pre_id)))
                     applied = false;
-        }
-        if (applied && (post_id != NULL_ABC))
-        {
-            if ((i > n - 2) || (!match(id_seq.at(i + 1), post_id)))
-                applied = false;
-            if (applied && (d_post_id != NULL_ABC))
-                if ((i > n - 3) || (!match(id_seq.at(i + 2), d_post_id)))
+                if (applied && (d_pre_id != NULL_ABC))
+                    if ((i < 2) || (!match(vowel_seq[i - 2], d_pre_id)))
+                        applied = false;
+            }
+            if (applied && (post_id != NULL_ABC))
+            {
+                if ((i > n - 2) || (!match(vowel_seq[i + 1], post_id)))
                     applied = false;
-        }
-        if (applied)
-            if (syncope)
-                continue;
+                if (applied && (d_post_id != NULL_ABC))
+                    if ((i > n - 3) || (!match(vowel_seq[i + 2], d_post_id)))
+                        applied = false;
+            }
+
+            int upper = orig_idx[i - 1];
+            while (j < upper)
+            {
+                new_id_seq.push_back(id_seq[j]);
+                j++;
+            }
+            if (applied)
+                if (syncope)
+                    continue;
+                else
+                    new_id_seq.push_back(after_id);
             else
-                new_id_seq.push_back(after_id);
-        else
-            new_id_seq.push_back(id_seq.at(i));
+                new_id_seq.push_back(vowel_seq[i]);
+            j++;
+        }
+        while (j < n - 1)
+        {
+            new_id_seq.push_back(id_seq[j]);
+            j++;
+        }
+    }
+    else
+    {
+        for (int i = 1; i < n - 1; i++)
+        {
+            bool applied = (id_seq[i] == before_id);
+            if (applied && (pre_id != NULL_ABC))
+            {
+                if ((i < 1) || (!match(id_seq[i - 1], pre_id)))
+                    applied = false;
+                if (applied && (d_pre_id != NULL_ABC))
+                    if ((i < 2) || (!match(id_seq[i - 2], d_pre_id)))
+                        applied = false;
+            }
+            if (applied && (post_id != NULL_ABC))
+            {
+                if ((i > n - 2) || (!match(id_seq[i + 1], post_id)))
+                    applied = false;
+                if (applied && (d_post_id != NULL_ABC))
+                    if ((i > n - 3) || (!match(id_seq[i + 2], d_post_id)))
+                        applied = false;
+            }
+            if (applied)
+                if (syncope)
+                    continue;
+                else
+                {
+                    switch (st)
+                    {
+                    case SpecialType::NONE:
+                        new_id_seq.push_back(after_id);
+                        break;
+                    case SpecialType::CLL:
+                        new_id_seq.pop_back();
+                        new_id_seq.push_back(after_id);
+                        break;
+                    case SpecialType::CLR:
+                        new_id_seq.push_back(after_id);
+                        i++;
+                        break;
+                    }
+                }
+            else
+                new_id_seq.push_back(id_seq[i]);
+        }
     }
     new_id_seq.push_back(site_space->eot_id);
     return new_id_seq;

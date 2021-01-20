@@ -1,11 +1,10 @@
-from typing import Optional, List
 import logging
 import random
 import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, NewType, Set, Tuple
+from typing import Callable, Dict, List, NewType, Optional, Set, Tuple
 
 import pandas as pd
 
@@ -150,6 +149,7 @@ class CognateRegistry:
             std_func = handle_sequence_inputs(lambda s: proto_ph_map[s])
             dist_mat = segments_dump['dist_mat']
             edges = segments_dump['edges']
+            cl_map = segments_dump['cl_map']
         else:
             # Get all relevant data frames.
             dfs = list()
@@ -163,9 +163,9 @@ class CognateRegistry:
             contents = df['pre_unit_seq']
             sources = df['source'].tolist()
             std_func = handle_sequence_inputs(lambda s: abc.standardize(s))
-            dist_mat = edges = None
+            dist_mat = edges = cl_map = None
         abc = Alphabet(','.join(langs), contents, sources=sources,
-                       dist_mat=dist_mat, edges=edges)
+                       dist_mat=dist_mat, edges=edges, cl_map=cl_map)
         for lang in langs:
             self._lang2abc[lang] = abc
 
