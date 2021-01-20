@@ -14,11 +14,13 @@ EOT = '<EOT>'
 PAD = '<pad>'
 ANY = '<any>'
 EMP = '<emp>'
+SYL_EOT = '<syl_EOT>'
 SOT_ID = 0
 EOT_ID = 1
 PAD_ID = 2
 ANY_ID = 3
 EMP_ID = 4
+SYL_EOT_ID = 5
 
 _ft = FeatureTable()
 

@@ -211,7 +211,7 @@ enum class SpecialType : uai_t
     NONE = static_cast<uai_t>(0),
     CLL = (static_cast<uai_t>(1) << 60),
     CLR = (static_cast<uai_t>(2) << 60),
-    SS = (static_cast<uai_t>(3) << 60),
+    VS = (static_cast<uai_t>(3) << 60),
 };
 
 namespace action

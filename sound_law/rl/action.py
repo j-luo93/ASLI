@@ -17,8 +17,10 @@ import torch
 import sound_law.rl.trajectory as tr
 from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import Singleton, pbar
+from pypheature.nphthong import Nphthong
+from pypheature.process import FeatureProcessor
 from sound_law.data.alphabet import (ANY_ID, EMP, EMP_ID, EOT_ID, SOT_ID,
-                                     Alphabet)
+                                     SYL_EOT_ID, Alphabet)
 
 # pylint: disable=no-name-in-module
 from .mcts_cpp import (PyAction, PyActionSpace, PyNull_abc, PySiteSpace,
@@ -58,6 +60,8 @@ class SoundChangeAction(PyAction):
                 return ANY_ID
             if unit == "#":
                 return SOT_ID if before_or_after == 'b' else EOT_ID
+            if unit == '##':
+                return SYL_EOT_ID
             if unit is None:
                 return PyNull_abc
             return cls.abc[unit]
@@ -99,7 +103,8 @@ class SoundChangeAction(PyAction):
         before = str(self.before_id) if self.abc is None else get_str(self.before_id)
         after = str(self.after_id) if self.abc is None else get_str(self.after_id)
 
-        return f'{pre}{before}{post} > {after}'
+        special = '' if self.special_type is None else (self.special_type + ': ')
+        return f'{special}{pre}{before}{post} > {after}'
 
 
 class SoundChangeActionSpace(PyActionSpace):
@@ -137,6 +142,15 @@ class SoundChangeActionSpace(PyActionSpace):
             for u1, u2 in product(units, repeat=2):
                 if u1 != u2:
                     register_uncondional_action(u1, u2)
+
+        # Set vowel mask.
+        processor = FeatureProcessor()
+        vowel_mask = np.zeros(len(abc), dtype='bool')
+        for u in units:
+            seg = processor.process(u)
+            if isinstance(seg, Nphthong) or seg.is_vowel():
+                vowel_mask[abc[u]] = True
+        self.set_vowel_mask(vowel_mask)
 
     def apply_action(self, unit_seq: Sequence[str], action: SoundChangeAction) -> List[str]:
         id_seq = [self.abc[u] for u in unit_seq]

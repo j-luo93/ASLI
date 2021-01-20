@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, SS
+from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -25,8 +25,8 @@ PyStop = STOP
 cdef class PySiteSpace:
     cdef SiteSpace *ptr
 
-    def __cinit__(self, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id):
-        self.ptr = new SiteSpace(sot_id, eot_id, any_id, emp_id)
+    def __cinit__(self, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id, abc_t syl_eot_id):
+        self.ptr = new SiteSpace(sot_id, eot_id, any_id, emp_id, syl_eot_id)
 
     def __dealloc__(self):
         del self.ptr
@@ -109,8 +109,8 @@ cdef class PyAction:
                 action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, CLL)
             elif special_type == 'CLR':
                 action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, CLR)
-            elif special_type == 'SS':
-                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, SS)
+            elif special_type == 'VS':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, VS)
             else:
                 action_id = combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id)
         self.action_id = action_id
@@ -133,6 +133,10 @@ cdef class PyActionSpace:
 
     def register_cl_map(self, abc_t before_id, abc_t after_id):
         self.ptr.register_cl_map(before_id, after_id)
+
+    def set_vowel_mask(self, bool[::1] vowel_mask):
+        cdef vector[bool] vowel_mask_vec = np2vector(vowel_mask)
+        self.ptr.set_vowel_mask(vowel_mask_vec)
 
     def get_action(self, action_id):
         return self.action_cls(get_before_id(action_id), get_after_id(action_id),

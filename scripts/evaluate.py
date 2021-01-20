@@ -79,7 +79,7 @@ post_cond_pat = ''.join([
 
 pat = re.compile(fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
 
-error_codes = {'OOS', 'IRG', 'CIS', 'EPTh', 'MTTh', 'SS'}
+error_codes = {'OOS', 'IRG', 'CIS', 'EPTh', 'MTTh'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
 # Gothic: B, ON: A-E, OHG: A-C-F, OE: A-D.1-D.2-G
 ref_no = {
@@ -159,7 +159,7 @@ class ExpandableAction:
     d_pre: Expandable
     post: Expandable
     d_post: Expandable
-    use_syl: bool = False
+    use_vowel: bool = False
 
     def __post_init__(self):
         if self.d_pre is not None and self.pre is None:
@@ -189,8 +189,8 @@ class ExpandableAction:
                     post = str(segments[i + 1]) if self.post.exists() else None
                     d_post = str(segments[i + 2]) if self.d_post.exists() else None
 
-                    if self.use_syl:
-                        special_type = 'SS'
+                    if self.use_vowel:
+                        special_type = 'VS'
                     else:
                         is_valid, special_type, after = get_special_type(self.after.raw, pre, post)
                         # In some cases, you cannot get compensatory lengthening if the segment is already long.
@@ -211,9 +211,9 @@ Action = Union[SoundChangeAction, ExpandableAction]
 
 
 def get_action(raw_line: str) -> Action:
-    use_syl = raw_line.startswith('SS:')
-    if use_syl:
-        raw_line = raw_line[3:]
+    use_vowel = raw_line.startswith('VS:')
+    if use_vowel:
+        raw_line = raw_line[3:].strip()
 
     result = pat.match(raw_line)
     d_pre = result.group('d_pre')
@@ -224,11 +224,11 @@ def get_action(raw_line: str) -> Action:
     after = result.group('after')
 
     if '[' in raw_line:
-        return ExpandableAction(Expandable(before), Expandable(after), Expandable(pre), Expandable(d_pre), Expandable(post), Expandable(d_post), use_syl=use_syl)
+        return ExpandableAction(Expandable(before), Expandable(after), Expandable(pre), Expandable(d_pre), Expandable(post), Expandable(d_post), use_vowel=use_vowel)
 
     # For special types, we need to substitute `after` with proper segments.
-    if use_syl:
-        special_type = 'SS'
+    if use_vowel:
+        special_type = 'VS'
     else:
         is_valid, special_type, after = get_special_type(after, pre, post)
         assert is_valid
@@ -273,6 +273,8 @@ class PlainState:
         new_segments = list()
         for seg in self.segments:
             new_segments.append(cls.action_space.apply_action(seg, action))
+            if action.special_type == 'VS' and new_segments[-1] != seg:
+                print(action, seg, new_segments[-1])
         return cls(new_segments)
 
     @property
