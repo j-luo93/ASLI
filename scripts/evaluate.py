@@ -237,7 +237,7 @@ def get_action(raw_line: str) -> Action:
 
 def get_actions(series, orders) -> List[Action]:
     rules = [None] * len(series)
-    for i, (cell, order) in enumerate(zip(series, orders)):
+    for i, (cell, order) in enumerate(zip(series, orders), 1):
         if not pd.isnull(cell):
             cell_results = list()
             for line in cell.strip().split('\n'):
@@ -273,8 +273,6 @@ class PlainState:
         new_segments = list()
         for seg in self.segments:
             new_segments.append(cls.action_space.apply_action(seg, action))
-            if action.special_type == 'VS' and new_segments[-1] != seg:
-                print(action, seg, new_segments[-1])
         return cls(new_segments)
 
     @property
@@ -297,7 +295,7 @@ def order_matters(a: Action, b: Action, state: PlainState) -> bool:
     return ordering1.segments == ordering2.segments
 
 
-if __name__ == "__main__":
+def simulate() -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState]]:
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     # Get alphabet and action space.
     initiator = setup()
@@ -328,8 +326,9 @@ if __name__ == "__main__":
     PlainState.action_space = manager.action_space
     PlainState.end_state = PlainState.from_vocab_state(manager.env.end)
     PlainState.abc = manager.tgt_abc
-    initial_state = state  # keep a pointer to this, we'll reuse it later for checking rule ordering
+    states = list()
     expanded_gold = list()
+    states.append(state)
     print(state.dist)
     for action in gold:
         if isinstance(action, SoundChangeAction):
@@ -337,14 +336,23 @@ if __name__ == "__main__":
             print(action)
             print(state.dist)
             expanded_gold.append(action)
+            states.append(state)
         else:
             for a in action.specialize(state):
                 state = state.apply_action(a)
                 print(a)
                 print(state.dist)
                 expanded_gold.append(a)
+                states.append(state)
     # NOTE(j_luo) We can only score based on expanded rules (i.e., excluding ExpandableAction).
     gold = expanded_gold
+    return manager, gold, states
+
+
+if __name__ == "__main__":
+
+    manager, gold, states = simulate()
+    initial_state = states[0]
 
     # compute the similarity between the candidate ruleset and the gold standard ruleset
     candidate: List[SoundChangeAction] = None  # let this be the model's ruleset, which we are comparing to gold
