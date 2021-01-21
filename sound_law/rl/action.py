@@ -17,8 +17,6 @@ import torch
 import sound_law.rl.trajectory as tr
 from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import Singleton, pbar
-from pypheature.nphthong import Nphthong
-from pypheature.process import FeatureProcessor
 from sound_law.data.alphabet import (ANY_ID, EMP, EMP_ID, EOT_ID, SOT_ID,
                                      SYL_EOT_ID, Alphabet)
 
@@ -143,14 +141,7 @@ class SoundChangeActionSpace(PyActionSpace):
                 if u1 != u2:
                     register_uncondional_action(u1, u2)
 
-        # Set vowel mask.
-        processor = FeatureProcessor()
-        vowel_mask = np.zeros(len(abc), dtype='bool')
-        for u in units:
-            seg = processor.process(u)
-            if isinstance(seg, Nphthong) or seg.is_vowel():
-                vowel_mask[abc[u]] = True
-        self.set_vowel_mask(vowel_mask)
+        self.set_vowel_info(abc.vowel_mask, abc.vowel_base, abc.vowel_stress)
 
     def apply_action(self, unit_seq: Sequence[str], action: SoundChangeAction) -> List[str]:
         id_seq = [self.abc[u] for u in unit_seq]

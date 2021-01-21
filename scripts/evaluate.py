@@ -24,16 +24,27 @@ _fp = FeatureProcessor()
 
 
 def named_ph(name: str) -> str:
-    ph = ''.join([
+    return ''.join([
         fr'(?P<{name}>',       # named capture group start
         '('
-        r'[^+\(\)\[\] ]+',           # acceptable characters (everything except '+', ' ', '(' and ')')
+        r'[^+\(\)\[\]\{\} ]+',           # acceptable characters (everything except '+', ' ', '(' and ')')
         '|',
-        r'\[[\w ,\+\-!]+\]',
+        r'\[[\w ,\+\-!]+\]',   # specify natural classes
         ')',
         ')'                   # capture group end
     ])
-    return ph
+
+
+def syl_info(name: str) -> str:
+    return ''.join([
+        fr'(?P<{name}>',
+        '(',
+        '\{',
+        r'[\+\-\w, ]+',
+        '\}'
+        ')?'
+        ')'
+    ])
 
 
 pre_cond_pat = ''.join([
@@ -43,11 +54,13 @@ pre_cond_pat = ''.join([
     '(',     # optional start 2
     ' *',
     named_ph('d_pre'),      # d_pre
+    syl_info('syl_d_pre'),
     ' *',    # optional whitespace
     r'\+',    # plus sign
     ' *',    # optional whitespace
     ')?',    # optional end 2
     named_ph('pre'),      # pre
+    syl_info('syl_pre'),
     ' *',
     r'\)',    # right parenthesis
     ' *',    # optional whitespace
@@ -65,11 +78,13 @@ post_cond_pat = ''.join([
     r'\(',    # left parenthesis
     ' *',
     named_ph('post'),
+    syl_info('syl_post'),
     '(',     # optional start 2
     ' *',
     r'\+',
     ' *',
     named_ph('d_post'),
+    syl_info('syl_d_post'),
     ' *',
     ')?',    # optional end 2
     r'\)',    # right parenthesis
@@ -77,7 +92,8 @@ post_cond_pat = ''.join([
     ')?'     # optional end 1
 ])
 
-pat = re.compile(fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
+pat = re.compile(
+    fr'^{pre_cond_pat}{named_ph("before")}{syl_info("syl_before")}{post_cond_pat} *> *{named_ph("after")} *$')
 
 error_codes = {'OOS', 'IRG', 'CIS', 'EPTh', 'MTTh'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
@@ -363,7 +379,7 @@ def simulate() -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState
         gold = list()
         for ref in ref_no[g.tgt_lang]:
             rows = df[df['ref no.'].str.startswith(ref)]
-            gold.extend(get_actions(rows['w/o SS'], rows['order']))
+            gold.extend(get_actions(rows['w/ SS'], rows['order']))
 
     # Simulate the actions and get the distance.
     state = PlainState.from_vocab_state(manager.env.start)

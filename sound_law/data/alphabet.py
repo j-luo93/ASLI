@@ -7,7 +7,10 @@ import pandas as pd
 import torch
 from panphon.featuretable import FeatureTable
 
+import sound_law.rl.mcts_cpp as mcts_cpp
 from dev_misc import LT, NDA, g
+from pypheature.nphthong import Nphthong
+from pypheature.process import FeatureProcessor
 
 SOT = '<SOT>'
 EOT = '<EOT>'
@@ -69,6 +72,15 @@ class Alphabet:
             self._u2u = u2u
 
         units = sorted(cnt.keys())
+
+        # Expand vowel set by adding stress.
+        processor = FeatureProcessor()
+        for u in list(units):
+            seg = processor.process(u)
+            if isinstance(seg, Nphthong) or seg.is_vowel():
+                units.append(u + '{+}')
+                units.append(u + '{-}')
+
         self.special_units = [SOT, EOT, PAD, ANY, EMP]
         self.special_ids = [SOT_ID, EOT_ID, PAD_ID, ANY_ID, EMP_ID]
         self._id2unit = self.special_units + units
@@ -89,6 +101,22 @@ class Alphabet:
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
         self.lang = lang
+
+        # Get vowel info.
+        n = len(self._id2unit)
+        self.vowel_mask = np.zeros(n, dtype=bool)
+        self.vowel_base = np.arange(n, dtype='int32')
+        self.vowel_stress = np.zeros(n, dtype='int32')
+        self.vowel_stress.fill(mcts_cpp.PyNoStress)
+        for u in self._id2unit:
+            if u.endswith('{+}') or u.endswith('{-}'):
+                base = u[:-3]
+                base_id = self._unit2id[base]
+                i = self._unit2id[u]
+                self.vowel_mask[base_id] = True
+                self.vowel_mask[i] = True
+                self.vowel_base[i] = base_id
+                self.vowel_stress[i] = mcts_cpp.PyStressed if u[-2] == '+' else mcts_cpp.PyUnstressed
 
     @property
     def pfm(self) -> LT:

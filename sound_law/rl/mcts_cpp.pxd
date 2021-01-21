@@ -35,6 +35,9 @@ cdef extern from "mcts_cpp/common.hpp":
     cdef cppclass SpecialType:
         pass
 
+    cdef cppclass Stress:
+        pass
+
     ctypedef threadpool Pool
 
     cdef cppclass Timer nogil:
@@ -46,6 +49,11 @@ cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
     cdef SpecialType CLL
     cdef SpecialType CLR
     cdef SpecialType VS
+
+cdef extern from "mcts_cpp/common.hpp" namespace "Stress":
+    cdef Stress NOSTRESS
+    cdef Stress STRESSED
+    cdef Stress UNSTRESSED
 
 cdef extern from "mcts_cpp/common.hpp" namespace "action":
     uai_t combine(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t)
@@ -173,7 +181,7 @@ cdef extern from "mcts_cpp/action.hpp":
 
         void register_edge(abc_t, abc_t)
         void register_cl_map(abc_t, abc_t)
-        void set_vowel_mask(vector[bool])
+        void set_vowel_info(vector[bool], vector[int], vector[Stress]);
         void set_action_allowed(Pool *, vector[TNptr])
         void set_action_allowed(TreeNode *)
         IdSeq apply_action(IdSeq, uai_t)
@@ -209,6 +217,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
 
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:
+    int
     float
     long
     abc_t

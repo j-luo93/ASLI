@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS
+from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS, Stress, NOSTRESS, STRESSED, UNSTRESSED
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -8,7 +8,7 @@ from cython.operator cimport dereference as deref, preincrement as inc
 cimport cython
 
 from typing import Optional
-from sound_law.data.alphabet import PAD_ID
+import sound_law.data.alphabet as alphabet
 
 cdef extern from "limits.h":
     cdef uai_t ULONG_MAX
@@ -20,6 +20,9 @@ cdef uai_t STOP = combine(NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL
 PyNull_abc = NULL_ABC
 PyNull_action = NULL_ACTION
 PyStop = STOP
+PyNoStress = <int>NOSTRESS
+PyStressed = <int>STRESSED
+PyUnstressed = <int>UNSTRESSED
 
 
 cdef class PySiteSpace:
@@ -134,9 +137,16 @@ cdef class PyActionSpace:
     def register_cl_map(self, abc_t before_id, abc_t after_id):
         self.ptr.register_cl_map(before_id, after_id)
 
-    def set_vowel_mask(self, bool[::1] vowel_mask):
+    def set_vowel_info(self, bool[::1] vowel_mask, int[::1] vowel_base, int[::1] vowel_stress):
         cdef vector[bool] vowel_mask_vec = np2vector(vowel_mask)
-        self.ptr.set_vowel_mask(vowel_mask_vec)
+        cdef vector[int] vowel_base_vec = np2vector(vowel_base)
+        cdef vector[int] vowel_stress_int_vec = np2vector(vowel_stress)
+        cdef size_t n = vowel_stress_int_vec.size()
+        cdef vector[Stress] vowel_stress_vec = vector[Stress](n)
+        cdef size_t i
+        for i in range(n):
+            vowel_stress_vec[i] = <Stress>vowel_stress_int_vec[i]
+        self.ptr.set_vowel_info(vowel_mask_vec, vowel_base_vec, vowel_stress_vec)
 
     def get_action(self, action_id):
         return self.action_cls(get_before_id(action_id), get_after_id(action_id),
@@ -191,7 +201,7 @@ cdef class PyTreeNode:
         cdef int n = self.ptr.size()
         cdef int m = max([self.ptr.get_id_seq(i).size() for i in range(n)])
         # Fill in the array.
-        arr = np.full([n, m], PAD_ID, dtype='long')
+        arr = np.full([n, m], alphabet.PAD_ID, dtype='long')
         cdef IdSeq id_seq
         for i in range(n):
             id_seq = self.ptr.get_id_seq(i)
@@ -426,7 +436,7 @@ cdef object c_parallel_stack_ids(vector[anyTNptr] nodes, int num_threads):
                 lengths_view[i, j] = nodes[i].get_id_seq(j).size()
     cdef size_t m = lengths.max()
 
-    arr = np.full([n, m, nw], PAD_ID, dtype='long')
+    arr = np.full([n, m, nw], alphabet.PAD_ID, dtype='long')
     cdef long[:, :, ::1] arr_view = arr
     cdef IdSeq id_seq
     with nogil:

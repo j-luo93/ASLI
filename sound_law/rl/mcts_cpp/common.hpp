@@ -214,6 +214,13 @@ enum class SpecialType : uai_t
     VS = (static_cast<uai_t>(3) << 60),
 };
 
+enum class Stress : int
+{
+    NOSTRESS,
+    STRESSED,
+    UNSTRESSED
+};
+
 namespace action
 {
     // Each action has the following format:

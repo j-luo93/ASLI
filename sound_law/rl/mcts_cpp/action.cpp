@@ -19,9 +19,11 @@ void ActionSpace::register_cl_map(abc_t before_id, abc_t after_id)
     cl_map[before_id] = after_id;
 }
 
-void ActionSpace::set_vowel_mask(const vec<bool> &vowel_mask)
+void ActionSpace::set_vowel_info(const vec<bool> &vowel_mask, const vec<int> &vowel_base, const vec<Stress> &vowel_stress)
 {
     this->vowel_mask = vowel_mask;
+    this->vowel_base = vowel_base;
+    this->vowel_stress = vowel_stress;
 }
 
 void ActionSpace::set_action_allowed(Pool *tp, const vec<TreeNode *> &tnodes)
@@ -101,6 +103,16 @@ inline bool ActionSpace::match(abc_t idx, abc_t target)
 {
     if (target == site_space->any_id)
         return ((idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
+    if (vowel_mask[target])
+        switch (vowel_stress[target])
+        {
+        case Stress::NOSTRESS:
+            return (target == vowel_base[idx]);
+        // `idx` is always assumed to have stress information.
+        default:
+            return (idx == target);
+        }
+
     return (idx == target);
 }
 
