@@ -23,6 +23,18 @@ from sound_law.train.manager import OnePairManager
 _fp = FeatureProcessor()
 
 
+def syl_info(name: str) -> str:
+    return ''.join([
+        fr'(?P<{name}>',
+        '(',
+        r'\{',
+        r'[\+\-\w, ]+',
+        r'\}'
+        ')?'
+        ')'
+    ])
+
+
 def named_ph(name: str) -> str:
     return ''.join([
         fr'(?P<{name}>',       # named capture group start
@@ -32,19 +44,7 @@ def named_ph(name: str) -> str:
         r'\[[\w ,\+\-!]+\]',   # specify natural classes
         ')',
         ')'                   # capture group end
-    ])
-
-
-def syl_info(name: str) -> str:
-    return ''.join([
-        fr'(?P<{name}>',
-        '(',
-        '\{',
-        r'[\+\-\w, ]+',
-        '\}'
-        ')?'
-        ')'
-    ])
+    ]) + syl_info('syl_' + name)
 
 
 pre_cond_pat = ''.join([
@@ -54,13 +54,11 @@ pre_cond_pat = ''.join([
     '(',     # optional start 2
     ' *',
     named_ph('d_pre'),      # d_pre
-    syl_info('syl_d_pre'),
     ' *',    # optional whitespace
     r'\+',    # plus sign
     ' *',    # optional whitespace
     ')?',    # optional end 2
     named_ph('pre'),      # pre
-    syl_info('syl_pre'),
     ' *',
     r'\)',    # right parenthesis
     ' *',    # optional whitespace
@@ -78,13 +76,11 @@ post_cond_pat = ''.join([
     r'\(',    # left parenthesis
     ' *',
     named_ph('post'),
-    syl_info('syl_post'),
     '(',     # optional start 2
     ' *',
     r'\+',
     ' *',
     named_ph('d_post'),
-    syl_info('syl_d_post'),
     ' *',
     ')?',    # optional end 2
     r'\)',    # right parenthesis
@@ -93,7 +89,7 @@ post_cond_pat = ''.join([
 ])
 
 pat = re.compile(
-    fr'^{pre_cond_pat}{named_ph("before")}{syl_info("syl_before")}{post_cond_pat} *> *{named_ph("after")} *$')
+    fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
 
 error_codes = {'OOS', 'IRG', 'CIS', 'EPTh', 'MTTh'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
@@ -111,7 +107,26 @@ class Boundary:
         return '#'
 
 
-SegmentLike = Union[Segment, Nphthong, Boundary]
+class SegmentWithStress:
+
+    def __init__(self, seg: Union[Nphthong, Segment], stress: str):
+        assert stress in ['0', '+', '-']
+        self.seg = seg
+        self.stress = stress
+
+    @classmethod
+    def from_str(cls, raw: str) -> SegmentWithStress:
+        stress = '0'
+        if '{' in raw:
+            stress = raw[-2]
+            raw = raw[:-3]
+        return SegmentWithStress(_fp.process(raw), stress)
+
+    def __str__(self):
+        return str(self.seg) + (("{" + self.stress + "}") if self.stress != '0' else '')
+
+
+SegmentLike = Union[SegmentWithStress, Boundary]
 
 
 @dataclass
@@ -119,8 +134,12 @@ class Expandable:
     raw: Optional[str] = None
     expandable: bool = field(init=False, repr=False)
     fv: List[str] = field(init=False, repr=False, default=None)
+    stress: str = field(init=False, default='0')
 
     def __post_init__(self):
+        if self.raw is not None and '{' in self.raw:
+            self.stress = self.raw[-2]
+        self.raw = self.raw[:-3] if self.stress != '0' else self.raw
         if self.raw is not None and '[' in self.raw:
             self.fv = [part.strip() for part in self.raw.strip('[]').split(',')]
             self.expandable = True
@@ -132,12 +151,22 @@ class Expandable:
 
     def match(self, segment: SegmentLike) -> bool:
         assert self.exists()
-        if isinstance(segment, Nphthong):
-            return not self.expandable and self.raw == str(segment)
+        if self.raw == '##':
+            breakpoint()
         if isinstance(segment, Boundary):
             return self.raw == '#'
+        stress_ok = True
+        if self.stress != '0':
+            stress_ok = (self.stress == segment.stress)
+        if not stress_ok:
+            return False
+
+        if self.raw == '.':
+            return True
+        if isinstance(segment.seg, Nphthong):
+            return not self.expandable and self.raw == str(segment)
         if self.expandable:
-            return segment.check_features(self.fv)
+            return segment.seg.check_features(self.fv)
         return self.raw == str(segment)
 
 
@@ -158,9 +187,13 @@ def get_special_type(after: str, pre: Union[None, str], post: Union[None, str]) 
         else:
             tgt = post
 
+        stress = ''
+        if '{' in tgt:
+            stress = tgt[-3:]
+            tgt = tgt[:-3]
         seg = _fp.process(tgt)
         if isinstance(seg, Segment) and seg.is_short():
-            after = tgt + "ː"
+            after = tgt + "ː" + stress
         else:
             is_valid = False
     return is_valid, special_type, after
@@ -186,7 +219,7 @@ class ExpandableAction:
     def specialize(self, state: PlainState) -> List[SoundChangeAction]:
         ret = set()
         for segments in state.segments:
-            segments = [Boundary()] + [_fp.process(seg) for seg in segments[1:-1]] + [Boundary()]
+            segments = [Boundary()] + [SegmentWithStress.from_str(seg) for seg in segments[1:-1]] + [Boundary()]
             n = len(segments)
             for i, seg in enumerate(segments[1:-1], 1):
                 applied = self.before.match(seg)
@@ -215,7 +248,7 @@ class ExpandableAction:
 
                     if self.after.expandable:
                         try:
-                            after = str(_fp.change_features(seg, self.after.fv))
+                            after = str(_fp.change_features(seg.seg, self.after.fv))
                         except (NonUniqueMapping, NoMappingFound):
                             continue
                     ret.add(SoundChangeAction.from_str(str(seg), after, pre,
@@ -231,13 +264,29 @@ def get_action(raw_line: str) -> Action:
     if use_vowel:
         raw_line = raw_line[3:].strip()
 
+    def get_group(name: str):
+        ph = result.group(name)
+        if ph is None:
+            return ph
+
+        stress = result.group('syl_' + name)
+        # Ignore `heavy` and simplify `stress`.
+        if stress:
+            segs = [seg.strip() for seg in stress.strip('{}').split(',')]
+            segs = [seg for seg in segs if 'heavy' not in seg]
+            if segs:
+                assert len(segs) == 1
+                stress = '{' + segs[0][0] + '}'
+        ph += (stress if stress else '')
+        return ph
+
     result = pat.match(raw_line)
-    d_pre = result.group('d_pre')
-    pre = result.group('pre')
-    before = result.group('before')
-    post = result.group('post')
-    d_post = result.group('d_post')
-    after = result.group('after')
+    d_pre = get_group('d_pre')
+    pre = get_group('pre')
+    before = get_group('before')
+    post = get_group('post')
+    d_post = get_group('d_post')
+    after = get_group('after')
 
     if '[' in raw_line:
         return ExpandableAction(Expandable(before), Expandable(after), Expandable(pre), Expandable(d_pre), Expandable(post), Expandable(d_post), use_vowel=use_vowel)
@@ -289,6 +338,15 @@ class PlainState:
         new_segments = list()
         for seg in self.segments:
             new_segments.append(cls.action_space.apply_action(seg, action))
+            if len(seg) == len(new_segments[-1]) and seg != new_segments[-1]:
+                replaced = list()
+                for s1, s2 in zip(seg, new_segments[-1]):
+                    if '{' in s1 and '{' not in s2:
+                        replaced.append(s2 + s1[-3:])
+                    else:
+                        replaced.append(s2)
+                new_segments[-1] = replaced
+
         return cls(new_segments)
 
     def dist_from(self, tgt_segments: List[List[str]]):

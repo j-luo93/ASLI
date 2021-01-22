@@ -17,8 +17,8 @@ import torch
 import sound_law.rl.trajectory as tr
 from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import Singleton, pbar
-from sound_law.data.alphabet import (ANY_ID, EMP, EMP_ID, EOT_ID, SOT_ID,
-                                     SYL_EOT_ID, Alphabet)
+from sound_law.data.alphabet import (ANY_ID, ANY_S_ID, ANY_UNS_ID, EMP, EMP_ID,
+                                     EOT_ID, SOT_ID, SYL_EOT_ID, Alphabet)
 
 # pylint: disable=no-name-in-module
 from .mcts_cpp import (PyAction, PyActionSpace, PyNull_abc, PySiteSpace,
@@ -56,6 +56,10 @@ class SoundChangeAction(PyAction):
                 return EMP_ID
             if unit == '.':
                 return ANY_ID
+            if unit == '.{+}':
+                return ANY_S_ID
+            if unit == '.{-}':
+                return ANY_UNS_ID
             if unit == "#":
                 return SOT_ID if before_or_after == 'b' else EOT_ID
             if unit == '##':
@@ -80,6 +84,10 @@ class SoundChangeAction(PyAction):
                 return '.'
             elif idx == EMP_ID:
                 return 'Ø'
+            elif idx == ANY_S_ID:
+                return '.{+}'
+            elif idx == ANY_UNS_ID:
+                return '.{-}'
             return self.abc[idx]  # pylint: disable=unsubscriptable-object
 
         def get_cond(cond):

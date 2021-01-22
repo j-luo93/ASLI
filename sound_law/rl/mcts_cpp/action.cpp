@@ -103,7 +103,12 @@ inline bool ActionSpace::match(abc_t idx, abc_t target)
 {
     if (target == site_space->any_id)
         return ((idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
+    if (target == site_space->any_s_id)
+        return ((vowel_stress[idx] == Stress::STRESSED) && (idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
+    if (target == site_space->any_uns_id)
+        return ((vowel_stress[idx] == Stress::UNSTRESSED) && (idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
     if (vowel_mask[target])
+    {
         switch (vowel_stress[target])
         {
         case Stress::NOSTRESS:
@@ -112,6 +117,7 @@ inline bool ActionSpace::match(abc_t idx, abc_t target)
         default:
             return (idx == target);
         }
+    }
 
     return (idx == target);
 }
@@ -148,7 +154,7 @@ inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
         int j = 1;
         for (int i = 1; i < m - 1; i++)
         {
-            bool applied = (vowel_seq[i] == before_id);
+            bool applied = match(vowel_seq[i], before_id);
             if (applied && (pre_id != NULL_ABC))
             {
                 if ((i < 1) || (!match(vowel_seq[i - 1], pre_id)))
@@ -191,7 +197,7 @@ inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
     {
         for (int i = 1; i < n - 1; i++)
         {
-            bool applied = (id_seq[i] == before_id);
+            bool applied = match(id_seq[i], before_id);
             if (applied && (pre_id != NULL_ABC))
             {
                 if ((i < 1) || (!match(id_seq[i - 1], pre_id)))

@@ -17,6 +17,8 @@ EOT = '<EOT>'
 PAD = '<pad>'
 ANY = '<any>'
 EMP = '<emp>'
+ANY_S = '<any_s>'
+ANY_UNS = '<any_uns>'
 SYL_EOT = '<syl_EOT>'
 SOT_ID = 0
 EOT_ID = 1
@@ -24,6 +26,8 @@ PAD_ID = 2
 ANY_ID = 3
 EMP_ID = 4
 SYL_EOT_ID = 5
+ANY_S_ID = 6
+ANY_UNS_ID = 7
 
 _ft = FeatureTable()
 
@@ -72,6 +76,7 @@ class Alphabet:
             self._u2u = u2u
 
         units = sorted(cnt.keys())
+        base_n = len(units)
 
         # Expand vowel set by adding stress.
         processor = FeatureProcessor()
@@ -81,26 +86,12 @@ class Alphabet:
                 units.append(u + '{+}')
                 units.append(u + '{-}')
 
-        self.special_units = [SOT, EOT, PAD, ANY, EMP]
-        self.special_ids = [SOT_ID, EOT_ID, PAD_ID, ANY_ID, EMP_ID]
+        self.special_units = [SOT, EOT, PAD, ANY, EMP, ANY_S, ANY_UNS]
+        self.special_ids = [SOT_ID, EOT_ID, PAD_ID, ANY_ID, EMP_ID, ANY_S_ID, ANY_UNS_ID]
+        special_n = len(self.special_ids)
         self._id2unit = self.special_units + units
         self._unit2id = dict(zip(self.special_units, self.special_ids))
         self._unit2id.update({c: i for i, c in enumerate(units, len(self.special_units))})
-        self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
-        self.dist_mat = self.edges = self.cl_map = None
-        if dist_mat is not None:
-            # Pad the dist_mat for special units.
-            self.dist_mat = np.full([len(self), len(self)], 99999, dtype='float32')
-            # NOTE(j_luo) Special ids should have zero cost if matched.
-            for i in range(len(self.special_ids)):
-                self.dist_mat[i, i] = 0
-            orig_ids = np.asarray([self[u] for u in contents[0]])
-            self.dist_mat[orig_ids.reshape(-1, 1), orig_ids] = dist_mat
-            self.edges = edges
-            self.cl_map = cl_map
-
-        logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
-        self.lang = lang
 
         # Get vowel info.
         n = len(self._id2unit)
@@ -108,6 +99,8 @@ class Alphabet:
         self.vowel_base = np.arange(n, dtype='int32')
         self.vowel_stress = np.zeros(n, dtype='int32')
         self.vowel_stress.fill(mcts_cpp.PyNoStress)
+        self.vowel_stress[ANY_S_ID] = mcts_cpp.PyStressed
+        self.vowel_stress[ANY_UNS_ID] = mcts_cpp.PyUnstressed
         for u in self._id2unit:
             if u.endswith('{+}') or u.endswith('{-}'):
                 base = u[:-3]
@@ -117,6 +110,27 @@ class Alphabet:
                 self.vowel_mask[i] = True
                 self.vowel_base[i] = base_id
                 self.vowel_stress[i] = mcts_cpp.PyStressed if u[-2] == '+' else mcts_cpp.PyUnstressed
+
+        self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
+        self.dist_mat = self.edges = self.cl_map = None
+        if dist_mat is not None:
+            # Pad the dist_mat for special units.
+            self.dist_mat = np.full([len(self), len(self)], 99999, dtype='float32')
+            # NOTE(j_luo) Special ids should have zero cost if matched.
+            for i in range(special_n):
+                self.dist_mat[i, i] = 0
+            # NOTE(j_luo) The new dist_mat should account for both the base units and the expanded vowels with stress.
+            orig_units = contents[0]
+            orig_u2i = {u: i for i, u in enumerate(orig_units)}
+            new_ids = np.asarray([self[u] for u in orig_units] + [self[u] for u in units[base_n:]])
+            orig_ids = np.asarray(list(range(len(orig_units))) +
+                                  [orig_u2i[self[self.vowel_base[self[u]]]] for u in units[base_n:]])
+            self.dist_mat[new_ids.reshape(-1, 1), new_ids] = dist_mat[orig_ids.reshape(-1, 1), orig_ids]
+            self.edges = edges
+            self.cl_map = cl_map
+
+        logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
+        self.lang = lang
 
     @property
     def pfm(self) -> LT:

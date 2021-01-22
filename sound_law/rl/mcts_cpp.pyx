@@ -28,8 +28,8 @@ PyUnstressed = <int>UNSTRESSED
 cdef class PySiteSpace:
     cdef SiteSpace *ptr
 
-    def __cinit__(self, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id, abc_t syl_eot_id):
-        self.ptr = new SiteSpace(sot_id, eot_id, any_id, emp_id, syl_eot_id)
+    def __cinit__(self, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id, abc_t syl_eot_id, abc_t any_s_id, abc_t any_uns_id):
+        self.ptr = new SiteSpace(sot_id, eot_id, any_id, emp_id, syl_eot_id, any_s_id, any_uns_id)
 
     def __dealloc__(self):
         del self.ptr

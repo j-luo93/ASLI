@@ -10,6 +10,8 @@ import pandas as pd
 
 from dev_misc import Arg, add_argument, add_check, g
 from dev_misc.utils import handle_sequence_inputs
+from pypheature.nphthong import Nphthong
+from pypheature.process import FeatureProcessor
 
 from .alphabet import Alphabet
 from .dataset import OnePairDataset
@@ -26,6 +28,9 @@ add_argument('use_duplicate_phono', dtype=bool, default=True,
 add_argument('noise_level', dtype=float, default=0.0, msg='Noise level on the target side.')
 add_check(
     (Arg('use_duplicate_phono') == False) | (Arg('separate_output') == True) | (Arg('use_phono_features') == False))
+
+
+_fp = FeatureProcessor()
 
 
 @handle_sequence_inputs
@@ -56,12 +61,29 @@ def get_paths(data_path: Path, src_lang: Lang, tgt_lang: Lang) -> Tuple[Path, Pa
     return Path(src_path).resolve(), Path(tgt_path).resolve()
 
 
-def postprocess(pre_unit_seq: List[str], std_func: Callable[[str], str], abc: Alphabet) -> dict:
+def add_stress_on_first(tokens: List[str]) -> str:
+    first_vowel = True
+    ret = list()
+    for tok in tokens:
+        seg = _fp.process(tok)
+        if isinstance(seg, Nphthong) or seg.is_vowel():
+            stress = '{' + ('+' if first_vowel else '-') + '}'
+            ret.append(tok + stress)
+            first_vowel = False
+        else:
+            ret.append(tok)
+    return ret
+
+
+def postprocess(pre_unit_seq: List[str], std_func: Callable[[str], str], abc: Alphabet, add_stress: bool = False) -> dict:
     """Postprocess the unit sequence by applying a standardization function and indexing every unit."""
     if g.use_duplicate_phono:
         post_unit_seq = pre_unit_seq
     else:
         post_unit_seq = std_func(pre_unit_seq)
+    if add_stress:
+        post_unit_seq = add_stress_on_first(post_unit_seq)
+
     id_seq = [abc[u] for u in post_unit_seq]
     form = ''.join(post_unit_seq)
     ret = {
@@ -173,7 +195,8 @@ class CognateRegistry:
         cols = ['post_unit_seq', 'id_seq', 'form']  # These are the columns to add.
         for lang in langs:
             for df in self._lang2dfs[lang].values():
-                records = df['pre_unit_seq'].apply(postprocess, std_func=std_func, abc=abc).tolist()
+                records = df['pre_unit_seq'].apply(postprocess, std_func=std_func,
+                                                   abc=abc, add_stress=(lang == g.src_lang)).tolist()
                 # NOTE(j_luo) Make sure to use the same index as the original `df` since duplicate indices indicate multiple references.
                 post = pd.DataFrame(records).set_index(df.index)
                 df[cols] = post[cols]

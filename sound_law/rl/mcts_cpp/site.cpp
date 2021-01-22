@@ -2,11 +2,19 @@
 
 SiteNode::SiteNode(usi_t site) : site(site) {}
 
-SiteSpace::SiteSpace(abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id, abc_t syl_eot_id) : sot_id(sot_id),
-                                                                                                 eot_id(eot_id),
-                                                                                                 any_id(any_id),
-                                                                                                 emp_id(emp_id),
-                                                                                                 syl_eot_id(syl_eot_id) {}
+SiteSpace::SiteSpace(abc_t sot_id,
+                     abc_t eot_id,
+                     abc_t any_id,
+                     abc_t emp_id,
+                     abc_t syl_eot_id,
+                     abc_t any_s_id,
+                     abc_t any_uns_id) : sot_id(sot_id),
+                                         eot_id(eot_id),
+                                         any_id(any_id),
+                                         emp_id(emp_id),
+                                         syl_eot_id(syl_eot_id),
+                                         any_s_id(any_s_id),
+                                         any_uns_id(any_uns_id) {}
 
 size_t SiteSpace::size() const { return nodes.size(); }
 

@@ -78,7 +78,7 @@ cdef extern from "mcts_cpp/site.hpp":
         abc_t any_id
         abc_t emp_id
 
-        SiteSpace(abc_t, abc_t, abc_t, abc_t, abc_t)
+        SiteSpace(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t)
 
         size_t size()
         void get_node(SiteNode *, usi_t)

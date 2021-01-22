@@ -9,12 +9,12 @@ from typing import List
 import pandas as pd
 from cltk.phonology.old_english.orthophonology import \
     OldEnglishOrthophonology as oe
+from cltk.phonology.old_norse.orthophonology import on
 from lingpy.sequence.sound_classes import ipa2tokens
 
 from pypheature.nphthong import Nphthong
 from pypheature.process import FeatureProcessor
 from xib.aligned_corpus.transcriber import RuleBasedTranscriber
-from cltk.phonology.old_norse.orthophonology import on
 
 
 @lru_cache(maxsize=None)
