@@ -17,9 +17,9 @@ EOT = '<EOT>'
 PAD = '<pad>'
 ANY = '<any>'
 EMP = '<emp>'
+SYL_EOT = '<syl_EOT>'
 ANY_S = '<any_s>'
 ANY_UNS = '<any_uns>'
-SYL_EOT = '<syl_EOT>'
 SOT_ID = 0
 EOT_ID = 1
 PAD_ID = 2
@@ -86,8 +86,8 @@ class Alphabet:
                 units.append(u + '{+}')
                 units.append(u + '{-}')
 
-        self.special_units = [SOT, EOT, PAD, ANY, EMP, ANY_S, ANY_UNS]
-        self.special_ids = [SOT_ID, EOT_ID, PAD_ID, ANY_ID, EMP_ID, ANY_S_ID, ANY_UNS_ID]
+        self.special_units = [SOT, EOT, PAD, ANY, EMP, SYL_EOT, ANY_S, ANY_UNS]
+        self.special_ids = [SOT_ID, EOT_ID, PAD_ID, ANY_ID, SYL_EOT_ID, EMP_ID, ANY_S_ID, ANY_UNS_ID]
         special_n = len(self.special_ids)
         self._id2unit = self.special_units + units
         self._unit2id = dict(zip(self.special_units, self.special_ids))

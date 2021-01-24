@@ -38,7 +38,7 @@ def PGmc_ipa_trans(word: str) -> str:  # only for latin-transliterated Gothic an
 
     # consonants
     word = re.sub(r"h", "x", word)
-    word = re.sub(r"f", "ɸ", word)
+    word = re.sub(r"f", "f", word)
     word = re.sub(r"xw", "xʷ", word)
     word = re.sub(r"kw", "kʷ", word)
     word = re.sub(r"þ", "θ", word)
@@ -53,12 +53,12 @@ def PGmc_ipa_trans(word: str) -> str:  # only for latin-transliterated Gothic an
     word = re.sub(r"b", "β", word)
     word = re.sub(r"^β", "b", word)
 
-    word = re.sub(r"g", "ɣ", word)
-    word = re.sub(r"ɣw", "ɡʷ", word)
+    word = re.sub(r"g", "ɡ", word)
+    word = re.sub(r"ɡw", "ɡʷ", word)
 
     word = re.sub(r"nk", "ŋk", word)
-    word = re.sub(r"nɡ", "ŋɡ", word)
-    word = re.sub(r"nɡ", "ŋɡ", word)
+    word = re.sub(r"ng", "ŋɡ", word)
+    word = re.sub(r"ng", "ŋɡ", word)
 
     return word
 
@@ -181,7 +181,16 @@ if __name__ == "__main__":
         ipa_col = 'non_ipa'
         form_col = 'desc_form'
         # NOTE(j_luo) Use the simple `a` phoneme to conform to other transcribers.
-        desc[ipa_col] = desc[form_col].apply(on.transcribe).str.replace('g', 'ɡ').apply(i2t)
+        # desc[ipa_col] = desc[form_col].apply(on.transcribe).str.replace(
+        #     'g', 'ɡ').str.replace('ɸ', 'f').str.replace('h', 'x').apply(i2t).str.replace('')
+        to_rectify = [('g', 'ɡ'), ('gʷ', 'ɡʷ'), ('h', 'x'), ('hʷ', 'xʷ'), ('ɛ', 'e'), ('ɣ', 'ɡ')]
+
+        def replace(s: str) -> str:
+            for x, y in to_rectify:
+                s = s.replace(x, y)
+            return s
+        desc[ipa_col] = desc[form_col].apply(on.transcribe).apply(i2t).apply(lambda lst: [replace(x) for x in lst])
+
     else:
         raise ValueError(f'Unrecognized language "{args.lang}".')
 

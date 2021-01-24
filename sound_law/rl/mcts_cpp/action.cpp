@@ -101,25 +101,17 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
 
 inline bool ActionSpace::match(abc_t idx, abc_t target)
 {
-    if (target == site_space->any_id)
-        return ((idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
-    if (target == site_space->any_s_id)
-        return ((vowel_stress[idx] == Stress::STRESSED) && (idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
-    if (target == site_space->any_uns_id)
-        return ((vowel_stress[idx] == Stress::UNSTRESSED) && (idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
-    if (vowel_mask[target])
+    Stress tgt_stress = vowel_stress[target];
+    if ((tgt_stress == Stress::STRESSED) || (tgt_stress == Stress::UNSTRESSED))
     {
-        switch (vowel_stress[target])
-        {
-        case Stress::NOSTRESS:
-            return (target == vowel_base[idx]);
-        // `idx` is always assumed to have stress information.
-        default:
-            return (idx == target);
-        }
+        if (tgt_stress != vowel_stress[idx])
+            return false;
     }
 
-    return (idx == target);
+    if ((target == site_space->any_id) || (target == site_space->any_s_id) || (target == site_space->any_uns_id))
+        return ((idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
+
+    return (vowel_base[target] == vowel_base[idx]);
 }
 
 inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
