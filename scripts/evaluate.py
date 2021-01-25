@@ -38,7 +38,7 @@ def named_ph(name: str) -> str:
         '('
         r'[^+\(\)\[\]\{\} ]+',           # acceptable characters (everything except '+', ' ', '(' and ')')
         '|',
-        r'\[[\w ,\+\-!]+\]',   # specify natural classes
+        r'\[[\w̃  ,\+\-!]+\]',   # specify natural classes
         ')',
         syl_info,
         ')'                   # capture group end
@@ -141,11 +141,17 @@ class HandwrittenSegment:
             raw_stress = None
         return HandwrittenSegment(raw_seg, raw_stress)
 
-    def is_cll(self):
+    def is_cll(self) -> bool:
         return self._raw_seg == 'CLL'
 
-    def is_clr(self):
+    def is_clr(self) -> bool:
         return self._raw_seg == 'CLR'
+
+    def is_gbj(self) -> bool:
+        return self._raw_seg == 'GBJ'
+
+    def is_gbw(self) -> bool:
+        return self._raw_seg == 'GBW'
 
     def to_segment(self) -> Union[Nphthong, Segment]:
         assert not self.expandable
@@ -244,9 +250,16 @@ class HandwrittenRule:
         after = get_segment('after')
         expandable = '[' in raw
 
-        if after.is_cll() or after.is_clr():
+        if after.is_cll() or after.is_clr() or after.is_gbj() or after.is_gbw():
             assert special_type is None
-            special_type = 'CLL' if after.is_cll() else 'CLR'
+            if after.is_cll():
+                special_type = 'CLL'
+            elif after.is_clr():
+                special_type = 'CLR'
+            elif after.is_gbj():
+                special_type = 'GBJ'
+            else:
+                special_type = 'GBW'
         return cls(before, after, pre, d_pre, post, d_post, expandable, special_type, ref=ref)
 
     def to_action(self) -> SoundChangeAction:
@@ -268,16 +281,27 @@ class HandwrittenRule:
             tgt_seg = tgt.to_segment()
             assert isinstance(tgt_seg, Nphthong) or tgt_seg.is_short()
             after = f'{tgt_seg}ː{tgt.stress_str}'
+        elif self.special_type in ['GBJ', 'GBW']:
+            before_seg = self.before.to_segment()
+            assert isinstance(before_seg, Nphthong)
+            assert len(before_seg.vowels) == 2
+            first_v = str(before_seg.vowels[0])
+            assert first_v in ['i', 'u']
+            if first_v == 'i':
+                assert self.special_type == 'GBJ'
+            else:
+                assert self.special_type == 'GBW'
+            after = str(before_seg.vowels[1]) + self.before.stress_str
 
         return SoundChangeAction.from_str(before, after, pre, d_pre, post, d_post, special_type=self.special_type)
 
     def specialize(self, state: PlainState) -> List[SoundChangeAction]:
         assert self.expandable
-        assert self.special_type != 'VS'
+        assert self.special_type != 'GB'
 
-        def safe_get(segments, idx: int) -> Union[None, str]:
+        def safe_get(segments: List[HS], idx: int) -> HS:
             if idx < 0 or idx >= len(segments):
-                return None
+                return HandwrittenSegment.from_str(None)
             return segments[idx]
 
         def realize(seg: HS, ph: HS) -> HS:
@@ -288,14 +312,22 @@ class HandwrittenRule:
                     return HandwrittenSegment.from_str(ph.segment_str)
             return HandwrittenSegment.from_str(None)
 
+        def is_vowel(ph: HS) -> bool:
+            seg = _fp.process(ph.segment_str)
+            return isinstance(seg, Nphthong) or seg.is_vowel()
+
         ret = set()
         for segments in state.segments:
+            segments = [HandwrittenSegment.from_str(ph) for ph in segments]
+            # Deal with vowel sequence.
+            if self.special_type == 'VS':
+                segments = [segments[0]] + [seg for seg in segments[1:-1] if is_vowel(seg)] + [segments[-1]]
+
             n = len(segments)
             for i in range(1, n - 1):
                 segs = [self.d_pre, self.pre, self.before, self.post, self.d_post]
                 site = [safe_get(segments, i - 2), safe_get(segments, i - 1), safe_get(segments, i),
                         safe_get(segments, i + 1), safe_get(segments, i + 2)]
-                site = [HandwrittenSegment.from_str(s) for s in site]
                 if all(hs.match(s) for hs, s in zip(segs, site)):
                     d_pre, pre, before, post, d_post = [realize(hs, s) for hs, s in zip(segs, site)]
                     if self.special_type in ['CLL', 'CLR']:
@@ -346,7 +378,7 @@ class PlainState:
     def __init__(self, segments: List[List[str]]):
         self.segments = segments
 
-    @classmethod
+    @ classmethod
     def from_vocab_state(cls, vocab: VocabState) -> PlainState:
         return cls(vocab.segment_list)
 
@@ -380,7 +412,7 @@ class PlainState:
             dist += cls.action_space.word_space.get_edit_dist(s1, s2)
         return dist
 
-    @property
+    @ property
     def dist(self) -> float:
         '''Returns the distance between the current state and the end state'''
         cls = type(self)
@@ -434,7 +466,7 @@ def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[A
     return descendants
 
 
-def simulate() -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState]]:
+def simulate() -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState], List[str]]:
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     add_argument("calc_metric", dtype=bool, default=False, msg="Whether to calculate the metrics.")
     # Get alphabet and action space.
@@ -485,7 +517,7 @@ def simulate() -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState
 
     # NOTE(j_luo) We can only score based on expanded rules.
     gold = expanded_gold
-    return manager, gold, states
+    return manager, gold, states, refs
 
 
 if __name__ == "__main__":

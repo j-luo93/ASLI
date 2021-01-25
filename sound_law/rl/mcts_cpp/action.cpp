@@ -26,6 +26,12 @@ void ActionSpace::set_vowel_info(const vec<bool> &vowel_mask, const vec<int> &vo
     this->vowel_stress = vowel_stress;
 }
 
+void ActionSpace::set_glide_info(abc_t glide_j, abc_t glide_w)
+{
+    this->glide_j = glide_j;
+    this->glide_w = glide_w;
+}
+
 void ActionSpace::set_action_allowed(Pool *tp, const vec<TreeNode *> &tnodes)
 {
     // Find unique tree nodes first.
@@ -223,6 +229,14 @@ inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
                     case SpecialType::CLR:
                         new_id_seq.push_back(after_id);
                         i++;
+                        break;
+                    case SpecialType::GBJ:
+                        new_id_seq.push_back(glide_j);
+                        new_id_seq.push_back(after_id);
+                        break;
+                    case SpecialType::GBW:
+                        new_id_seq.push_back(glide_w);
+                        new_id_seq.push_back(after_id);
                         break;
                     }
                 }

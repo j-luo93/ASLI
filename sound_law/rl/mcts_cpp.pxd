@@ -49,6 +49,8 @@ cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
     cdef SpecialType CLL
     cdef SpecialType CLR
     cdef SpecialType VS
+    cdef SpecialType GBJ
+    cdef SpecialType GBW
 
 cdef extern from "mcts_cpp/common.hpp" namespace "Stress":
     cdef Stress NOSTRESS
@@ -182,6 +184,7 @@ cdef extern from "mcts_cpp/action.hpp":
         void register_edge(abc_t, abc_t)
         void register_cl_map(abc_t, abc_t)
         void set_vowel_info(vector[bool], vector[int], vector[Stress]);
+        void set_glide_info(abc_t, abc_t)
         void set_action_allowed(Pool *, vector[TNptr])
         void set_action_allowed(TreeNode *)
         IdSeq apply_action(IdSeq, uai_t)

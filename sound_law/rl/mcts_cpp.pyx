@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS, Stress, NOSTRESS, STRESSED, UNSTRESSED
+from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS, GBJ, GBW, Stress, NOSTRESS, STRESSED, UNSTRESSED
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -114,6 +114,10 @@ cdef class PyAction:
                 action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, CLR)
             elif special_type == 'VS':
                 action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, VS)
+            elif special_type == 'GBJ':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, GBJ)
+            elif special_type == 'GBW':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, GBW)
             else:
                 action_id = combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id)
         self.action_id = action_id
@@ -147,6 +151,9 @@ cdef class PyActionSpace:
         for i in range(n):
             vowel_stress_vec[i] = <Stress>vowel_stress_int_vec[i]
         self.ptr.set_vowel_info(vowel_mask_vec, vowel_base_vec, vowel_stress_vec)
+
+    def set_glide_info(self, abc_t glide_j, abc_t glide_w):
+        self.ptr.set_glide_info(glide_j, glide_w)
 
     def get_action(self, action_id):
         return self.action_cls(get_before_id(action_id), get_after_id(action_id),

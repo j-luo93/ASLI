@@ -153,7 +153,7 @@ class OnePairManager:
             t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype('uint16')
             t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
             py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID, SYL_EOT_ID, ANY_S_ID, ANY_UNS_ID)
-            py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 2.0)
+            py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 1.0)
             self.action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold, g.site_threshold, self.tgt_abc)
 
             self.env = SoundChangeEnv(self.action_space, py_ws, s_arr, s_lengths,

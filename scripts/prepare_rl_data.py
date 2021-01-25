@@ -183,7 +183,7 @@ if __name__ == "__main__":
         # NOTE(j_luo) Use the simple `a` phoneme to conform to other transcribers.
         # desc[ipa_col] = desc[form_col].apply(on.transcribe).str.replace(
         #     'g', 'ɡ').str.replace('ɸ', 'f').str.replace('h', 'x').apply(i2t).str.replace('')
-        to_rectify = [('g', 'ɡ'), ('gʷ', 'ɡʷ'), ('h', 'x'), ('hʷ', 'xʷ'), ('ɛ', 'e'), ('ɣ', 'ɡ')]
+        to_rectify = [('g', 'ɡ'), ('gʷ', 'ɡʷ'), ('h', 'x'), ('hʷ', 'xʷ'), ('ɛ', 'e'), ('ɣ', 'ɡ'), ('ɔ', 'o')]
 
         def replace(s: str) -> str:
             for x, y in to_rectify:

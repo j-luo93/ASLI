@@ -212,6 +212,8 @@ enum class SpecialType : uai_t
     CLL = (static_cast<uai_t>(1) << 60),
     CLR = (static_cast<uai_t>(2) << 60),
     VS = (static_cast<uai_t>(3) << 60),
+    GBJ = (static_cast<uai_t>(4) << 60),
+    GBW = (static_cast<uai_t>(5) << 60)
 };
 
 enum class Stress : int

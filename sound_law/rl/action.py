@@ -150,6 +150,7 @@ class SoundChangeActionSpace(PyActionSpace):
                     register_uncondional_action(u1, u2)
 
         self.set_vowel_info(abc.vowel_mask, abc.vowel_base, abc.vowel_stress)
+        self.set_glide_info(abc['j'], abc['w'])
 
     def apply_action(self, unit_seq: Sequence[str], action: SoundChangeAction) -> List[str]:
         id_seq = [self.abc[u] for u in unit_seq]
