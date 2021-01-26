@@ -375,25 +375,39 @@ if __name__ == "__main__":
         # 2. there may be situations where A->B->C, that is that the ordering of A and B matter and the ordering of B and C matter, but the ordering of A and C do not matter. However, because of how the relationship is, we should care about the relative ordering of A and C; but this model won't detect that directly. One counterpoint: if A and C are in the wrong order, then at least one of them is in the wrong order relative to B, so it will be detected. But even still, perhaps the penalty should be higher than the penalty you normally accrue for swapping two rules, as the ordering of A and C are also wrong.
         # a complicated fix to the above would be to make a graph of actions and then use that to discover if a path A to C exists (and that therefore relative order matters) but it's unclear if this could be done for each of the n choose 2 ~ O(n^2) pairs of rules in a computationally efficient matter. One slightly good thing is that you can memoize to reduce the amount of searches to perhaps visiting each vertex exactly once.
 
-        # greedily match the rules one-to-one
+        # greedily match up to 3 rules to each rule in gold
+        threshold = 10 # amount a rule must decrease the distance by to be included in a poly-matching
         unmatched_rule_indices = set(range(len(candidate)))
-        rule_pairings = {} # maps the index of a rule in gold to the index of its matched rule in candidate
+        rule_pairings = {} # maps the index of a rule in gold to a list of indices of its matched rules in candidate
         current_state = initial_state
         for i, act1 in enumerate(gold):
             next_state = current_state.apply_action(act1)
             next_segments = next_state.segments
-            # greedily identify the most similar action to act1, ie the act that results in the most similar next state
+            rule_pairings[i] = []
+            
+            # greedily identify up to 3 rules in candidate to be matched to rule i
             lowest_dist = None
             lowest_dist_ind = None
-            for j in unmatched_rule_indices:
-                act2 = candidate[j]
-                dist = current_state.apply_action(act2).dist_from(next_segments)
-                if dist < lowest_dist or lowest_dist is None:
-                    lowest_dist = dist
-                    lowest_dist_ind = j
+            last_rule_ind = -1 # rules are ordered, so we can only consider appending rules that come after the last picked rule
+            cand_base_state = current_state # the state resulting after all current matched rules are applied
+            base_dist = current_state.dist_from(next_segments) # distance resulting after all current matched rules are applied
+            for j in range(3):
+                for ind in filter(lambda x: x > last_rule_ind, unmatched_rule_indices):
+                    act2 = candidate[ind]
+                    dist = cand_base_state.apply_action(act2).dist_from(next_segments)
+                    if lowest_dist is None or (dist < lowest_dist and dist <= base_dist - threshold):
+                        lowest_dist = dist
+                        lowest_dist_ind = ind
+                
+                if lowest_dist_ind is None: # no match found
+                    break
 
-            rule_pairings[i] = lowest_dist_ind
-            unmatched_rule_indices.remove(lowest_dist_ind)
+                rule_pairings[i].append(lowest_dist_ind)
+                unmatched_rule_indices.remove(lowest_dist_ind)
+                last_rule_ind = lowest_dist_ind
+                cand_base_state = cand_base_state.apply_action(candidate[lowest_dist_ind])
+                base_dist = cand_base_state.dist_from(next_segments)
+
             current_state = next_state
 
         # evaluate how similar each rule in the pairing is by evaluating each of the paired rules and comparing how similar the results are
