@@ -19,8 +19,14 @@ from sound_law.rl.mcts_cpp import \
     PyNull_abc  # pylint: disable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.train.manager import OnePairManager
+from copy import deepcopy
 
 _fp = FeatureProcessor()
+# NOTE(j_luo) We use `a` to represent the back vowel `ɑ`.
+back_a = _fp._base_segments['ɑ']
+front_a = deepcopy(back_a)
+front_a.base = 'a'
+_fp._base_segments['a'] = front_a
 
 
 syl_info = ''.join([
@@ -99,7 +105,7 @@ ref_no = {
 }
 
 
-stress_pat = re.compile(r'\{[\w \+\-]+\}')
+stress_pat = re.compile(r'\{[\w, \+\-]+\}')
 
 
 @dataclass
@@ -200,6 +206,11 @@ class HandwrittenSegment:
             if ph.segment_str in [EOT, SOT]:
                 return False
             seg = _fp.process(ph.segment_str)
+            # Special case for `voice`.
+            if isinstance(seg, Nphthong):
+                if self.fv == ['+voice']:
+                    return True
+
             return not isinstance(seg, Nphthong) and seg.check_features(self.fv)
 
         assert self._raw_seg != '##'
@@ -316,6 +327,7 @@ class HandwrittenRule:
             seg = _fp.process(ph.segment_str)
             return isinstance(seg, Nphthong) or seg.is_vowel()
 
+        segs = [self.d_pre, self.pre, self.before, self.post, self.d_post]
         ret = set()
         for segments in state.segments:
             segments = [HandwrittenSegment.from_str(ph) for ph in segments]
@@ -325,7 +337,6 @@ class HandwrittenRule:
 
             n = len(segments)
             for i in range(1, n - 1):
-                segs = [self.d_pre, self.pre, self.before, self.post, self.d_post]
                 site = [safe_get(segments, i - 2), safe_get(segments, i - 1), safe_get(segments, i),
                         safe_get(segments, i + 1), safe_get(segments, i + 2)]
                 if all(hs.match(s) for hs, s in zip(segs, site)):
@@ -378,7 +389,7 @@ class PlainState:
     def __init__(self, segments: List[List[str]]):
         self.segments = segments
 
-    @ classmethod
+    @classmethod
     def from_vocab_state(cls, vocab: VocabState) -> PlainState:
         return cls(vocab.segment_list)
 
@@ -466,7 +477,7 @@ def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[A
     return descendants
 
 
-def simulate() -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState], List[str]]:
+def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] = None) -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState], List[str]]:
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     add_argument("calc_metric", dtype=bool, default=False, msg="Whether to calculate the metrics.")
     # Get alphabet and action space.
@@ -478,14 +489,17 @@ def simulate() -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState
     _fp.load_repository(dump['proto_ph_map'].keys())
 
     # Get the list of rules.
-    if g.in_path:
+    gold = list()
+    if raw_inputs is not None:
+        for ri in raw_inputs:
+            gold.extend(get_actions(*ri))
+    elif g.in_path:
         with open(g.in_path, 'r', encoding='utf8') as fin:
             lines = [line.strip() for line in fin.readlines()]
             gold = get_actions(lines, range(len(lines)))
     else:
         df = pd.read_csv('data/test_annotations.csv')
         df = df.dropna(subset=['ref no.'])
-        gold = list()
         for ref in ref_no[g.tgt_lang]:
             rows = df[df['ref no.'].str.startswith(ref)]
             gold.extend(get_actions(rows['w/ SS'], rows['order'], refs=rows['ref no.']))
@@ -504,6 +518,7 @@ def simulate() -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState
     for hr in gold:
         if hr.expandable:
             action_q = hr.specialize(state)
+            print(hr)
         else:
             action_q = [hr.to_action()]
         for action in action_q:

@@ -124,7 +124,8 @@ to_break_got = {
     'ɛːa': ['ɛː', 'a']
 }
 to_break_pgm = {
-    'eːa': ['eː', 'a']
+    'eːa': ['eː', 'a'],
+    'oːa': ['oː', 'a']
 }
 to_break = {
     'got': to_break_got,
@@ -165,6 +166,11 @@ if __name__ == "__main__":
     desc = desc[~desc['gem-pro'].isin(dups)].reset_index(drop=True)
 
     # IPA transcription.
+    def replace(s: str) -> str:
+        for x, y in to_rectify:
+            s = s.replace(x, y)
+        return s
+
     if args.lang == "got":
         ipa_col = 'got_ipa'
         form_col = 'latin'
@@ -175,8 +181,10 @@ if __name__ == "__main__":
         ipa_col = 'ang_ipa'
         form_col = 'desc_form'
         # NOTE(j_luo) Use the simple `a` phoneme to conform to other transcribers.
+        to_rectify = [('ɑ', 'a'), ('g', 'ɡ'), ('h', 'x'), ('hʷ', 'xʷ'), ('ç', 'x')]
+
         desc[ipa_col] = desc[form_col].apply(lambda s: oe(
-            s.strip('-')).replace('g', 'ɡ')).apply(i2t).apply(lambda s: [ss.replace('ɑ', 'a') for ss in s])
+            s.strip('-').replace('ċ', 'c').replace('ġ', 'g'))).apply(i2t).apply(lambda lst: [replace(x) for x in lst])
     elif args.lang == 'non':
         ipa_col = 'non_ipa'
         form_col = 'desc_form'
@@ -184,11 +192,6 @@ if __name__ == "__main__":
         # desc[ipa_col] = desc[form_col].apply(on.transcribe).str.replace(
         #     'g', 'ɡ').str.replace('ɸ', 'f').str.replace('h', 'x').apply(i2t).str.replace('')
         to_rectify = [('g', 'ɡ'), ('gʷ', 'ɡʷ'), ('h', 'x'), ('hʷ', 'xʷ'), ('ɛ', 'e'), ('ɣ', 'ɡ'), ('ɔ', 'o')]
-
-        def replace(s: str) -> str:
-            for x, y in to_rectify:
-                s = s.replace(x, y)
-            return s
         desc[ipa_col] = desc[form_col].apply(on.transcribe).apply(i2t).apply(lambda lst: [replace(x) for x in lst])
 
     else:
