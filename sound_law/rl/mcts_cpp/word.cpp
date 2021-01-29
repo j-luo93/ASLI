@@ -49,7 +49,7 @@ void WordSpace::get_word(Word *&output, const IdSeq &id_seq, size_t dt_size)
     auto word = new Word(id_seq, site_roots, dt_size);
     output = word;
     words.try_emplace_l(
-        id_seq, [&output, &word](Word *&value) { output = value; delete word; }, word);
+        id_seq, [&output, word](Word *&value) { output = value; delete word; }, word);
 }
 
 void WordSpace::get_words(Pool *tp, vec<Word *> &outputs, const vec<IdSeq> &inputs, bool unique, size_t dt_size)

@@ -286,69 +286,6 @@ namespace site
     }
 } // namespace site
 
-typedef std::chrono::high_resolution_clock Time;
-typedef std::chrono::duration<float> fsec;
-typedef std::chrono::_V2::system_clock::time_point time_point;
-
-class Timer
-{
-    // Copied from https://stackoverflow.com/questions/1008019/c-singleton-design-pattern.
-    UMap<std::string, float> elapsed;
-    UMap<std::string, time_point> start_time;
-    bool enabled = false;
-    bool started = false;
-    std::string last_activity;
-
-    Timer() {} // Constructor? (the {} brackets) are needed here.
-
-public:
-    static Timer &getInstance()
-    {
-        static Timer instance; // Guaranteed to be destroyed.
-                               // Instantiated on first use.
-        return instance;
-    }
-
-    Timer(Timer const &) = delete;
-    void operator=(Timer const &) = delete;
-
-    inline void enable()
-    {
-        enabled = true;
-        std::cerr << "timer enabled.\n";
-    }
-    inline void disable()
-    {
-        enabled = false;
-        std::cerr << "timer disabled.\n";
-    }
-    inline void start(const std::string &name)
-    {
-        if (enabled)
-            start_time[name] = Time::now();
-    }
-    inline void end(const std::string &name)
-    {
-        if (enabled)
-        {
-            fsec fs = Time::now() - start_time.at(name);
-            elapsed[name] += fs.count();
-            start_time.erase(name);
-        }
-    }
-    inline void show_stats()
-    {
-        float total = 0.0;
-        for (const auto &item : elapsed)
-            total += item.second;
-        std::cerr << elapsed.size() << " stats available. Total time elapsed " << total << '\n';
-        for (const auto &item : elapsed)
-        {
-            std::cerr << item.first << ": " << item.second << "s (" << item.second / total * 100 << "%) elapsed.\n";
-        }
-    }
-};
-
 class DistTable
 {
     const size_t size;

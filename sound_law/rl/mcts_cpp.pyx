@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS, GBJ, GBW, Stress, NOSTRESS, STRESSED, UNSTRESSED
+from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS, GBJ, GBW, Stress, NOSTRESS, STRESSED, UNSTRESSED, timer
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -355,13 +355,13 @@ cdef class PyMcts:
         return action_id, wrap_node(tnode_cls, new_node), reward
 
     def enable_timer(self):
-        self.ptr.env.action_space.timer.enable()
+        timer.enable()
 
     def disable_timer(self):
-        self.ptr.env.action_space.timer.disable()
+        timer.disable()
 
     def show_timer_stats(self):
-        self.ptr.env.action_space.timer.show_stats()
+        timer.show_stats()
 
     def set_logging_options(self, int verbose_level, bool log_to_file):
         self.ptr.set_logging_options(verbose_level, log_to_file)

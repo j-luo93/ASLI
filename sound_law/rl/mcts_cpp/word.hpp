@@ -35,7 +35,6 @@ public:
     SiteSpace *site_space;
     const vec<vec<float>> dist_mat;
     const float ins_cost;
-    Timer &timer = Timer::getInstance();
 
     WordSpace(SiteSpace *, const vec<vec<float>> &, float);
 

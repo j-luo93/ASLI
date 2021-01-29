@@ -22,8 +22,6 @@ class SiteSpace
 {
     friend class WordSpace;
 
-    Timer &timer = Timer::getInstance();
-
     void get_node(SiteNode *&, abc_t, abc_t, abc_t, abc_t, abc_t);
 
 public:

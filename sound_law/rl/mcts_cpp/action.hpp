@@ -27,7 +27,6 @@ public:
     WordSpace *word_space;
     const float dist_threshold;
     const int site_threshold;
-    Timer &timer = Timer::getInstance();
 
     ActionSpace(SiteSpace *, WordSpace *, float, int);
 

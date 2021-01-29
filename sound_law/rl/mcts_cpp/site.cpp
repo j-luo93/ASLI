@@ -38,7 +38,7 @@ inline void SiteSpace::get_node(SiteNode *&output, abc_t before_id, abc_t pre_id
     auto new_node = new SiteNode(site);
     output = new_node;
     if (!nodes.try_emplace_l(
-            site, [&output, &new_node](SiteNode *&value) { output = value; delete new_node; }, new_node))
+            site, [&output, new_node](SiteNode *&value) { output = value; delete new_node; }, new_node))
         return;
 
     SPDLOG_TRACE("adding site to nodes {}", site::str(site));
