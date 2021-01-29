@@ -1,5 +1,6 @@
 #include "action.hpp"
 #include "timer.hpp"
+#include "stats.hpp"
 
 ActionSpace::ActionSpace(
     SiteSpace *site_space,
@@ -81,28 +82,61 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
 
         usi_t site = gnode->base->site;
         abc_t before_id = site::get_before_id(site);
-        for (abc_t after_id : edges[before_id])
+        auto &after_ids = edges[before_id];
+        size_t n = after_ids.size();
+        auto action_ids = vec<uai_t>();
+        action_ids.reserve(n);
+        for (abc_t after_id : after_ids)
         {
             uai_t action_id = action::combine_after_id(site, after_id);
-            bool syncope = (after_id == site_space->emp_id);
-            float delta = 0.0;
-            for (auto order : gnode->linked_words)
+            action_ids.push_back(action_id);
+        }
+        auto deltas = vec<float>(n);
+        for (auto order : gnode->linked_words)
+        {
+            auto word = tnode->words[order];
+            bool is_short = (word->id_seq.size() == 3);
+            auto new_words = vec<Word *>();
+            apply_actions(new_words, word, site, action_ids);
+            for (size_t i = 0; i < n; i++)
             {
-                auto word = tnode->words[order];
-                if (syncope && (word->id_seq.size() == 3))
+                auto after_id = after_ids[i];
+                if ((after_id == site_space->emp_id) && is_short)
                 {
-                    delta = 9999999999.9;
-                    break;
+                    deltas[i] += 999999999.9;
+                    continue;
                 }
-                Word *new_word;
-                apply_action(new_word, word, action_id);
+                auto new_word = new_words[i];
                 SPDLOG_TRACE("  new word {0} old word {1} order {2}", new_word->str(), word->str(), order);
                 // delta += new_word->dists.get_value(order) - word->dists.get_value(order);
-                delta += word_space->safe_get_dist(new_word, order) - word_space->safe_get_dist(word, order);
+                deltas[i] += word_space->safe_get_dist(new_word, order) - word_space->safe_get_dist(word, order);
             }
-            if (delta < dist_threshold)
-                aa.push_back(action_id);
         }
+        for (size_t i = 0; i < n; i++)
+            if (deltas[i] < dist_threshold)
+                aa.push_back(action_ids[i]);
+        // for (abc_t after_id : edges[before_id])
+        // {
+        //     uai_t action_id = action::combine_after_id(site, after_id);
+        //     bool syncope = (after_id == site_space->emp_id);
+        //     float delta = 0.0;
+        //     for (auto order : gnode->linked_words)
+        //     {
+        //         auto word = tnode->words[order];
+        //         if (syncope && (word->id_seq.size() == 3))
+        //         {
+        //             delta = 9999999999.9;
+        //             break;
+        //         }
+        //         Word *new_word;
+        //         apply_action(new_word, word, action_id);
+        //         SPDLOG_TRACE("  new word {0} old word {1} order {2}", new_word->str(), word->str(), order);
+        //         // delta += new_word->dists.get_value(order) - word->dists.get_value(order);
+        //         delta += word_space->safe_get_dist(new_word, order) - word_space->safe_get_dist(word, order);
+        //     }
+        //     if (delta < dist_threshold)
+        //         aa.push_back(action_id);
+        // }
     }
 }
 
@@ -249,21 +283,38 @@ inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
     return new_id_seq;
 }
 
-void ActionSpace::apply_action(Word *&output, Word *word, uai_t action_id)
+void ActionSpace::apply_actions(vec<Word *> &outputs, Word *word, usi_t site, const vec<uai_t> &action_ids)
 {
-    // Should never deal with stop action here.
-    assert(action_id != action::STOP);
-
-    if (word->neighbors.if_contains(action_id, [&output](Word *const &value) { output = value; }))
+    if (word->neighbors.if_contains(site, [&outputs](vec<Word *> const &values) { outputs = values; }))
         return;
 
-    auto new_id_seq = apply_action(word->id_seq, action_id);
-    word_space->get_word(output, new_id_seq);
-
+    outputs.reserve(action_ids.size());
+    for (uai_t action_id : action_ids)
+    {
+        auto new_id_seq = apply_action(word->id_seq, action_id);
+        outputs.push_back(nullptr);
+        word_space->get_word(outputs.back(), new_id_seq);
+    }
     // NOTE(j_luo) No need to do anything if the key exists -- `get_word` ensures the right Word object is returned.
     word->neighbors.try_emplace_l(
-        action_id, [](Word *value) {}, output);
+        site, [](vec<Word *> &values) {}, outputs);
 }
+
+// void ActionSpace::apply_action(Word *&output, Word *word, uai_t action_id)
+// {
+//     // Should never deal with stop action here.
+//     assert(action_id != action::STOP);
+
+//     if (word->neighbors.if_contains(action_id, [&output](Word *const &value) { output = value; }))
+//         return;
+
+//     auto new_id_seq = apply_action(word->id_seq, action_id);
+//     word_space->get_word(output, new_id_seq);
+
+//     // NOTE(j_luo) No need to do anything if the key exists -- `get_word` ensures the right Word object is returned.
+//     word->neighbors.try_emplace_l(
+//         action_id, [](Word *value) {}, output);
+// }
 
 vec<uai_t> ActionSpace::get_similar_actions(uai_t action)
 {

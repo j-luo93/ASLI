@@ -6,6 +6,7 @@ from libcpp.string cimport string
 from libcpp cimport bool
 
 cdef extern from "mcts_cpp/timer.cpp": pass
+cdef extern from "mcts_cpp/stats.cpp": pass
 cdef extern from "mcts_cpp/site.cpp": pass
 cdef extern from "mcts_cpp/word.cpp": pass
 cdef extern from "mcts_cpp/tree_node.cpp": pass
@@ -41,13 +42,13 @@ cdef extern from "mcts_cpp/common.hpp":
 
     ctypedef threadpool Pool
 
-cdef extern from "mcts_cpp/timer.hpp":
-    cdef cppclass Timer nogil:
-        void enable()
-        void disable()
+cdef extern from "mcts_cpp/stats.hpp":
+    cdef cppclass Stats nogil:
+        void enable_timer()
+        void disable_timer()
         void show_stats()
 
-    cdef Timer timer
+    cdef Stats stats
 
 cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
     cdef SpecialType CLL

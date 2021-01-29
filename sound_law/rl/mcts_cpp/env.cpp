@@ -54,13 +54,29 @@ TreeNode *Env::apply_action(TreeNode *node, int best_i, uai_t action)
         int i = 0;
         for (const auto word : node->words)
         {
-            if (word->neighbors.find(action) == word->neighbors.end())
+            // if (word->neighbors.find(action) == word->neighbors.end())
+            // {
+            //     assert(word->id_seq == action_space->apply_action(word->id_seq, action));
+            //     new_words.push_back(word);
+            // }
+            // else
+            usi_t site = action::get_site(action);
+            bool pushed = false;
+            if (word->neighbors.contains(site))
             {
-                assert(word->id_seq == action_space->apply_action(word->id_seq, action));
-                new_words.push_back(word);
+                abc_t before_id = action::get_before_id(action);
+                abc_t after_id = action::get_after_id(action);
+                auto &edges = action_space->edges[before_id];
+                for (size_t i = 0; i < edges.size(); i++)
+                    if (edges[i] == after_id)
+                    {
+                        new_words.push_back(word->neighbors[site][i]);
+                        pushed = true;
+                        break;
+                    }
             }
-            else
-                new_words.push_back(word->neighbors.at(action));
+            if (!pushed)
+                new_words.push_back(word);
             i++;
         }
         new_node = new TreeNode(new_words, prev_action, node, false);

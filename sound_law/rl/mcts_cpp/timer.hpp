@@ -22,21 +22,20 @@ public:
     ~TimerScope();
 };
 
+class Stats;
+
 class Timer
 {
     friend class TimerScope;
+    friend class Stats;
 
     ParaMap<std::string, float> elapsed;
     bool enabled = false;
     bool started = false;
 
-    inline void update(const std::string &, float);
-
-public:
+    void update(const std::string &, float);
     TimerScope start(const std::string &);
     void enable();
     void disable();
     void show_stats();
 };
-
-extern Timer timer;

@@ -11,7 +11,7 @@ class Word
 
 public:
     const IdSeq id_seq;
-    ParaMap<usi_t, Word *> neighbors;
+    ParaMap<usi_t, vec<Word *>> neighbors;
     // ActionMap<Word *> neighbors;
     vec<SiteNode *> site_roots;
     std::string str();

@@ -223,7 +223,7 @@ class Mcts(PyMcts):
                         tracker.update('rollout')
                     if root.stopped or root.done:
                         break
-                    self.show_timer_stats()
+                    self.show_stats()
                 if ei % g.episode_check_interval == 0:
                     out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
                     logging.debug(pad_for_log(out))
