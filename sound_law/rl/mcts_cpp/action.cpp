@@ -71,9 +71,14 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
         GraphNode *gnode = item.second;
         if (gnode->num_sites < site_threshold)
             continue;
-        if ((gnode->lchild != nullptr) && (gnode->lchild->num_sites == gnode->num_sites))
-            continue;
-        if ((gnode->rchild != nullptr) && (gnode->rchild->num_sites == gnode->num_sites))
+        bool can_be_simpler = false;
+        for (auto child : gnode->children)
+            if (child->num_sites == gnode->num_sites)
+            {
+                can_be_simpler = true;
+                break;
+            }
+        if (can_be_simpler)
             continue;
 
         usi_t site = gnode->base->site;

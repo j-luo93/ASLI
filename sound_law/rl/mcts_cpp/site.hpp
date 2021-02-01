@@ -10,8 +10,7 @@ class SiteNode
 
 public:
     const usi_t site;
-    SiteNode *lchild = nullptr;
-    SiteNode *rchild = nullptr;
+    vec<SiteNode *> children;
 };
 
 class WordSpace;
@@ -49,8 +48,7 @@ class GraphNode
 
 public:
     SiteNode *base;
-    GraphNode *lchild = nullptr;
-    GraphNode *rchild = nullptr;
+    vec<GraphNode *> children;
     int num_sites = 0;
     USet<int> linked_words; // the orders for the linked words -- use set since one word might have multiple identical sites
 };

@@ -42,38 +42,47 @@ inline void SiteSpace::get_node(SiteNode *&output, abc_t before_id, abc_t pre_id
         return;
 
     SPDLOG_TRACE("adding site to nodes {}", site::str(site));
+    new_node->children.reserve(2);
     if (pre_id != NULL_ABC)
     {
         if (d_pre_id != NULL_ABC)
         {
+            new_node->children.push_back(nullptr);
+            auto &child = new_node->children.back();
             if ((d_pre_id != any_id) && (d_pre_id != sot_id))
-                get_node(new_node->lchild, before_id, pre_id, any_id, post_id, d_post_id);
+                get_node(child, before_id, pre_id, any_id, post_id, d_post_id);
             else
-                get_node(new_node->lchild, before_id, pre_id, NULL_ABC, post_id, d_post_id);
+                get_node(child, before_id, pre_id, NULL_ABC, post_id, d_post_id);
         }
         else
         {
+            new_node->children.push_back(nullptr);
+            auto &child = new_node->children.back();
             if ((pre_id != any_id) && (pre_id != sot_id))
-                get_node(new_node->lchild, before_id, any_id, NULL_ABC, post_id, d_post_id);
+                get_node(child, before_id, any_id, NULL_ABC, post_id, d_post_id);
             else
-                get_node(new_node->lchild, before_id, NULL_ABC, NULL_ABC, post_id, d_post_id);
+                get_node(child, before_id, NULL_ABC, NULL_ABC, post_id, d_post_id);
         }
     }
     if (post_id != NULL_ABC)
     {
         if (d_post_id != NULL_ABC)
         {
+            new_node->children.push_back(nullptr);
+            auto &child = new_node->children.back();
             if ((d_post_id != any_id) && (d_post_id != eot_id))
-                get_node(new_node->rchild, before_id, pre_id, d_pre_id, post_id, any_id);
+                get_node(child, before_id, pre_id, d_pre_id, post_id, any_id);
             else
-                get_node(new_node->rchild, before_id, pre_id, d_pre_id, post_id, NULL_ABC);
+                get_node(child, before_id, pre_id, d_pre_id, post_id, NULL_ABC);
         }
         else
         {
+            new_node->children.push_back(nullptr);
+            auto &child = new_node->children.back();
             if ((post_id != any_id) && (post_id != eot_id))
-                get_node(new_node->rchild, before_id, pre_id, d_pre_id, any_id, NULL_ABC);
+                get_node(child, before_id, pre_id, d_pre_id, any_id, NULL_ABC);
             else
-                get_node(new_node->rchild, before_id, pre_id, d_pre_id, NULL_ABC, NULL_ABC);
+                get_node(child, before_id, pre_id, d_pre_id, NULL_ABC, NULL_ABC);
         }
     }
 }
@@ -117,10 +126,8 @@ inline GraphNode *SiteGraph::generate_subgraph(SiteNode *snode)
     {
         GraphNode *gnode = new GraphNode(snode);
         nodes[site] = gnode;
-        if (snode->lchild != nullptr)
-            gnode->lchild = generate_subgraph(snode->lchild);
-        if (snode->rchild != nullptr)
-            gnode->rchild = generate_subgraph(snode->rchild);
+        for (auto child : snode->children)
+            gnode->children.push_back(generate_subgraph(child));
         return gnode;
     }
     else
@@ -145,8 +152,8 @@ vec<GraphNode *> SiteGraph::get_descendants(GraphNode *root)
     while (i < nodes.size())
     {
         GraphNode *node = nodes[i];
-        visit(nodes, node->lchild);
-        visit(nodes, node->rchild);
+        for (auto child : node->children)
+            visit(nodes, child);
         i++;
     }
     for (const auto node : nodes)
