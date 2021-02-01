@@ -26,6 +26,7 @@ void ActionSpace::set_vowel_info(const vec<bool> &vowel_mask, const vec<int> &vo
     this->vowel_mask = vowel_mask;
     this->vowel_base = vowel_base;
     this->vowel_stress = vowel_stress;
+    site_space->set_vowel_info(vowel_mask, vowel_base, vowel_stress);
 }
 
 void ActionSpace::set_glide_info(abc_t glide_j, abc_t glide_w)

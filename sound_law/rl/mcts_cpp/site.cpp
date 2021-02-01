@@ -28,6 +28,12 @@ void SiteSpace::get_node(SiteNode *&output, usi_t site)
     get_node(output, before_id, pre_id, d_pre_id, post_id, d_post_id);
 }
 
+inline SiteNode *&append_ptr(vec<SiteNode *> &outputs)
+{
+    outputs.push_back(nullptr);
+    return outputs.back();
+}
+
 inline void SiteSpace::get_node(SiteNode *&output, abc_t before_id, abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id)
 {
     auto site = site::combine(pre_id, d_pre_id, post_id, d_post_id, before_id);
@@ -42,49 +48,59 @@ inline void SiteSpace::get_node(SiteNode *&output, abc_t before_id, abc_t pre_id
         return;
 
     SPDLOG_TRACE("adding site to nodes {}", site::str(site));
-    new_node->children.reserve(2);
+    auto &children = new_node->children;
+    children.reserve(7);
     if (pre_id != NULL_ABC)
     {
         if (d_pre_id != NULL_ABC)
         {
-            new_node->children.push_back(nullptr);
-            auto &child = new_node->children.back();
             if ((d_pre_id != any_id) && (d_pre_id != sot_id))
-                get_node(child, before_id, pre_id, any_id, post_id, d_post_id);
+                get_node(append_ptr(children), before_id, pre_id, any_id, post_id, d_post_id);
             else
-                get_node(child, before_id, pre_id, NULL_ABC, post_id, d_post_id);
+                get_node(append_ptr(children), before_id, pre_id, NULL_ABC, post_id, d_post_id);
+            if (vowel_stress[d_pre_id] != Stress::NOSTRESS)
+                get_node(append_ptr(children), before_id, pre_id, vowel_base[d_pre_id], post_id, d_post_id);
         }
         else
         {
-            new_node->children.push_back(nullptr);
-            auto &child = new_node->children.back();
             if ((pre_id != any_id) && (pre_id != sot_id))
-                get_node(child, before_id, any_id, NULL_ABC, post_id, d_post_id);
+                get_node(append_ptr(children), before_id, any_id, NULL_ABC, post_id, d_post_id);
             else
-                get_node(child, before_id, NULL_ABC, NULL_ABC, post_id, d_post_id);
+                get_node(append_ptr(children), before_id, NULL_ABC, NULL_ABC, post_id, d_post_id);
         }
+        if (vowel_stress[pre_id] != Stress::NOSTRESS)
+            get_node(append_ptr(children), before_id, vowel_base[pre_id], d_pre_id, post_id, d_post_id);
     }
     if (post_id != NULL_ABC)
     {
         if (d_post_id != NULL_ABC)
         {
-            new_node->children.push_back(nullptr);
-            auto &child = new_node->children.back();
             if ((d_post_id != any_id) && (d_post_id != eot_id))
-                get_node(child, before_id, pre_id, d_pre_id, post_id, any_id);
+                get_node(append_ptr(children), before_id, pre_id, d_pre_id, post_id, any_id);
             else
-                get_node(child, before_id, pre_id, d_pre_id, post_id, NULL_ABC);
+                get_node(append_ptr(children), before_id, pre_id, d_pre_id, post_id, NULL_ABC);
+            if (vowel_stress[d_post_id] != Stress::NOSTRESS)
+                get_node(append_ptr(children), before_id, pre_id, d_pre_id, post_id, vowel_base[d_post_id]);
         }
         else
         {
-            new_node->children.push_back(nullptr);
-            auto &child = new_node->children.back();
             if ((post_id != any_id) && (post_id != eot_id))
-                get_node(child, before_id, pre_id, d_pre_id, any_id, NULL_ABC);
+                get_node(append_ptr(children), before_id, pre_id, d_pre_id, any_id, NULL_ABC);
             else
-                get_node(child, before_id, pre_id, d_pre_id, NULL_ABC, NULL_ABC);
+                get_node(append_ptr(children), before_id, pre_id, d_pre_id, NULL_ABC, NULL_ABC);
         }
+        if (vowel_stress[post_id] != Stress::NOSTRESS)
+            get_node(append_ptr(children), before_id, pre_id, d_pre_id, vowel_base[post_id], d_post_id);
     }
+    if (vowel_stress[before_id] != Stress::NOSTRESS)
+        get_node(append_ptr(children), vowel_base[before_id], pre_id, d_pre_id, post_id, d_post_id);
+}
+
+void SiteSpace::set_vowel_info(const vec<bool> &vowel_mask, const vec<int> &vowel_base, const vec<Stress> &vowel_stress)
+{
+    this->vowel_mask = vowel_mask;
+    this->vowel_base = vowel_base;
+    this->vowel_stress = vowel_stress;
 }
 
 void SiteSpace::get_nodes(Pool *tp, vec<vec<SiteNode *>> &outputs, const vec<vec<usi_t>> &sites)
