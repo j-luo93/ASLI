@@ -11,9 +11,7 @@ class SiteNode
 public:
     const usi_t site;
     SiteNode *lchild = nullptr;
-    SiteNode *lxchild = nullptr;
     SiteNode *rchild = nullptr;
-    SiteNode *rxchild = nullptr;
 };
 
 class WordSpace;
@@ -53,8 +51,6 @@ public:
     SiteNode *base;
     GraphNode *lchild = nullptr;
     GraphNode *rchild = nullptr;
-    GraphNode *lxchild = nullptr;
-    GraphNode *rxchild = nullptr;
     int num_sites = 0;
     USet<int> linked_words; // the orders for the linked words -- use set since one word might have multiple identical sites
 };

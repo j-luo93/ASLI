@@ -73,11 +73,7 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
             continue;
         if ((gnode->lchild != nullptr) && (gnode->lchild->num_sites == gnode->num_sites))
             continue;
-        if ((gnode->lxchild != nullptr) && (gnode->lxchild->num_sites == gnode->num_sites))
-            continue;
         if ((gnode->rchild != nullptr) && (gnode->rchild->num_sites == gnode->num_sites))
-            continue;
-        if ((gnode->rxchild != nullptr) && (gnode->rxchild->num_sites == gnode->num_sites))
             continue;
 
         usi_t site = gnode->base->site;
