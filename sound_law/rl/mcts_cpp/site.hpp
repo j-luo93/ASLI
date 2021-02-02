@@ -20,7 +20,7 @@ class SiteSpace
     friend class WordSpace;
 
     vec<bool> vowel_mask;
-    vec<int> vowel_base;
+    vec<abc_t> vowel_base;
     vec<Stress> vowel_stress;
 
     void get_node(SiteNode *&, abc_t, abc_t, abc_t, abc_t, abc_t);
@@ -40,7 +40,7 @@ public:
     size_t size() const;
     void get_node(SiteNode *&, usi_t);
     void get_nodes(Pool *, vec<vec<SiteNode *>> &, const vec<vec<usi_t>> &);
-    void set_vowel_info(const vec<bool> &, const vec<int> &, const vec<Stress> &);
+    void set_vowel_info(const vec<bool> &, const vec<abc_t> &, const vec<Stress> &);
 };
 
 // A wrapper class around SiteNode that includes stats.

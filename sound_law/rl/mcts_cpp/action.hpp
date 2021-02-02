@@ -14,8 +14,10 @@ class ActionSpace
 {
     UMap<abc_t, abc_t> cl_map;
     vec<bool> vowel_mask;
-    vec<int> vowel_base;
+    vec<abc_t> vowel_base;
     vec<Stress> vowel_stress;
+    vec<abc_t> stressed_vowel;
+    vec<abc_t> unstressed_vowel;
     abc_t glide_j;
     abc_t glide_w;
 
@@ -33,7 +35,7 @@ public:
 
     void register_edge(abc_t, abc_t);
     void register_cl_map(abc_t, abc_t); // compensatory length edge.
-    void set_vowel_info(const vec<bool> &, const vec<int> &, const vec<Stress> &);
+    void set_vowel_info(const vec<bool> &, const vec<abc_t> &, const vec<Stress> &, const vec<abc_t> &, const vec<abc_t> &);
     void set_glide_info(abc_t, abc_t);
     void set_action_allowed(Pool *, const vec<TreeNode *> &);
     void set_action_allowed(TreeNode *);

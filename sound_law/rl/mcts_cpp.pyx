@@ -141,16 +141,18 @@ cdef class PyActionSpace:
     def register_cl_map(self, abc_t before_id, abc_t after_id):
         self.ptr.register_cl_map(before_id, after_id)
 
-    def set_vowel_info(self, bool[::1] vowel_mask, int[::1] vowel_base, int[::1] vowel_stress):
+    def set_vowel_info(self, bool[::1] vowel_mask, abc_t[::1] vowel_base, int[::1] vowel_stress, abc_t[::1] stressed_vowel, abc_t[::1] unstressed_vowel):
         cdef vector[bool] vowel_mask_vec = np2vector(vowel_mask)
-        cdef vector[int] vowel_base_vec = np2vector(vowel_base)
+        cdef vector[abc_t] vowel_base_vec = np2vector(vowel_base)
         cdef vector[int] vowel_stress_int_vec = np2vector(vowel_stress)
+        cdef vector[abc_t] stressed_vowel_vec = np2vector(stressed_vowel)
+        cdef vector[abc_t] unstressed_vowel_vec = np2vector(unstressed_vowel)
         cdef size_t n = vowel_stress_int_vec.size()
         cdef vector[Stress] vowel_stress_vec = vector[Stress](n)
         cdef size_t i
         for i in range(n):
             vowel_stress_vec[i] = <Stress>vowel_stress_int_vec[i]
-        self.ptr.set_vowel_info(vowel_mask_vec, vowel_base_vec, vowel_stress_vec)
+        self.ptr.set_vowel_info(vowel_mask_vec, vowel_base_vec, vowel_stress_vec, stressed_vowel_vec, unstressed_vowel_vec)
 
     def set_glide_info(self, abc_t glide_j, abc_t glide_w):
         self.ptr.set_glide_info(glide_j, glide_w)

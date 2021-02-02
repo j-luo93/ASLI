@@ -21,11 +21,17 @@ void ActionSpace::register_cl_map(abc_t before_id, abc_t after_id)
     cl_map[before_id] = after_id;
 }
 
-void ActionSpace::set_vowel_info(const vec<bool> &vowel_mask, const vec<int> &vowel_base, const vec<Stress> &vowel_stress)
+void ActionSpace::set_vowel_info(const vec<bool> &vowel_mask,
+                                 const vec<abc_t> &vowel_base,
+                                 const vec<Stress> &vowel_stress,
+                                 const vec<abc_t> &stressed_vowel,
+                                 const vec<abc_t> &unstressed_vowel)
 {
     this->vowel_mask = vowel_mask;
     this->vowel_base = vowel_base;
     this->vowel_stress = vowel_stress;
+    this->stressed_vowel = stressed_vowel;
+    this->unstressed_vowel = unstressed_vowel;
     site_space->set_vowel_info(vowel_mask, vowel_base, vowel_stress);
 }
 
@@ -166,6 +172,19 @@ inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
     abc_t d_pre_id = action::get_d_pre_id(action_id);
     abc_t post_id = action::get_post_id(action_id);
     abc_t d_post_id = action::get_d_post_id(action_id);
+
+    switch (vowel_stress[before_id])
+    {
+    case Stress::STRESSED:
+        after_id = stressed_vowel[after_id];
+        break;
+    case Stress::UNSTRESSED:
+        after_id = unstressed_vowel[after_id];
+        break;
+    default:
+        break;
+    }
+
     bool syncope = (after_id == site_space->emp_id);
     SpecialType st = action::get_special_type(action_id);
     int n = id_seq.size();

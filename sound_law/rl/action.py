@@ -149,7 +149,7 @@ class SoundChangeActionSpace(PyActionSpace):
                 if u1 != u2:
                     register_uncondional_action(u1, u2)
 
-        self.set_vowel_info(abc.vowel_mask, abc.vowel_base, abc.vowel_stress)
+        self.set_vowel_info(abc.vowel_mask, abc.vowel_base, abc.vowel_stress, abc.stressed_vowel, abc.unstressed_vowel)
         self.set_glide_info(abc['j'], abc['w'])
 
     def apply_action(self, unit_seq: Sequence[str], action: SoundChangeAction) -> List[str]:

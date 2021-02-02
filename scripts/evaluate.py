@@ -399,15 +399,6 @@ class PlainState:
         new_segments = list()
         for seg in self.segments:
             new_segments.append(cls.action_space.apply_action(seg, action))
-            # FIXME(j_luo)  This looks weird.
-            if len(seg) == len(new_segments[-1]) and seg != new_segments[-1]:
-                replaced = list()
-                for s1, s2 in zip(seg, new_segments[-1]):
-                    if '{' in s1 and '{' not in s2:
-                        replaced.append(s2 + s1[-3:])
-                    else:
-                        replaced.append(s2)
-                new_segments[-1] = replaced
 
         return cls(new_segments)
 

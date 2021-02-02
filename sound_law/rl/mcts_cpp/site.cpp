@@ -96,7 +96,7 @@ inline void SiteSpace::get_node(SiteNode *&output, abc_t before_id, abc_t pre_id
         get_node(append_ptr(children), vowel_base[before_id], pre_id, d_pre_id, post_id, d_post_id);
 }
 
-void SiteSpace::set_vowel_info(const vec<bool> &vowel_mask, const vec<int> &vowel_base, const vec<Stress> &vowel_stress)
+void SiteSpace::set_vowel_info(const vec<bool> &vowel_mask, const vec<abc_t> &vowel_base, const vec<Stress> &vowel_stress)
 {
     this->vowel_mask = vowel_mask;
     this->vowel_base = vowel_base;

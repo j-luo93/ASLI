@@ -187,7 +187,7 @@ cdef extern from "mcts_cpp/action.hpp":
 
         void register_edge(abc_t, abc_t)
         void register_cl_map(abc_t, abc_t)
-        void set_vowel_info(vector[bool], vector[int], vector[Stress]);
+        void set_vowel_info(vector[bool], vector[abc_t], vector[Stress], vector[abc_t], vector[abc_t])
         void set_glide_info(abc_t, abc_t)
         void set_action_allowed(Pool *, vector[TNptr])
         void set_action_allowed(TreeNode *)

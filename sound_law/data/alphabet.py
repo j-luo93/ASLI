@@ -87,7 +87,7 @@ class Alphabet:
                 units.append(u + '{-}')
 
         self.special_units = [SOT, EOT, PAD, ANY, EMP, SYL_EOT, ANY_S, ANY_UNS]
-        self.special_ids = [SOT_ID, EOT_ID, PAD_ID, ANY_ID, SYL_EOT_ID, EMP_ID, ANY_S_ID, ANY_UNS_ID]
+        self.special_ids = [SOT_ID, EOT_ID, PAD_ID, ANY_ID, EMP_ID, SYL_EOT_ID, ANY_S_ID, ANY_UNS_ID]
         special_n = len(self.special_ids)
         self._id2unit = self.special_units + units
         self._unit2id = dict(zip(self.special_units, self.special_ids))
@@ -96,11 +96,15 @@ class Alphabet:
         # Get vowel info.
         n = len(self._id2unit)
         self.vowel_mask = np.zeros(n, dtype=bool)
-        self.vowel_base = np.arange(n, dtype='int32')
+        self.vowel_base = np.arange(n, dtype='uint16')
         self.vowel_stress = np.zeros(n, dtype='int32')
+        self.stressed_vowel = np.arange(n, dtype='uint16')
+        self.unstressed_vowel = np.arange(n, dtype='uint16')
         self.vowel_stress.fill(mcts_cpp.PyNoStress)
         self.vowel_stress[ANY_S_ID] = mcts_cpp.PyStressed
         self.vowel_stress[ANY_UNS_ID] = mcts_cpp.PyUnstressed
+        self.stressed_vowel[ANY_ID] = ANY_S_ID
+        self.unstressed_vowel[ANY_ID] = ANY_UNS_ID
         for u in self._id2unit:
             if u.endswith('{+}') or u.endswith('{-}'):
                 base = u[:-3]
@@ -110,6 +114,10 @@ class Alphabet:
                 self.vowel_mask[i] = True
                 self.vowel_base[i] = base_id
                 self.vowel_stress[i] = mcts_cpp.PyStressed if u[-2] == '+' else mcts_cpp.PyUnstressed
+                if u.endswith('{+}'):
+                    self.stressed_vowel[base_id] = i
+                else:
+                    self.unstressed_vowel[base_id] = i
 
         self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
         self.dist_mat = self.edges = self.cl_map = None
