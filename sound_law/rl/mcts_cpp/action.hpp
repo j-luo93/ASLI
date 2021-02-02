@@ -34,6 +34,8 @@ public:
 
     void register_edge(abc_t, abc_t);
     void register_cl_map(abc_t, abc_t); // compensatory length edge.
+    void register_gbj(abc_t, abc_t);
+    void register_gbw(abc_t, abc_t);
     void set_vowel_info(const vec<bool> &, const vec<abc_t> &, const vec<Stress> &, const vec<abc_t> &, const vec<abc_t> &);
     void set_glide_info(abc_t, abc_t);
     void set_action_allowed(Pool *, const vec<TreeNode *> &);
@@ -41,5 +43,5 @@ public:
     // void apply_action(Word *&, Word *, uai_t);
     IdSeq apply_action(const IdSeq &, uai_t);
     vec<uai_t> get_similar_actions(uai_t);
-    int locate_edge_index(abc_t, abc_t);
+    int locate_edge_index(abc_t, SpecialType, abc_t);
 };

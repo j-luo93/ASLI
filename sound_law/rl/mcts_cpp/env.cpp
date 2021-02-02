@@ -66,7 +66,8 @@ TreeNode *Env::apply_action(TreeNode *node, int best_i, uai_t action)
             {
                 abc_t before_id = action::get_before_id(action);
                 abc_t after_id = action::get_after_id(action);
-                int idx = action_space->locate_edge_index(before_id, after_id);
+                SpecialType st = action::get_special_type(action);
+                int idx = action_space->locate_edge_index(before_id, st, after_id);
                 if (idx > 0)
                 {
                     pushed = true;

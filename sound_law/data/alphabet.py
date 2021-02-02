@@ -38,7 +38,8 @@ class Alphabet:
     def __init__(self, lang: str, contents: List[List[str]], sources: Union[str, List[str]],
                  dist_mat: Optional[NDA] = None,
                  edges: Optional[List[Tuple[str, str]]] = None,
-                 cl_map: Optional[Dict[str, str]] = None):
+                 cl_map: Optional[Dict[str, str]] = None,
+                 gb_map: Optional[Dict[str, str]] = None):
         if sources is not None:
             if isinstance(sources, str):
                 sources = [sources] * len(contents)
@@ -120,7 +121,7 @@ class Alphabet:
                     self.unstressed_vowel[base_id] = i
 
         self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
-        self.dist_mat = self.edges = self.cl_map = None
+        self.dist_mat = self.edges = self.cl_map = self.gb_map = None
         if dist_mat is not None:
             # Pad the dist_mat for special units.
             self.dist_mat = np.full([len(self), len(self)], 99999, dtype='float32')
@@ -136,6 +137,7 @@ class Alphabet:
             self.dist_mat[new_ids.reshape(-1, 1), new_ids] = dist_mat[orig_ids.reshape(-1, 1), orig_ids]
             self.edges = edges
             self.cl_map = cl_map
+            self.gb_map = gb_map
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
         self.lang = lang

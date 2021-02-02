@@ -129,12 +129,17 @@ class SoundChangeActionSpace(PyActionSpace):
         # Register unconditional actions first.
         units = [u for u in self.abc if u not in self.abc.special_units]
 
-        def register_uncondional_action(u1: str, u2: str, cl: bool = False):
+        def register_uncondional_action(u1: str, u2: str, cl: bool = False, gb: bool = False):
             id1 = abc[u1]
             id2 = abc[u2]
             if cl:
-                print(u1, u2)
                 self.register_cl_map(id1, id2)
+            elif gb:
+                if u1.startswith('i'):
+                    self.register_gbj(id1, id2)
+                else:
+                    assert u1.startswith('u')
+                    self.register_gbw(id1, id2)
             else:
                 self.register_edge(id1, id2)
 
@@ -145,6 +150,8 @@ class SoundChangeActionSpace(PyActionSpace):
                 register_uncondional_action(u, EMP)
             for u1, u2 in abc.cl_map.items():
                 register_uncondional_action(u1, u2, cl=True)
+            for u1, u2 in abc.gb_map.items():
+                register_uncondional_action(u1, u2, gb=True)
         else:
             for u1, u2 in product(units, repeat=2):
                 if u1 != u2:

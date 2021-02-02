@@ -22,6 +22,9 @@ void ActionSpace::register_cl_map(abc_t before_id, abc_t after_id)
     edges[before_id].push_back(std::make_pair(SpecialType::CLR, after_id));
 }
 
+void ActionSpace::register_gbj(abc_t before_id, abc_t after_id) { edges[before_id].push_back(std::make_pair(SpecialType::GBJ, after_id)); }
+void ActionSpace::register_gbw(abc_t before_id, abc_t after_id) { edges[before_id].push_back(std::make_pair(SpecialType::GBW, after_id)); }
+
 void ActionSpace::set_vowel_info(const vec<bool> &vowel_mask,
                                  const vec<abc_t> &vowel_base,
                                  const vec<Stress> &vowel_stress,
@@ -149,12 +152,15 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
     }
 }
 
-int ActionSpace::locate_edge_index(abc_t before_id, abc_t after_id)
+int ActionSpace::locate_edge_index(abc_t before_id, SpecialType st, abc_t after_id)
 {
     auto &st_and_after_ids = edges[before_id];
     for (size_t i = 0; i < st_and_after_ids.size(); i++)
-        if (st_and_after_ids[i].second == after_id)
+    {
+        auto &edge = st_and_after_ids[i];
+        if ((edge.first == st) && (edge.second == after_id))
             return i;
+    }
     return -1;
 }
 

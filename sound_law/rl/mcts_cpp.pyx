@@ -152,6 +152,12 @@ cdef class PyActionSpace:
     def register_cl_map(self, abc_t before_id, abc_t after_id):
         self.ptr.register_cl_map(before_id, after_id)
 
+    def register_gbj(self, abc_t before_id, abc_t after_id):
+        self.ptr.register_gbj(before_id, after_id)
+
+    def register_gbw(self, abc_t before_id, abc_t after_id):
+        self.ptr.register_gbw(before_id, after_id)
+
     def set_vowel_info(self, bool[::1] vowel_mask, abc_t[::1] vowel_base, int[::1] vowel_stress, abc_t[::1] stressed_vowel, abc_t[::1] unstressed_vowel):
         cdef vector[bool] vowel_mask_vec = np2vector(vowel_mask)
         cdef vector[abc_t] vowel_base_vec = np2vector(vowel_base)
