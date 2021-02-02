@@ -133,6 +133,7 @@ class SoundChangeActionSpace(PyActionSpace):
             id1 = abc[u1]
             id2 = abc[u2]
             if cl:
+                print(u1, u2)
                 self.register_cl_map(id1, id2)
             else:
                 self.register_edge(id1, id2)

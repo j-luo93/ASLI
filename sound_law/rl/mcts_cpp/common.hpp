@@ -208,7 +208,7 @@ void find_unique(vec<K> &outputs, const vec<vec<K>> &inputs, const UMap<K, V> &c
 
 enum class SpecialType : uai_t
 {
-    NONE = static_cast<uai_t>(0),
+    NONE = (static_cast<uai_t>(0) << 60),
     CLL = (static_cast<uai_t>(1) << 60),
     CLR = (static_cast<uai_t>(2) << 60),
     VS = (static_cast<uai_t>(3) << 60),
@@ -239,6 +239,7 @@ namespace action
     // Obtain a UAI by combining a USI with after_id;
     inline usi_t get_site(uai_t action) { return action >> 10; }
     inline uai_t combine_after_id(usi_t site, abc_t after_id) { return ((site << 10) | static_cast<abc_t>(after_id)); }
+    inline uai_t combine_after_id_special(usi_t site, abc_t after_id, SpecialType st) { return ((site << 10) | static_cast<abc_t>(after_id) | static_cast<uai_t>(st)); }
     inline uai_t combine(abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id, abc_t before_id, abc_t after_id)
     {
         return ((static_cast<uai_t>(pre_id) << 50) |

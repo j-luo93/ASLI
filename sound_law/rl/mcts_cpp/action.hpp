@@ -12,7 +12,7 @@ using GraphOutput = tup<ParaAction, ParaOrder, UnseenAction>;
 
 class ActionSpace
 {
-    UMap<abc_t, abc_t> cl_map;
+    UMap<abc_t, vec<pair<SpecialType, abc_t>>> edges;
     vec<bool> vowel_mask;
     vec<abc_t> vowel_base;
     vec<Stress> vowel_stress;
@@ -29,7 +29,6 @@ public:
     WordSpace *word_space;
     const float dist_threshold;
     const int site_threshold;
-    UMap<abc_t, vec<abc_t>> edges;
 
     ActionSpace(SiteSpace *, WordSpace *, float, int);
 
@@ -42,4 +41,5 @@ public:
     // void apply_action(Word *&, Word *, uai_t);
     IdSeq apply_action(const IdSeq &, uai_t);
     vec<uai_t> get_similar_actions(uai_t);
+    int locate_edge_index(abc_t, abc_t);
 };

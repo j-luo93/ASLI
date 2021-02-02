@@ -71,6 +71,7 @@ cdef extern from "mcts_cpp/common.hpp" namespace "action":
     abc_t get_post_id(uai_t)
     abc_t get_d_pre_id(uai_t)
     abc_t get_pre_id(uai_t)
+    SpecialType get_special_type(uai_t)
 
 cdef extern from "mcts_cpp/site.hpp":
     cdef cppclass SiteNode nogil:

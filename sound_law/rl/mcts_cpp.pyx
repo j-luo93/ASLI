@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS, GBJ, GBW, Stress, NOSTRESS, STRESSED, UNSTRESSED, stats
+from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS, GBJ, GBW, Stress, NOSTRESS, STRESSED, UNSTRESSED, stats, get_special_type
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -88,6 +88,17 @@ cdef class PyAction:
                   special_type: Optional[str] = None):
         if action_id is not None:
             assert special_type is None, "Do not provide `special_type` if `action_id` is known."
+            c_st = <long>get_special_type(action_id)
+            if c_st == <long>CLL:
+                special_type = 'CLL'
+            elif c_st == <long>CLR:
+                special_type = 'CLR'
+            elif c_st == <long>VS:
+                special_type = 'VS'
+            elif c_st == <long>GBJ:
+                special_type = 'GBJ'
+            elif c_st == <long>GBW:
+                special_type = 'GBW'
 
         self.before_id = before_id
         self.after_id = after_id

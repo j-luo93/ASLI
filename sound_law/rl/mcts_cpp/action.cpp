@@ -13,12 +13,13 @@ ActionSpace::ActionSpace(
 
 void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
 {
-    edges[before_id].push_back(after_id);
+    edges[before_id].push_back(std::make_pair(SpecialType::NONE, after_id));
 }
 
 void ActionSpace::register_cl_map(abc_t before_id, abc_t after_id)
 {
-    cl_map[before_id] = after_id;
+    edges[before_id].push_back(std::make_pair(SpecialType::CLL, after_id));
+    edges[before_id].push_back(std::make_pair(SpecialType::CLR, after_id));
 }
 
 void ActionSpace::set_vowel_info(const vec<bool> &vowel_mask,
@@ -90,13 +91,13 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
 
         usi_t site = gnode->base->site;
         abc_t before_id = site::get_before_id(site);
-        auto &after_ids = edges[before_id];
-        size_t n = after_ids.size();
+        auto &st_and_after_ids = edges[before_id];
+        size_t n = st_and_after_ids.size();
         auto action_ids = vec<uai_t>();
         action_ids.reserve(n);
-        for (abc_t after_id : after_ids)
+        for (auto &st_and_after : st_and_after_ids)
         {
-            uai_t action_id = action::combine_after_id(site, after_id);
+            uai_t action_id = action::combine_after_id_special(site, st_and_after.second, st_and_after.first);
             action_ids.push_back(action_id);
         }
         auto deltas = vec<float>(n);
@@ -108,7 +109,7 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
             apply_actions(new_words, word, site, action_ids);
             for (size_t i = 0; i < n; i++)
             {
-                auto after_id = after_ids[i];
+                abc_t after_id = st_and_after_ids[i].second;
                 if ((after_id == site_space->emp_id) && is_short)
                 {
                     deltas[i] += 999999999.9;
@@ -146,6 +147,15 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
         //         aa.push_back(action_id);
         // }
     }
+}
+
+int ActionSpace::locate_edge_index(abc_t before_id, abc_t after_id)
+{
+    auto &st_and_after_ids = edges[before_id];
+    for (size_t i = 0; i < st_and_after_ids.size(); i++)
+        if (st_and_after_ids[i].second == after_id)
+            return i;
+    return -1;
 }
 
 inline bool ActionSpace::match(abc_t idx, abc_t target)

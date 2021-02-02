@@ -66,14 +66,12 @@ TreeNode *Env::apply_action(TreeNode *node, int best_i, uai_t action)
             {
                 abc_t before_id = action::get_before_id(action);
                 abc_t after_id = action::get_after_id(action);
-                auto &edges = action_space->edges[before_id];
-                for (size_t i = 0; i < edges.size(); i++)
-                    if (edges[i] == after_id)
-                    {
-                        new_words.push_back(word->neighbors[site][i]);
-                        pushed = true;
-                        break;
-                    }
+                int idx = action_space->locate_edge_index(before_id, after_id);
+                if (idx > 0)
+                {
+                    pushed = true;
+                    new_words.push_back(word->neighbors[site][idx]);
+                }
             }
             if (!pushed)
                 new_words.push_back(word);
