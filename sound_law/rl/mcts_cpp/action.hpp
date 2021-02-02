@@ -22,7 +22,8 @@ class ActionSpace
     abc_t glide_w;
 
     bool match(abc_t, abc_t);
-    void apply_actions(vec<Word *> &, Word *, usi_t, const vec<uai_t> &);
+    void apply_actions(vec<Word *> &, Word *, usi_t, const vec<uai_t> &, bool);
+    void add_actions_from_graph(TreeNode *, const SiteGraph &, vec<uai_t> &, bool);
 
 public:
     SiteSpace *site_space;
@@ -43,5 +44,5 @@ public:
     // void apply_action(Word *&, Word *, uai_t);
     IdSeq apply_action(const IdSeq &, uai_t);
     vec<uai_t> get_similar_actions(uai_t);
-    int locate_edge_index(abc_t, SpecialType, abc_t);
+    int locate_edge_index(abc_t, SpecialType, abc_t, bool);
 };

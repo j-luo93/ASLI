@@ -94,13 +94,14 @@ if __name__ == "__main__":
     parser.add_argument('--length', type=int, help='Length of synthesizing random rules.')
     parser.add_argument('--random_seed', type=int, default=1234, help='Random seed')
     parser.add_argument('--options', default='', type=str, help='Extra options')
+    parser.add_argument('--debug', action='store_true', help='debug mode')
     args = parser.parse_args()
 
     if args.mode == 'random':
 
         sys.argv = f'''
         sound_law/main.py
-            --config OPRLPgmcGot
+            --config {"OPRLFakeR30C" if args.debug else "OPRLPgmcGot"}
             --mcts_config LargeSims
             --no_use_value_guidance
             --use_conditional

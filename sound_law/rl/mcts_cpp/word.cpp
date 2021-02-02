@@ -1,9 +1,13 @@
 #include "word.hpp"
 
 Word::Word(const IdSeq &id_seq,
+           const IdSeq &vowel_seq,
            const vec<SiteNode *> &site_roots,
+           const vec<SiteNode *> &vowel_site_roots,
            size_t dt_size) : id_seq(id_seq),
+                             vowel_seq(vowel_seq),
                              site_roots(site_roots),
+                             vowel_site_roots(vowel_site_roots),
                              dists(DistTable(dt_size)){};
 
 std::string Word::str()
@@ -23,18 +27,8 @@ WordSpace::WordSpace(SiteSpace *site_space,
 
 size_t WordSpace::size() const { return words.size(); }
 
-void WordSpace::get_word(Word *&output, const IdSeq &id_seq, size_t dt_size)
+inline vec<SiteNode *> WordSpace::get_site_roots(const IdSeq &id_seq)
 {
-    // timer.start("get_word");
-    dt_size = end_words.empty() ? dt_size : end_words.size();
-    assert(dt_size > 0);
-
-    if (words.if_contains(id_seq, [&output](Word *const &value) { output = value; }))
-    {
-        // timer.end("get_word");
-        return;
-    }
-
     size_t n = id_seq.size();
     auto site_roots = vec<SiteNode *>(n - 2);
     for (int i = 1; i < n - 1; i++)
@@ -46,7 +40,34 @@ void WordSpace::get_word(Word *&output, const IdSeq &id_seq, size_t dt_size)
         abc_t d_post_id = (i < n - 2) ? id_seq[i + 2] : NULL_ABC;
         site_space->get_node(site_roots[i - 1], before_id, pre_id, d_pre_id, post_id, d_post_id);
     }
-    auto word = new Word(id_seq, site_roots, dt_size);
+    return site_roots;
+}
+
+void WordSpace::get_word(Word *&output, const IdSeq &id_seq, size_t dt_size)
+{
+    dt_size = end_words.empty() ? dt_size : end_words.size();
+    assert(dt_size > 0);
+
+    if (words.if_contains(id_seq, [&output](Word *const &value) { output = value; }))
+        return;
+
+    size_t n = id_seq.size();
+    // Get vowel sequence.
+    IdSeq vowel_seq = IdSeq();
+    vowel_seq.reserve(n);
+    vowel_seq.push_back(site_space->sot_id);
+    for (int i = 1; i < n - 1; i++)
+    {
+        abc_t before_id = id_seq[i];
+        if (site_space->vowel_mask[before_id])
+            vowel_seq.push_back(before_id);
+    }
+    vowel_seq.push_back((site_space->vowel_mask[id_seq[n - 2]]) ? site_space->syl_eot_id : site_space->eot_id);
+
+    // Get word.
+    auto site_roots = get_site_roots(id_seq);
+    auto vowel_site_roots = get_site_roots(vowel_seq);
+    auto word = new Word(id_seq, vowel_seq, site_roots, vowel_site_roots, dt_size);
     output = word;
     words.try_emplace_l(
         id_seq, [&output, word](Word *&value) { output = value; delete word; }, word);

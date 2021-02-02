@@ -289,25 +289,27 @@ namespace site
 
 class DistTable
 {
-    const size_t size;
+    const size_t table_size;
     vec<std::atomic<float>> data;
 
 public:
-    inline DistTable(size_t size) : size(size), data(vec<std::atomic<float>>(size))
+    inline DistTable(size_t table_size) : table_size(table_size), data(vec<std::atomic<float>>(table_size))
     {
-        for (size_t i = 0; i < size; i++)
+        for (size_t i = 0; i < table_size; i++)
             set(i, -1.0);
     }
     inline float get(size_t index)
     {
-        assert(index < size);
+        assert(index < table_size);
         assert(data[index] >= 0);
         return data[index];
     }
     inline std::atomic<float> *locate(size_t index)
     {
-        assert(index < size);
+        assert(index < table_size);
         return &data[index];
     }
     inline void set(size_t index, float value) { data[index] = value; }
+
+    inline size_t size() const { return table_size; }
 };

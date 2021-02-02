@@ -58,30 +58,18 @@ void ActionSpace::set_action_allowed(Pool *tp, const vec<TreeNode *> &tnodes)
         unique_tnodes);
 }
 
-void ActionSpace::set_action_allowed(TreeNode *tnode)
+void ActionSpace::add_actions_from_graph(TreeNode *tnode, const SiteGraph &graph, vec<uai_t> &actions, bool use_vowel_seq)
 {
-    if (!tnode->action_allowed.empty() || (tnode->done) || (tnode->stopped))
-        return;
-
-    // Build the graph first.
-    SiteGraph graph = SiteGraph();
-    SPDLOG_TRACE("Getting graph outputs.");
-    for (size_t order = 0; order < tnode->words.size(); order++)
-    {
-        Word *word = tnode->words[order];
-        for (SiteNode *root : word->site_roots)
-            graph.add_root(root, order);
-    }
-
-    auto &aa = tnode->action_allowed;
-    aa.reserve(1000);
-    // Stop is always available.
-    aa.push_back(action::STOP);
     for (const auto &item : graph.nodes)
     {
         GraphNode *gnode = item.second;
         if (gnode->num_sites < site_threshold)
             continue;
+
+        // Do not include unconditional changes if we are using vowel sequence -- they would have been covered by normal sequences anyway.
+        if (use_vowel_seq && (gnode->children.size() == 0))
+            continue;
+
         bool can_be_simpler = false;
         for (auto child : gnode->children)
             if (child->num_sites == gnode->num_sites)
@@ -95,21 +83,29 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
         usi_t site = gnode->base->site;
         abc_t before_id = site::get_before_id(site);
         auto &st_and_after_ids = edges[before_id];
-        size_t n = st_and_after_ids.size();
+        size_t orig_n = st_and_after_ids.size();
         auto action_ids = vec<uai_t>();
-        action_ids.reserve(n);
+        action_ids.reserve(orig_n);
         for (auto &st_and_after : st_and_after_ids)
         {
-            uai_t action_id = action::combine_after_id_special(site, st_and_after.second, st_and_after.first);
+            SpecialType st = st_and_after.first;
+            if (use_vowel_seq && (st != SpecialType::NONE))
+                break;
+            uai_t action_id;
+            if (use_vowel_seq)
+                action_id = action::combine_after_id_special(site, st_and_after.second, SpecialType::VS);
+            else
+                action_id = action::combine_after_id_special(site, st_and_after.second, st);
             action_ids.push_back(action_id);
         }
+        size_t n = action_ids.size();
         auto deltas = vec<float>(n);
         for (auto order : gnode->linked_words)
         {
             auto word = tnode->words[order];
             bool is_short = (word->id_seq.size() == 3);
             auto new_words = vec<Word *>();
-            apply_actions(new_words, word, site, action_ids);
+            apply_actions(new_words, word, site, action_ids, use_vowel_seq);
             for (size_t i = 0; i < n; i++)
             {
                 abc_t after_id = st_and_after_ids[i].second;
@@ -120,45 +116,48 @@ void ActionSpace::set_action_allowed(TreeNode *tnode)
                 }
                 auto new_word = new_words[i];
                 SPDLOG_TRACE("  new word {0} old word {1} order {2}", new_word->str(), word->str(), order);
-                // delta += new_word->dists.get_value(order) - word->dists.get_value(order);
                 deltas[i] += word_space->safe_get_dist(new_word, order) - word_space->safe_get_dist(word, order);
             }
         }
         for (size_t i = 0; i < n; i++)
             if (deltas[i] < dist_threshold)
-                aa.push_back(action_ids[i]);
-        // for (abc_t after_id : edges[before_id])
-        // {
-        //     uai_t action_id = action::combine_after_id(site, after_id);
-        //     bool syncope = (after_id == site_space->emp_id);
-        //     float delta = 0.0;
-        //     for (auto order : gnode->linked_words)
-        //     {
-        //         auto word = tnode->words[order];
-        //         if (syncope && (word->id_seq.size() == 3))
-        //         {
-        //             delta = 9999999999.9;
-        //             break;
-        //         }
-        //         Word *new_word;
-        //         apply_action(new_word, word, action_id);
-        //         SPDLOG_TRACE("  new word {0} old word {1} order {2}", new_word->str(), word->str(), order);
-        //         // delta += new_word->dists.get_value(order) - word->dists.get_value(order);
-        //         delta += word_space->safe_get_dist(new_word, order) - word_space->safe_get_dist(word, order);
-        //     }
-        //     if (delta < dist_threshold)
-        //         aa.push_back(action_id);
-        // }
+                actions.push_back(action_ids[i]);
     }
 }
 
-int ActionSpace::locate_edge_index(abc_t before_id, SpecialType st, abc_t after_id)
+void ActionSpace::set_action_allowed(TreeNode *tnode)
+{
+    if (!tnode->action_allowed.empty() || (tnode->done) || (tnode->stopped))
+        return;
+
+    // Build the graph first.
+    SiteGraph graph = SiteGraph();
+    SiteGraph vgraph = SiteGraph();
+    SPDLOG_TRACE("Getting graph outputs.");
+    for (size_t order = 0; order < tnode->words.size(); order++)
+    {
+        Word *word = tnode->words[order];
+        for (SiteNode *root : word->site_roots)
+            graph.add_root(root, order);
+        for (SiteNode *vroot : word->vowel_site_roots)
+            vgraph.add_root(vroot, order);
+    }
+
+    auto &aa = tnode->action_allowed;
+    aa.reserve(1000);
+    // Stop is always available.
+    aa.push_back(action::STOP);
+    add_actions_from_graph(tnode, graph, aa, false);
+    add_actions_from_graph(tnode, vgraph, aa, true);
+}
+
+int ActionSpace::locate_edge_index(abc_t before_id, SpecialType st, abc_t after_id, bool use_vowel_seq)
 {
     auto &st_and_after_ids = edges[before_id];
     for (size_t i = 0; i < st_and_after_ids.size(); i++)
     {
         auto &edge = st_and_after_ids[i];
-        if ((edge.first == st) && (edge.second == after_id))
+        if ((use_vowel_seq || (edge.first == st)) && (edge.second == after_id))
             return i;
     }
     return -1;
@@ -320,9 +319,10 @@ inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
     return new_id_seq;
 }
 
-void ActionSpace::apply_actions(vec<Word *> &outputs, Word *word, usi_t site, const vec<uai_t> &action_ids)
+void ActionSpace::apply_actions(vec<Word *> &outputs, Word *word, usi_t site, const vec<uai_t> &action_ids, bool use_vowel_seq)
 {
-    if (word->neighbors.if_contains(site, [&outputs](vec<Word *> const &values) { outputs = values; }))
+    auto &neighbors = (use_vowel_seq) ? word->vowel_neighbors : word->neighbors;
+    if (neighbors.if_contains(site, [&outputs](vec<Word *> const &values) { outputs = values; }))
         return;
 
     outputs.reserve(action_ids.size());
@@ -333,25 +333,9 @@ void ActionSpace::apply_actions(vec<Word *> &outputs, Word *word, usi_t site, co
         word_space->get_word(outputs.back(), new_id_seq);
     }
     // NOTE(j_luo) No need to do anything if the key exists -- `get_word` ensures the right Word object is returned.
-    word->neighbors.try_emplace_l(
+    neighbors.try_emplace_l(
         site, [](vec<Word *> &values) {}, outputs);
 }
-
-// void ActionSpace::apply_action(Word *&output, Word *word, uai_t action_id)
-// {
-//     // Should never deal with stop action here.
-//     assert(action_id != action::STOP);
-
-//     if (word->neighbors.if_contains(action_id, [&output](Word *const &value) { output = value; }))
-//         return;
-
-//     auto new_id_seq = apply_action(word->id_seq, action_id);
-//     word_space->get_word(output, new_id_seq);
-
-//     // NOTE(j_luo) No need to do anything if the key exists -- `get_word` ensures the right Word object is returned.
-//     word->neighbors.try_emplace_l(
-//         action_id, [](Word *value) {}, output);
-// }
 
 vec<uai_t> ActionSpace::get_similar_actions(uai_t action)
 {
