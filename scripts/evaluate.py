@@ -288,6 +288,75 @@ def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[A
     return descendants
 
 
+def match_rules(gold: List[List[Action]], candidate: List[List[Action]], initial_state: PlainState) -> List[Tuple[Int]]:
+    '''
+    Determines the best matching of rules between gold and candidate under the current ordering and bundling of rules. Bundled rules are treated as a block; only the end state after applying all of the rules is considered.
+
+    Assumes there are more bundles in candidate than in gold; that is, every block in gold will be matched with something, while the blocks in candidate may not get matched to anything.
+    
+    Returns the optimal partitioning.
+    '''
+    # TODO(djwyen) update so that candidate is just a list of actions instead, so we don't presuppose any blocking?
+    m = len(gold)
+    n = len(candidate)
+    memo = {} # for memoization. maps a tuple (i,j) to the value of subproblem x(i,j)
+    gold_state_dict = {} # maps index i to state s_i, the state achieved after applying gold rules 0 through i in gold to initial_state.
+    cand_state_dict = {} # similarly, maps index j to state s_j obtained by appling rules 0-j in candidate to initial_state
+    subproblem_graph = {} # maps (i,j) to (k,l) if subproblem (i,j) goes to subproblem (k,l). Use to reconstruct the matching discovered
+
+    # populate the dictionaries
+    current_state = initial_state
+    for i, block in enumerate(gold):
+        for act in block:
+            current_state = current_state.apply_action(act)
+        gold_state_dict[i] = current_state
+    current_state = initial_state
+    for j, block in enumerate(candidate):
+        for act in block:
+            current_state = current_state.apply_action(act)
+        cand_state_dict[j] = current_state
+
+    def x(i: int, j: int) -> float:
+        '''Returns the minimum distance achievable matching rules gold[i:] to candidate[j:] using dynamic programming.'''
+        
+        if (i,j) in memo:
+            return memo[(i,j)]
+        if i == m: # matching complete
+            return 0
+        if j == n and i != m: # must match everything in gold
+            return float('inf')
+
+        s_i = gold_state_dict[i]
+        s_j = cand_state_dict[j]
+        dist = s_i.dist_from(s_j.segments)
+        take_dist = x(i+1, j+1) + dist # ie match i to j
+        skip_dist = x(i, j+1) # match i with something else
+
+        if take_dist <= skip_dist:
+            memo[(i,j)] = take_dist
+            subproblem_graph[(i,j)] = (i+1, j+1)
+            return take_dist
+        else:
+            memo[(i,j)] = skip_dist
+            subproblem_graph[(i,j)] = (i, j+1)
+            return skip_dist
+    
+    # run the DP problem to populate subproblem_graph
+    min_dist = x(0,0)
+    # reconstruct the solution
+    i = 0
+    j = 0
+    rule_matching = [] # contains tuple (i,j) if matching i->j was established
+    while i != m:
+        i_new, j_new = subproblem_graph[(i, j)]
+        if i_new == i+1: # the take route was taken, so matching i->j was established
+            rule_matching.append((i, j))
+        i, j = i_new, j_new
+    
+    return rule_matching
+        
+
+
 if __name__ == "__main__":
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     add_argument("calc_metric", dtype=bool, default=False, msg="Whether to calculate the metrics.")
