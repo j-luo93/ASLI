@@ -1,6 +1,6 @@
 #include "env.hpp"
 
-Env::Env(const EnvOpt &env_opt, const WordSpaceOpt &ws_opt) : opt(env_opt)
+Env::Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt &ws_opt) : opt(env_opt)
 {
     assert(opt.start_ids.size() == opt.end_ids.size());
 
@@ -18,10 +18,10 @@ Env::Env(const EnvOpt &env_opt, const WordSpaceOpt &ws_opt) : opt(env_opt)
 
     start = new TreeNode(start_words, 0);
     end = new TreeNode(word_space->end_words, node::END_DEPTH);
-    action_space->expand(start);
 
     // Set up the action space properly.
-    action_space = new ActionSpace(word_space);
+    action_space = new ActionSpace(word_space, as_opt);
+    action_space->expand(start);
 }
 
 TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)

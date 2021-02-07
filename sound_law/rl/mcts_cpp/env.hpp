@@ -18,9 +18,9 @@ class Env
     WordSpace *word_space;
 
 public:
-    Env(const EnvOpt &env_opt, const WordSpaceOpt &ws_opt);
+    Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt &ws_opt);
 
-    EnvOpt opt;
+    const EnvOpt opt;
     TreeNode *start;
     TreeNode *end;
     ActionSpace *action_space;

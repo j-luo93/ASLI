@@ -10,6 +10,14 @@ struct Subpath
     bool stopped;
 };
 
+struct ActionSpaceOpt
+{
+    abc_t null_id;
+    abc_t emp_id;
+    abc_t sot_id;
+    abc_t eot_id;
+};
+
 class Env;
 
 class ActionSpace
@@ -24,8 +32,9 @@ class ActionSpace
     TreeNode *apply_new_action(TreeNode *, const Subpath &);
 
 public:
-    ActionSpace(WordSpace *);
+    ActionSpace(WordSpace *, const ActionSpaceOpt &);
 
+    const ActionSpaceOpt opt;
     map<abc_t, vec<abc_t>> permissible_changes;
 
     void register_permissible_change(abc_t, abc_t);

@@ -50,10 +50,10 @@ using VocabIdSeq = vec<IdSeq>;
 
 constexpr uint64_t last_10 = (static_cast<uint64_t>(1) << 10) - 1;
 
-namespace abc
-{
-    constexpr abc_t NONE = 0;
-};
+// namespace abc
+// {
+//     constexpr abc_t NONE = 0;
+// };
 
 // Define a hasher for IdSeq in std namespace by borrowing from boost.
 namespace std

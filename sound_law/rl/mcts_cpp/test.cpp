@@ -19,16 +19,17 @@ inline float randint(int high)
     return static_cast<int>(ret);
 }
 
-VocabIdSeq randv(int num_words, int max_len, int num_abc)
+VocabIdSeq randv(int num_words, int max_len, int num_abc, bool syncope)
 {
     VocabIdSeq vocab = VocabIdSeq(num_words);
+    int len = (syncope) ? (max_len - 1) : max_len;
     for (int i = 0; i < num_words; i++)
     {
-        vocab[i] = IdSeq(max_len);
-        vocab[i][0] = 1;
-        for (int j = 1; j < max_len - 1; j++)
+        vocab[i] = IdSeq(len);
+        vocab[i][0] = 2;
+        for (int j = 1; j < len - 1; j++)
             vocab[i][j] = randint(num_abc - 4) + 4;
-        vocab[i][max_len - 1] = 2;
+        vocab[i][len - 1] = 3;
     }
     return vocab;
 }
@@ -82,6 +83,7 @@ int main(int argc, char *argv[])
     add_argument<unsigned>(parser, "random_seed", "Random seed", "0");
     add_flag(parser, "log_to_file", "Flag to log to file");
     add_flag(parser, "quiet", "Set log level to error to disable info logging.");
+    add_flag(parser, "syncope", "Use one syncopation.");
     auto args = parser.parse(argc, argv);
     const int num_threads = args["num_threads"].as<int>();
     const int num_words = args["num_words"].as<int>();
@@ -92,6 +94,7 @@ int main(int argc, char *argv[])
     const unsigned random_seed = args["random_seed"].as<unsigned>();
     const bool log_to_file = args["log_to_file"].as<bool>();
     const bool quiet = args["quiet"].as<bool>();
+    const bool syncope = args["syncope"].as<bool>();
     const int num_sims = args["num_sims"].as<int>();
     const int batch_size = args["batch_size"].as<int>();
 
@@ -122,22 +125,30 @@ int main(int argc, char *argv[])
             dist_mat[i][j] = std::abs(i - j);
     }
 
-    VocabIdSeq start_ids = randv(num_words, max_len, num_abc);
-    VocabIdSeq end_ids = randv(num_words, max_len, num_abc);
+    VocabIdSeq start_ids = randv(num_words, max_len, num_abc, false);
+    VocabIdSeq end_ids = randv(num_words, max_len, num_abc, syncope);
 
     auto env_opt = EnvOpt();
     env_opt.start_ids = start_ids;
     env_opt.end_ids = end_ids;
     env_opt.final_reward = 1.0;
     env_opt.step_penalty = 0.0; // 0.001;
+    auto as_opt = ActionSpaceOpt();
+    as_opt.null_id = 0;
+    as_opt.emp_id = 1;
+    as_opt.sot_id = 2;
+    as_opt.eot_id = 3;
     auto ws_opt = WordSpaceOpt();
     ws_opt.dist_mat = dist_mat;
     ws_opt.ins_cost = ins_cost;
-    auto env = new Env(env_opt, ws_opt);
+    auto env = new Env(env_opt, as_opt, ws_opt);
     for (int i = 4; i < num_abc; i++)
+    {
         for (int j = std::max(0, i - 10); j < std::min(num_abc, i + 11); j++)
             if ((i != j) && (j > 3))
                 env->action_space->register_permissible_change(i, j);
+        env->action_space->register_permissible_change(i, as_opt.emp_id);
+    }
     env->action_space->evaluate(env->start,
                                 MetaPriors{
                                     uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)});

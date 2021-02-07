@@ -21,7 +21,7 @@ void TreeNode::common_init(const vec<Word *> &words)
 TreeNode::TreeNode(const vec<Word *> &words,
                    int depth) : words(words),
                                 depth(depth),
-                                BaseNode(nullptr, ChosenChar(-1, abc::NONE), stopped) { common_init(words); }
+                                BaseNode(nullptr, ChosenChar(-1, 0), stopped) { common_init(words); }
 
 TreeNode::TreeNode(const vec<Word *> &words,
                    int depth,

@@ -33,7 +33,7 @@ class WordSpace
     vec<Word *> end_words;
 
 public:
-    WordSpaceOpt opt;
+    const WordSpaceOpt opt;
 
     WordSpace(const VocabIdSeq &, const WordSpaceOpt &);
 

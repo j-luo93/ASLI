@@ -1,6 +1,6 @@
 #include "action.hpp"
 
-ActionSpace::ActionSpace(WordSpace *word_space) : word_space(word_space) {}
+ActionSpace::ActionSpace(WordSpace *word_space, const ActionSpaceOpt &as_opt) : word_space(word_space), opt(as_opt) {}
 
 TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
 {
@@ -39,6 +39,16 @@ inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &
     auto new_id_seq = IdSeq(id_seq);
     for (const auto pos : positions)
         new_id_seq[pos] = after_id;
+    if (after_id == opt.emp_id)
+    {
+        auto cleaned = IdSeq();
+        cleaned.reserve(new_id_seq.size());
+        for (const auto unit : new_id_seq)
+            if (unit != opt.emp_id)
+                cleaned.push_back(unit);
+        return cleaned;
+    }
+
     return new_id_seq;
 }
 
@@ -118,7 +128,7 @@ void ActionSpace::expand(TreeNode *node)
     }
 
     // Null/Stop option.
-    node->permissible_chars.push_back(abc::NONE);
+    node->permissible_chars.push_back(opt.null_id);
     node->affected = vec<Affected>({{}});
 
     auto char_map = map<abc_t, size_t>();
@@ -159,13 +169,13 @@ bool ActionSpace::expand(MiniNode *node)
 
     if (node->stopped)
     {
-        node->permissible_chars.push_back(abc::NONE);
+        node->permissible_chars.push_back(opt.null_id);
         node->affected = vec<Affected>({{}});
     }
     // Only BEFORE doesn't have NONE as an option (if not stopped).
     else if (node->ap != ActionPhase::BEFORE)
     {
-        node->permissible_chars.push_back(abc::NONE);
+        node->permissible_chars.push_back(opt.null_id);
         // Affected positions will not be further narrowed down.
         assert(node->parent != nullptr);
         node->affected = vec<Affected>({node->parent->affected[node->chosen_char.first]});
@@ -174,7 +184,7 @@ bool ActionSpace::expand(MiniNode *node)
     if (node->stopped)
         SPDLOG_TRACE("Phase {}, keeping only Null action due to stopped status.", str::from(node->ap));
     // If pre_id is null then d_pre_id should also be null. Same goes for post_id and d_post_id.
-    else if (((node->ap == ActionPhase::PRE) || (node->ap == ActionPhase::POST)) && (node->chosen_char.second == abc::NONE))
+    else if (((node->ap == ActionPhase::PRE) || (node->ap == ActionPhase::POST)) && (node->chosen_char.second == opt.null_id))
         SPDLOG_TRACE("Phase {}, keeping only Null action.", str::from(node->ap));
 
     // For the five intermediate mini nodes:
