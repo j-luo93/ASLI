@@ -72,12 +72,26 @@ class MiniNode : public BaseNode
 {
     friend class ActionSpace;
     friend class TreeNode;
+    friend class TransitionNode;
 
     MiniNode(TreeNode *, BaseNode *const, const ChosenChar &, ActionPhase);
 
 public:
     TreeNode *const base;
     const ActionPhase ap;
+};
+
+/* ---------------------- Transition Node --------------------- */
+// This is the last mini node that leads to a normal tree node. Only this node has rewards.
+
+class TransitionNode : public MiniNode
+{
+    friend class ActionSpace;
+
+    TransitionNode(TreeNode *, MiniNode *, const ChosenChar &);
+
+public:
+    vec<float> rewards;
 };
 
 /* ------------------------- Tree Node ------------------------ */
@@ -104,7 +118,6 @@ public:
     float dist = 0.0;
     bool stopped = false;
     bool done = false;
-    vec<float> rewards;
 
     MetaPriors meta_priors;
 

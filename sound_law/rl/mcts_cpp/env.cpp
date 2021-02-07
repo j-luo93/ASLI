@@ -26,17 +26,18 @@ Env::Env(const EnvOpt &env_opt, const WordSpaceOpt &ws_opt) : opt(env_opt)
 
 TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
 {
-    MiniNode *last = subpath.second[4];
+    auto *last = static_cast<TransitionNode *>(subpath.second[4]);
     int last_child_index = subpath.first[5].first;
     BaseNode *&child = last->children[last_child_index];
     if (child == nullptr)
     {
         child = action_space->apply_new_action(node, subpath);
         auto *tchild = static_cast<TreeNode *>(child);
-        float final_reward = tchild->done ? opt.final_reward : -opt.step_penalty;
-        float incremental_reward = (node->dist - tchild->dist) / start->dist;
-        float reward = final_reward + incremental_reward;
-        node->rewards[last_child_index] = reward;
+        last->rewards[last_child_index] = (node->dist - tchild->dist);
+        // float final_reward = tchild->done ? opt.final_reward : -opt.step_penalty;
+        // float incremental_reward = (node->dist - tchild->dist) / start->dist;
+        // float reward = final_reward + incremental_reward;
+        // node->rewards[last_child_index] = reward;
     }
     return static_cast<TreeNode *>(child);
 }

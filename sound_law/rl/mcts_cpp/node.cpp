@@ -4,6 +4,10 @@ BaseNode::BaseNode(BaseNode *const parent, const ChosenChar &chosen_char) : pare
 
 MiniNode::MiniNode(TreeNode *base, BaseNode *const parent, const ChosenChar &chosen_char, ActionPhase ap) : base(base), ap(ap), BaseNode(parent, chosen_char) {}
 
+TransitionNode::TransitionNode(TreeNode *base,
+                               MiniNode *parent,
+                               const ChosenChar &chosen_char) : MiniNode(base, static_cast<BaseNode *>(parent), chosen_char, ActionPhase::POST) {}
+
 void TreeNode::common_init(const vec<Word *> &words)
 {
     for (int order = 0; order < words.size(); ++order)
@@ -76,7 +80,7 @@ BaseNode *BaseNode::play()
     for (size_t i = 0; i < scores.size(); ++i)
         std::cerr << permissible_chars[i] << ":" << scores[i] << " ";
     std::cerr << "\n";
-    std::cerr << "max index: " << max_index << " max_value: " << max_value << "\n";
+    std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
     assert(max_index != -1);
     assert(!played);
     played = true;
@@ -94,7 +98,7 @@ void BaseNode::backup(float value, int game_count, float virtual_loss)
         auto &chosen = node->chosen_char;
         int index = chosen.first;
         abc_t best_char = chosen.second;
-        auto tparent = dynamic_cast<TreeNode *>(parent);
+        auto tparent = dynamic_cast<TransitionNode *>(parent);
         if (tparent != nullptr)
             rtg += tparent->rewards[index];
         parent->action_counts[index] -= game_count - 1;

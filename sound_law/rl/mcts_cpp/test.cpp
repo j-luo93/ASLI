@@ -47,6 +47,15 @@ vec<float> randp(int num_actions)
     return p;
 }
 
+vec<float> uniform(int num_actions)
+{
+    auto p = vec<float>(num_actions);
+    float v = 1.0 / static_cast<float>(num_actions);
+    for (int i = 0; i < num_actions; ++i)
+        p[i] = v;
+    return p;
+}
+
 template <class T>
 void add_argument(cxxopts::Options &options, const std::string &name, const std::string &desc, const std::string &default_v)
 {
@@ -119,7 +128,7 @@ int main(int argc, char *argv[])
     env_opt.start_ids = start_ids;
     env_opt.end_ids = end_ids;
     env_opt.final_reward = 1.0;
-    env_opt.step_penalty = 0.001;
+    env_opt.step_penalty = 0.0; // 0.001;
     auto ws_opt = WordSpaceOpt();
     ws_opt.dist_mat = dist_mat;
     ws_opt.ins_cost = ins_cost;
@@ -130,7 +139,7 @@ int main(int argc, char *argv[])
                 env->action_space->register_permissible_change(i, j);
     env->action_space->evaluate(env->start,
                                 MetaPriors{
-                                    randp(num_abc), randp(num_abc), randp(num_abc), randp(num_abc), randp(num_abc), randp(num_abc)});
+                                    uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)});
 
     auto mcts_opt = MctsOpt();
     mcts_opt.puct_c = puct_c;
@@ -166,7 +175,7 @@ int main(int argc, char *argv[])
             for (const auto node : unique_nodes)
                 env->action_space->evaluate(node,
                                             MetaPriors{
-                                                randp(num_abc), randp(num_abc), randp(num_abc), randp(num_abc), randp(num_abc), randp(num_abc)});
+                                                uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)});
             SPDLOG_DEBUG("Backing up values.");
             mcts->backup(selected, vec<float>(selected.size(), 0.0));
         }

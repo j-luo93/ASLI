@@ -84,9 +84,16 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
 MiniNode *ActionSpace::get_mini_node(TreeNode *base, BaseNode *parent, const ChosenChar &chosen, ActionPhase ap)
 {
     BaseNode *&child = parent->children[chosen.first];
+    bool is_transition = (ap == ActionPhase::POST);
     if (child == nullptr)
-        child = new MiniNode(base, parent, chosen, ap);
-    return static_cast<MiniNode *>(child);
+        if (is_transition)
+            child = new TransitionNode(base, static_cast<MiniNode *>(parent), chosen);
+        else
+            child = new MiniNode(base, parent, chosen, ap);
+    if (is_transition)
+        return static_cast<TransitionNode *>(child);
+    else
+        return static_cast<MiniNode *>(child);
 }
 
 void ActionSpace::expand(TreeNode *node)
@@ -220,7 +227,7 @@ void ActionSpace::clear_stats(BaseNode *node)
     node->children = vec<BaseNode *>(n, nullptr);
     node->action_counts = vec<visit_t>(n, 0);
     node->total_values = vec<float>(n, 0.0);
-    auto tnode = dynamic_cast<TreeNode *>(node);
+    auto tnode = dynamic_cast<TransitionNode *>(node);
     if (tnode != nullptr)
         tnode->rewards = vec<float>(n, 0.0);
 }
