@@ -3,7 +3,12 @@
 #include "word.hpp"
 #include "node.hpp"
 
-using Subpath = pair<array<ChosenChar, 6>, array<MiniNode *, 5>>;
+struct Subpath
+{
+    array<ChosenChar, 6> chosen_seq;
+    array<MiniNode *, 5> mini_node_seq;
+    bool stopped;
+};
 
 class Env;
 
@@ -24,7 +29,7 @@ public:
     map<abc_t, vec<abc_t>> permissible_changes;
 
     void register_permissible_change(abc_t, abc_t);
-    MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase);
+    MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool);
     void expand(TreeNode *);
     bool expand(MiniNode *);
     void evaluate(MiniNode *);

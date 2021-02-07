@@ -23,7 +23,7 @@ TreeNode *Mcts::select_single_thread(TreeNode *node, int depth_limit)
         if ((node->stopped) || (node->done))
             break;
     }
-    SPDLOG_DEBUG("Mcts: selected str\n{}", str::from(node));
+    SPDLOG_DEBUG("Mcts: selected node dist {0} str\n{1}", node->dist, str::from(node));
     return node;
 }
 

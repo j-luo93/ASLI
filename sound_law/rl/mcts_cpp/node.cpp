@@ -1,19 +1,19 @@
 #include "node.hpp"
 
-BaseNode::BaseNode(BaseNode *const parent, const ChosenChar &chosen_char) : parent(parent), chosen_char(chosen_char) {}
+BaseNode::BaseNode(BaseNode *const parent, const ChosenChar &chosen_char, bool stopped) : parent(parent), chosen_char(chosen_char), stopped(stopped) {}
 
-MiniNode::MiniNode(TreeNode *base, BaseNode *const parent, const ChosenChar &chosen_char, ActionPhase ap) : base(base), ap(ap), BaseNode(parent, chosen_char) {}
+MiniNode::MiniNode(TreeNode *base, BaseNode *const parent, const ChosenChar &chosen_char, ActionPhase ap, bool stopped) : base(base), ap(ap), BaseNode(parent, chosen_char, stopped) {}
 
 TransitionNode::TransitionNode(TreeNode *base,
                                MiniNode *parent,
-                               const ChosenChar &chosen_char) : MiniNode(base, static_cast<BaseNode *>(parent), chosen_char, ActionPhase::POST) {}
+                               const ChosenChar &chosen_char,
+                               bool stopped) : MiniNode(base, static_cast<BaseNode *>(parent), chosen_char, ActionPhase::POST, stopped) {}
 
 void TreeNode::common_init(const vec<Word *> &words)
 {
     for (int order = 0; order < words.size(); ++order)
         dist += words[order]->get_edit_dist(order);
 
-    // FIXME(j_luo) add stopped.
     if (dist == 0.0)
         done = true;
 }
@@ -21,14 +21,15 @@ void TreeNode::common_init(const vec<Word *> &words)
 TreeNode::TreeNode(const vec<Word *> &words,
                    int depth) : words(words),
                                 depth(depth),
-                                BaseNode(nullptr, ChosenChar(-1, abc::NONE)) { common_init(words); }
+                                BaseNode(nullptr, ChosenChar(-1, abc::NONE), stopped) { common_init(words); }
 
 TreeNode::TreeNode(const vec<Word *> &words,
                    int depth,
                    BaseNode *const parent,
-                   const ChosenChar &chosen_char) : words(words),
-                                                    depth(depth),
-                                                    BaseNode(parent, chosen_char) { common_init(words); }
+                   const ChosenChar &chosen_char,
+                   bool stopped) : words(words),
+                                   depth(depth),
+                                   BaseNode(parent, chosen_char, stopped) { common_init(words); }
 
 bool BaseNode::is_expanded() { return (permissible_chars.size() > 0); }
 bool BaseNode::is_evaluated() { return (priors.size() > 0); }

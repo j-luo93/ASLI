@@ -25,10 +25,10 @@ VocabIdSeq randv(int num_words, int max_len, int num_abc)
     for (int i = 0; i < num_words; i++)
     {
         vocab[i] = IdSeq(max_len);
-        vocab[i][0] = 0;
+        vocab[i][0] = 1;
         for (int j = 1; j < max_len - 1; j++)
             vocab[i][j] = randint(num_abc - 4) + 4;
-        vocab[i][max_len - 1] = 1;
+        vocab[i][max_len - 1] = 2;
     }
     return vocab;
 }
@@ -49,8 +49,9 @@ vec<float> randp(int num_actions)
 
 vec<float> uniform(int num_actions)
 {
-    auto p = vec<float>(num_actions);
+    auto p = vec<float>(num_actions, 0.0);
     float v = 1.0 / static_cast<float>(num_actions);
+    // p[0] = 1.0;
     for (int i = 0; i < num_actions; ++i)
         p[i] = v;
     return p;

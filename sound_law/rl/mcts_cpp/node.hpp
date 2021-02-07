@@ -29,12 +29,10 @@ class BaseNode
 {
     friend class ActionSpace;
 
-    // vec<float> get_scores(float);
-
 protected:
     std::mutex mtx;
 
-    BaseNode(BaseNode *const, const ChosenChar &);
+    BaseNode(BaseNode *const, const ChosenChar &, bool);
 
     bool played = false;
 
@@ -47,6 +45,7 @@ protected:
 public:
     BaseNode *const parent;
     const ChosenChar chosen_char;
+    const bool stopped;
 
     vec<abc_t> permissible_chars; // What characters are permissible to act upon?
     vec<Affected> affected;       // What positions are affected by each permissible character?
@@ -74,7 +73,7 @@ class MiniNode : public BaseNode
     friend class TreeNode;
     friend class TransitionNode;
 
-    MiniNode(TreeNode *, BaseNode *const, const ChosenChar &, ActionPhase);
+    MiniNode(TreeNode *, BaseNode *const, const ChosenChar &, ActionPhase, bool);
 
 public:
     TreeNode *const base;
@@ -87,8 +86,9 @@ public:
 class TransitionNode : public MiniNode
 {
     friend class ActionSpace;
+    friend class Env;
 
-    TransitionNode(TreeNode *, MiniNode *, const ChosenChar &);
+    TransitionNode(TreeNode *, MiniNode *, const ChosenChar &, bool);
 
 public:
     vec<float> rewards;
@@ -109,14 +109,13 @@ class TreeNode : public BaseNode
 
     void common_init(const vec<Word *> &);
     TreeNode(const vec<Word *> &, int);
-    TreeNode(const vec<Word *> &, int, BaseNode *const, const ChosenChar &);
+    TreeNode(const vec<Word *> &, int, BaseNode *const, const ChosenChar &, bool);
 
 public:
     const vec<Word *> words;
     const int depth;
 
     float dist = 0.0;
-    bool stopped = false;
     bool done = false;
 
     MetaPriors meta_priors;
