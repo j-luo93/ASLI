@@ -1,52 +1,53 @@
 #include "mcts.hpp"
-#include "timer.hpp"
 
-Mcts::Mcts(
-    Env *env,
-    float puct_c,
-    int game_count,
-    float virtual_loss,
-    int num_threads) : env(env),
-                       puct_c(puct_c),
-                       game_count(game_count),
-                       virtual_loss(virtual_loss),
-                       num_threads(num_threads)
+Mcts::Mcts(Env *env, const MctsOpt &opt) : env(env), opt(opt)
 {
-    if (num_threads > 1)
-        tp = new Pool(num_threads);
+    if (opt.num_threads > 1)
+        tp = new Pool(opt.num_threads);
     else
         tp = nullptr;
+}
 
-    env->action_space->set_action_allowed(tp, vec<TreeNode *>{env->start});
+TreeNode *Mcts::select_single_thread(TreeNode *node, int depth_limit)
+{
+    assert(!node->is_leaf());
+    while ((node->depth < depth_limit) && (!node->is_leaf()))
+    {
+        // Complete sampling one action.
+        SPDLOG_DEBUG("Mcts: node depth {}", node->depth);
+        SPDLOG_DEBUG("Mcts: node str\n{}", str::from(node));
+        auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss);
+        SPDLOG_DEBUG("Mcts: node subpath found.");
+        node = env->apply_action(node, subpath);
+        SPDLOG_DEBUG("Mcts: action applied.");
+        if ((node->stopped) || (node->done))
+            break;
+    }
+    SPDLOG_DEBUG("Mcts: selected str\n{}", str::from(node));
+    return node;
 }
 
 vec<TreeNode *> Mcts::select(TreeNode *root, int num_sims, int depth_limit)
 {
+    SPDLOG_DEBUG("Mcts: selecting...");
     auto selected = vec<TreeNode *>();
-    parallel_apply<false, 1>(
-        tp,
-        [this, depth_limit](TreeNode *node) {
-            SPDLOG_DEBUG("Starting selection.");
-            assert(!node->is_leaf());
-            SPDLOG_DEBUG("Node depth: {}", node->depth);
-            while ((node->depth < depth_limit) && (!node->is_leaf()))
-            {
-                SPDLOG_DEBUG("Current node: {}", node->str());
-                SPDLOG_DEBUG(node->str());
-                auto best_i = node->select(puct_c, game_count, virtual_loss);
-                auto action = node->action_allowed.at(best_i);
-                node = env->apply_action(node, best_i, action);
-                SPDLOG_DEBUG("Selected best_i {0} action {1}. New node: {2}", best_i, action::str(action), node->str());
-                SPDLOG_DEBUG(node->str());
-                if ((node->stopped) || (node->done))
-                    break;
-            }
-            SPDLOG_DEBUG("Selection finished.");
-            return node;
-        },
-        selected,
-        vec<TreeNode *>(num_sims, root));
-    env->action_space->set_action_allowed(tp, selected);
+    selected.reserve(num_sims);
+    if (tp == nullptr)
+        for (size_t i = 0; i < num_sims; ++i)
+            selected.push_back(select_single_thread(root, depth_limit));
+    else
+    {
+        vec<std::future<void>> results(num_sims);
+        selected.resize(num_sims);
+        for (size_t i = 0; i < num_sims; ++i)
+            results[i] = tp->push(
+                [this, root, depth_limit, i, &selected](int) {
+                    selected[i] = this->select_single_thread(root, depth_limit);
+                });
+        for (size_t i = 0; i < num_sims; ++i)
+            results[i].wait();
+    }
+    SPDLOG_DEBUG("Mcts: selected.");
     return selected;
 }
 
@@ -55,48 +56,8 @@ void Mcts::backup(const vec<TreeNode *> &nodes, const vec<float> &values)
     assert(nodes.size() == values.size());
     for (size_t i = 0; i < nodes.size(); i++)
     {
-        auto node = nodes.at(i);
-        auto value = values.at(i);
-        node->backup(value, game_count, virtual_loss);
-    }
-}
-
-uai_t Mcts::play(TreeNode *node)
-{
-    assert(!node->played);
-    node->played = true;
-    int best_i = node->max_index;
-    uai_t action_id = (best_i == -1) ? action::STOP : node->max_action_id;
-    SPDLOG_INFO("Played action {0}, best_i {1}", action::str(action_id), best_i);
-    SPDLOG_INFO("Old node: {}", node->str());
-    SPDLOG_INFO("New node: {}", node->neighbors.at(action_id)->str());
-    return action_id;
-}
-
-void Mcts::set_logging_options(int verbose_level, bool log_to_file = false)
-{
-    spdlog::level::level_enum level;
-    switch (verbose_level)
-    {
-    case 0:
-        level = spdlog::level::err;
-        break;
-    case 1:
-        level = spdlog::level::info;
-        break;
-    case 2:
-        level = spdlog::level::debug;
-        break;
-    case 3:
-        level = spdlog::level::trace;
-        break;
-    }
-    spdlog::set_level(level);
-
-    if (log_to_file)
-    {
-        auto logger = spdlog::basic_logger_st("default", "log.txt", true);
-        logger->flush_on(level);
-        spdlog::set_default_logger(logger);
+        auto node = nodes[i];
+        auto value = values[i];
+        node->backup(value, opt.game_count, opt.virtual_loss);
     }
 }

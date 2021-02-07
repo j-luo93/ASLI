@@ -2,22 +2,28 @@
 
 #include "common.hpp"
 #include "env.hpp"
+#include "node.hpp"
+
+struct MctsOpt
+{
+    float puct_c;
+    int game_count;
+    float virtual_loss;
+    int num_threads;
+};
 
 class Mcts
 {
     Pool *tp;
+    Env *env;
+
+    TreeNode *select_single_thread(TreeNode *, int);
 
 public:
-    Env *env;
-    const float puct_c;
-    const int game_count;
-    const float virtual_loss;
-    const int num_threads;
+    MctsOpt opt;
 
-    Mcts(Env *, float, int, float, int);
+    Mcts(Env *, const MctsOpt &);
 
     vec<TreeNode *> select(TreeNode *, int, int);
     void backup(const vec<TreeNode *> &, const vec<float> &);
-    uai_t play(TreeNode *);
-    void set_logging_options(int, bool);
 };

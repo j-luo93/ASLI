@@ -1,51 +1,42 @@
 #pragma once
 
 #include "common.hpp"
-#include "site.hpp"
 
 class Word
 {
     friend class WordSpace;
 
-    Word(const IdSeq &, const IdSeq &, const vec<SiteNode *> &, const vec<SiteNode *> &, size_t);
+    Word(const IdSeq &);
+
+    // FIXME(j_luo) optimize this later.
+
+    paramap<int, float> dists;
 
 public:
     const IdSeq id_seq;
-    const IdSeq vowel_seq;
-    ParaMap<usi_t, vec<Word *>> neighbors;
-    ParaMap<usi_t, vec<Word *>> vowel_neighbors;
 
-    vec<SiteNode *> site_roots;
-    vec<SiteNode *> vowel_site_roots;
-    std::string str();
-    DistTable dists;
+    float get_edit_dist(int);
 };
 
-class ActionSpace;
-class Env;
+struct WordSpaceOpt
+{
+    vec<vec<float>> dist_mat;
+    float ins_cost;
+};
 
 class WordSpace
 {
     friend class ActionSpace;
     friend class Env;
 
-    ParaMap<IdSeq, Word *> words;
+    paramap<IdSeq, Word *> words;
     vec<Word *> end_words;
 
-    float get_edit_dist(Word *, Word *);
-    vec<SiteNode *> get_site_roots(const IdSeq &);
-
 public:
-    SiteSpace *site_space;
-    const vec<vec<float>> dist_mat;
-    const float ins_cost;
+    WordSpaceOpt opt;
 
-    WordSpace(SiteSpace *, const vec<vec<float>> &, float);
+    WordSpace(const VocabIdSeq &, const WordSpaceOpt &);
 
-    void get_words(Pool *, vec<Word *> &, const vec<IdSeq> &, bool = false, size_t = 0);
-    void get_word(Word *&, const IdSeq &, size_t = 0);
-    size_t size() const;
-    void set_end_words(const vec<Word *> &);
-    float safe_get_dist(Word *, int);
-    float get_edit_dist(const IdSeq &, const IdSeq &);
+    Word *get_word(const IdSeq &);
+    void set_edit_dist(Word *, int);
 };

@@ -1,84 +1,42 @@
 #include "env.hpp"
 
-Env::Env(ActionSpace *action_space,
-         WordSpace *word_space,
-         const VocabIdSeq &start_ids,
-         const VocabIdSeq &end_ids,
-         float final_reward,
-         float step_penalty) : action_space(action_space),
-                               word_space(word_space),
-                               final_reward(final_reward),
-                               step_penalty(step_penalty)
+Env::Env(const EnvOpt &env_opt, const WordSpaceOpt &ws_opt) : opt(env_opt)
 {
-    // Set up the word space properly.
-    auto end_words = vec<Word *>();
-    word_space->get_words(nullptr, end_words, end_ids, false, end_ids.size());
-    word_space->set_end_words(end_words);
-    auto start_words = vec<Word *>();
-    word_space->get_words(nullptr, start_words, start_ids);
-    for (size_t order = 0; order < start_words.size(); order++)
-    {
-        auto word = start_words.at(order);
+    assert(opt.start_ids.size() == opt.end_ids.size());
 
-        word->dists.set(order, word_space->get_edit_dist(word, word_space->end_words.at(order)));
-        end_words.at(order)->dists.set(order, 0.0);
-    }
+    // Set up the word space properly.
+    word_space = new WordSpace(opt.end_ids, ws_opt);
+
+    // Set up start and end states.
+    size_t n = opt.start_ids.size();
+    auto start_words = vec<Word *>();
+    start_words.reserve(n);
+    for (const auto &id_seq : opt.start_ids)
+        start_words.push_back(word_space->get_word(id_seq));
+    for (int order = 0; order < n; ++order)
+        word_space->set_edit_dist(start_words[order], order);
+
     start = new TreeNode(start_words, 0);
-    end = new TreeNode(end_words, -1);
+    end = new TreeNode(word_space->end_words, node::END_DEPTH);
+    action_space->expand(start);
+
+    // Set up the action space properly.
+    action_space = new ActionSpace(word_space);
 }
 
-TreeNode *Env::apply_action(TreeNode *node, int best_i, uai_t action)
+TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
 {
-    std::lock_guard<std::mutex> lock(node->neighbor_mtx);
-    auto &neighbors = node->neighbors;
-    if (neighbors.find(action) != neighbors.end())
-        return neighbors.at(action);
-
-    auto prev_action = pair<int, uai_t>(best_i, action);
-    TreeNode *new_node;
-    float reward;
-
-    // Special treatment for stop action.
-    if (action == action::STOP)
+    MiniNode *last = subpath.second[4];
+    int last_child_index = subpath.first[5].first;
+    BaseNode *&child = last->children[last_child_index];
+    if (child == nullptr)
     {
-        new_node = new TreeNode(node->words, prev_action, node, true);
-        // Still need to apply this for the last step.
-        reward = -this->step_penalty;
-        SPDLOG_DEBUG("Stop action applied.");
+        child = action_space->apply_new_action(node, subpath);
+        auto *tchild = static_cast<TreeNode *>(child);
+        float final_reward = tchild->done ? opt.final_reward : -opt.step_penalty;
+        float incremental_reward = (node->dist - tchild->dist) / start->dist;
+        float reward = final_reward + incremental_reward;
+        node->rewards[last_child_index] = reward;
     }
-    else
-    {
-        // Obtain new list of words.
-        SPDLOG_DEBUG("Applying action {0}, best_i {1}.", action::str(action), best_i);
-        auto new_words = vec<Word *>();
-        SpecialType st = action::get_special_type(action);
-        bool use_vowel_seq = (st == SpecialType::VS);
-        for (const auto word : node->words)
-        {
-            usi_t site = action::get_site(action);
-            auto &w_neighbors = use_vowel_seq ? word->vowel_neighbors : word->neighbors;
-            bool pushed = false;
-            if (w_neighbors.contains(site))
-            {
-                abc_t before_id = action::get_before_id(action);
-                abc_t after_id = action::get_after_id(action);
-                int idx = action_space->locate_edge_index(before_id, st, after_id, use_vowel_seq);
-                if (idx > 0)
-                {
-                    pushed = true;
-                    new_words.push_back(w_neighbors[site][idx]);
-                }
-            }
-            if (!pushed)
-                new_words.push_back(word);
-        }
-        new_node = new TreeNode(new_words, prev_action, node, false);
-
-        float final_reward = new_node->done ? this->final_reward : -this->step_penalty;
-        float incremental_reward = (node->dist - new_node->dist) / start->dist;
-        reward = final_reward + incremental_reward;
-    }
-    node->neighbors[action] = new_node;
-    node->rewards[action] = reward;
-    return new_node;
+    return static_cast<TreeNode *>(child);
 }

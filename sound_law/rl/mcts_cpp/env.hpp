@@ -1,21 +1,29 @@
 #pragma once
 
 #include "common.hpp"
+#include "node.hpp"
+#include "word.hpp"
 #include "action.hpp"
-#include "tree_node.hpp"
+
+struct EnvOpt
+{
+    VocabIdSeq start_ids;
+    VocabIdSeq end_ids;
+    float final_reward;
+    float step_penalty;
+};
 
 class Env
 {
-public:
-    ActionSpace *action_space;
     WordSpace *word_space;
+
+public:
+    Env(const EnvOpt &env_opt, const WordSpaceOpt &ws_opt);
+
+    EnvOpt opt;
     TreeNode *start;
     TreeNode *end;
-    const float final_reward;
-    const float step_penalty;
+    ActionSpace *action_space;
 
-public:
-    Env(ActionSpace *, WordSpace *, const VocabIdSeq &, const VocabIdSeq &, float, float);
-
-    TreeNode *apply_action(TreeNode *, int, uai_t);
+    TreeNode *apply_action(TreeNode *, const Subpath &);
 };
