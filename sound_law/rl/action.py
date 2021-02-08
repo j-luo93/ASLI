@@ -18,7 +18,8 @@ import sound_law.rl.trajectory as tr
 from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import Singleton, pbar
 from sound_law.data.alphabet import (ANY_ID, ANY_S_ID, ANY_UNS_ID, EMP, EMP_ID,
-                                     EOT_ID, SOT_ID, SYL_EOT_ID, Alphabet)
+                                     EOT_ID, NULL_ID, SOT_ID, SYL_EOT_ID,
+                                     Alphabet)
 
 # pylint: disable=no-name-in-module
 # from .mcts_cpp import PyAction
@@ -32,16 +33,25 @@ add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factor
 add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
 
 
+@dataclass(eq=True, frozen=True)
 class SoundChangeAction:
-    # class SoundChangeAction(PyAction):
     """One sound change rule."""
+
+    before_id: int
+    after_id: int
+    pre_id: int
+    d_pre_id: int
+    post_id: int
+    d_post_id: int
+    special_type: Optional[str] = None
+
     abc: ClassVar[Alphabet] = None
 
-    def __hash__(self):
-        return self.action_id
+    # def __hash__(self):
+    #     return hash(f"{self.special_type}: {self.before_id} {self.after_id} {self.pre_id} {self.d_pre_id} {self.post_id} {self.d_post_id}")
 
-    def __eq__(self, other: SoundChangeAction):
-        return self.action_id == other.action_id
+    # def __eq__(self, other: SoundChangeAction):
+    #     return self.before_id == other.before_id and self.after_id == other.after_id and self.pre_id== self.other_id
 
     @classmethod
     def from_str(cls, before: str, after: str,
@@ -71,16 +81,17 @@ class SoundChangeAction:
             if unit == '##':
                 return SYL_EOT_ID
             if unit is None:
-                return PyNull_abc
-            return cls.abc[unit]
+                return NULL_ID
+            return cls.abc[unit]  # pylint: disable=unsubscriptable-object
 
-        return cls(cls.abc[before], to_int(after, 'a'),
+        return cls(cls.abc[before], to_int(after, 'a'),  # pylint: disable=unsubscriptable-object
                    to_int(pre, 'b'), to_int(d_pre, 'b'),
                    to_int(post, 'a'), to_int(d_post, 'a'),
                    special_type=special_type)
 
     def __repr__(self):
-        if self.action_id == PyStop:
+        # if self.action_id == PyStop:
+        if self.before_id == NULL_ID:
             return 'STOP'
 
         def get_str(idx: int):
@@ -105,10 +116,10 @@ class SoundChangeAction:
                 ret = f'({ret})'
             return ret
 
-        pre = get_cond(self.pre_cond)
+        pre = get_cond([idx for idx in [self.d_pre_id, self.pre_id] if idx != NULL_ID])
         if pre:
             pre = f'{pre} + '
-        post = get_cond(self.post_cond)
+        post = get_cond([idx for idx in [self.post_id, self.d_post_id] if idx != NULL_ID])
         if post:
             post = f' + {post}'
 

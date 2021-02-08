@@ -20,6 +20,7 @@ EMP = '<emp>'
 SYL_EOT = '<syl_EOT>'
 ANY_S = '<any_s>'
 ANY_UNS = '<any_uns>'
+NULL = "<null>"
 SOT_ID = 0
 EOT_ID = 1
 PAD_ID = 2
@@ -28,6 +29,7 @@ EMP_ID = 4
 SYL_EOT_ID = 5
 ANY_S_ID = 6
 ANY_UNS_ID = 7
+NULL_ID = 8
 
 _ft = FeatureTable()
 
@@ -96,29 +98,29 @@ class Alphabet:
 
         # Get vowel info.
         n = len(self._id2unit)
-        self.vowel_mask = np.zeros(n, dtype=bool)
-        self.vowel_base = np.arange(n, dtype='uint16')
-        self.vowel_stress = np.zeros(n, dtype='int32')
-        self.stressed_vowel = np.arange(n, dtype='uint16')
-        self.unstressed_vowel = np.arange(n, dtype='uint16')
-        self.vowel_stress.fill(mcts_cpp.PyNoStress)
-        self.vowel_stress[ANY_S_ID] = mcts_cpp.PyStressed
-        self.vowel_stress[ANY_UNS_ID] = mcts_cpp.PyUnstressed
-        self.stressed_vowel[ANY_ID] = ANY_S_ID
-        self.unstressed_vowel[ANY_ID] = ANY_UNS_ID
+        self.is_vowel = np.zeros(n, dtype=bool)
+        self.unit_stress = np.zeros(n, dtype='int32')
+        self.unit2base = np.arange(n, dtype='uint16')
+        self.unit2stressed = np.arange(n, dtype='uint16')
+        self.unit2unstressed = np.arange(n, dtype='uint16')
+        self.unit_stress.fill(mcts_cpp.PyNoStress)
+        self.unit_stress[ANY_S_ID] = mcts_cpp.PyStressed
+        self.unit_stress[ANY_UNS_ID] = mcts_cpp.PyUnstressed
+        self.unit2stressed[ANY_ID] = ANY_S_ID
+        self.unit2unstressed[ANY_ID] = ANY_UNS_ID
         for u in self._id2unit:
             if u.endswith('{+}') or u.endswith('{-}'):
                 base = u[:-3]
                 base_id = self._unit2id[base]
                 i = self._unit2id[u]
-                self.vowel_mask[base_id] = True
-                self.vowel_mask[i] = True
-                self.vowel_base[i] = base_id
-                self.vowel_stress[i] = mcts_cpp.PyStressed if u[-2] == '+' else mcts_cpp.PyUnstressed
+                self.is_vowel[base_id] = True
+                self.is_vowel[i] = True
+                self.unit2base[i] = base_id
+                self.unit_stress[i] = mcts_cpp.PyStressed if u[-2] == '+' else mcts_cpp.PyUnstressed
                 if u.endswith('{+}'):
-                    self.stressed_vowel[base_id] = i
+                    self.unit2stressed[base_id] = i
                 else:
-                    self.unstressed_vowel[base_id] = i
+                    self.unit2unstressed[base_id] = i
 
         self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
         self.dist_mat = self.edges = self.cl_map = self.gb_map = None
@@ -133,7 +135,7 @@ class Alphabet:
             orig_u2i = {u: i for i, u in enumerate(orig_units)}
             new_ids = np.asarray([self[u] for u in orig_units] + [self[u] for u in units[base_n:]])
             orig_ids = np.asarray(list(range(len(orig_units))) +
-                                  [orig_u2i[self[self.vowel_base[self[u]]]] for u in units[base_n:]])
+                                  [orig_u2i[self[self.unit2base[self[u]]]] for u in units[base_n:]])
             self.dist_mat[new_ids.reshape(-1, 1), new_ids] = dist_mat[orig_ids.reshape(-1, 1), orig_ids]
             self.edges = edges
             self.cl_map = cl_map

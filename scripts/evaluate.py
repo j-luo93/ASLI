@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import pickle
 import re
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import ClassVar, Dict, List, Optional, Set, Tuple, Union
 
@@ -14,12 +16,12 @@ from pypheature.process import (FeatureProcessor, NoMappingFound,
 from pypheature.segment import Segment
 from sound_law.data.alphabet import EOT, SOT, Alphabet
 from sound_law.main import setup
-from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
-from sound_law.rl.mcts_cpp import \
-    PyNull_abc  # pylint: disable=no-name-in-module
+from sound_law.rl.action import SoundChangeAction
+from sound_law.rl.env import SoundChangeEnv
+# from sound_law.rl.mcts_cpp import
+#     PyNull_abc  # pylint: disable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.train.manager import OnePairManager
-from copy import deepcopy
 
 _fp = FeatureProcessor()
 # NOTE(j_luo) We use `a` to represent the back vowel `ɑ`.
@@ -382,25 +384,26 @@ def get_actions(raw_rules: List[str], orders: List[str], refs: Optional[List[str
 class PlainState:
     """This stores the plain vocabulary state (using str), as opposed to `VocabState` that is used by MCTS (using ids)."""
 
-    action_space: ClassVar[SoundChangeActionSpace] = None
+    # action_space: ClassVar[SoundChangeActionSpace] = None
+    env: ClassVar[SoundChangeEnv] = None
     end_state: ClassVar[PlainState] = None
     abc: ClassVar[Alphabet] = None
 
-    def __init__(self, segments: List[List[str]]):
-        self.segments = segments
-
-    @classmethod
-    def from_vocab_state(cls, vocab: VocabState) -> PlainState:
-        return cls(vocab.segment_list)
+    def __init__(self, node: VocabState):
+        self.segments = node.segment_list
+        self._node = node
 
     def apply_action(self, action: SoundChangeAction) -> PlainState:
         cls = type(self)
-        assert cls.action_space is not None
-        new_segments = list()
-        for seg in self.segments:
-            new_segments.append(cls.action_space.apply_action(seg, action))
+        assert cls.env is not None
+        try:
+            new_node = cls.env.apply_action(self._node, action.before_id, action.after_id,
+                                            action.pre_id, action.d_pre_id, action.post_id, action.d_post_id)
+            return cls(new_node)
 
-        return cls(new_segments)
+        except RuntimeError:
+            logging.warn("No site was targeted.")
+            return self
 
     def dist_from(self, tgt_segments: List[List[str]]):
         '''Returns the distance between the current state and a specified state of segments'''
@@ -411,10 +414,10 @@ class PlainState:
         for s1, s2 in zip(self.segments, tgt_segments):
             s1 = [cls.abc[u] for u in s1]  # pylint: disable=unsubscriptable-object
             s2 = [cls.abc[u] for u in s2]  # pylint: disable=unsubscriptable-object
-            dist += cls.action_space.word_space.get_edit_dist(s1, s2)
+            dist += cls.env.get_edit_dist(s1, s2)
         return dist
 
-    @ property
+    @property
     def dist(self) -> float:
         '''Returns the distance between the current state and the end state'''
         cls = type(self)
@@ -496,30 +499,30 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
             gold.extend(get_actions(rows['w/ SS'], rows['order'], refs=rows['ref no.']))
 
     # Simulate the actions and get the distance.
-    PlainState.action_space = manager.action_space
-    PlainState.end_state = PlainState.from_vocab_state(manager.env.end)
+    PlainState.env = manager.env
+    PlainState.end_state = PlainState(manager.env.end)
     PlainState.abc = manager.tgt_abc
-    state = PlainState.from_vocab_state(manager.env.start)
+    state = PlainState(manager.env.start)
     states = [state]
     actions = list()
     refs = list()
     expanded_gold = list()
 
-    print(state.dist)
+    logging.info(f"Starting dist: {state.dist:.3f}")
     for hr in gold:
         if hr.expandable:
             action_q = hr.specialize(state)
-            print(hr)
+            logging.warn(f"This is an expandable rule: {hr}")
         else:
             action_q = [hr.to_action()]
         for action in action_q:
+            logging.info(f"Applying {action}")
             state = state.apply_action(action)
             states.append(state)
             actions.append(action)
             refs.append(hr.ref)
             expanded_gold.append(action)
-            print(action)
-            print(state.dist)
+            logging.info(f"New dist: {state.dist:.3f}")
 
     # NOTE(j_luo) We can only score based on expanded rules.
     gold = expanded_gold

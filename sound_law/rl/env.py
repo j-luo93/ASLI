@@ -6,36 +6,60 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
-import torch.nn as nn
 
 from dev_misc import FT, LT, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib import pad_to_dense
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.utils import handle_sequence_inputs
-from sound_law.data.alphabet import PAD_ID
+from sound_law.data.alphabet import PAD_ID, Alphabet, EMP
 
 from .action import SoundChangeAction
 from .agent import AgentInputs, VanillaPolicyGradient
-from .mcts_cpp import PyEnv  # pylint: disable=no-name-in-module
+# pylint: disable=no-name-in-module
+from .mcts_cpp import PyActionSpaceOpt, PyEnv, PyEnvOpt, PyWordSpaceOpt
+# pylint: enable=no-name-in-module
 from .trajectory import Trajectory, VocabState
 
 
-class SoundChangeEnv(nn.Module, PyEnv):
+class SoundChangeEnv(PyEnv):
 
     tnode_cls = VocabState
 
     add_argument(f'final_reward', default=1.0, dtype=float, msg='Final reward for reaching the end.')
     add_argument(f'step_penalty', default=0.02, dtype=float, msg='Penalty for each step if not the end state.')
 
-    # pylint: disable=unused-argument
-    def __init__(self,
-                 action_space: SoundChangeActionSpace,
-                 word_space: PyWordSpace,
-                 s_arr, s_lengths,
-                 e_arr, e_lengths,
-                 final_reward: float,
-                 step_penalty: float):
-        nn.Module.__init__(self)
+    def register_changes(self, abc: Alphabet):
+        # # Set class variable for `SoundChangeAction` here.
+        SoundChangeAction.abc = abc
+
+        # Register unconditional actions first.
+        units = [u for u in abc if u not in abc.special_units]
+
+        def register_uncondional_action(u1: str, u2: str, cl: bool = False, gb: bool = False):
+            id1 = abc[u1]
+            id2 = abc[u2]
+            if cl:
+                self.register_cl_map(id1, id2)
+            elif gb:
+                if u1.startswith('i'):
+                    self.register_gbj(id1, id2)
+                else:
+                    assert u1.startswith('u')
+                    self.register_gbw(id1, id2)
+            else:
+                self.register_permissible_change(id1, id2)
+
+        for u1, u2 in abc.edges:
+            register_uncondional_action(u1, u2)
+        for u in units:
+            register_uncondional_action(u, EMP)
+        # for u1, u2 in abc.cl_map.items():
+        #     register_uncondional_action(u1, u2, cl=True)
+        # for u1, u2 in abc.gb_map.items():
+        #     register_uncondional_action(u1, u2, gb=True)
+
+        # self.set_vowel_info(abc.vowel_mask, abc.vowel_base, abc.vowel_stress, abc.stressed_vowel, abc.unstressed_vowel)
+        # self.set_glide_info(abc['j'], abc['w'])
 
     def forward(self, state: VocabState, best_i: int, action: SoundChangeAction) -> Tuple[VocabState, bool, float]:
         return self.step(state, best_i, action)

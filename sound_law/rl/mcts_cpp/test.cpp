@@ -138,6 +138,23 @@ int main(int argc, char *argv[])
     as_opt.emp_id = 1;
     as_opt.sot_id = 2;
     as_opt.eot_id = 3;
+    as_opt.is_vowel = vec<bool>(num_abc);
+    as_opt.unit_stress = vec<Stress>(num_abc);
+    as_opt.unit2base = vec<abc_t>(num_abc);
+    as_opt.unit2stressed = vec<abc_t>(num_abc);
+    as_opt.unit2unstressed = vec<abc_t>(num_abc);
+    if ((num_abc - 3) > 4)
+    {
+        as_opt.is_vowel[num_abc - 3] = true;
+        as_opt.is_vowel[num_abc - 2] = true;
+        as_opt.is_vowel[num_abc - 1] = true;
+        as_opt.unit_stress[num_abc - 2] = Stress::STRESSED;
+        as_opt.unit_stress[num_abc - 1] = Stress::UNSTRESSED;
+        as_opt.unit2base[num_abc - 2] = num_abc - 3;
+        as_opt.unit2base[num_abc - 1] = num_abc - 3;
+        as_opt.unit2stressed[num_abc - 3] = num_abc - 2;
+        as_opt.unit2unstressed[num_abc - 3] = num_abc - 1;
+    }
     auto ws_opt = WordSpaceOpt();
     ws_opt.dist_mat = dist_mat;
     ws_opt.ins_cost = ins_cost;
@@ -146,12 +163,12 @@ int main(int argc, char *argv[])
     {
         for (int j = std::max(0, i - 10); j < std::min(num_abc, i + 11); j++)
             if ((i != j) && (j > 3))
-                env->action_space->register_permissible_change(i, j);
-        env->action_space->register_permissible_change(i, as_opt.emp_id);
+                env->register_permissible_change(i, j);
+        env->register_permissible_change(i, as_opt.emp_id);
     }
-    env->action_space->evaluate(env->start,
-                                MetaPriors{
-                                    uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)});
+    env->evaluate(env->start,
+                  MetaPriors{
+                      uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)});
 
     auto mcts_opt = MctsOpt();
     mcts_opt.puct_c = puct_c;
@@ -185,9 +202,9 @@ int main(int argc, char *argv[])
                                        });
             SPDLOG_DEBUG("#nodes to evaluate: {}", unique_nodes.size());
             for (const auto node : unique_nodes)
-                env->action_space->evaluate(node,
-                                            MetaPriors{
-                                                uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)});
+                env->evaluate(node,
+                              MetaPriors{
+                                  uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)});
             SPDLOG_DEBUG("Backing up values.");
             mcts->backup(selected, vec<float>(selected.size(), 0.0));
         }

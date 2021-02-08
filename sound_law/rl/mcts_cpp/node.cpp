@@ -12,7 +12,7 @@ TransitionNode::TransitionNode(TreeNode *base,
 void TreeNode::common_init(const vec<Word *> &words)
 {
     for (int order = 0; order < words.size(); ++order)
-        dist += words[order]->get_edit_dist(order);
+        dist += words[order]->get_edit_dist_at(order);
 
     if (dist == 0.0)
         done = true;

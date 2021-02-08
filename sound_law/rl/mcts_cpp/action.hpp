@@ -16,6 +16,11 @@ struct ActionSpaceOpt
     abc_t emp_id;
     abc_t sot_id;
     abc_t eot_id;
+    vec<bool> is_vowel;
+    vec<Stress> unit_stress;
+    vec<abc_t> unit2base;
+    vec<abc_t> unit2stressed;
+    vec<abc_t> unit2unstressed;
 };
 
 class Env;
@@ -31,20 +36,22 @@ class ActionSpace
     Subpath get_best_subpath(TreeNode *, float, int, float);
     MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool);
     IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t);
+    void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &);
     void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
     bool expand(MiniNode *);
     void evaluate(MiniNode *);
     // This will create a new tree node without checking first if the child exists. Use `apply_action` in `Env` if checking is needed.
     TreeNode *apply_new_action(TreeNode *, const Subpath &);
+    TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t);
+    void register_permissible_change(abc_t, abc_t);
+    void evaluate(TreeNode *, const MetaPriors &);
 
-public:
     ActionSpace(WordSpace *, const ActionSpaceOpt &);
-
-    const ActionSpaceOpt opt;
     map<abc_t, vec<abc_t>> permissible_changes;
 
-    void register_permissible_change(abc_t, abc_t);
     void expand(TreeNode *);
     void clear_stats(BaseNode *);
-    void evaluate(TreeNode *, const MetaPriors &);
+
+public:
+    const ActionSpaceOpt opt;
 };

@@ -94,3 +94,10 @@ namespace str
 {
     inline string from(bool b) { return b ? "true" : "false"; }
 } // namespace str
+
+enum class Stress : int
+{
+    NOSTRESS,
+    STRESSED,
+    UNSTRESSED
+};

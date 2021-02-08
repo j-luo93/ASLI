@@ -12,8 +12,9 @@ from torch.optim import SGD, Adam
 from dev_misc import add_argument, add_condition, g, get_tensor
 from dev_misc.devlib.helper import has_gpus
 from dev_misc.trainlib.tb_writer import MetricWriter
-from sound_law.data.alphabet import (ANY_ID, EMP_ID, EOT_ID, SOT_ID, ANY_S_ID, ANY_UNS_ID,
-                                     SYL_EOT_ID, Alphabet)
+from sound_law.data.alphabet import (ANY_ID, ANY_S_ID, ANY_UNS_ID, EMP_ID,
+                                     EOT_ID, NULL_ID, SOT_ID, SYL_EOT_ID,
+                                     Alphabet)
 from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.setting import Setting, Split
@@ -23,9 +24,8 @@ from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
 # pylint: disable=no-name-in-module
-from sound_law.rl.mcts_cpp import PyEnv
-# from sound_law.rl.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
-#                                    PyWordSpace)
+from sound_law.rl.mcts_cpp import (  # pylint: disable=no-name-in-module
+    PyActionSpaceOpt, PyEnv, PyEnvOpt, PyWordSpaceOpt)
 # pylint: enable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.s2s.module import CharEmbedding, EmbParams, PhonoEmbedding
@@ -128,19 +128,7 @@ class OnePairManager:
             test_setting = create_setting('test', Split('test'), False)
             settings.append(test_setting)
 
-        # if g.use_rl:
-        #     # SoundChangeActionSpace.set_conditional(g.use_conditional)
-        #     # SoundChangeActionSpace.set_pruning(g.use_pruning)
-        #     # if g.use_pruning:
-        #     #     SoundChangeActionSpace.set_pruning_threshold(g.pruning_threshold)
-        #     py_ss = PySiteSpace()
-        #     py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 1.0, s_arr, s_lengths)
-        #     self.action_space = SoundChangeActionSpace(self.tgt_abc)
-        #     dl_kwargs = {'action_space': self.action_space}
-        # else:
-        #     dl_kwargs = dict()
         for setting in settings:
-            # self.dl_reg.register_data_loader(setting, cr, **dl_kwargs)
             self.dl_reg.register_data_loader(setting, cr)
 
         # Get the RL environment if needed.
@@ -153,12 +141,16 @@ class OnePairManager:
             tgt_seqs = dl.entire_batch.tgt_seqs
             t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype('uint16')
             t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
-            py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID, SYL_EOT_ID, ANY_S_ID, ANY_UNS_ID)
-            py_ws = PyWordSpace(py_ss, self.tgt_abc.dist_mat, 1.0)
-            self.action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold, g.site_threshold, self.tgt_abc)
-
-            self.env = SoundChangeEnv(self.action_space, py_ws, s_arr, s_lengths,
-                                      t_arr, t_lengths, g.final_reward, g.step_penalty)
+            env_opt = PyEnvOpt(s_arr, s_lengths, t_arr, t_lengths, g.final_reward, g.step_penalty)
+            as_opt = PyActionSpaceOpt(NULL_ID, EMP_ID, SOT_ID, EOT_ID,
+                                      self.tgt_abc.is_vowel,
+                                      self.tgt_abc.unit_stress,
+                                      self.tgt_abc.unit2base,
+                                      self.tgt_abc.unit2stressed,
+                                      self.tgt_abc.unit2unstressed)
+            ws_opt = PyWordSpaceOpt(self.tgt_abc.dist_mat, 1.0)
+            self.env = SoundChangeEnv(env_opt, as_opt, ws_opt)
+            self.env.register_changes(self.tgt_abc)
 
     def run(self):
         phono_feat_mat = special_ids = None

@@ -122,11 +122,7 @@ if __name__ == "__main__":
         tgt_seqs = dl.entire_batch.tgt_seqs
         t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype("uint16")
         t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
-        py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID, SYL_EOT_ID, ANY_S_ID, ANY_UNS_ID)
-        py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 2.0)
-        action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold,
-                                              g.site_threshold, manager.tgt_abc)
-        env = SoundChangeEnv(action_space, py_ws, s_arr, s_lengths, t_arr, t_lengths, g.final_reward, g.step_penalty)
+        env = manager.env
 
         init_n_chars = len(get_all_chars(env.start, manager.tgt_abc))
         print(init_n_chars)
@@ -137,7 +133,6 @@ if __name__ == "__main__":
         np.random.seed(args.random_seed)
         for i in range(args.length):
             while True:
-                env.action_space.set_action_allowed(state)
                 best_i = np.random.choice(state.num_actions)
                 print(state.num_actions, 'allowed.')
                 # for i, a in enumerate(state.action_allowed):

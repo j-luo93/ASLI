@@ -15,6 +15,8 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
     {
         auto new_words = vec<Word *>(node->words);
         const auto &aff = last->affected[last_child_index];
+        // std::cerr << "last size " << last->affected.size() << "\n";
+        // std::cerr << "last " << last_child_index << "\n";
         // FIXME(j_luo) If everything is ordered, then perhaps we don't need hashing.
         auto order2pos = map<int, vec<size_t>>();
         for (const auto &item : aff)
@@ -25,7 +27,7 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
             auto new_id_seq = change_id_seq(node->words[order]->id_seq, item.second, after_id);
             auto new_word = word_space->get_word(new_id_seq);
             new_words[order] = new_word;
-            word_space->set_edit_dist(new_word, order);
+            word_space->set_edit_dist_at(new_word, order);
         }
         new_node = new TreeNode(new_words, node->depth + 1, last, subpath.chosen_seq[5], false);
         expand(new_node);
@@ -33,12 +35,93 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
     return new_node;
 }
 
+inline int get_index(abc_t target, const vec<abc_t> &chars)
+{
+    for (int i = 0; i < chars.size(); ++i)
+        if (chars[i] == target)
+            return i;
+    // std::cerr << target << "\n";
+    // for (const auto c : chars)
+    //     std::cerr << c << " ";
+    // assert(false);
+    throw std::runtime_error("Target not found.");
+}
+
+inline void dummy_evaluate(vec<float> &priors, size_t size) { priors = vec<float>(size, 0.0); }
+
+TreeNode *ActionSpace::apply_action(TreeNode *node,
+                                    abc_t before_id,
+                                    abc_t after_id,
+                                    abc_t pre_id,
+                                    abc_t d_pre_id,
+                                    abc_t post_id,
+                                    abc_t d_post_id)
+{
+    // std::cerr << "before\n";
+    auto before = ChosenChar({get_index(before_id, node->permissible_chars), before_id});
+    bool stopped = (before.first == 0);
+    auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
+    if (expand(before_mn))
+        dummy_evaluate(before_mn->priors, before_mn->permissible_chars.size());
+
+    // std::cerr << "after\n";
+    auto after = ChosenChar({get_index(after_id, before_mn->permissible_chars), after_id});
+    auto after_mn = get_mini_node(node, before_mn, after, ActionPhase::AFTER, stopped);
+    if (expand(after_mn))
+        dummy_evaluate(after_mn->priors, after_mn->permissible_chars.size());
+
+    // std::cerr << "pre\n";
+    auto pre = ChosenChar({get_index(pre_id, after_mn->permissible_chars), pre_id});
+    auto pre_mn = get_mini_node(node, after_mn, pre, ActionPhase::PRE, stopped);
+    if (expand(pre_mn))
+        dummy_evaluate(pre_mn->priors, pre_mn->permissible_chars.size());
+
+    auto d_pre = ChosenChar({get_index(d_pre_id, pre_mn->permissible_chars), d_pre_id});
+    // std::cerr << "d_pre\n";
+    auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
+    if (expand(d_pre_mn))
+        dummy_evaluate(d_pre_mn->priors, d_pre_mn->permissible_chars.size());
+
+    // std::cerr << "post\n";
+    auto post = ChosenChar({get_index(post_id, d_pre_mn->permissible_chars), post_id});
+    auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
+    if (expand(post_mn))
+        dummy_evaluate(post_mn->priors, post_mn->permissible_chars.size());
+
+    // std::cerr << "d_post\n";
+    auto d_post = ChosenChar({get_index(d_post_id, post_mn->permissible_chars), d_post_id});
+
+    Subpath subpath;
+    subpath.chosen_seq = {before, after, pre, d_pre, post, d_post};
+    subpath.mini_node_seq = {before_mn, after_mn, pre_mn, d_pre_mn, post_mn};
+    subpath.stopped = stopped;
+
+    // FIXME(j_luo) This shouldn't create a new node.
+    return apply_new_action(node, subpath);
+}
+
 inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &positions, abc_t after_id)
 {
-    // FIXME(j_luo)  add syncope and all special cases.
+    // FIXME(j_luo)   add all special cases.
     auto new_id_seq = IdSeq(id_seq);
+    auto stressed_after_id = opt.unit2stressed[after_id];
+    auto unstressed_after_id = opt.unit2unstressed[after_id];
     for (const auto pos : positions)
-        new_id_seq[pos] = after_id;
+    {
+        auto stress = opt.unit_stress[new_id_seq[pos]];
+        switch (stress)
+        {
+        case Stress::NOSTRESS:
+            new_id_seq[pos] = after_id;
+            break;
+        case Stress::STRESSED:
+            new_id_seq[pos] = stressed_after_id;
+            break;
+        case Stress::UNSTRESSED:
+            new_id_seq[pos] = unstressed_after_id;
+            break;
+        }
+    }
     if (after_id == opt.emp_id)
     {
         auto cleaned = IdSeq();
@@ -130,8 +213,8 @@ void ActionSpace::expand(TreeNode *node)
     // Null/Stop option.
     node->permissible_chars.push_back(opt.null_id);
     node->affected = vec<Affected>({{}});
-
     auto char_map = map<abc_t, size_t>();
+    // std::cerr << str::from(node);
     for (int order = 0; order < node->words.size(); ++order)
     {
         auto &id_seq = node->words[order]->id_seq;
@@ -144,6 +227,7 @@ void ActionSpace::expand(TreeNode *node)
     clear_stats(node);
     SPDLOG_DEBUG("ActionSpace:: node expanded with #actions {}.", node->permissible_chars.size());
 
+    // std::cerr << "-----------------\n";
     // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
     // {
     //     std::cerr << "unit: " << node->permissible_chars[i] << "\n";
@@ -229,6 +313,7 @@ bool ActionSpace::expand(MiniNode *node)
     }
     clear_stats(node);
     SPDLOG_DEBUG("ActionSpace:: mini node expanded with #actions {}.", node->permissible_chars.size());
+    // std::cerr << "-----------------\n";
     // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
     // {
     //     std::cerr << "unit: " << node->permissible_chars[i] << "\n";
@@ -242,13 +327,8 @@ bool ActionSpace::expand(MiniNode *node)
     return true;
 }
 
-void ActionSpace::update_affected(BaseNode *node, const IdSeq &id_seq, int order, size_t pos, int offset, map<abc_t, size_t> &char_map)
+void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map)
 {
-    int new_pos = pos + offset;
-    if ((new_pos < 0) || (new_pos >= id_seq.size()))
-        return;
-
-    auto unit = id_seq[new_pos];
     if (!char_map.contains(unit))
     {
         // Add one more permission char.
@@ -262,6 +342,19 @@ void ActionSpace::update_affected(BaseNode *node, const IdSeq &id_seq, int order
         auto &aff = node->affected[char_map[unit]];
         aff.push_back({order, pos});
     }
+}
+
+void ActionSpace::update_affected(BaseNode *node, const IdSeq &id_seq, int order, size_t pos, int offset, map<abc_t, size_t> &char_map)
+{
+    int new_pos = pos + offset;
+    if ((new_pos < 0) || (new_pos >= id_seq.size()))
+        return;
+
+    auto unit = id_seq[new_pos];
+    update_affected(node, unit, order, pos, char_map);
+
+    if (opt.unit_stress[unit] != Stress::NOSTRESS)
+        update_affected(node, opt.unit2base[unit], order, pos, char_map);
 }
 
 void ActionSpace::evaluate(MiniNode *node)
