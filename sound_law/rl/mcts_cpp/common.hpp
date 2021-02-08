@@ -101,3 +101,13 @@ enum class Stress : int
     STRESSED,
     UNSTRESSED
 };
+
+enum class SpecialType : abc_t // Treat it as a special char to compatibility with ChosenChar in MiniNode.
+{
+    NONE,
+    CLL,
+    CLR,
+    VS,
+    GBJ,
+    GBW
+};

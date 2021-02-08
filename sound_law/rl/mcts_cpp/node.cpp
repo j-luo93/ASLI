@@ -69,7 +69,7 @@ bool TreeNode::is_leaf() { return priors.size() == 0; }
 TreeNode *TreeNode::play()
 {
     MiniNode *mini_node = static_cast<MiniNode *>(BaseNode::play());
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
         mini_node = static_cast<MiniNode *>(mini_node->play());
     return static_cast<TreeNode *>(mini_node->play());
 }

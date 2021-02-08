@@ -12,6 +12,7 @@ namespace node
 enum class ActionPhase : int
 {
     BEFORE,
+    SPECIAL_TYPE,
     AFTER,
     PRE,
     D_PRE,
@@ -108,6 +109,7 @@ class TreeNode : public BaseNode
     friend class ActionSpace;
 
     MetaPriors meta_priors;
+    vec<float> special_priors;
 
     void common_init(const vec<Word *> &);
     TreeNode(const vec<Word *> &, int);
@@ -135,6 +137,8 @@ namespace str
         {
         case ActionPhase::BEFORE:
             return "BEFORE";
+        case ActionPhase::SPECIAL_TYPE:
+            return "SPECIAL_TYPE";
         case ActionPhase::AFTER:
             return "AFTER";
         case ActionPhase::PRE:

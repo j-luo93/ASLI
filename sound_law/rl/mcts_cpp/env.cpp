@@ -26,8 +26,8 @@ Env::Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt
 
 TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
 {
-    auto *last = static_cast<TransitionNode *>(subpath.mini_node_seq[4]);
-    int last_child_index = subpath.chosen_seq[5].first;
+    auto *last = static_cast<TransitionNode *>(subpath.mini_node_seq[5]);
+    int last_child_index = subpath.chosen_seq[6].first;
     // Lock the last node since we are modifying its members.
     std::lock_guard<std::mutex> lock(last->mtx);
     BaseNode *&child = last->children[last_child_index];
@@ -39,7 +39,7 @@ TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
             reward = -opt.step_penalty;
         {
             auto *tchild = static_cast<TreeNode *>(child);
-            // last->rewards[last_child_index] = (node->dist - tchild->dist);
+            // reward = (node->dist - tchild->dist);
             float final_reward = tchild->done ? opt.final_reward : -opt.step_penalty;
             float incremental_reward = (node->dist - tchild->dist) / start->dist;
             reward = final_reward + incremental_reward;

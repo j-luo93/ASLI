@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
     env_opt.start_ids = start_ids;
     env_opt.end_ids = end_ids;
     env_opt.final_reward = 1.0;
-    env_opt.step_penalty = 0.0; // 0.001;
+    env_opt.step_penalty = 0.001;
     auto as_opt = ActionSpaceOpt();
     as_opt.null_id = 0;
     as_opt.emp_id = 1;
@@ -143,6 +143,14 @@ int main(int argc, char *argv[])
     as_opt.unit2base = vec<abc_t>(num_abc);
     as_opt.unit2stressed = vec<abc_t>(num_abc);
     as_opt.unit2unstressed = vec<abc_t>(num_abc);
+    for (abc_t i = 0; i < num_abc; ++i)
+    {
+        as_opt.is_vowel[i] = false;
+        as_opt.unit_stress[i] = Stress::NOSTRESS;
+        as_opt.unit2base[i] = i;
+        as_opt.unit2stressed[i] = i;
+        as_opt.unit2unstressed[i] = i;
+    }
     if ((num_abc - 3) > 4)
     {
         as_opt.is_vowel[num_abc - 3] = true;
@@ -168,7 +176,8 @@ int main(int argc, char *argv[])
     }
     env->evaluate(env->start,
                   MetaPriors{
-                      uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)});
+                      uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
+                  vec<float>{1.0, 0.0, 0.0, 0.0, 0.0});
 
     auto mcts_opt = MctsOpt();
     mcts_opt.puct_c = puct_c;
@@ -204,7 +213,8 @@ int main(int argc, char *argv[])
             for (const auto node : unique_nodes)
                 env->evaluate(node,
                               MetaPriors{
-                                  uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)});
+                                  uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
+                              vec<float>{1.0, 0.0, 0.0, 0.0, 0.0, 0.0});
             SPDLOG_DEBUG("Backing up values.");
             mcts->backup(selected, vec<float>(selected.size(), 0.0));
         }
@@ -214,6 +224,7 @@ int main(int argc, char *argv[])
         // std::cerr << "\n";
         // std::cerr << "max index: " << root->max_index << " max_value: " << root->max_value << "\n";
         root = root->play();
+        std::cerr << str::from(root);
         SPDLOG_INFO("New dist: {}", root->dist);
     }
     // action_space->timer.show_stats();

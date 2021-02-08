@@ -5,8 +5,8 @@
 
 struct Subpath
 {
-    array<ChosenChar, 6> chosen_seq;
-    array<MiniNode *, 5> mini_node_seq;
+    array<ChosenChar, 7> chosen_seq;
+    array<MiniNode *, 6> mini_node_seq;
     bool stopped;
 };
 
@@ -38,18 +38,30 @@ class ActionSpace
     IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t);
     void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &);
     void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
+
+    // Methods for expanding nodes.
+    void expand(TreeNode *);
     bool expand(MiniNode *);
+    void expand_before(MiniNode *);
+    void expand_special_type(MiniNode *);
+    void expand_after(MiniNode *);
+    void expand_pre(MiniNode *);
+    void expand_d_pre(MiniNode *);
+    void expand_post(MiniNode *);
+    void expand_normal(MiniNode *, int);
+    void expand_null(MiniNode *);
+    bool expand_null_only(MiniNode *);
+
     void evaluate(MiniNode *);
     // This will create a new tree node without checking first if the child exists. Use `apply_action` in `Env` if checking is needed.
     TreeNode *apply_new_action(TreeNode *, const Subpath &);
-    TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t);
+    TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType);
     void register_permissible_change(abc_t, abc_t);
-    void evaluate(TreeNode *, const MetaPriors &);
+    void evaluate(TreeNode *, const MetaPriors &, const vec<float> &);
 
     ActionSpace(WordSpace *, const ActionSpaceOpt &);
     map<abc_t, vec<abc_t>> permissible_changes;
 
-    void expand(TreeNode *);
     void clear_stats(BaseNode *);
 
 public:
