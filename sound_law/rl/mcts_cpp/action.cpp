@@ -60,13 +60,13 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
     auto before = ChosenChar({get_index(before_id, node->permissible_chars), before_id});
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
-    if (expand(before_mn, false))
+    if (expand(before_mn, false, true))
         dummy_evaluate(before_mn->priors, before_mn->permissible_chars.size());
 
     // std::cerr << "after\n";
     auto after = ChosenChar({get_index(after_id, before_mn->permissible_chars), after_id});
     auto after_mn = get_mini_node(node, before_mn, after, ActionPhase::AFTER, stopped);
-    if (expand(after_mn, false))
+    if (expand(after_mn, false, false))
         dummy_evaluate(after_mn->priors, after_mn->permissible_chars.size());
 
     // std::cerr << "special_type\n";
@@ -74,25 +74,25 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
     bool use_vowel_seq = (st == SpecialType::VS);
     auto special_type = ChosenChar({get_index(st_abc, after_mn->permissible_chars), st_abc});
     auto st_mn = get_mini_node(node, after_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
-    if (expand(st_mn, use_vowel_seq))
+    if (expand(st_mn, use_vowel_seq, false))
         dummy_evaluate(st_mn->priors, st_mn->permissible_chars.size());
 
     // std::cerr << "pre\n";
     auto pre = ChosenChar({get_index(pre_id, st_mn->permissible_chars), pre_id});
     auto pre_mn = get_mini_node(node, st_mn, pre, ActionPhase::PRE, stopped);
-    if (expand(pre_mn, use_vowel_seq))
+    if (expand(pre_mn, use_vowel_seq, false))
         dummy_evaluate(pre_mn->priors, pre_mn->permissible_chars.size());
 
     auto d_pre = ChosenChar({get_index(d_pre_id, pre_mn->permissible_chars), d_pre_id});
     // std::cerr << "d_pre\n";
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
-    if (expand(d_pre_mn, use_vowel_seq))
+    if (expand(d_pre_mn, use_vowel_seq, false))
         dummy_evaluate(d_pre_mn->priors, d_pre_mn->permissible_chars.size());
 
     // std::cerr << "post\n";
     auto post = ChosenChar({get_index(post_id, d_pre_mn->permissible_chars), post_id});
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
-    if (expand(post_mn, use_vowel_seq))
+    if (expand(post_mn, use_vowel_seq, false))
         dummy_evaluate(post_mn->priors, post_mn->permissible_chars.size());
 
     // std::cerr << "d_post\n";
@@ -153,38 +153,38 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     auto before = node->get_best_subaction(puct_c, game_count, virtual_loss);
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
-    if (expand(before_mn, false))
+    if (expand(before_mn, false, false))
         evaluate(before_mn);
     SPDLOG_DEBUG("ActionSpace:: before done.");
 
     auto after = before_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto after_mn = get_mini_node(node, before_mn, after, ActionPhase::AFTER, stopped);
-    if (expand(after_mn, false))
+    if (expand(after_mn, false, false))
         evaluate(after_mn);
     SPDLOG_DEBUG("ActionSpace:: after done.");
 
     bool use_vowel_seq = (static_cast<SpecialType>(after_mn->chosen_char.second) == SpecialType::VS);
     auto special_type = after_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto st_mn = get_mini_node(node, after_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
-    if (expand(st_mn, use_vowel_seq))
+    if (expand(st_mn, use_vowel_seq, false))
         evaluate(st_mn);
     SPDLOG_DEBUG("ActionSpace:: special_type done.");
 
     auto pre = st_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto pre_mn = get_mini_node(node, st_mn, pre, ActionPhase::PRE, stopped);
-    if (expand(pre_mn, use_vowel_seq))
+    if (expand(pre_mn, use_vowel_seq, false))
         evaluate(pre_mn);
     SPDLOG_DEBUG("ActionSpace:: pre done.");
 
     auto d_pre = pre_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
-    if (expand(d_pre_mn, use_vowel_seq))
+    if (expand(d_pre_mn, use_vowel_seq, false))
         evaluate(d_pre_mn);
     SPDLOG_DEBUG("ActionSpace:: d_pre done.");
 
     auto post = d_pre_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
-    if (expand(post_mn, use_vowel_seq))
+    if (expand(post_mn, use_vowel_seq, false))
         evaluate(post_mn);
     SPDLOG_DEBUG("ActionSpace:: post done.");
 
@@ -257,10 +257,15 @@ void ActionSpace::expand(TreeNode *node)
     // }
 }
 
-void ActionSpace::expand_before(MiniNode *node)
+void ActionSpace::expand_before(MiniNode *node, bool force_apply)
 {
+    if (force_apply)
+        // HACK(j_luo) this is hacky.
+        for (abc_t after_id = 0; after_id < 1000; ++after_id)
+            node->permissible_chars.push_back(after_id);
+    else
+        node->permissible_chars = permissible_changes[node->chosen_char.second];
     // FIXME(j_luo) This is not very efficient.
-    node->permissible_chars = permissible_changes[node->chosen_char.second];
     node->affected = vec<Affected>(node->permissible_chars.size(), node->parent->affected[node->chosen_char.first]);
 }
 void ActionSpace::expand_after(MiniNode *node)
@@ -328,7 +333,7 @@ void ActionSpace::expand_null(MiniNode *node)
     node->affected = vec<Affected>({node->parent->affected[node->chosen_char.first]});
 }
 
-bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq)
+bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
 {
     std::lock_guard<std::mutex> lock(node->mtx);
 
@@ -351,7 +356,7 @@ bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq)
         switch (node->ap)
         {
         case ActionPhase::BEFORE:
-            expand_before(node);
+            expand_before(node, force_apply);
             break;
         case ActionPhase::AFTER:
             expand_after(node);

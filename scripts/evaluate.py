@@ -523,11 +523,7 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
             action_q = [hr.to_action()]
         for action in action_q:
             logging.info(f"Applying {action}")
-            old_state = state
             state = state.apply_action(action)
-            # for s1, s2, s3 in zip(old_state._node.word_list, state._node.word_list, PlainState.end_state._node.word_list):
-            #     if s1 != s2:
-            #         logging.info(f'{s1} -> {s2} | {s3}')
             states.append(state)
             actions.append(action)
             refs.append(hr.ref)
