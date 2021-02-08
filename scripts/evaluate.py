@@ -398,7 +398,7 @@ class PlainState:
         assert cls.env is not None
         try:
             new_node = cls.env.apply_action(self._node, action.before_id, action.after_id,
-                                            action.pre_id, action.d_pre_id, action.post_id, action.d_post_id)
+                                            action.pre_id, action.d_pre_id, action.post_id, action.d_post_id, action.special_type)
             return cls(new_node)
 
         except RuntimeError:

@@ -1,6 +1,7 @@
 # distutils: language = c++
 from .mcts_cpp cimport TreeNode, IdSeq, VocabIdSeq, Env, Mcts
 from .mcts_cpp cimport Stress, NOSTRESS, STRESSED, UNSTRESSED
+from .mcts_cpp cimport SpecialType, NONE, CLL, CLR, VS, GBJ, GBW
 import numpy as np
 cimport numpy as np
 
@@ -198,8 +199,23 @@ cdef class PyEnv:
                      abc_t pre_id,
                      abc_t d_pre_id,
                      abc_t post_id,
-                     abc_t d_post_id):
-        cdef TreeNode *new_node = self.ptr.apply_action(py_node.ptr, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id)
+                     abc_t d_post_id,
+                     special_type: Optional[str] = None):
+        cdef SpecialType st
+        if special_type is None:
+            st = NONE
+        elif special_type == 'VS':
+            st = VS
+        elif special_type == 'CLL':
+            st = CLL
+        elif special_type == 'CLR':
+            st = CLR
+        elif special_type == 'GBJ':
+            st = GBJ
+        elif special_type == 'GBW':
+            st = GBW
+
+        cdef TreeNode *new_node = self.ptr.apply_action(py_node.ptr, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, st)
         tnode_cls = type(self).tnode_cls
         return wrap_node(tnode_cls, new_node)
 

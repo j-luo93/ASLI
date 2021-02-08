@@ -28,10 +28,21 @@ cdef extern from "mcts_cpp/common.hpp":
     cdef cppclass Stress:
         pass
 
+    cdef cppclass SpecialType:
+        pass
+
 cdef extern from "mcts_cpp/common.hpp" namespace "Stress":
     cdef Stress NOSTRESS
     cdef Stress STRESSED
     cdef Stress UNSTRESSED
+
+cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
+    cdef SpecialType NONE
+    cdef SpecialType CLL
+    cdef SpecialType CLR
+    cdef SpecialType VS
+    cdef SpecialType GBJ
+    cdef SpecialType GBW
 
 cdef extern from "mcts_cpp/word.hpp":
     cdef cppclass Word nogil:
@@ -83,7 +94,7 @@ cdef extern from "mcts_cpp/env.hpp":
 
         void register_permissible_change(abc_t, abc_t)
         float get_edit_dist(IdSeq, IdSeq)
-        TreeNode *apply_action(TreeNode *node, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t) except +
+        TreeNode *apply_action(TreeNode *node, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
 
 cdef extern from "mcts_cpp/node.hpp":
 

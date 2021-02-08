@@ -12,11 +12,11 @@ namespace node
 enum class ActionPhase : int
 {
     BEFORE,
-    SPECIAL_TYPE,
     AFTER,
     PRE,
     D_PRE,
     POST,
+    SPECIAL_TYPE,
 };
 
 using Affected = vec<pair<int, size_t>>;
@@ -137,8 +137,6 @@ namespace str
         {
         case ActionPhase::BEFORE:
             return "BEFORE";
-        case ActionPhase::SPECIAL_TYPE:
-            return "SPECIAL_TYPE";
         case ActionPhase::AFTER:
             return "AFTER";
         case ActionPhase::PRE:
@@ -147,6 +145,8 @@ namespace str
             return "D_PRE";
         case ActionPhase::POST:
             return "D_POST";
+        case ActionPhase::SPECIAL_TYPE:
+            return "SPECIAL_TYPE";
         }
     }
 
