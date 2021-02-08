@@ -18,13 +18,14 @@ from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.setting import Setting, Split
 from sound_law.evaluate.evaluator import Evaluator
-from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
+from sound_law.rl.action import SoundChangeAction
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
 from sound_law.rl.mcts import Mcts
 # pylint: disable=no-name-in-module
-from sound_law.rl.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
-                                   PyWordSpace)
+from sound_law.rl.mcts_cpp import PyEnv
+# from sound_law.rl.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
+#                                    PyWordSpace)
 # pylint: enable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.s2s.module import CharEmbedding, EmbParams, PhonoEmbedding

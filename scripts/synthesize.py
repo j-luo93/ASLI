@@ -15,11 +15,10 @@ from sound_law.data.alphabet import (ANY_ID, ANY_S_ID, ANY_UNS_ID, EMP_ID,
                                      EOT_ID, SOT_ID, SYL_EOT_ID)
 from sound_law.data.cognate import CognateRegistry
 from sound_law.main import setup
-from sound_law.rl.action import SoundChangeActionSpace
+# from sound_law.rl.action import SoundChangeActionSpace
 from sound_law.rl.env import SoundChangeEnv
 # pylint: disable=no-name-in-module
-from sound_law.rl.mcts_cpp import (PyActionSpace, PyEnv, PySiteSpace,
-                                   PyWordSpace)
+from sound_law.rl.mcts_cpp import PyEnv
 # pylint: enable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.train.manager import OnePairManager

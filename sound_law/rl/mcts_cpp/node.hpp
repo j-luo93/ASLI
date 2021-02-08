@@ -107,6 +107,8 @@ class TreeNode : public BaseNode
     friend class Env;
     friend class ActionSpace;
 
+    MetaPriors meta_priors;
+
     void common_init(const vec<Word *> &);
     TreeNode(const vec<Word *> &, int);
     TreeNode(const vec<Word *> &, int, BaseNode *const, const ChosenChar &, bool);
@@ -118,11 +120,11 @@ public:
     float dist = 0.0;
     bool done = false;
 
-    MetaPriors meta_priors;
-
     // Return a vector of `MiniNode *` as the subactions.
     bool is_leaf();
     TreeNode *play() override;
+    IdSeq get_id_seq(int);
+    size_t size();
 };
 
 namespace str

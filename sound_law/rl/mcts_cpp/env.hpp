@@ -13,17 +13,21 @@ struct EnvOpt
     float step_penalty;
 };
 
+class Mcts;
+
 class Env
 {
+    friend class Mcts;
+
     WordSpace *word_space;
 
+    TreeNode *apply_action(TreeNode *, const Subpath &);
+
 public:
-    Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt &ws_opt);
+    Env(const EnvOpt &, const ActionSpaceOpt &, const WordSpaceOpt &);
 
     const EnvOpt opt;
     TreeNode *start;
     TreeNode *end;
     ActionSpace *action_space;
-
-    TreeNode *apply_action(TreeNode *, const Subpath &);
 };

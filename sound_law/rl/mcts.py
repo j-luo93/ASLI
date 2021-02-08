@@ -12,14 +12,14 @@ import torch
 from dev_misc import LT, NDA, add_argument, g, get_tensor, get_zeros
 from dev_misc.trainlib import Tracker
 from dev_misc.utils import ScopedCache, pad_for_log
-from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
+from sound_law.rl.action import SoundChangeAction
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
 from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.trajectory import Trajectory, VocabState
 
 # pylint: disable=no-name-in-module
-from .mcts_cpp import (PyMcts, parallel_get_sparse_action_masks,
-                       parallel_stack_ids)
+# from .mcts_cpp import (PyMcts, parallel_get_sparse_action_masks, parallel_stack_ids)
+from .mcts_cpp import PyMcts
 
 # pylint: enable=no-name-in-module
 

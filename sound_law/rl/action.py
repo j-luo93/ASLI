@@ -21,13 +21,19 @@ from sound_law.data.alphabet import (ANY_ID, ANY_S_ID, ANY_UNS_ID, EMP, EMP_ID,
                                      EOT_ID, SOT_ID, SYL_EOT_ID, Alphabet)
 
 # pylint: disable=no-name-in-module
-from .mcts_cpp import (PyAction, PyActionSpace, PyNull_abc, PySiteSpace,
-                       PyStop, PyWordSpace)
+# from .mcts_cpp import PyAction
+
+# from .mcts_cpp import (PyAction, PyActionSpace, PyNull_abc, PySiteSpace,
+#                        PyStop, PyWordSpace)
 
 # pylint: enable=no-name-in-module
 
+add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
+add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
 
-class SoundChangeAction(PyAction):
+
+class SoundChangeAction:
+    # class SoundChangeAction(PyAction):
     """One sound change rule."""
     abc: ClassVar[Alphabet] = None
 
@@ -113,54 +119,54 @@ class SoundChangeAction(PyAction):
         return f'{special}{pre}{before}{post} > {after}'
 
 
-class SoundChangeActionSpace(PyActionSpace):
-    """The action space, i.e., the space of all sound changes."""
+# class SoundChangeActionSpace(PyActionSpace):
+#     """The action space, i.e., the space of all sound changes."""
 
-    action_cls = SoundChangeAction
+#     action_cls = SoundChangeAction
 
-    add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
-    add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
+#     add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
+#     add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
 
-    def __init__(self, py_ss: PySiteSpace, py_ws: PyWordSpace, dist_threshold: float, site_threshold: int, abc: Alphabet):
-        super().__init__()
-        # # Set class variable for `SoundChangeAction` here.
-        self.abc = SoundChangeAction.abc = abc
+#     def __init__(self, py_ss: PySiteSpace, py_ws: PyWordSpace, dist_threshold: float, site_threshold: int, abc: Alphabet):
+#         super().__init__()
+#         # # Set class variable for `SoundChangeAction` here.
+#         self.abc = SoundChangeAction.abc = abc
 
-        # Register unconditional actions first.
-        units = [u for u in self.abc if u not in self.abc.special_units]
+#         # Register unconditional actions first.
+#         units = [u for u in self.abc if u not in self.abc.special_units]
 
-        def register_uncondional_action(u1: str, u2: str, cl: bool = False, gb: bool = False):
-            id1 = abc[u1]
-            id2 = abc[u2]
-            if cl:
-                self.register_cl_map(id1, id2)
-            elif gb:
-                if u1.startswith('i'):
-                    self.register_gbj(id1, id2)
-                else:
-                    assert u1.startswith('u')
-                    self.register_gbw(id1, id2)
-            else:
-                self.register_edge(id1, id2)
+#         def register_uncondional_action(u1: str, u2: str, cl: bool = False, gb: bool = False):
+#             id1 = abc[u1]
+#             id2 = abc[u2]
+#             if cl:
+#                 self.register_cl_map(id1, id2)
+#             elif gb:
+#                 if u1.startswith('i'):
+#                     self.register_gbj(id1, id2)
+#                 else:
+#                     assert u1.startswith('u')
+#                     self.register_gbw(id1, id2)
+#             else:
+#                 self.register_edge(id1, id2)
 
-        if g.use_mcts:
-            for u1, u2 in abc.edges:
-                register_uncondional_action(u1, u2)
-            for u in units:
-                register_uncondional_action(u, EMP)
-            for u1, u2 in abc.cl_map.items():
-                register_uncondional_action(u1, u2, cl=True)
-            for u1, u2 in abc.gb_map.items():
-                register_uncondional_action(u1, u2, gb=True)
-        else:
-            for u1, u2 in product(units, repeat=2):
-                if u1 != u2:
-                    register_uncondional_action(u1, u2)
+#         if g.use_mcts:
+#             for u1, u2 in abc.edges:
+#                 register_uncondional_action(u1, u2)
+#             for u in units:
+#                 register_uncondional_action(u, EMP)
+#             for u1, u2 in abc.cl_map.items():
+#                 register_uncondional_action(u1, u2, cl=True)
+#             for u1, u2 in abc.gb_map.items():
+#                 register_uncondional_action(u1, u2, gb=True)
+#         else:
+#             for u1, u2 in product(units, repeat=2):
+#                 if u1 != u2:
+#                     register_uncondional_action(u1, u2)
 
-        self.set_vowel_info(abc.vowel_mask, abc.vowel_base, abc.vowel_stress, abc.stressed_vowel, abc.unstressed_vowel)
-        self.set_glide_info(abc['j'], abc['w'])
+#         self.set_vowel_info(abc.vowel_mask, abc.vowel_base, abc.vowel_stress, abc.stressed_vowel, abc.unstressed_vowel)
+#         self.set_glide_info(abc['j'], abc['w'])
 
-    def apply_action(self, unit_seq: Sequence[str], action: SoundChangeAction) -> List[str]:
-        id_seq = [self.abc[u] for u in unit_seq]
-        new_id_seq = super().apply_action(id_seq, action)
-        return [self.abc[i] for i in new_id_seq]
+#     def apply_action(self, unit_seq: Sequence[str], action: SoundChangeAction) -> List[str]:
+#         id_seq = [self.abc[u] for u in unit_seq]
+#         new_id_seq = super().apply_action(id_seq, action)
+#         return [self.abc[i] for i in new_id_seq]

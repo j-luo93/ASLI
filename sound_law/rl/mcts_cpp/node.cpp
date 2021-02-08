@@ -123,3 +123,7 @@ void BaseNode::backup(float value, int game_count, float virtual_loss)
         parent = node->parent;
     }
 }
+
+IdSeq TreeNode::get_id_seq(int order) { return words[order]->id_seq; }
+
+size_t TreeNode::size() { return words.size(); }

@@ -13,7 +13,6 @@
 
 using abc_t = uint16_t;
 using visit_t = int32_t; // for visit/action counts -- due to virtual games, this could be negative.`
-using order_t = uint16_t;
 
 using string = std::string;
 
