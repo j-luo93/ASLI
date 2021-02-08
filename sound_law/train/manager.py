@@ -142,13 +142,13 @@ class OnePairManager:
             t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype('uint16')
             t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
             env_opt = PyEnvOpt(s_arr, s_lengths, t_arr, t_lengths, g.final_reward, g.step_penalty)
-            as_opt = PyActionSpaceOpt(NULL_ID, EMP_ID, SOT_ID, EOT_ID,
-                                      self.tgt_abc.is_vowel,
-                                      self.tgt_abc.unit_stress,
-                                      self.tgt_abc.unit2base,
-                                      self.tgt_abc.unit2stressed,
-                                      self.tgt_abc.unit2unstressed)
-            ws_opt = PyWordSpaceOpt(self.tgt_abc.dist_mat, 1.0)
+            as_opt = PyActionSpaceOpt(NULL_ID, EMP_ID, SOT_ID, EOT_ID)
+            ws_opt = PyWordSpaceOpt(self.tgt_abc.dist_mat, 1.0,
+                                    self.tgt_abc.is_vowel,
+                                    self.tgt_abc.unit_stress,
+                                    self.tgt_abc.unit2base,
+                                    self.tgt_abc.unit2stressed,
+                                    self.tgt_abc.unit2unstressed)
             self.env = SoundChangeEnv(env_opt, as_opt, ws_opt)
             self.env.register_changes(self.tgt_abc)
 

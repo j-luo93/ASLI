@@ -60,38 +60,39 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
     auto before = ChosenChar({get_index(before_id, node->permissible_chars), before_id});
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
-    if (expand(before_mn))
+    if (expand(before_mn, false))
         dummy_evaluate(before_mn->priors, before_mn->permissible_chars.size());
 
     // std::cerr << "after\n";
     auto after = ChosenChar({get_index(after_id, before_mn->permissible_chars), after_id});
     auto after_mn = get_mini_node(node, before_mn, after, ActionPhase::AFTER, stopped);
-    if (expand(after_mn))
+    if (expand(after_mn, false))
         dummy_evaluate(after_mn->priors, after_mn->permissible_chars.size());
 
     // std::cerr << "special_type\n";
     abc_t st_abc = static_cast<abc_t>(st);
+    bool use_vowel_seq = (st == SpecialType::VS);
     auto special_type = ChosenChar({get_index(st_abc, after_mn->permissible_chars), st_abc});
     auto st_mn = get_mini_node(node, after_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
-    if (expand(st_mn))
+    if (expand(st_mn, use_vowel_seq))
         dummy_evaluate(st_mn->priors, st_mn->permissible_chars.size());
 
     // std::cerr << "pre\n";
     auto pre = ChosenChar({get_index(pre_id, st_mn->permissible_chars), pre_id});
     auto pre_mn = get_mini_node(node, st_mn, pre, ActionPhase::PRE, stopped);
-    if (expand(pre_mn))
+    if (expand(pre_mn, use_vowel_seq))
         dummy_evaluate(pre_mn->priors, pre_mn->permissible_chars.size());
 
     auto d_pre = ChosenChar({get_index(d_pre_id, pre_mn->permissible_chars), d_pre_id});
     // std::cerr << "d_pre\n";
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
-    if (expand(d_pre_mn))
+    if (expand(d_pre_mn, use_vowel_seq))
         dummy_evaluate(d_pre_mn->priors, d_pre_mn->permissible_chars.size());
 
     // std::cerr << "post\n";
     auto post = ChosenChar({get_index(post_id, d_pre_mn->permissible_chars), post_id});
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
-    if (expand(post_mn))
+    if (expand(post_mn, use_vowel_seq))
         dummy_evaluate(post_mn->priors, post_mn->permissible_chars.size());
 
     // std::cerr << "d_post\n";
@@ -110,11 +111,11 @@ inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &
 {
     // FIXME(j_luo)   add all special cases.
     auto new_id_seq = IdSeq(id_seq);
-    auto stressed_after_id = opt.unit2stressed[after_id];
-    auto unstressed_after_id = opt.unit2unstressed[after_id];
+    auto stressed_after_id = word_space->opt.unit2stressed[after_id];
+    auto unstressed_after_id = word_space->opt.unit2unstressed[after_id];
     for (const auto pos : positions)
     {
-        auto stress = opt.unit_stress[new_id_seq[pos]];
+        auto stress = word_space->opt.unit_stress[new_id_seq[pos]];
         switch (stress)
         {
         case Stress::NOSTRESS:
@@ -152,37 +153,38 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     auto before = node->get_best_subaction(puct_c, game_count, virtual_loss);
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
-    if (expand(before_mn))
+    if (expand(before_mn, false))
         evaluate(before_mn);
     SPDLOG_DEBUG("ActionSpace:: before done.");
 
     auto after = before_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto after_mn = get_mini_node(node, before_mn, after, ActionPhase::AFTER, stopped);
-    if (expand(after_mn))
+    if (expand(after_mn, false))
         evaluate(after_mn);
     SPDLOG_DEBUG("ActionSpace:: after done.");
 
+    bool use_vowel_seq = (static_cast<SpecialType>(after_mn->chosen_char.second) == SpecialType::VS);
     auto special_type = after_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto st_mn = get_mini_node(node, after_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
-    if (expand(st_mn))
+    if (expand(st_mn, use_vowel_seq))
         evaluate(st_mn);
     SPDLOG_DEBUG("ActionSpace:: special_type done.");
 
     auto pre = st_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto pre_mn = get_mini_node(node, st_mn, pre, ActionPhase::PRE, stopped);
-    if (expand(pre_mn))
+    if (expand(pre_mn, use_vowel_seq))
         evaluate(pre_mn);
     SPDLOG_DEBUG("ActionSpace:: pre done.");
 
     auto d_pre = pre_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
-    if (expand(d_pre_mn))
+    if (expand(d_pre_mn, use_vowel_seq))
         evaluate(d_pre_mn);
     SPDLOG_DEBUG("ActionSpace:: d_pre done.");
 
     auto post = d_pre_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
-    if (expand(post_mn))
+    if (expand(post_mn, use_vowel_seq))
         evaluate(post_mn);
     SPDLOG_DEBUG("ActionSpace:: post done.");
 
@@ -211,6 +213,8 @@ MiniNode *ActionSpace::get_mini_node(TreeNode *base, BaseNode *parent, const Cho
         return static_cast<MiniNode *>(child);
 }
 
+inline bool in_bound(int pos, size_t max) { return ((pos >= 0) && (pos < max)); }
+
 void ActionSpace::expand(TreeNode *node)
 {
     std::lock_guard<std::mutex> lock(node->mtx);
@@ -225,6 +229,7 @@ void ActionSpace::expand(TreeNode *node)
     // Null/Stop option.
     node->permissible_chars.push_back(opt.null_id);
     node->affected = vec<Affected>({{}});
+
     auto char_map = map<abc_t, size_t>();
     for (int order = 0; order < node->words.size(); ++order)
     {
@@ -232,7 +237,8 @@ void ActionSpace::expand(TreeNode *node)
         size_t n = id_seq.size();
         // Skip the boundaries.
         for (int pos = 1; pos < n - 1; ++pos)
-            update_affected(node, id_seq, order, pos, 0, char_map);
+            if (in_bound(pos, n))
+                update_affected(node, id_seq[pos], order, pos, char_map);
     }
 
     clear_stats(node);
@@ -261,11 +267,11 @@ void ActionSpace::expand_after(MiniNode *node)
 {
     auto unit = node->parent->chosen_char.second;
     node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::NONE));
-    if (opt.is_vowel[unit])
+    if (word_space->opt.is_vowel[unit])
         node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::VS));
     node->affected = vec<Affected>(node->permissible_chars.size(), node->parent->affected[node->chosen_char.first]);
 }
-void ActionSpace::expand_normal(MiniNode *node, int offset)
+void ActionSpace::expand_normal(MiniNode *node, int offset, bool use_vowel_seq)
 {
     expand_null(node);
 
@@ -275,7 +281,22 @@ void ActionSpace::expand_normal(MiniNode *node, int offset)
     for (const auto &aff : affected)
     {
         int order = aff.first;
-        update_affected(node, words[order]->id_seq, order, aff.second, offset, char_map);
+        auto word = words[order];
+        if (use_vowel_seq)
+        {
+            // Get the position/index in the vowel seq.
+            auto vowel_pos = word->id2vowel[aff.second] + offset;
+            auto &vowel_seq = words[order]->vowel_seq;
+            if (in_bound(vowel_pos, vowel_seq.size()))
+                update_affected(node, vowel_seq[vowel_pos], order, aff.second, char_map);
+        }
+        else
+        {
+            auto pos = aff.second + offset;
+            auto &id_seq = words[order]->id_seq;
+            if (in_bound(pos, id_seq.size()))
+                update_affected(node, id_seq[pos], order, aff.second, char_map);
+        }
     }
 }
 bool ActionSpace::expand_null_only(MiniNode *node)
@@ -288,17 +309,17 @@ bool ActionSpace::expand_null_only(MiniNode *node)
     }
     return false;
 }
-void ActionSpace::expand_special_type(MiniNode *node) { expand_normal(node, -1); }
-void ActionSpace::expand_pre(MiniNode *node)
+void ActionSpace::expand_special_type(MiniNode *node, bool use_vowel_seq) { expand_normal(node, -1, use_vowel_seq); }
+void ActionSpace::expand_pre(MiniNode *node, bool use_vowel_seq)
 {
     if (!expand_null_only(node))
-        expand_normal(node, -2);
+        expand_normal(node, -2, use_vowel_seq);
 }
-void ActionSpace::expand_d_pre(MiniNode *node) { expand_normal(node, 1); }
-void ActionSpace::expand_post(MiniNode *node)
+void ActionSpace::expand_d_pre(MiniNode *node, bool use_vowel_seq) { expand_normal(node, 1, use_vowel_seq); }
+void ActionSpace::expand_post(MiniNode *node, bool use_vowel_seq)
 {
     if (!expand_null_only(node))
-        expand_normal(node, 2);
+        expand_normal(node, 2, use_vowel_seq);
 }
 void ActionSpace::expand_null(MiniNode *node)
 {
@@ -307,7 +328,7 @@ void ActionSpace::expand_null(MiniNode *node)
     node->affected = vec<Affected>({node->parent->affected[node->chosen_char.first]});
 }
 
-bool ActionSpace::expand(MiniNode *node)
+bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq)
 {
     std::lock_guard<std::mutex> lock(node->mtx);
 
@@ -336,16 +357,16 @@ bool ActionSpace::expand(MiniNode *node)
             expand_after(node);
             break;
         case ActionPhase::SPECIAL_TYPE:
-            expand_special_type(node);
+            expand_special_type(node, use_vowel_seq);
             break;
         case ActionPhase::PRE:
-            expand_pre(node);
+            expand_pre(node, use_vowel_seq);
             break;
         case ActionPhase::D_PRE:
-            expand_d_pre(node);
+            expand_d_pre(node, use_vowel_seq);
             break;
         case ActionPhase::POST:
-            expand_post(node);
+            expand_post(node, use_vowel_seq);
             break;
         }
 
@@ -436,19 +457,9 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         auto &aff = node->affected[char_map[unit]];
         aff.push_back({order, pos});
     }
-}
 
-void ActionSpace::update_affected(BaseNode *node, const IdSeq &id_seq, int order, size_t pos, int offset, map<abc_t, size_t> &char_map)
-{
-    int new_pos = pos + offset;
-    if ((new_pos < 0) || (new_pos >= id_seq.size()))
-        return;
-
-    auto unit = id_seq[new_pos];
-    update_affected(node, unit, order, pos, char_map);
-
-    if (opt.unit_stress[unit] != Stress::NOSTRESS)
-        update_affected(node, opt.unit2base[unit], order, pos, char_map);
+    if (word_space->opt.unit_stress[unit] != Stress::NOSTRESS)
+        update_affected(node, word_space->opt.unit2base[unit], order, pos, char_map);
 }
 
 void ActionSpace::evaluate(MiniNode *node)

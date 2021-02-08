@@ -16,11 +16,6 @@ struct ActionSpaceOpt
     abc_t emp_id;
     abc_t sot_id;
     abc_t eot_id;
-    vec<bool> is_vowel;
-    vec<Stress> unit_stress;
-    vec<abc_t> unit2base;
-    vec<abc_t> unit2stressed;
-    vec<abc_t> unit2unstressed;
 };
 
 class Env;
@@ -37,18 +32,18 @@ class ActionSpace
     MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool);
     IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t);
     void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &);
-    void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
+    // void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
 
     // Methods for expanding nodes.
     void expand(TreeNode *);
-    bool expand(MiniNode *);
+    bool expand(MiniNode *, bool);
     void expand_before(MiniNode *);
-    void expand_special_type(MiniNode *);
     void expand_after(MiniNode *);
-    void expand_pre(MiniNode *);
-    void expand_d_pre(MiniNode *);
-    void expand_post(MiniNode *);
-    void expand_normal(MiniNode *, int);
+    void expand_special_type(MiniNode *, bool);
+    void expand_pre(MiniNode *, bool);
+    void expand_d_pre(MiniNode *, bool);
+    void expand_post(MiniNode *, bool);
+    void expand_normal(MiniNode *, int, bool);
     void expand_null(MiniNode *);
     bool expand_null_only(MiniNode *);
 

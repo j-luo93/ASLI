@@ -138,34 +138,34 @@ int main(int argc, char *argv[])
     as_opt.emp_id = 1;
     as_opt.sot_id = 2;
     as_opt.eot_id = 3;
-    as_opt.is_vowel = vec<bool>(num_abc);
-    as_opt.unit_stress = vec<Stress>(num_abc);
-    as_opt.unit2base = vec<abc_t>(num_abc);
-    as_opt.unit2stressed = vec<abc_t>(num_abc);
-    as_opt.unit2unstressed = vec<abc_t>(num_abc);
-    for (abc_t i = 0; i < num_abc; ++i)
-    {
-        as_opt.is_vowel[i] = false;
-        as_opt.unit_stress[i] = Stress::NOSTRESS;
-        as_opt.unit2base[i] = i;
-        as_opt.unit2stressed[i] = i;
-        as_opt.unit2unstressed[i] = i;
-    }
-    if ((num_abc - 3) > 4)
-    {
-        as_opt.is_vowel[num_abc - 3] = true;
-        as_opt.is_vowel[num_abc - 2] = true;
-        as_opt.is_vowel[num_abc - 1] = true;
-        as_opt.unit_stress[num_abc - 2] = Stress::STRESSED;
-        as_opt.unit_stress[num_abc - 1] = Stress::UNSTRESSED;
-        as_opt.unit2base[num_abc - 2] = num_abc - 3;
-        as_opt.unit2base[num_abc - 1] = num_abc - 3;
-        as_opt.unit2stressed[num_abc - 3] = num_abc - 2;
-        as_opt.unit2unstressed[num_abc - 3] = num_abc - 1;
-    }
     auto ws_opt = WordSpaceOpt();
     ws_opt.dist_mat = dist_mat;
     ws_opt.ins_cost = ins_cost;
+    ws_opt.is_vowel = vec<bool>(num_abc);
+    ws_opt.unit_stress = vec<Stress>(num_abc);
+    ws_opt.unit2base = vec<abc_t>(num_abc);
+    ws_opt.unit2stressed = vec<abc_t>(num_abc);
+    ws_opt.unit2unstressed = vec<abc_t>(num_abc);
+    for (abc_t i = 0; i < num_abc; ++i)
+    {
+        ws_opt.is_vowel[i] = false;
+        ws_opt.unit_stress[i] = Stress::NOSTRESS;
+        ws_opt.unit2base[i] = i;
+        ws_opt.unit2stressed[i] = i;
+        ws_opt.unit2unstressed[i] = i;
+    }
+    if ((num_abc - 3) > 4)
+    {
+        ws_opt.is_vowel[num_abc - 3] = true;
+        ws_opt.is_vowel[num_abc - 2] = true;
+        ws_opt.is_vowel[num_abc - 1] = true;
+        ws_opt.unit_stress[num_abc - 2] = Stress::STRESSED;
+        ws_opt.unit_stress[num_abc - 1] = Stress::UNSTRESSED;
+        ws_opt.unit2base[num_abc - 2] = num_abc - 3;
+        ws_opt.unit2base[num_abc - 1] = num_abc - 3;
+        ws_opt.unit2stressed[num_abc - 3] = num_abc - 2;
+        ws_opt.unit2unstressed[num_abc - 3] = num_abc - 1;
+    }
     auto env = new Env(env_opt, as_opt, ws_opt);
     for (int i = 4; i < num_abc; i++)
     {
@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
     env->evaluate(env->start,
                   MetaPriors{
                       uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
-                  vec<float>{1.0, 0.0, 0.0, 0.0, 0.0});
+                  uniform(6));
 
     auto mcts_opt = MctsOpt();
     mcts_opt.puct_c = puct_c;
@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
                 env->evaluate(node,
                               MetaPriors{
                                   uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
-                              vec<float>{1.0, 0.0, 0.0, 0.0, 0.0, 0.0});
+                              uniform(6));
             SPDLOG_DEBUG("Backing up values.");
             mcts->backup(selected, vec<float>(selected.size(), 0.0));
         }

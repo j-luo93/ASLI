@@ -402,7 +402,7 @@ class PlainState:
             return cls(new_node)
 
         except RuntimeError:
-            logging.warn("No site was targeted.")
+            logging.warning("No site was targeted.")
             return self
 
     def dist_from(self, tgt_segments: List[List[str]]):
@@ -412,9 +412,10 @@ class PlainState:
         assert tgt_segments is not None
         dist = 0.0
         for s1, s2 in zip(self.segments, tgt_segments):
-            s1 = [cls.abc[u] for u in s1]  # pylint: disable=unsubscriptable-object
-            s2 = [cls.abc[u] for u in s2]  # pylint: disable=unsubscriptable-object
-            dist += cls.env.get_edit_dist(s1, s2)
+            seq1 = [cls.abc[u] for u in s1]  # pylint: disable=unsubscriptable-object
+            seq2 = [cls.abc[u] for u in s2]  # pylint: disable=unsubscriptable-object
+            # print(''.join(s1), ''.join(s2), cls.env.get_edit_dist(seq1, seq2))
+            dist += cls.env.get_edit_dist(seq1, seq2)
         return dist
 
     @property
@@ -508,16 +509,25 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
     refs = list()
     expanded_gold = list()
 
+    # def test(s1, s2):
+    #     seq1 = [PlainState.abc[u] for u in s1.split()]
+    #     seq2 = [PlainState.abc[u] for u in s2.split()]
+    #     return PlainState.env.get_edit_dist(seq1, seq2)
+
     logging.info(f"Starting dist: {state.dist:.3f}")
     for hr in gold:
         if hr.expandable:
             action_q = hr.specialize(state)
-            logging.warn(f"This is an expandable rule: {hr}")
+            logging.warning(f"This is an expandable rule: {hr}")
         else:
             action_q = [hr.to_action()]
         for action in action_q:
             logging.info(f"Applying {action}")
+            old_state = state
             state = state.apply_action(action)
+            # for s1, s2, s3 in zip(old_state._node.word_list, state._node.word_list, PlainState.end_state._node.word_list):
+            #     if s1 != s2:
+            #         logging.info(f'{s1} -> {s2} | {s3}')
             states.append(state)
             actions.append(action)
             refs.append(hr.ref)

@@ -9,7 +9,7 @@ class Word
     friend class WordSpace;
     friend class TreeNode;
 
-    Word(const IdSeq &);
+    Word(const IdSeq &, const IdSeq &, const vec<size_t> &);
 
     // FIXME(j_luo) optimize this later.
     paramap<int, float> dists;
@@ -18,12 +18,19 @@ class Word
 
 public:
     const IdSeq id_seq;
+    const IdSeq vowel_seq;
+    const vec<size_t> id2vowel;
 };
 
 struct WordSpaceOpt
 {
     vec<vec<float>> dist_mat;
     float ins_cost;
+    vec<bool> is_vowel;
+    vec<Stress> unit_stress;
+    vec<abc_t> unit2base;
+    vec<abc_t> unit2stressed;
+    vec<abc_t> unit2unstressed;
 };
 
 class WordSpace

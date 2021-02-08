@@ -51,6 +51,11 @@ cdef extern from "mcts_cpp/word.hpp":
     cdef cppclass WordSpaceOpt nogil:
         vector[vector[float]] dist_mat
         float ins_cost
+        vector[bool] is_vowel
+        vector[Stress] unit_stress
+        vector[abc_t] unit2base
+        vector[abc_t] unit2stressed
+        vector[abc_t] unit2unstressed
 
         WordSpaceOpt()
 
@@ -65,11 +70,6 @@ cdef extern from "mcts_cpp/action.hpp":
         abc_t emp_id
         abc_t sot_id
         abc_t eot_id
-        vector[bool] is_vowel
-        vector[Stress] unit_stress
-        vector[abc_t] unit2base
-        vector[abc_t] unit2stressed
-        vector[abc_t] unit2unstressed
 
         ActionSpaceOpt()
 

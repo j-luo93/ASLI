@@ -125,29 +125,20 @@ cdef class PyEnvOpt:
 cdef class PyActionSpaceOpt:
     cdef ActionSpaceOpt c_obj
 
-    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id,
-                  bool[::1] np_is_vowel, int[::1] np_unit_stress,
-                  abc_t[::1] np_unit2base, abc_t[::1] np_unit2stressed,
-                  abc_t[::1] np_unit2unstressed):
+    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id):
         self.c_obj = ActionSpaceOpt()
         self.c_obj.null_id = null_id
         self.c_obj.emp_id = emp_id
         self.c_obj.sot_id = sot_id
         self.c_obj.eot_id = eot_id
-        self.c_obj.is_vowel = np2vector(np_is_vowel)
-        cdef size_t n = len(np_is_vowel)
-        cdef vector[Stress] unit_stress = vector[Stress](n)
-        for i in range(n):
-            unit_stress[i] = <Stress>np_unit_stress[i]
-        self.c_obj.unit_stress = unit_stress
-        self.c_obj.unit2base = np2vector(np_unit2base)
-        self.c_obj.unit2stressed = np2vector(np_unit2stressed)
-        self.c_obj.unit2unstressed = np2vector(np_unit2unstressed)
 
 cdef class PyWordSpaceOpt:
     cdef WordSpaceOpt c_obj
 
-    def __cinit__(self, float[:, ::1] np_dist_mat, float ins_cost):
+    def __cinit__(self, float[:, ::1] np_dist_mat, float ins_cost,
+                  bool[::1] np_is_vowel, int[::1] np_unit_stress,
+                  abc_t[::1] np_unit2base, abc_t[::1] np_unit2stressed,
+                  abc_t[::1] np_unit2unstressed):
         cdef size_t n = np_dist_mat.shape[0]
         cdef size_t m = np_dist_mat.shape[1]
         cdef long[::1] lengths = np.zeros(n, dtype='long')
@@ -157,6 +148,15 @@ cdef class PyWordSpaceOpt:
         self.c_obj = WordSpaceOpt()
         self.c_obj.dist_mat = np2nested(np_dist_mat, lengths)
         self.c_obj.ins_cost = ins_cost
+        self.c_obj.is_vowel = np2vector(np_is_vowel)
+        cdef size_t num_abc = len(np_is_vowel)
+        cdef vector[Stress] unit_stress = vector[Stress](num_abc)
+        for i in range(num_abc):
+            unit_stress[i] = <Stress>np_unit_stress[i]
+        self.c_obj.unit_stress = unit_stress
+        self.c_obj.unit2base = np2vector(np_unit2base)
+        self.c_obj.unit2stressed = np2vector(np_unit2stressed)
+        self.c_obj.unit2unstressed = np2vector(np_unit2unstressed)
 
 cdef class PyMctsOpt:
     cdef MctsOpt c_obj
