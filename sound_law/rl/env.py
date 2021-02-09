@@ -42,10 +42,10 @@ class SoundChangeEnv(PyEnv):
                 self.register_cl_map(id1, id2)
             elif gb:
                 if u1.startswith('i'):
-                    self.register_gbj(id1, id2)
+                    self.register_gbj_map(id1, id2)
                 else:
                     assert u1.startswith('u')
-                    self.register_gbw(id1, id2)
+                    self.register_gbw_map(id1, id2)
             else:
                 self.register_permissible_change(id1, id2)
 
@@ -55,8 +55,8 @@ class SoundChangeEnv(PyEnv):
             register_uncondional_action(u, EMP)
         for u1, u2 in abc.cl_map.items():
             register_uncondional_action(u1, u2, cl=True)
-        # for u1, u2 in abc.gb_map.items():
-        #     register_uncondional_action(u1, u2, gb=True)
+        for u1, u2 in abc.gb_map.items():
+            register_uncondional_action(u1, u2, gb=True)
 
         # self.set_vowel_info(abc.vowel_mask, abc.vowel_base, abc.vowel_stress, abc.stressed_vowel, abc.unstressed_vowel)
         # self.set_glide_info(abc['j'], abc['w'])

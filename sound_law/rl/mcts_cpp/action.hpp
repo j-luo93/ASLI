@@ -19,6 +19,8 @@ struct ActionSpaceOpt
     abc_t any_id;
     abc_t any_s_id;
     abc_t any_uns_id;
+    abc_t glide_j;
+    abc_t glide_w;
 };
 
 class Env;
@@ -56,11 +58,15 @@ class ActionSpace
     TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType);
     void register_permissible_change(abc_t, abc_t);
     void register_cl_map(abc_t, abc_t);
+    void register_gbj_map(abc_t, abc_t);
+    void register_gbw_map(abc_t, abc_t);
     void evaluate(TreeNode *, const MetaPriors &, const vec<float> &);
 
     ActionSpace(WordSpace *, const ActionSpaceOpt &);
     map<abc_t, vec<abc_t>> permissible_changes;
     map<abc_t, abc_t> cl_map;
+    map<abc_t, abc_t> gbj_map;
+    map<abc_t, abc_t> gbw_map;
 
     void clear_stats(BaseNode *);
 

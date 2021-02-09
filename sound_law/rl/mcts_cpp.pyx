@@ -125,7 +125,7 @@ cdef class PyEnvOpt:
 cdef class PyActionSpaceOpt:
     cdef ActionSpaceOpt c_obj
 
-    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t any_s_id, abc_t any_uns_id):
+    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t any_s_id, abc_t any_uns_id, abc_t glide_j, abc_t glide_w):
         self.c_obj = ActionSpaceOpt()
         self.c_obj.null_id = null_id
         self.c_obj.emp_id = emp_id
@@ -134,6 +134,8 @@ cdef class PyActionSpaceOpt:
         self.c_obj.any_id = any_id
         self.c_obj.any_s_id = any_s_id
         self.c_obj.any_uns_id = any_uns_id
+        self.c_obj.glide_j = glide_j
+        self.c_obj.glide_w = glide_w
 
 cdef class PyWordSpaceOpt:
     cdef WordSpaceOpt c_obj
@@ -227,6 +229,12 @@ cdef class PyEnv:
 
     def register_cl_map(self, abc_t unit1, abc_t unit2):
         self.ptr.register_cl_map(unit1, unit2)
+
+    def register_gbj_map(self, abc_t unit1, abc_t unit2):
+        self.ptr.register_gbj_map(unit1, unit2)
+
+    def register_gbw_map(self, abc_t unit1, abc_t unit2):
+        self.ptr.register_gbw_map(unit1, unit2)
 
     # def step(self, PyTreeNode node, int best_i, uai_t action_id):
     #     new_node = self.ptr.apply_action(node.ptr, best_i, action_id)

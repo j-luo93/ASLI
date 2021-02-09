@@ -158,11 +158,30 @@ inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &
         return cleaned;
     }
 
+    if ((st == SpecialType::GBJ) || (st == SpecialType::GBW))
+    {
+        abc_t glide = ((st == SpecialType::GBJ) ? opt.glide_j : opt.glide_w);
+        auto to_insert = vec<bool>(new_id_seq.size(), false);
+        for (const auto pos : positions)
+            to_insert[pos] = true;
+        auto inserted = IdSeq();
+        inserted.reserve(new_id_seq.size() * 10);
+        for (size_t i = 0; i < new_id_seq.size(); ++i)
+        {
+            if (to_insert[i])
+                inserted.push_back(glide);
+            inserted.push_back(new_id_seq[i]);
+        }
+        return inserted;
+    }
+
     return new_id_seq;
 }
 
 void ActionSpace::register_permissible_change(abc_t before, abc_t after) { permissible_changes[before].push_back(after); }
 void ActionSpace::register_cl_map(abc_t before, abc_t after) { cl_map[before] = after; }
+void ActionSpace::register_gbj_map(abc_t before, abc_t after) { gbj_map[before] = after; }
+void ActionSpace::register_gbw_map(abc_t before, abc_t after) { gbw_map[before] = after; }
 
 Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss)
 {
@@ -279,6 +298,10 @@ void ActionSpace::expand_special_type(MiniNode *node, bool force_apply)
     auto st = static_cast<SpecialType>(node->chosen_char.second);
     if ((st == SpecialType::CLL) || (st == SpecialType::CLR))
         node->permissible_chars.push_back(cl_map[node->parent->chosen_char.second]);
+    else if (st == SpecialType::GBJ)
+        node->permissible_chars.push_back(gbj_map[node->parent->chosen_char.second]);
+    else if (st == SpecialType::GBW)
+        node->permissible_chars.push_back(gbw_map[node->parent->chosen_char.second]);
     else if (force_apply)
         // HACK(j_luo) this is hacky.
         for (abc_t after_id = 0; after_id < 1000; ++after_id)
@@ -318,6 +341,18 @@ void ActionSpace::expand_before(MiniNode *node)
         node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::CLR));
     else
         node->affected.pop_back();
+    // GBJ
+    if (gbj_map.contains(unit))
+    {
+        node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::GBJ));
+        node->affected.push_back(aff);
+    }
+    // GBW
+    if (gbw_map.contains(unit))
+    {
+        node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::GBW));
+        node->affected.push_back(aff);
+    }
 }
 void ActionSpace::expand_normal(MiniNode *node, int offset, bool use_vowel_seq)
 {

@@ -73,6 +73,8 @@ cdef extern from "mcts_cpp/action.hpp":
         abc_t any_id
         abc_t any_s_id
         abc_t any_uns_id
+        abc_t glide_j
+        abc_t glide_w
 
         ActionSpaceOpt()
 
@@ -97,6 +99,8 @@ cdef extern from "mcts_cpp/env.hpp":
 
         void register_permissible_change(abc_t, abc_t)
         void register_cl_map(abc_t, abc_t)
+        void register_gbj_map(abc_t, abc_t)
+        void register_gbw_map(abc_t, abc_t)
         float get_edit_dist(IdSeq, IdSeq)
         TreeNode *apply_action(TreeNode *node, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
 
