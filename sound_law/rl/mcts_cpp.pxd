@@ -70,6 +70,9 @@ cdef extern from "mcts_cpp/action.hpp":
         abc_t emp_id
         abc_t sot_id
         abc_t eot_id
+        abc_t any_id
+        abc_t any_s_id
+        abc_t any_uns_id
 
         ActionSpaceOpt()
 

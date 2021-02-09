@@ -306,7 +306,8 @@ void ActionSpace::expand_normal(MiniNode *node, int offset, bool use_vowel_seq)
 }
 bool ActionSpace::expand_null_only(MiniNode *node)
 {
-    if (node->chosen_char.second == opt.null_id)
+    abc_t last_unit = node->chosen_char.second;
+    if ((last_unit == opt.null_id) || (last_unit == opt.any_id) || (last_unit == opt.any_s_id) || (last_unit == opt.any_uns_id))
     {
         SPDLOG_TRACE("Phase {}, keeping only Null action.", str::from(node->ap));
         expand_null(node);
@@ -463,8 +464,20 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         aff.push_back({order, pos});
     }
 
-    if (word_space->opt.unit_stress[unit] != Stress::NOSTRESS)
+    Stress stress = word_space->opt.unit_stress[unit];
+    if (stress != Stress::NOSTRESS)
+    {
         update_affected(node, word_space->opt.unit2base[unit], order, pos, char_map);
+        if (stress == Stress::STRESSED)
+        {
+            if (unit != opt.any_s_id)
+                update_affected(node, opt.any_s_id, order, pos, char_map);
+        }
+        else if (unit != opt.any_uns_id)
+            update_affected(node, opt.any_uns_id, order, pos, char_map);
+    }
+    else if ((unit != opt.any_id) && (!word_space->opt.is_vowel[unit]))
+        update_affected(node, opt.any_id, order, pos, char_map);
 }
 
 void ActionSpace::evaluate(MiniNode *node)

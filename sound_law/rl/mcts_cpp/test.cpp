@@ -28,7 +28,7 @@ VocabIdSeq randv(int num_words, int max_len, int num_abc, bool syncope)
         vocab[i] = IdSeq(len);
         vocab[i][0] = 2;
         for (int j = 1; j < len - 1; j++)
-            vocab[i][j] = randint(num_abc - 4) + 4;
+            vocab[i][j] = randint(num_abc - 7) + 7;
         vocab[i][len - 1] = 3;
     }
     return vocab;
@@ -138,6 +138,9 @@ int main(int argc, char *argv[])
     as_opt.emp_id = 1;
     as_opt.sot_id = 2;
     as_opt.eot_id = 3;
+    as_opt.any_id = 4;
+    as_opt.any_s_id = 5;
+    as_opt.any_uns_id = 6;
     auto ws_opt = WordSpaceOpt();
     ws_opt.dist_mat = dist_mat;
     ws_opt.ins_cost = ins_cost;
@@ -154,7 +157,7 @@ int main(int argc, char *argv[])
         ws_opt.unit2stressed[i] = i;
         ws_opt.unit2unstressed[i] = i;
     }
-    if ((num_abc - 3) > 4)
+    if ((num_abc - 3) > 6)
     {
         ws_opt.is_vowel[num_abc - 3] = true;
         ws_opt.is_vowel[num_abc - 2] = true;

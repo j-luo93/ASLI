@@ -106,6 +106,8 @@ class Alphabet:
         self.unit_stress.fill(mcts_cpp.PyNoStress)
         self.unit_stress[ANY_S_ID] = mcts_cpp.PyStressed
         self.unit_stress[ANY_UNS_ID] = mcts_cpp.PyUnstressed
+        self.unit2base[ANY_S_ID] = ANY_ID
+        self.unit2base[ANY_UNS_ID] = ANY_ID
         self.unit2stressed[ANY_ID] = ANY_S_ID
         self.unit2unstressed[ANY_ID] = ANY_UNS_ID
         for u in self._id2unit:

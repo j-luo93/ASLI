@@ -125,12 +125,15 @@ cdef class PyEnvOpt:
 cdef class PyActionSpaceOpt:
     cdef ActionSpaceOpt c_obj
 
-    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id):
+    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t any_s_id, abc_t any_uns_id):
         self.c_obj = ActionSpaceOpt()
         self.c_obj.null_id = null_id
         self.c_obj.emp_id = emp_id
         self.c_obj.sot_id = sot_id
         self.c_obj.eot_id = eot_id
+        self.c_obj.any_id = any_id
+        self.c_obj.any_s_id = any_s_id
+        self.c_obj.any_uns_id = any_uns_id
 
 cdef class PyWordSpaceOpt:
     cdef WordSpaceOpt c_obj
