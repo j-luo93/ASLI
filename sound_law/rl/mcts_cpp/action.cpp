@@ -72,6 +72,10 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
         dummy_evaluate(st_mn->priors, st_mn->permissible_chars.size());
 
     // std::cerr << "after\n";
+    // std::cerr << after_id << "\n";
+    // for (const auto x : st_mn->permissible_chars)
+    //     std::cerr << x << " ";
+    // std::cerr << "\n";
     auto after = ChosenChar({get_index(after_id, st_mn->permissible_chars), after_id});
     auto after_mn = get_mini_node(node, st_mn, after, ActionPhase::AFTER, stopped);
     bool use_vowel_seq = (st == SpecialType::VS);
@@ -110,7 +114,6 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
 
 inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &positions, abc_t after_id, SpecialType st)
 {
-    // FIXME(j_luo)   add all special cases.
     auto new_id_seq = IdSeq(id_seq);
     auto stressed_after_id = word_space->opt.unit2stressed[after_id];
     auto unstressed_after_id = word_space->opt.unit2unstressed[after_id];
@@ -130,7 +133,6 @@ inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &
             break;
         }
     }
-    bool to_clean = (after_id == opt.emp_id);
     if (st == SpecialType::CLL)
     {
         for (const auto pos : positions)
@@ -148,7 +150,7 @@ inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &
         }
     }
 
-    if (to_clean)
+    if ((after_id == opt.emp_id) || (st == SpecialType::CLL) || (st == SpecialType::CLR))
     {
         auto cleaned = IdSeq();
         cleaned.reserve(new_id_seq.size());
@@ -195,7 +197,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
 
     auto special_type = before_mn->get_best_subaction(puct_c, game_count, virtual_loss);
     auto st_mn = get_mini_node(node, before_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
-    if (expand(st_mn, false, true))
+    if (expand(st_mn, false, false))
         evaluate(st_mn);
     SPDLOG_DEBUG("ActionSpace:: special_type done.");
 
@@ -297,19 +299,48 @@ void ActionSpace::expand_special_type(MiniNode *node, bool force_apply)
 {
     auto st = static_cast<SpecialType>(node->chosen_char.second);
     if ((st == SpecialType::CLL) || (st == SpecialType::CLR))
-        node->permissible_chars.push_back(cl_map[node->parent->chosen_char.second]);
-    else if (st == SpecialType::GBJ)
-        node->permissible_chars.push_back(gbj_map[node->parent->chosen_char.second]);
-    else if (st == SpecialType::GBW)
-        node->permissible_chars.push_back(gbw_map[node->parent->chosen_char.second]);
-    else if (force_apply)
-        // HACK(j_luo) this is hacky.
-        for (abc_t after_id = 0; after_id < 1000; ++after_id)
-            node->permissible_chars.push_back(after_id);
+    {
+        const auto &aff = node->parent->affected[node->chosen_char.first];
+        auto offset = (st == SpecialType::CLL) ? -1 : 1;
+        auto char_map = map<abc_t, size_t>();
+        for (const auto &item : aff)
+        {
+            auto order = item.first;
+            auto pos = item.second;
+            auto unit = node->base->words[order]->id_seq[pos + offset];
+            auto base_unit = word_space->opt.unit2base[unit];
+            // FIXME(j_luo) we really don't need to pass order and pos (and create item) separately -- we just need to decide whether to keep it or not.
+            assert(cl_map.contains(base_unit));
+            update_affected(node, cl_map[base_unit], order, pos, char_map);
+        }
+
+        // std::cerr << "-----------------\n";
+        // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
+        // {
+        //     std::cerr << "unit: " << node->permissible_chars[i] << "\n";
+        //     std::cerr << "affected " << node->affected[i].size() << "\n";
+        //     for (const auto &item : node->affected[i])
+        //     {
+        //         std::cerr << item.first << ":" << item.second << " ";
+        //     }
+        //     std::cerr << "\n";
+        // }
+    }
     else
-        node->permissible_chars = permissible_changes[node->parent->chosen_char.second];
-    // FIXME(j_luo) This is not very efficient.
-    node->affected = vec<Affected>(node->permissible_chars.size(), node->parent->affected[node->chosen_char.first]);
+    {
+        if (st == SpecialType::GBJ)
+            node->permissible_chars.push_back(gbj_map[node->parent->chosen_char.second]);
+        else if (st == SpecialType::GBW)
+            node->permissible_chars.push_back(gbw_map[node->parent->chosen_char.second]);
+        else if (force_apply)
+            // HACK(j_luo) this is hacky.
+            for (abc_t after_id = 0; after_id < 1000; ++after_id)
+                node->permissible_chars.push_back(after_id);
+        else
+            node->permissible_chars = permissible_changes[node->parent->chosen_char.second];
+        // FIXME(j_luo) This is not very efficient.
+        node->affected = vec<Affected>(node->permissible_chars.size(), node->parent->affected[node->chosen_char.first]);
+    }
 }
 void ActionSpace::expand_before(MiniNode *node)
 {
@@ -319,39 +350,52 @@ void ActionSpace::expand_before(MiniNode *node)
         node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::VS));
     node->affected = vec<Affected>(node->permissible_chars.size(), node->parent->affected[node->chosen_char.first]);
 
-    // Need to copy this to avoid being modified as we add cll_aff and clr_aff in-place.
-    auto aff = node->affected[0];
-    // CLL
-    node->affected.push_back(Affected());
-    auto &cll_aff = node->affected.back();
-    for (const auto &item : aff)
-        if (item.second > 0)
-            cll_aff.push_back(item);
+    // CLL and CLR
+    // std::cerr << "cllr\n";
+    auto cll_aff = Affected();
+    auto clr_aff = Affected();
+    for (const auto &item : node->affected[0])
+    {
+        auto order = item.first;
+        auto pos = item.second;
+        auto &id_seq = node->base->words[order]->id_seq;
+        if (pos > 0)
+        {
+            auto base_unit = word_space->opt.unit2base[id_seq[pos - 1]];
+            if (cl_map.contains(base_unit))
+                cll_aff.push_back(item);
+        }
+        if (pos < (id_seq.size() - 1))
+        {
+            auto base_unit = word_space->opt.unit2base[id_seq[pos + 1]];
+            if (cl_map.contains(base_unit))
+                clr_aff.push_back(item);
+        }
+    }
     if (cll_aff.size() > 0)
+    {
         node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::CLL));
-    else
-        node->affected.pop_back();
-    // CLR
-    node->affected.push_back(Affected());
-    auto &clr_aff = node->affected.back();
-    for (const auto &item : aff)
-        if (item.second < (node->base->words[item.first]->id_seq.size() - 1))
-            clr_aff.push_back(item);
+        node->affected.push_back(cll_aff);
+    }
     if (clr_aff.size() > 0)
+    {
         node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::CLR));
-    else
-        node->affected.pop_back();
+        node->affected.push_back(clr_aff);
+    }
     // GBJ
-    if (gbj_map.contains(unit))
+    // std::cerr << "gbj\n";
+    auto base_unit = word_space->opt.unit2base[unit];
+    if (gbj_map.contains(base_unit))
     {
         node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::GBJ));
-        node->affected.push_back(aff);
+        node->affected.push_back(node->affected[0]);
     }
     // GBW
-    if (gbw_map.contains(unit))
+    // std::cerr << "gbw\n";
+    if (gbw_map.contains(base_unit))
     {
         node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::GBW));
-        node->affected.push_back(aff);
+        node->affected.push_back(node->affected[0]);
     }
 }
 void ActionSpace::expand_normal(MiniNode *node, int offset, bool use_vowel_seq)
@@ -456,7 +500,6 @@ bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
 
     clear_stats(node);
     SPDLOG_DEBUG("ActionSpace:: mini node expanded with #actions {}.", node->permissible_chars.size());
-    return true;
 
     // std::cerr << "-----------------\n";
     // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
@@ -474,6 +517,7 @@ bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
 
 void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map)
 {
+    // FIXME(j_luo) clearer logic here -- e.g., <any> is not aviable for after_id.
     if (!char_map.contains(unit))
     {
         // Add one more permission char.
