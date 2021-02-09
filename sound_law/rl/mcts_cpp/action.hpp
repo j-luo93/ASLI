@@ -40,8 +40,8 @@ class ActionSpace
     // Methods for expanding nodes.
     void expand(TreeNode *);
     bool expand(MiniNode *, bool, bool);
-    void expand_before(MiniNode *, bool);
-    void expand_after(MiniNode *);
+    void expand_before(MiniNode *);
+    void expand_after(MiniNode *, bool);
     void expand_special_type(MiniNode *, bool);
     void expand_pre(MiniNode *, bool);
     void expand_d_pre(MiniNode *, bool);
