@@ -225,6 +225,9 @@ cdef class PyEnv:
     def register_permissible_change(self, abc_t unit1, abc_t unit2):
         self.ptr.register_permissible_change(unit1, unit2)
 
+    def register_cl_map(self, abc_t unit1, abc_t unit2):
+        self.ptr.register_cl_map(unit1, unit2)
+
     # def step(self, PyTreeNode node, int best_i, uai_t action_id):
     #     new_node = self.ptr.apply_action(node.ptr, best_i, action_id)
     #     tnode_cls = type(node)

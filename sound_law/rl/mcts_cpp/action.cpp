@@ -8,6 +8,7 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
     MiniNode *last = subpath.mini_node_seq[5];
     abc_t after_id = subpath.chosen_seq[2].second;
     auto last_child_index = subpath.chosen_seq[6].first;
+    SpecialType st = static_cast<SpecialType>(subpath.chosen_seq[1].second);
     TreeNode *new_node;
     if (subpath.stopped)
         new_node = new TreeNode(node->words, node->depth + 1, last, subpath.chosen_seq[6], true);
@@ -22,7 +23,7 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
         for (const auto &item : order2pos)
         {
             auto order = item.first;
-            auto new_id_seq = change_id_seq(node->words[order]->id_seq, item.second, after_id);
+            auto new_id_seq = change_id_seq(node->words[order]->id_seq, item.second, after_id, st);
             auto new_word = word_space->get_word(new_id_seq);
             new_words[order] = new_word;
             word_space->set_edit_dist_at(new_word, order);
@@ -107,7 +108,7 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
     return apply_new_action(node, subpath);
 }
 
-inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &positions, abc_t after_id)
+inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &positions, abc_t after_id, SpecialType st)
 {
     // FIXME(j_luo)   add all special cases.
     auto new_id_seq = IdSeq(id_seq);
@@ -129,7 +130,25 @@ inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &
             break;
         }
     }
-    if (after_id == opt.emp_id)
+    bool to_clean = (after_id == opt.emp_id);
+    if (st == SpecialType::CLL)
+    {
+        for (const auto pos : positions)
+        {
+            assert(pos > 0);
+            new_id_seq[pos - 1] = opt.emp_id;
+        }
+    }
+    else if (st == SpecialType::CLR)
+    {
+        for (const auto pos : positions)
+        {
+            assert(pos < (id_seq.size() - 1));
+            new_id_seq[pos + 1] = opt.emp_id;
+        }
+    }
+
+    if (to_clean)
     {
         auto cleaned = IdSeq();
         cleaned.reserve(new_id_seq.size());
@@ -142,10 +161,8 @@ inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &
     return new_id_seq;
 }
 
-void ActionSpace::register_permissible_change(abc_t before, abc_t after)
-{
-    permissible_changes[before].push_back(after);
-}
+void ActionSpace::register_permissible_change(abc_t before, abc_t after) { permissible_changes[before].push_back(after); }
+void ActionSpace::register_cl_map(abc_t before, abc_t after) { cl_map[before] = after; }
 
 Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss)
 {
@@ -259,7 +276,10 @@ void ActionSpace::expand(TreeNode *node)
 
 void ActionSpace::expand_special_type(MiniNode *node, bool force_apply)
 {
-    if (force_apply)
+    auto st = static_cast<SpecialType>(node->chosen_char.second);
+    if ((st == SpecialType::CLL) || (st == SpecialType::CLR))
+        node->permissible_chars.push_back(cl_map[node->parent->chosen_char.second]);
+    else if (force_apply)
         // HACK(j_luo) this is hacky.
         for (abc_t after_id = 0; after_id < 1000; ++after_id)
             node->permissible_chars.push_back(after_id);
@@ -275,6 +295,29 @@ void ActionSpace::expand_before(MiniNode *node)
     if (word_space->opt.is_vowel[unit])
         node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::VS));
     node->affected = vec<Affected>(node->permissible_chars.size(), node->parent->affected[node->chosen_char.first]);
+
+    // Need to copy this to avoid being modified as we add cll_aff and clr_aff in-place.
+    auto aff = node->affected[0];
+    // CLL
+    node->affected.push_back(Affected());
+    auto &cll_aff = node->affected.back();
+    for (const auto &item : aff)
+        if (item.second > 0)
+            cll_aff.push_back(item);
+    if (cll_aff.size() > 0)
+        node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::CLL));
+    else
+        node->affected.pop_back();
+    // CLR
+    node->affected.push_back(Affected());
+    auto &clr_aff = node->affected.back();
+    for (const auto &item : aff)
+        if (item.second < (node->base->words[item.first]->id_seq.size() - 1))
+            clr_aff.push_back(item);
+    if (clr_aff.size() > 0)
+        node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::CLR));
+    else
+        node->affected.pop_back();
 }
 void ActionSpace::expand_normal(MiniNode *node, int offset, bool use_vowel_seq)
 {

@@ -35,11 +35,12 @@ public:
     inline void evaluate(TreeNode *node, const MetaPriors &meta_priors, const vec<float> &special_priors) { action_space->evaluate(node, meta_priors, special_priors); };
     inline float get_edit_dist(const IdSeq &seq1, const IdSeq &seq2) { return word_space->get_edit_dist(seq1, seq2); };
     inline TreeNode *apply_action(TreeNode *node,
-                                  abc_t before_id,
-                                  abc_t after_id,
-                                  abc_t pre_id,
-                                  abc_t d_pre_id,
-                                  abc_t post_id,
-                                  abc_t d_post_id,
-                                  SpecialType special_type) { return action_space->apply_action(node, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, special_type); };
+                                  abc_t before,
+                                  abc_t after,
+                                  abc_t pre,
+                                  abc_t d_pre,
+                                  abc_t post,
+                                  abc_t d_post,
+                                  SpecialType special_type) { return action_space->apply_action(node, before, after, pre, d_pre, post, d_post, special_type); };
+    inline void register_cl_map(abc_t before, abc_t after) { action_space->register_cl_map(before, after); };
 };

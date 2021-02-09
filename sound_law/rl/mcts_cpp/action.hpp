@@ -33,7 +33,7 @@ class ActionSpace
 
     Subpath get_best_subpath(TreeNode *, float, int, float);
     MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool);
-    IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t);
+    IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t, SpecialType);
     void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &);
     // void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
 
@@ -55,10 +55,12 @@ class ActionSpace
     TreeNode *apply_new_action(TreeNode *, const Subpath &);
     TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType);
     void register_permissible_change(abc_t, abc_t);
+    void register_cl_map(abc_t, abc_t);
     void evaluate(TreeNode *, const MetaPriors &, const vec<float> &);
 
     ActionSpace(WordSpace *, const ActionSpaceOpt &);
     map<abc_t, vec<abc_t>> permissible_changes;
+    map<abc_t, abc_t> cl_map;
 
     void clear_stats(BaseNode *);
 

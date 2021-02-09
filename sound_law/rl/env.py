@@ -53,8 +53,8 @@ class SoundChangeEnv(PyEnv):
             register_uncondional_action(u1, u2)
         for u in units:
             register_uncondional_action(u, EMP)
-        # for u1, u2 in abc.cl_map.items():
-        #     register_uncondional_action(u1, u2, cl=True)
+        for u1, u2 in abc.cl_map.items():
+            register_uncondional_action(u1, u2, cl=True)
         # for u1, u2 in abc.gb_map.items():
         #     register_uncondional_action(u1, u2, gb=True)
 

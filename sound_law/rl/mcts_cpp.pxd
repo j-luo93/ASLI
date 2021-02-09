@@ -96,6 +96,7 @@ cdef extern from "mcts_cpp/env.hpp":
         TreeNode *end
 
         void register_permissible_change(abc_t, abc_t)
+        void register_cl_map(abc_t, abc_t)
         float get_edit_dist(IdSeq, IdSeq)
         TreeNode *apply_action(TreeNode *node, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
 
