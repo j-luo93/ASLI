@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
         env->register_permissible_change(i, as_opt.emp_id);
     }
     env->evaluate(env->start,
-                  MetaPriors{
+                  vec<vec<float>>{
                       uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
                   uniform(6));
 
@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
             SPDLOG_DEBUG("#nodes to evaluate: {}", unique_nodes.size());
             for (const auto node : unique_nodes)
                 env->evaluate(node,
-                              MetaPriors{
+                              vec<vec<float>>{
                                   uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
                               uniform(6));
             SPDLOG_DEBUG("Backing up values.");

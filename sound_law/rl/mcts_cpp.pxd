@@ -98,11 +98,13 @@ cdef extern from "mcts_cpp/env.hpp":
         TreeNode *end
 
         void register_permissible_change(abc_t, abc_t)
+        void evaluate(TreeNode *, vector[vector[float]], vector[float])
         void register_cl_map(abc_t, abc_t)
         void register_gbj_map(abc_t, abc_t)
         void register_gbw_map(abc_t, abc_t)
         float get_edit_dist(IdSeq, IdSeq)
         TreeNode *apply_action(TreeNode *node, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
+        void clear_stats(TreeNode *node, bool)
 
 cdef extern from "mcts_cpp/node.hpp":
 
@@ -115,7 +117,6 @@ cdef extern from "mcts_cpp/node.hpp":
     ctypedef BaseNode * BNptr
 
     cdef cppclass TreeNode nogil:
-        BaseNode *parent
         ChosenChar chosen_char
         bool stopped
 
@@ -144,6 +145,8 @@ cdef extern from "mcts_cpp/node.hpp":
         TreeNode *play()
         IdSeq get_id_seq(int)
         size_t size()
+        size_t get_num_actions()
+        void add_noise(vector[float], float)
 
 ctypedef TreeNode * TNptr
 

@@ -4,6 +4,8 @@ from .mcts_cpp cimport Stress, NOSTRESS, STRESSED, UNSTRESSED
 from .mcts_cpp cimport SpecialType, NONE, CLL, CLR, VS, GBJ, GBW
 import numpy as np
 cimport numpy as np
+from cython.parallel import prange
+cimport cython
 
 import sound_law.data.alphabet as alphabet
 
@@ -52,12 +54,18 @@ cdef class PyTreeNode:
             vocab[i] = self.ptr.get_id_seq(i)
         return vocab
 
-    # @property
-    # def dist(self) -> float:
-    #     return self.ptr.dist
+    def get_num_actions(self):
+        return self.ptr.get_num_actions()
 
-    # def is_leaf(self) -> bool:
-    #     return self.ptr.is_leaf()
+    def add_noise(self, float[::1] noise, float noise_ratio):
+        self.ptr.add_noise(np2vector(noise), noise_ratio)
+
+    @property
+    def dist(self) -> float:
+        return self.ptr.dist
+
+    def is_leaf(self) -> bool:
+        return self.ptr.is_leaf()
 
     # def expand(self, float[::1] prior):
     #     cdef vector[float] prior_vec = np2vector(prior)
@@ -75,9 +83,9 @@ cdef class PyTreeNode:
     # def action_allowed(self):
     #     return np.asarray(self.ptr.action_allowed, dtype='long')
 
-    # @property
-    # def action_count(self):
-    #     return np.asarray(self.ptr.action_count, dtype='long')
+    @property
+    def action_counts(self):
+        return np.asarray(self.ptr.action_counts, dtype='long')
 
     # @property
     # def max_index(self):
@@ -87,9 +95,9 @@ cdef class PyTreeNode:
     # def max_action_id(self):
     #     return self.ptr.max_action_id
 
-    # @property
-    # def total_value(self):
-    #     return np.asarray(self.ptr.total_value, dtype='float32')
+    @property
+    def total_values(self):
+        return np.asarray(self.ptr.total_values, dtype='float32')
 
     # @property
     # def prev_action(self):
@@ -185,7 +193,7 @@ cdef class PyEnv:
 
     tnode_cls = PyTreeNode
 
-    def __cinit__(self, PyEnvOpt py_env_opt, PyActionSpaceOpt py_as_opt, PyWordSpaceOpt py_ws_opt):
+    def __cinit__(self, PyEnvOpt py_env_opt, PyActionSpaceOpt py_as_opt, PyWordSpaceOpt py_ws_opt, *args, **kwargs):
         self.ptr = new Env(py_env_opt.c_obj, py_as_opt.c_obj, py_ws_opt.c_obj)
         tnode_cls = type(self).tnode_cls
         self.start = wrap_node(tnode_cls, self.ptr.start)
@@ -236,38 +244,52 @@ cdef class PyEnv:
     def register_gbw_map(self, abc_t unit1, abc_t unit2):
         self.ptr.register_gbw_map(unit1, unit2)
 
+    def clear_stats(self, PyTreeNode py_node, bool recursive):
+        self.ptr.clear_stats(py_node.ptr, recursive)
+
+    def evaluate(self, PyTreeNode py_node, float[:, ::1] np_meta_priors, float[::1] np_special_priors):
+        cdef long[::1] lengths = np.full([6], np_meta_priors.shape[1], dtype='long')
+        cdef vector[vector[float]] meta_priors = np2nested(np_meta_priors, lengths)
+        cdef vector[float] special_priors = np2vector(np_special_priors)
+        self.ptr.evaluate(py_node.ptr, meta_priors, special_priors)
+
     # def step(self, PyTreeNode node, int best_i, uai_t action_id):
     #     new_node = self.ptr.apply_action(node.ptr, best_i, action_id)
     #     tnode_cls = type(node)
     #     return wrap_node(tnode_cls, new_node)
 
+cdef inline TreeNode *get_ptr(PyTreeNode py_node):
+    return py_node.ptr
+
 cdef class PyMcts:
     cdef Mcts *ptr
 
-    def __cinit__(self, PyEnv py_env, PyMctsOpt py_mcts_opt):
+    cdef public PyEnv env
+
+    def __cinit__(self, PyEnv py_env, PyMctsOpt py_mcts_opt, *args, **kwargs):
         self.ptr = new Mcts(py_env.ptr, py_mcts_opt.c_obj)
+        self.env = py_env
 
     def __dealloc__(self):
         del self.ptr
 
-    # def select(self, PyTreeNode py_tnode, int num_sims, int depth_limit):
-    #     cdef vector[TNptr] selected = self.ptr.select(py_tnode.ptr, num_sims, depth_limit)
-    #     cdef vector[int] steps_left_vec = vector[int](selected.size())
-    #     cdef size_t i
-    #     for i in range(selected.size()):
-    #         steps_left_vec[i] = selected[i].depth
-    #     steps_left = np.asarray(steps_left_vec, dtype='long')
-    #     tnode_cls = type(py_tnode)
-    #     return [wrap_node(tnode_cls, node) for node in selected], steps_left
+    def select(self, PyTreeNode py_tnode, int num_sims, int depth_limit):
+        cdef vector[TNptr] selected = self.ptr.select(py_tnode.ptr, num_sims, depth_limit)
+        cdef vector[int] steps_left_vec = vector[int](selected.size())
+        for i in range(selected.size()):
+            steps_left_vec[i] = selected[i].depth
+        steps_left = np.asarray(steps_left_vec, dtype='long')
+        tnode_cls = type(py_tnode)
+        return [wrap_node(tnode_cls, node) for node in selected], steps_left
 
-    # def backup(self, states, values):
-    #     cdef size_t n = len(states)
-    #     cdef vector[TNptr] states_vec = vector[TNptr](n)
-    #     for i in range(n):
-    #         states_vec[i] = get_ptr(states[i])
-    #     cdef float[::1] np_values = np.asarray(values, dtype='float32')
-    #     cdef vector[float] values_vec = np2vector(np_values)
-    #     self.ptr.backup(states_vec, values_vec)
+    def backup(self, states, vector[float] values):
+        cdef vector[TNptr] states_vec = vector[TNptr]()
+        states_vec.reserve(len(states))
+        for state in states:
+            states_vec.push_back(get_ptr(state))
+        self.ptr.backup(states_vec, values)
+
+    def play(self, PyTreeNode py_tnode)
 
     # def play(self, PyTreeNode py_tnode):
     #     cdef uai_t action_id = self.ptr.play(py_tnode.ptr)
@@ -287,3 +309,30 @@ cdef class PyMcts:
 
     # def set_logging_options(self, int verbose_level, bool log_to_file):
     #     self.ptr.set_logging_options(verbose_level, log_to_file)
+
+@cython.boundscheck(False)
+cpdef object parallel_stack_ids(py_nodes, int num_threads):
+    cdef size_t n = len(py_nodes)
+    cdef vector[TNptr] nodes = vector[TNptr]()
+    nodes.reserve(n)
+    for node in py_nodes:
+        nodes.push_back(get_ptr(node))
+
+
+    # Get the max length first.
+    cdef int i, j, k
+    cdef size_t m = 0
+    cdef size_t nw = nodes[0].size()
+    for i in range(n):
+        for j in range(nw):
+            m = max(m, nodes[i].get_id_seq(j).size())
+
+    cdef long[:, :, ::1] arr = np.full([n, m, nw], alphabet.PAD_ID, dtype='long')
+    cdef IdSeq id_seq
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            for k in range(nw):
+                id_seq = nodes[i].get_id_seq(k)
+                for j in range(id_seq.size()):
+                    arr[i, j, k] = id_seq[j]
+    return np.asarray(arr)

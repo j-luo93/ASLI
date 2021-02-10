@@ -20,25 +20,25 @@ from sound_law.rl.mcts_cpp import \
     PyTreeNode  # pylint: disable=no-name-in-module
 
 
-class VocabStateSpace:
-    """This is the factory class for creating VocabState."""
+# class VocabStateSpace:
+#     """This is the factory class for creating VocabState."""
 
-    def get_state(self,
-                  seqs: Optional[dl.PaddedUnitSeqs] = None,
-                  ids: Optional[NDA] = None,
-                  lengths: Optional[NDA] = None,
-                  action_space: Optional[a.SoundChangeActionSpace] = None,
-                  end_state: Optional[VocabState] = None) -> VocabState:
-        if seqs is not None:
-            ids = seqs.ids.t()
-            lengths = seqs.lengths.t()
-        # NOTE(j_luo) Since memoryviews are used in the extension class, we have to make them contiguous.
-        arr = np.ascontiguousarray(ids.cpu().numpy())
-        lengths = np.ascontiguousarray(lengths.cpu().numpy())
-        state = VocabState(arr=arr, lengths=lengths, end_node=end_state)
-        if action_space is not None:
-            action_space.set_action_allowed(state)
-        return state
+#     def get_state(self,
+#                   seqs: Optional[dl.PaddedUnitSeqs] = None,
+#                   ids: Optional[NDA] = None,
+#                   lengths: Optional[NDA] = None,
+#                   action_space: Optional[a.SoundChangeActionSpace] = None,
+#                   end_state: Optional[VocabState] = None) -> VocabState:
+#         if seqs is not None:
+#             ids = seqs.ids.t()
+#             lengths = seqs.lengths.t()
+#         # NOTE(j_luo) Since memoryviews are used in the extension class, we have to make them contiguous.
+#         arr = np.ascontiguousarray(ids.cpu().numpy())
+#         lengths = np.ascontiguousarray(lengths.cpu().numpy())
+#         state = VocabState(arr=arr, lengths=lengths, end_node=end_state)
+#         if action_space is not None:
+#             action_space.set_action_allowed(state)
+#         return state
 
 
 class VocabState(PyTreeNode):
@@ -53,7 +53,7 @@ class VocabState(PyTreeNode):
 
     @property
     def q(self):
-        return self.total_value / (1e-8 + self.action_count)
+        return self.total_values / (1e-8 + self.action_counts)
 
     @property
     def word_list(self) -> List[str]:

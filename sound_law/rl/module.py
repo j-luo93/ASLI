@@ -15,15 +15,17 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction
+from .env import SoundChangeEnv
+
 # from .mcts_cpp import PyNull_abc  # pylint: disable=no-name-in-module
 
 
 class FactorizedProjection(nn.Module):
     """A factorized projection layer that predicts the before ids and the after ids."""
 
-    def __init__(self, input_size: int, action_space: SoundChangeActionSpace):
+    def __init__(self, input_size: int, env: SoundChangeEnv):
         super().__init__()
-        num_ids = len(action_space.abc)
+        num_ids = len(env.abc)
         assert g.use_conditional, 'Blocked potential module expects conditional actions'
         # self.before_potential = nn.Linear(input_size, num_ids)
         # self.after_potential = nn.Linear(input_size, num_ids)
@@ -33,57 +35,62 @@ class FactorizedProjection(nn.Module):
         #     self.d_pre_potential = nn.Linear(input_size, num_ids)
         #     self.d_post_potential = nn.Linear(input_size, num_ids)
         self.potential_block = nn.Linear(input_size, num_ids * 7)
-        self.action_space = action_space
+        self.env = env
 
-    def forward(self, inp: FT, sparse: bool = False, indices: Optional[NDA] = None) -> FT:
+    def forward(self, inp: FT, sparse: bool = False, indices: Optional[NDA] = None) -> Tuple[FT, FT]:
         is_2d = inp.ndim == 2
         if g.use_conditional and not is_2d:
             raise RuntimeError(f'Not sure why you end up here.')
-        assert sparse, 'Cannot deal with dense action space.'
+        # assert True, 'Cannot deal with dense action space.'
+        assert is_2d
 
         potentials = self.potential_block(inp)
-        last_10 = (1 << 10) - 1
         with NoName(potentials):
-            indices = get_tensor(indices)
-            after_id = indices & last_10
-            before_id = (indices >> 10) & last_10
-            d_post_id = (indices >> 20) & last_10
-            post_id = (indices >> 30) & last_10
-            d_pre_id = (indices >> 40) & last_10
-            pre_id = (indices >> 50) & last_10
-            special_type = (indices >> 60)
-            a2i = torch.stack([before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, special_type], dim=-1)
-            # a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, g.num_workers))
-            mask = a2i == PyNull_abc
-            a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
-            num_ids = len(self.action_space.abc)
-            batch_ids = get_tensor(np.arange(indices.shape[0])).long().view(-1, 1, 1)
-            order = get_tensor(np.arange(7)).long()
-            ret = potentials.view(-1, num_ids, 7)[batch_ids, a2i, order]
-            ret = torch.where(mask, torch.zeros_like(ret), ret)
-            ret = ret.view(-1, indices.shape[-1], 7).sum(dim=-1)
-            return ret.rename('batch', 'action')
+            potentials = potentials.view(-1, len(self.env.abc), 7)
+            return potentials[..., :6].permute(0, 2, 1).rename('batch', 'phase', 'action'), potentials[:, :6, 6].rename('batch', 'special_type')
+
+        # last_10 = (1 << 10) - 1
+        # with NoName(potentials):
+        #     indices = get_tensor(indices)
+        #     after_id = indices & last_10
+        #     before_id = (indices >> 10) & last_10
+        #     d_post_id = (indices >> 20) & last_10
+        #     post_id = (indices >> 30) & last_10
+        #     d_pre_id = (indices >> 40) & last_10
+        #     pre_id = (indices >> 50) & last_10
+        #     special_type = (indices >> 60)
+        #     a2i = torch.stack([before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, special_type], dim=-1)
+        #     # a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, g.num_workers))
+        #     mask = a2i == PyNull_abc
+        #     a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
+        #     num_ids = len(self.action_space.abc)
+        #     batch_ids = get_tensor(np.arange(indices.shape[0])).long().view(-1, 1, 1)
+        #     order = get_tensor(np.arange(7)).long()
+        #     ret = potentials.view(-1, num_ids, 7)[batch_ids, a2i, order]
+        #     ret = torch.where(mask, torch.zeros_like(ret), ret)
+        #     ret = ret.view(-1, indices.shape[-1], 7).sum(dim=-1)
+        #     return ret.rename('batch', 'action')
 
 
-class SparseProjection(nn.Module):
-    """A projection layer that can be selectively computed on given indices."""
+# class SparseProjection(nn.Module):
+#     """A projection layer that can be selectively computed on given indices."""
 
-    def __init__(self, input_size: int, num_classes: int):
-        super().__init__()
-        self.input_size = input_size
-        self.num_classes = num_classes
-        self.weight = nn.Parameter(nn.init.xavier_uniform(torch.randn(num_classes, input_size)))
-        self.bias = nn.Parameter(torch.zeros(num_classes))
+#     def __init__(self, input_size: int, num_classes: int):
+#         super().__init__()
+#         self.input_size = input_size
+#         self.num_classes = num_classes
+#         self.weight = nn.Parameter(nn.init.xavier_uniform(torch.randn(num_classes, input_size)))
+#         self.bias = nn.Parameter(torch.zeros(num_classes))
 
-    def forward(self, inp: FT, sparse: bool = False, indices: Optional[LT] = None):
-        with NoName(inp):
-            if sparse:
-                w = self.weight[indices]
-                b = self.bias[indices]
-                out = torch.bmm(w, inp.unsqueeze(dim=-1)).squeeze(dim=-1) + b
-                return out
-            else:
-                return torch.addmm(self.bias, inp, self.weight.t())
+#     def forward(self, inp: FT, sparse: bool = False, indices: Optional[LT] = None):
+#         with NoName(inp):
+#             if sparse:
+#                 w = self.weight[indices]
+#                 b = self.bias[indices]
+#                 out = torch.bmm(w, inp.unsqueeze(dim=-1)).squeeze(dim=-1) + b
+#                 return out
+#             else:
+#                 return torch.addmm(self.bias, inp, self.weight.t())
 
 
 @dataclass
@@ -155,36 +162,35 @@ class PolicyNetwork(nn.Module):
                  enc: StateEncoder,
                  hidden: nn.Module,
                  proj: nn.Module,
-                 action_space: SoundChangeActionSpace):
+                 env: SoundChangeEnv):
         super().__init__()
         self.enc = enc
         self.hidden = hidden
         self.proj = proj
-        self.action_space = action_space
+        self.env = env
 
     @classmethod
     def from_params(cls, emb_params: EmbParams,
                     cnn1d_params: Cnn1dParams,
-                    action_space: SoundChangeActionSpace) -> PolicyNetwork:
+                    env: SoundChangeEnv) -> PolicyNetwork:
         enc = StateEncoder.from_params(emb_params, cnn1d_params)
         input_size = cnn1d_params.hidden_size
         hidden = nn.Sequential(
             nn.Linear(input_size, input_size // 2),
             nn.Tanh(),
             nn.Dropout(g.dropout))
-        if g.factorize_actions:
-            proj = FactorizedProjection(input_size // 2, action_space)
-        else:
-            num_actions = len(action_space)
-            proj = SparseProjection(input_size // 2, num_actions)
-        return cls(enc, hidden, proj, action_space)
+        # if g.factorize_actions:
+        proj = FactorizedProjection(input_size // 2, env)
+        # else:
+        #     proj = SparseProjection(input_size // 2, env.num_actions)
+        return cls(enc, hidden, proj, env)
 
     def forward(self,
                 curr_ids: LT,
                 end_ids: LT,
-                action_masks: BT,
+                # action_masks: BT,
                 sparse: bool = False,
-                indices: Optional[NDA] = None) -> Distribution:
+                indices: Optional[NDA] = None):
         """Get policy distribution based on current state (and end state)."""
         if sparse and indices is None:
             raise TypeError(f'Must provide `indices` in sparse mode.')
@@ -196,12 +202,13 @@ class PolicyNetwork(nn.Module):
             action_logits = self.proj(hid, indices=indices, sparse=True)
         else:
             action_logits = self.proj(hid, sparse=False)
-        action_logits = torch.where(action_masks, action_logits,
-                                    torch.full_like(action_logits, -999.9))
+        return action_logits
+        # action_logits = torch.where(action_masks, action_logits,
+        #                             torch.full_like(action_logits, -999.9))
 
-        with NoName(action_logits):
-            policy = torch.distributions.Categorical(logits=action_logits)
-        return policy
+        # with NoName(action_logits):
+        #     policy = torch.distributions.Categorical(logits=action_logits)
+        # return policy
 
 
 class ValueNetwork(nn.Module):

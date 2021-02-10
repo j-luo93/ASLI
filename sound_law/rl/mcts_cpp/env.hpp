@@ -32,7 +32,7 @@ public:
     TreeNode *end;
 
     inline void register_permissible_change(abc_t before, abc_t after) { action_space->register_permissible_change(before, after); };
-    inline void evaluate(TreeNode *node, const MetaPriors &meta_priors, const vec<float> &special_priors) { action_space->evaluate(node, meta_priors, special_priors); };
+    inline void evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors) { action_space->evaluate(node, meta_priors, special_priors); };
     inline float get_edit_dist(const IdSeq &seq1, const IdSeq &seq2) { return word_space->get_edit_dist(seq1, seq2); };
     inline TreeNode *apply_action(TreeNode *node,
                                   abc_t before,
@@ -45,4 +45,5 @@ public:
     inline void register_cl_map(abc_t before, abc_t after) { action_space->register_cl_map(before, after); };
     inline void register_gbj_map(abc_t before, abc_t after) { action_space->register_gbj_map(before, after); };
     inline void register_gbw_map(abc_t before, abc_t after) { action_space->register_gbw_map(before, after); };
+    inline void clear_stats(TreeNode *node, bool recursive) { action_space->clear_stats(node, recursive); };
 };

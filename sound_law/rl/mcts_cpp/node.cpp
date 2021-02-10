@@ -21,7 +21,7 @@ void TreeNode::common_init(const vec<Word *> &words)
 TreeNode::TreeNode(const vec<Word *> &words,
                    int depth) : words(words),
                                 depth(depth),
-                                BaseNode(nullptr, ChosenChar(-1, 0), stopped) { common_init(words); }
+                                BaseNode(nullptr, ChosenChar(-1, 0), false) { common_init(words); }
 
 TreeNode::TreeNode(const vec<Word *> &words,
                    int depth,
@@ -127,3 +127,16 @@ void BaseNode::backup(float value, int game_count, float virtual_loss)
 IdSeq TreeNode::get_id_seq(int order) { return words[order]->id_seq; }
 
 size_t TreeNode::size() { return words.size(); }
+
+size_t BaseNode::get_num_actions()
+{
+    assert(permissible_chars.size() > 0);
+    return permissible_chars.size();
+}
+
+void BaseNode::add_noise(const vec<float> &noise, float noise_ratio)
+{
+    assert(noise.size() == get_num_actions());
+    for (size_t i = 0; i < priors.size(); ++i)
+        priors[i] = priors[i] * (1.0 - noise_ratio) + noise[i] * noise_ratio;
+}

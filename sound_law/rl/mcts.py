@@ -18,9 +18,7 @@ from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.trajectory import Trajectory, VocabState
 
 # pylint: disable=no-name-in-module
-# from .mcts_cpp import (PyMcts, parallel_get_sparse_action_masks, parallel_stack_ids)
-from .mcts_cpp import PyMcts
-
+from .mcts_cpp import PyMcts, parallel_stack_ids
 # pylint: enable=no-name-in-module
 
 
@@ -39,19 +37,21 @@ class Mcts(PyMcts):
     add_argument('dirichlet_alpha', default=0.03, dtype=float, msg='Alpha value for the Dirichlet noise.')
     add_argument('noise_ratio', default=0.25, dtype=float, msg='Mixing ratio for the Dirichlet noise.')
 
-    def __init__(self,
-                 env: SoundChangeEnv,
-                 puct_c: float,
-                 game_count: int,
-                 virtual_loss: float,
-                 num_threads: int,
-                 agent: BasePG):
-        self.env = env
+    # def __init__(self,
+    #              env: SoundChangeEnv,
+    #              puct_c: float,
+    #              game_count: int,
+    #              virtual_loss: float,
+    #              num_threads: int,
+    #              agent: BasePG):
+    #     self.env = env
+    #     self.agent = agent
+    #     # NOTE(j_luo) This keeps track all selected states in history.
+    #     # self._states: List[VocabState] = list()
+    #     # self._total_state_ids: Set[int] = set()
+    #     # self.reset()
+    def __init__(self, *args, agent: BasePG = None, **kwargs):
         self.agent = agent
-        # NOTE(j_luo) This keeps track all selected states in history.
-        # self._states: List[VocabState] = list()
-        # self._total_state_ids: Set[int] = set()
-        # self.reset()
 
     def reset(self):
         # for s in self._states:
@@ -59,21 +59,10 @@ class Mcts(PyMcts):
         # logging.debug(f'Total number of states reset: {len(self._states)}.')
         # self._state_ids: Set[int] = set()
         # self._states: List[VocabState] = list()
-        self.env.start.clear_stats(recursive=True)
+        self.env.clear_stats(self.env.start, True)
 
-    @overload
-    def expand(self, state: VocabState) -> float: ...
-
-    @overload
-    def expand(self, states: List[VocabState]) -> List[float]: ...
-
-    def expand(self, states, steps: Optional[Union[int, LT]] = None):
+    def evaluate(self, states, steps: Optional[Union[int, LT]] = None) -> List[float]:
         """Expand and evaluate the leaf node."""
-        ret_lst = True
-        if isinstance(states, VocabState):
-            states = [states]
-            ret_lst = False
-
         values = [None] * len(states)
         outstanding_idx = list()
         outstanding_states = list()
@@ -88,9 +77,10 @@ class Mcts(PyMcts):
 
         # Collect states that need evaluation.
         if outstanding_states:
-            indices, action_masks, num_actions = parallel_get_sparse_action_masks(outstanding_states, g.num_workers)
+            # indices, action_masks, num_actions = parallel_get_sparse_action_masks(outstanding_states, g.num_workers)
             # indices = get_tensor(indices)
-            am_tensor = get_tensor(action_masks)
+            # am_tensor = get_tensor(action_masks)
+            # FIXME(j_luo) maybe transpose it first???
             id_seqs = parallel_stack_ids(outstanding_states, g.num_workers)
             id_seqs = get_tensor(id_seqs).rename('batch', 'pos', 'word')
             if steps is not None and not isinstance(steps, int):
@@ -98,13 +88,16 @@ class Mcts(PyMcts):
 
             # TODO(j_luo) Scoped might be wrong here.
             # with ScopedCache('state_repr'):
-            probs = self.agent.get_policy(id_seqs, am_tensor, indices=indices, sparse=True).probs.cpu().numpy()
+            meta_priors, special_priors = self.agent.get_policy(id_seqs)
+            breakpoint()  # BREAKPOINT(j_luo)
+            meta_priors = meta_priors.cpu().numpy()
+            special_priors = special_priors.cpu().numpy()
             if g.use_value_guidance:
                 agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()
             else:
-                agent_values = np.zeros([len(probs)], dtype='float32')
+                agent_values = np.zeros([len(id_seqs)], dtype='float32')
 
-            for i, state, p, v, na in zip(outstanding_idx, outstanding_states, probs, agent_values, num_actions):
+            for i, state, mp, sp, v in zip(outstanding_idx, outstanding_states, meta_priors, special_priors, agent_values):
                 # NOTE(j_luo) Values should be returned even if states are duplicates or have been visited.
                 values[i] = v
                 # NOTE(j_luo) Skip duplicate states (due to exploration collapse) or visited states (due to rollout truncation).
@@ -117,12 +110,8 @@ class Mcts(PyMcts):
                 # if state.idx not in self._total_state_ids:
                 #     self._total_state_ids.add(state.idx)
 
-                # See issue here https://github.com/cython/cython/issues/2204. Memoryview with bool dtype is still not supported.
-                state.expand(p[:na])
-
-        if ret_lst:
-            return values
-        return values[0]
+                self.env.evaluate(state, mp, sp)
+        return values
 
     # def backup(self,
     #            state: VocabState,
@@ -130,7 +119,7 @@ class Mcts(PyMcts):
     #     state.backup(value, g.mixing, g.game_count, g.virtual_loss)
 
     def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, float, VocabState]:
-        exp = np.power(state.action_count.astype('float32'), 1.0)
+        exp = np.power(state.action_counts.astype('float32'), 1.0)
         probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)
         # if g.use_max_value:
         #     best_i = np.argmax(state.max_value)
@@ -155,12 +144,13 @@ class Mcts(PyMcts):
         #     action = self.env.action_space.get_action(action_id)
         #     new_state, reward = self.env.step(state, best_i, action_id)
         action_id, new_state, reward = super().play(state)
+        super().play(state)
         action = self.env.action_space.get_action(action_id)
         return probs, action, reward, new_state
 
     def add_noise(self, state: VocabState):
         """Add Dirichlet noise to `state`, usually the root."""
-        noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(state.num_actions)).astype('float32')
+        noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(state.get_num_actions())).astype('float32')
         state.add_noise(noise, g.noise_ratio)
 
     def collect_episodes(self, init_state: VocabState, end_state: VocabState,
@@ -174,20 +164,20 @@ class Mcts(PyMcts):
         # if self.env.action_space.cache_size > 300000:
         #     logging.info(f'Clearing up all the cached words.')
         #     self.env.action_space.clear_cache()
-        logging.info(
-            f'{len(self.env.word_space.site_space)} sites, {len(self.env.word_space)} words, {init_state.get_num_descendants()} nodes in total.')
+        # logging.info(
+        #     f'{len(self.env.word_space.site_space)} sites, {len(self.env.word_space)} words, {init_state.get_num_descendants()} nodes in total.')
         trajectories = list()
         self.agent.eval()
         num_episodes = num_episodes or g.num_episodes
         with self.agent.policy_grad(False), self.agent.value_grad(False):
-            self.enable_timer()
+            # self.enable_timer()
             for ei in range(num_episodes):
                 root = init_state
                 self.reset()
                 steps = 0 if g.use_finite_horizon else None
                 # self.env.action_space.set_action_allowed(root)
-                value = self.expand(root, steps=steps)
-                self.backup([root], [value])
+                self.evaluate([root], steps=steps)
+                # self.backup([root], [value])
 
                 trajectory = Trajectory(root, end_state)
                 # Episodes have max rollout length.
@@ -202,7 +192,7 @@ class Mcts(PyMcts):
                     for _ in range(num_batches):
                         new_states, steps_left = self.select(root, g.expansion_batch_size, g.max_rollout_length)
                         steps = g.max_rollout_length - get_tensor(steps_left) if g.use_finite_horizon else None
-                        values = self.expand(new_states, steps=steps)
+                        values = self.evaluate(new_states, steps=steps)
                         self.backup(new_states, values)
                         # backed_up_idx = set()
                         # for state, value in zip(new_states, values):
@@ -215,7 +205,7 @@ class Mcts(PyMcts):
                     trajectory.append(action, new_state, reward, mcts_pi=probs)
                     if ri == 0 and ei % g.episode_check_interval == 0:
                         k = min(20, root.num_actions)
-                        logging.debug(pad_for_log(str(get_tensor(root.action_count).topk(k))))
+                        logging.debug(pad_for_log(str(get_tensor(root.action_counts).topk(k))))
                         logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
                     root = new_state
 
@@ -223,7 +213,7 @@ class Mcts(PyMcts):
                         tracker.update('rollout')
                     if root.stopped or root.done:
                         break
-                    self.show_stats()
+                    # self.show_stats()
                 if ei % g.episode_check_interval == 0:
                     out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
                     logging.debug(pad_for_log(out))

@@ -279,7 +279,7 @@ void ActionSpace::expand(TreeNode *node)
                 update_affected(node, id_seq[pos], order, pos, char_map);
     }
 
-    clear_stats(node);
+    clear_stats(node, false);
     SPDLOG_DEBUG("ActionSpace:: node expanded with #actions {}.", node->permissible_chars.size());
 
     // std::cerr << "-----------------\n";
@@ -313,6 +313,7 @@ void ActionSpace::expand_special_type(MiniNode *node, bool force_apply)
             assert(cl_map.contains(base_unit));
             update_affected(node, cl_map[base_unit], order, pos, char_map);
         }
+        // std::cerr << "CLLR\n";
 
         // std::cerr << "-----------------\n";
         // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
@@ -339,6 +340,8 @@ void ActionSpace::expand_special_type(MiniNode *node, bool force_apply)
         else
             node->permissible_chars = permissible_changes[node->parent->chosen_char.second];
         // FIXME(j_luo) This is not very efficient.
+        // std::cerr << "node\n";
+        // std::cerr << node->parent->chosen_char.second << "\n";
         node->affected = vec<Affected>(node->permissible_chars.size(), node->parent->affected[node->chosen_char.first]);
     }
 }
@@ -498,10 +501,12 @@ bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
             break;
         }
 
-    clear_stats(node);
+    clear_stats(node, false);
     SPDLOG_DEBUG("ActionSpace:: mini node expanded with #actions {}.", node->permissible_chars.size());
 
     // std::cerr << "-----------------\n";
+    // std::cerr << str::from(node->ap) << " " << node->permissible_chars.size() << "\n";
+
     // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
     // {
     //     std::cerr << "unit: " << node->permissible_chars[i] << "\n";
@@ -518,6 +523,15 @@ bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
 void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map)
 {
     // FIXME(j_luo) clearer logic here -- e.g., <any> is not aviable for after_id.
+    if (dynamic_cast<TreeNode *>(node) != nullptr)
+        if ((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id))
+            return;
+    MiniNode *mini_node = dynamic_cast<MiniNode *>(node);
+    if (mini_node != nullptr)
+        if (mini_node->ap == ActionPhase::SPECIAL_TYPE)
+            if ((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id))
+                return;
+
     if (!char_map.contains(unit))
     {
         // Add one more permission char.
@@ -566,24 +580,36 @@ void ActionSpace::evaluate(MiniNode *node)
     }
 }
 
-void ActionSpace::clear_stats(BaseNode *node)
+void ActionSpace::clear_stats(BaseNode *node, bool recursive)
 {
     size_t n = node->permissible_chars.size();
     node->children = vec<BaseNode *>(n, nullptr);
     node->action_counts = vec<visit_t>(n, 0);
     node->total_values = vec<float>(n, 0.0);
+    node->priors.clear();
+    node->visit_count = 0;
+    node->max_index = -1;
+    node->max_value = -9999.9;
     auto tnode = dynamic_cast<TransitionNode *>(node);
     if (tnode != nullptr)
         tnode->rewards = vec<float>(n, 0.0);
+    if (recursive)
+        for (const auto child : node->children)
+            if (child != nullptr)
+                clear_stats(child, true);
 }
 
-void ActionSpace::evaluate(TreeNode *node, const MetaPriors &meta_priors, const vec<float> &special_priors)
+void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors)
 {
     assert(node->is_expanded());
     node->meta_priors = meta_priors;
     node->special_priors = special_priors;
     node->priors.clear();
+    node->priors.reserve(node->permissible_chars.size());
     auto &full_priors = node->meta_priors[0];
     for (const auto unit : node->permissible_chars)
+        // {
+        //     std::cerr << full_priors.size() << " " << unit << "\n";
         node->priors.push_back(full_priors[unit]);
+    // }
 }

@@ -19,10 +19,12 @@ from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction
+from .env import SoundChangeEnv
 # from .mcts_cpp import (  # pylint: disable=no-name-in-module
 #     parallel_get_sparse_action_masks, parallel_stack_ids)
 from .module import Cnn1dParams, PolicyNetwork, ValueNetwork
-from .reward import get_rtgs_dense, get_rtgs_list  # pylint: disable=no-name-in-module
+from .reward import (get_rtgs_dense,  # pylint: disable=no-name-in-module
+                     get_rtgs_list)
 from .trajectory import Trajectory, TrEdge, VocabState
 
 
@@ -144,14 +146,14 @@ class BasePG(nn.Module, metaclass=ABCMeta):
     add_argument('use_finite_horizon', dtype=bool, default=False, msg='Flag to use finite horizon.')
 
     def __init__(self, num_chars: int,
-                 action_space: SoundChangeActionSpace,
+                 env: SoundChangeEnv,
                  end_state: VocabState,
                  phono_feat_mat: Optional[LT] = None,
                  special_ids: Optional[Sequence[int]] = None):
         super().__init__()
         emb_params = get_emb_params(num_chars, phono_feat_mat, special_ids)
         cnn1d_params = Cnn1dParams(g.char_emb_size, g.hidden_size, 3, g.num_layers, g.dropout)
-        self.policy_net = PolicyNetwork.from_params(emb_params, cnn1d_params, action_space)
+        self.policy_net = PolicyNetwork.from_params(emb_params, cnn1d_params, env)
         self.value_net = self._get_value_net(emb_params, cnn1d_params)
         self.end_state = end_state
         self._policy_grad = True
@@ -183,10 +185,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
             return self.value_net(curr_ids, end_ids, steps=steps, done=done)
 
     def get_policy(self,
-                   state_or_ids: Union[VocabState, LT],
-                   action_masks: BT,
-                   sparse: bool = False,
-                   indices: Optional[NDA] = None) -> Distribution:
+                   state_or_ids: Union[VocabState, LT]):
         """Get policy distribution based on current state (and end state)."""
         if isinstance(state_or_ids, VocabState):
             curr_ids = state_or_ids.tensor
@@ -194,10 +193,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
             curr_ids = state_or_ids
         end_ids = self.end_state.tensor
         with torch.set_grad_enabled(self._policy_grad):
-            return self.policy_net(curr_ids, end_ids,
-                                   action_masks,
-                                   sparse=sparse,
-                                   indices=indices)
+            return self.policy_net(curr_ids, end_ids)
 
     def sample_action(self, policy: Distribution) -> SoundChangeAction:
         with torch.set_grad_enabled(self._policy_grad):

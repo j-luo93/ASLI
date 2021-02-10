@@ -60,7 +60,7 @@ class ActionSpace
     void register_cl_map(abc_t, abc_t);
     void register_gbj_map(abc_t, abc_t);
     void register_gbw_map(abc_t, abc_t);
-    void evaluate(TreeNode *, const MetaPriors &, const vec<float> &);
+    void evaluate(TreeNode *, const vec<vec<float>> &, const vec<float> &);
 
     ActionSpace(WordSpace *, const ActionSpaceOpt &);
     map<abc_t, vec<abc_t>> permissible_changes;
@@ -68,7 +68,7 @@ class ActionSpace
     map<abc_t, abc_t> gbj_map;
     map<abc_t, abc_t> gbw_map;
 
-    void clear_stats(BaseNode *);
+    void clear_stats(BaseNode *, bool);
 
 public:
     const ActionSpaceOpt opt;

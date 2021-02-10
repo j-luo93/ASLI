@@ -21,18 +21,19 @@ from sound_law.data.setting import Setting, Split
 from sound_law.evaluate.evaluator import Evaluator
 from sound_law.rl.action import SoundChangeAction
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
-from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
+from sound_law.rl.env import SoundChangeEnv  # , TrajectoryCollector
 from sound_law.rl.mcts import Mcts
 # pylint: disable=no-name-in-module
 from sound_law.rl.mcts_cpp import (  # pylint: disable=no-name-in-module
-    PyActionSpaceOpt, PyEnv, PyEnvOpt, PyWordSpaceOpt)
+    PyActionSpaceOpt, PyEnv, PyEnvOpt, PyWordSpaceOpt, PyMctsOpt)
 # pylint: enable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.s2s.module import CharEmbedding, EmbParams, PhonoEmbedding
 from sound_law.s2s.one_pair import OnePairModel
 from sound_law.s2s.one_to_many import OneToManyModel
 
-from .trainer import MctsTrainer, PolicyGradientTrainer, Trainer
+from .trainer import MctsTrainer, Trainer
+# from .trainer import MctsTrainer, PolicyGradientTrainer, Trainer
 
 add_argument('batch_size', default=32, dtype=int, msg='Batch size.')
 add_argument('check_interval', default=10, dtype=int, msg='Frequency to check the training progress.')
@@ -150,8 +151,7 @@ class OnePairManager:
                                     self.tgt_abc.unit2base,
                                     self.tgt_abc.unit2stressed,
                                     self.tgt_abc.unit2unstressed)
-            self.env = SoundChangeEnv(env_opt, as_opt, ws_opt)
-            self.env.register_changes(self.tgt_abc)
+            self.env = SoundChangeEnv(env_opt, as_opt, ws_opt, abc=self.tgt_abc)
 
     def run(self):
         phono_feat_mat = special_ids = None
@@ -169,7 +169,7 @@ class OnePairManager:
             if g.use_rl:
                 end_state = self.env.end
                 agent_cls = VanillaPolicyGradient if g.agent == 'vpg' else A2C
-                model = agent_cls(len(self.tgt_abc), self.action_space, end_state, **phono_kwargs)
+                model = agent_cls(len(self.tgt_abc), self.env, end_state, **phono_kwargs)
             else:
                 model = OnePairModel(len(self.src_abc), len(self.tgt_abc), **phono_kwargs)
             if g.saved_model_path is not None:
@@ -182,10 +182,10 @@ class OnePairManager:
 
         def get_trainer(model, train_name, evaluator, metric_writer, **kwargs):
             if g.use_rl:
-                if g.use_mcts:
-                    trainer_cls = MctsTrainer
-                else:
-                    trainer_cls = PolicyGradientTrainer
+                # if g.use_mcts:
+                trainer_cls = MctsTrainer
+                # else:
+                #     trainer_cls = PolicyGradientTrainer
             else:
                 trainer_cls = Trainer
             trainer = trainer_cls(model, [self.dl_reg.get_setting_by_name(train_name)],
@@ -232,20 +232,21 @@ class OnePairManager:
         if g.use_rl:
             dl = self.dl_reg.get_loaders_by_name('rl')
             model = get_model(dl=dl)
-            if g.use_mcts:
-                mcts = Mcts(self.env, g.puct_c, g.game_count, g.virtual_loss, g.num_workers, model)
-                mcts.set_logging_options(g.mcts_verbose_level, g.mcts_log_to_file)
-                if g.evaluate_only:
-                    tr = mcts.collect_episodes(mcts.env.start, mcts.env.end, num_episodes=1)[0]
-                    tr.save(g.log_dir)
-                    return
-                else:
-                    trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
+            # if g.use_mcts:
+            mcts_opt = PyMctsOpt(g.puct_c, g.game_count, g.virtual_loss, g.num_workers)
+            mcts = Mcts(self.env, mcts_opt, agent=model)
+            # mcts.set_logging_options(g.mcts_verbose_level, g.mcts_log_to_file)
+            if g.evaluate_only:
+                tr = mcts.collect_episodes(mcts.env.start, mcts.env.end, num_episodes=1)[0]
+                tr.save(g.log_dir)
+                return
             else:
-                collector = TrajectoryCollector(g.batch_size,
-                                                max_rollout_length=g.max_rollout_length,
-                                                truncate_last=True)
-                trainer = get_trainer(model, 'rl', None, None, env=self.env, collector=collector)
+                trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
+            # else:
+            #     collector = TrajectoryCollector(g.batch_size,
+            #                                     max_rollout_length=g.max_rollout_length,
+            #                                     truncate_last=True)
+            #     trainer = get_trainer(model, 'rl', None, None, env=self.env, collector=collector)
             trainer.train(self.dl_reg)
         elif g.input_format == 'wikt':
             run_once('train', 'dev', 'test')

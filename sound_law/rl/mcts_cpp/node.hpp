@@ -62,6 +62,8 @@ public:
     bool is_expanded();
     bool is_evaluated();
     vec<float> get_scores(float);
+    size_t get_num_actions();
+    void add_noise(const vec<float> &, float);
 };
 
 /* ------------------------- Mini Node ------------------------ */
@@ -97,8 +99,6 @@ public:
 
 /* ------------------------- Tree Node ------------------------ */
 
-using MetaPriors = array<vec<float>, 6>;
-
 class Mcts;
 class Env;
 
@@ -108,7 +108,7 @@ class TreeNode : public BaseNode
     friend class Env;
     friend class ActionSpace;
 
-    MetaPriors meta_priors;
+    vec<vec<float>> meta_priors;
     vec<float> special_priors;
 
     void common_init(const vec<Word *> &);

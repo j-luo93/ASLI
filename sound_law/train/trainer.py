@@ -17,7 +17,7 @@ from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
                                         PaddedUnitSeqs, VSOnePairDataLoader)
 from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
-from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
+from sound_law.rl.env import SoundChangeEnv  # , TrajectoryCollector
 from sound_law.rl.mcts import Mcts
 # pylint: disable=no-name-in-module
 # from sound_law.rl.mcts_cpp import parallel_stack_policies
@@ -182,191 +182,191 @@ class RLTrainer(BaseTrainer):
         return self.model
 
 
-class PolicyGradientTrainer(RLTrainer):
+# class PolicyGradientTrainer(RLTrainer):
 
-    add_argument('value_steps', dtype=int, default=10, msg='How many inner loops to fit value net.')
-    add_argument('use_ppo', dtype=bool, default=False, msg='Flag to use PPO training.')
-    add_argument('policy_steps', dtype=int, default=10, msg='How many inner loops to train policy net. Used for PPO.')
-    add_argument('clip_ratio', dtype=float, default=0.2, msg='Clip ratio used for PPO.')
-    add_argument('target_kl', dtype=float, default=0.015, msg='Max kl to use.')
-    add_argument('entropy_as_reward', dtype=bool, default=False, msg='Flag to add policy entropy to reward.')
+#     add_argument('value_steps', dtype=int, default=10, msg='How many inner loops to fit value net.')
+#     add_argument('use_ppo', dtype=bool, default=False, msg='Flag to use PPO training.')
+#     add_argument('policy_steps', dtype=int, default=10, msg='How many inner loops to train policy net. Used for PPO.')
+#     add_argument('clip_ratio', dtype=float, default=0.2, msg='Clip ratio used for PPO.')
+#     add_argument('target_kl', dtype=float, default=0.015, msg='Max kl to use.')
+#     add_argument('entropy_as_reward', dtype=bool, default=False, msg='Flag to add policy entropy to reward.')
 
-    @property
-    def entropy_reg(self) -> float:
-        if g.init_entropy_reg > 0.0:
-            return self.tracker.entropy_reg
-        return 0.0
+#     @property
+#     def entropy_reg(self) -> float:
+#         if g.init_entropy_reg > 0.0:
+#             return self.tracker.entropy_reg
+#         return 0.0
 
-    def add_trackables(self):
-        super().add_trackables()
-        if g.init_entropy_reg > 0.0:
-            multiplier = math.exp(math.log(g.end_entropy_reg / g.init_entropy_reg) / g.when_entropy_reg)
-            self.tracker.add_anneal_trackable('entropy_reg', g.init_entropy_reg, multiplier, g.end_entropy_reg)
-        if g.value_steps:
-            step = self.tracker['step']
-            policy_steps = g.policy_steps if g.use_ppo else 1
-            step.add_trackable('policy_step', total=policy_steps, endless=True)
-            step.add_trackable('value_step', total=g.value_steps, endless=True)
+#     def add_trackables(self):
+#         super().add_trackables()
+#         if g.init_entropy_reg > 0.0:
+#             multiplier = math.exp(math.log(g.end_entropy_reg / g.init_entropy_reg) / g.when_entropy_reg)
+#             self.tracker.add_anneal_trackable('entropy_reg', g.init_entropy_reg, multiplier, g.end_entropy_reg)
+#         if g.value_steps:
+#             step = self.tracker['step']
+#             policy_steps = g.policy_steps if g.use_ppo else 1
+#             step.add_trackable('policy_step', total=policy_steps, endless=True)
+#             step.add_trackable('value_step', total=g.value_steps, endless=True)
 
-    def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
-        if collector is None:
-            raise TypeError(f'Must pass a trajectory collector to initialize this trainer.')
-        if env is None:
-            raise TypeError(f'Must pass an environment to initialize this trainer.')
+#     def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
+#         if collector is None:
+#             raise TypeError(f'Must pass a trajectory collector to initialize this trainer.')
+#         if env is None:
+#             raise TypeError(f'Must pass an environment to initialize this trainer.')
 
-        self.collector = collector
-        self.env = env
-        super().__init__(*args, **kwargs)
+#         self.collector = collector
+#         self.env = env
+#         super().__init__(*args, **kwargs)
 
-    def train_one_step(self, dl: VSOnePairDataLoader) -> Metrics:
-        init_state = dl.init_state
-        end_state = dl.end_state
+#     def train_one_step(self, dl: VSOnePairDataLoader) -> Metrics:
+#         init_state = dl.init_state
+#         end_state = dl.end_state
 
-        # Collect episodes first.
-        agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
-        # TODO(j_luo) a bit ugly here.
-        self.add_callback('check', 'log_tr', lambda: log_trajectories(agent_inputs))
-        bs = agent_inputs.batch_size
-        n_tr = len(agent_inputs.trajectories)
+#         # Collect episodes first.
+#         agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
+#         # TODO(j_luo) a bit ugly here.
+#         self.add_callback('check', 'log_tr', lambda: log_trajectories(agent_inputs))
+#         bs = agent_inputs.batch_size
+#         n_tr = len(agent_inputs.trajectories)
 
-        # ---------------------------- main ---------------------------- #
+#         # ---------------------------- main ---------------------------- #
 
-        def get_v_loss(agent_outputs: AgentOutputs, tgt_agent_outputs: AgentOutputs) -> Metric:
-            if g.critic_target == 'rtg':
-                tgt = tgt_agent_outputs.rew_outputs.rtgs
-            else:
-                tgt = tgt_agent_outputs.rew_outputs.expected
-                if g.entropy_as_reward:
-                    tgt = tgt + self.entropy_reg * tgt_agent_outputs.entropy
-            diff = (agent_outputs.rew_outputs.values - tgt) ** 2
-            loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(tgt))
-            return loss
+#         def get_v_loss(agent_outputs: AgentOutputs, tgt_agent_outputs: AgentOutputs) -> Metric:
+#             if g.critic_target == 'rtg':
+#                 tgt = tgt_agent_outputs.rew_outputs.rtgs
+#             else:
+#                 tgt = tgt_agent_outputs.rew_outputs.expected
+#                 if g.entropy_as_reward:
+#                     tgt = tgt + self.entropy_reg * tgt_agent_outputs.entropy
+#             diff = (agent_outputs.rew_outputs.values - tgt) ** 2
+#             loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(tgt))
+#             return loss
 
-        def get_pi_losses(agent_outputs: AgentOutputs, tgt_agent_outputs: Optional[AgentOutputs] = None) -> Metrics:
-            ret = Metrics()
+#         def get_pi_losses(agent_outputs: AgentOutputs, tgt_agent_outputs: Optional[AgentOutputs] = None) -> Metrics:
+#             ret = Metrics()
 
-            log_probs = agent_outputs.log_probs
-            entropy = agent_outputs.entropy
-            if g.agent == 'vpg':
-                pg_losses = -log_probs * agent_outputs.rew_outputs.rtgs
-            else:
-                if g.use_ppo:
-                    tgt_log_probs = tgt_agent_outputs.log_probs
-                    ratio = (log_probs - tgt_log_probs).exp()
-                    tgt_advs = tgt_agent_outputs.rew_outputs.advantages
-                    if g.entropy_as_reward:
-                        tgt_advs = tgt_advs + self.entropy_reg * entropy
-                    low = 1 - g.clip_ratio
-                    high = 1 + g.clip_ratio
-                    clip_adv = ratio.clamp(low, high) * tgt_advs
-                    pg_losses = -torch.min(ratio * tgt_advs, clip_adv)
+#             log_probs = agent_outputs.log_probs
+#             entropy = agent_outputs.entropy
+#             if g.agent == 'vpg':
+#                 pg_losses = -log_probs * agent_outputs.rew_outputs.rtgs
+#             else:
+#                 if g.use_ppo:
+#                     tgt_log_probs = tgt_agent_outputs.log_probs
+#                     ratio = (log_probs - tgt_log_probs).exp()
+#                     tgt_advs = tgt_agent_outputs.rew_outputs.advantages
+#                     if g.entropy_as_reward:
+#                         tgt_advs = tgt_advs + self.entropy_reg * entropy
+#                     low = 1 - g.clip_ratio
+#                     high = 1 + g.clip_ratio
+#                     clip_adv = ratio.clamp(low, high) * tgt_advs
+#                     pg_losses = -torch.min(ratio * tgt_advs, clip_adv)
 
-                    # Extra useful info.
-                    with torch.no_grad():
-                        approx_kl = tgt_log_probs - log_probs
-                        clipped = (ratio > high) | (ratio < low)
-                        ret += Metric('clipped', clipped.sum(), bs)
-                        ret += Metric('approx_kl', approx_kl.sum(), bs)
-                else:
-                    pg_losses = -log_probs * agent_outputs.rew_outputs.advantages
-                advs = agent_outputs.rew_outputs.advantages
-                ret += Metric('abs_advantage', advs.abs().sum(), bs)
-                ret += Metric('advantage', advs.sum(), bs)
+#                     # Extra useful info.
+#                     with torch.no_grad():
+#                         approx_kl = tgt_log_probs - log_probs
+#                         clipped = (ratio > high) | (ratio < low)
+#                         ret += Metric('clipped', clipped.sum(), bs)
+#                         ret += Metric('approx_kl', approx_kl.sum(), bs)
+#                 else:
+#                     pg_losses = -log_probs * agent_outputs.rew_outputs.advantages
+#                 advs = agent_outputs.rew_outputs.advantages
+#                 ret += Metric('abs_advantage', advs.abs().sum(), bs)
+#                 ret += Metric('advantage', advs.sum(), bs)
 
-            pg = Metric('pg', pg_losses.sum(), bs)
-            entropy_loss = Metric('entropy', entropy.sum(), bs)
-            if g.entropy_as_reward:
-                pi_loss = Metric('pi_loss', pg.total, bs)
-            else:
-                pi_loss = Metric('pi_loss', pg.total - self.entropy_reg * entropy_loss.total, bs)
-            ret += Metrics(pg, entropy_loss, pi_loss)
-            return ret
+#             pg = Metric('pg', pg_losses.sum(), bs)
+#             entropy_loss = Metric('entropy', entropy.sum(), bs)
+#             if g.entropy_as_reward:
+#                 pi_loss = Metric('pi_loss', pg.total, bs)
+#             else:
+#                 pi_loss = Metric('pi_loss', pg.total - self.entropy_reg * entropy_loss.total, bs)
+#             ret += Metrics(pg, entropy_loss, pi_loss)
+#             return ret
 
-        def update(name: str, tgt_agent_outputs: Optional[AgentOutputs] = None) -> Tuple[Metrics, AgentOutputs]:
-            self.model.train()
-            if name == 'all':
-                # Use the default optimizer that optimize the entire model.
-                optim = self.optimizer
-            else:
-                optim = self.optimizers[name]
-            optim.zero_grad()
+#         def update(name: str, tgt_agent_outputs: Optional[AgentOutputs] = None) -> Tuple[Metrics, AgentOutputs]:
+#             self.model.train()
+#             if name == 'all':
+#                 # Use the default optimizer that optimize the entire model.
+#                 optim = self.optimizer
+#             else:
+#                 optim = self.optimizers[name]
+#             optim.zero_grad()
 
-            ret_log_probs = ret_entropy = (name != 'value')
-            agent_outputs: AgentOutputs = self.model(agent_inputs,
-                                                     ret_log_probs=ret_log_probs,
-                                                     ret_entropy=ret_entropy)
+#             ret_log_probs = ret_entropy = (name != 'value')
+#             agent_outputs: AgentOutputs = self.model(agent_inputs,
+#                                                      ret_log_probs=ret_log_probs,
+#                                                      ret_entropy=ret_entropy)
 
-            # Some common metrics.
-            tr_rew = Metric('reward', agent_inputs.rewards.sum(), n_tr)
-            success = Metric('success', agent_inputs.done.sum(), n_tr)
-            step_metrics = Metrics(tr_rew, success)
+#             # Some common metrics.
+#             tr_rew = Metric('reward', agent_inputs.rewards.sum(), n_tr)
+#             success = Metric('success', agent_inputs.done.sum(), n_tr)
+#             step_metrics = Metrics(tr_rew, success)
 
-            # Compute losses depending on the name.
-            if name in ['value', 'all'] and g.agent == 'a2c':
-                step_metrics += get_v_loss(agent_outputs, tgt_agent_outputs)
-            if name in ['policy', 'all']:
-                step_metrics += get_pi_losses(agent_outputs, tgt_agent_outputs=tgt_agent_outputs)
+#             # Compute losses depending on the name.
+#             if name in ['value', 'all'] and g.agent == 'a2c':
+#                 step_metrics += get_v_loss(agent_outputs, tgt_agent_outputs)
+#             if name in ['policy', 'all']:
+#                 step_metrics += get_pi_losses(agent_outputs, tgt_agent_outputs=tgt_agent_outputs)
 
-            # Backprop depending on the name.
-            if name == 'value':
-                step_metrics.v_regress_loss.mean.backward()
-            elif name == 'policy':
-                step_metrics.pi_loss.mean.backward()
-            else:
-                total_loss = step_metrics.pi_loss.total + step_metrics.v_regress_loss.total
-                total_loss = Metric('total_loss', total_loss, bs)
-                step_metrics += total_loss
-                step_metrics.total_loss.mean.backward()
+#             # Backprop depending on the name.
+#             if name == 'value':
+#                 step_metrics.v_regress_loss.mean.backward()
+#             elif name == 'policy':
+#                 step_metrics.pi_loss.mean.backward()
+#             else:
+#                 total_loss = step_metrics.pi_loss.total + step_metrics.v_regress_loss.total
+#                 total_loss = Metric('total_loss', total_loss, bs)
+#                 step_metrics += total_loss
+#                 step_metrics.total_loss.mean.backward()
 
-            # Clip gradient norm.
-            grad_norm = clip_grad(get_optim_params(optim), bs)
-            step_metrics += grad_norm
+#             # Clip gradient norm.
+#             grad_norm = clip_grad(get_optim_params(optim), bs)
+#             step_metrics += grad_norm
 
-            # Update.
-            optim.step()
+#             # Update.
+#             optim.step()
 
-            return step_metrics, agent_outputs
+#             return step_metrics, agent_outputs
 
-        # Gather metrics.
-        metrics = Metrics()
+#         # Gather metrics.
+#         metrics = Metrics()
 
-        if g.agent == 'a2c':
+#         if g.agent == 'a2c':
 
-            # PPO training.
-            if g.use_ppo:
-                with self.model.policy_grad(False), self.model.value_grad(False):
-                    tgt_agent_outputs = self.model(agent_inputs, ret_entropy=True)
+#             # PPO training.
+#             if g.use_ppo:
+#                 with self.model.policy_grad(False), self.model.value_grad(False):
+#                     tgt_agent_outputs = self.model(agent_inputs, ret_entropy=True)
 
-                with self.model.policy_grad(True), self.model.value_grad(False):
-                    self.tracker.reset('policy_step')
-                    for i in range(g.policy_steps):
-                        step_metrics, _ = update('policy', tgt_agent_outputs=tgt_agent_outputs)
-                        metrics += step_metrics
-                        self.tracker.update('policy_step')
-                        # Early-stop.
-                        if step_metrics.approx_kl.mean.item() > g.target_kl:
-                            logging.debug(f'Early-stopped at step {i + 1}.')
-                            break
-            else:
-                with self.model.policy_grad(True), self.model.value_grad(False):
-                    step_metrics, tgt_agent_outputs = update('policy')
-                    metrics += step_metrics
-                    self.tracker.update('policy_step')
+#                 with self.model.policy_grad(True), self.model.value_grad(False):
+#                     self.tracker.reset('policy_step')
+#                     for i in range(g.policy_steps):
+#                         step_metrics, _ = update('policy', tgt_agent_outputs=tgt_agent_outputs)
+#                         metrics += step_metrics
+#                         self.tracker.update('policy_step')
+#                         # Early-stop.
+#                         if step_metrics.approx_kl.mean.item() > g.target_kl:
+#                             logging.debug(f'Early-stopped at step {i + 1}.')
+#                             break
+#             else:
+#                 with self.model.policy_grad(True), self.model.value_grad(False):
+#                     step_metrics, tgt_agent_outputs = update('policy')
+#                     metrics += step_metrics
+#                     self.tracker.update('policy_step')
 
-            with self.model.policy_grad(False), self.model.value_grad(True):
-                for _ in range(g.value_steps):
-                    metrics += update('value', tgt_agent_outputs=tgt_agent_outputs)[0]
-                    self.tracker.update('value_step')
+#             with self.model.policy_grad(False), self.model.value_grad(True):
+#                 for _ in range(g.value_steps):
+#                     metrics += update('value', tgt_agent_outputs=tgt_agent_outputs)[0]
+#                     self.tracker.update('value_step')
 
-        else:
-            name = 'all' if g.agent == 'a2c' else 'policy'
-            with self.model.policy_grad(True), self.model.value_grad(True):
-                metrics += update(name)[0]
+#         else:
+#             name = 'all' if g.agent == 'a2c' else 'policy'
+#             with self.model.policy_grad(True), self.model.value_grad(True):
+#                 metrics += update(name)[0]
 
-        metrics = metrics.with_prefix('check')
-        if g.init_entropy_reg > 0.0:
-            self.tracker.update('entropy_reg')
-        return metrics
+#         metrics = metrics.with_prefix('check')
+#         if g.init_entropy_reg > 0.0:
+#             self.tracker.update('entropy_reg')
+#         return metrics
 
 
 class MctsTrainer(RLTrainer):
