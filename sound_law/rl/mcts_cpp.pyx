@@ -62,7 +62,8 @@ cdef class PyTreeNode:
             vocab[i] = self.ptr.get_id_seq(i)
         return vocab
 
-    def get_num_actions(self):
+    @property
+    def num_actions(self) -> int:
         return self.ptr.get_num_actions()
 
     def add_noise(self, float[::1] noise, float noise_ratio):
@@ -268,6 +269,16 @@ cdef class PyEnv:
 
     def clear_stats(self, PyTreeNode py_node, bool recursive):
         self.ptr.clear_stats(py_node.ptr, recursive)
+
+    def clear_priors(self, PyTreeNode py_node, bool recursive):
+        self.ptr.clear_priors(py_node.ptr, recursive)
+
+    def prune(self, PyTreeNode py_node):
+        self.ptr.prune(py_node.ptr)
+
+    @property
+    def num_words(self) -> int:
+        return self.ptr.get_num_words()
 
     def evaluate(self, PyTreeNode py_node, float[:, ::1] np_meta_priors, float[::1] np_special_priors):
         cdef long[::1] lengths = np.full([6], np_meta_priors.shape[1], dtype='long')

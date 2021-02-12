@@ -279,7 +279,7 @@ void ActionSpace::expand(TreeNode *node)
                 update_affected(node, id_seq[pos], order, pos, char_map);
     }
 
-    clear_stats(node, false);
+    expand_stats(node);
     SPDLOG_DEBUG("ActionSpace:: node expanded with #actions {}.", node->permissible_chars.size());
 
     // std::cerr << "-----------------\n";
@@ -508,7 +508,7 @@ bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
             break;
         }
 
-    clear_stats(node, false);
+    expand_stats(node);
     SPDLOG_DEBUG("ActionSpace:: mini node expanded with #actions {}.", node->permissible_chars.size());
 
     // std::cerr << "-----------------\n";
@@ -601,23 +601,49 @@ void ActionSpace::evaluate(MiniNode *node)
     normalize(node->priors);
 }
 
+void ActionSpace::expand_stats(BaseNode *node)
+{
+    size_t n = node->permissible_chars.size();
+    clear_stats(node, false);
+    clear_priors(node, false);
+    node->children = vec<BaseNode *>(n, nullptr);
+    if (node->is_transitional())
+        static_cast<TransitionNode *>(node)->rewards = vec<float>(n, 0.0);
+}
+
 void ActionSpace::clear_stats(BaseNode *node, bool recursive)
 {
     size_t n = node->permissible_chars.size();
     node->action_counts = vec<visit_t>(n, 0);
     node->total_values = vec<float>(n, 0.0);
-    node->priors.clear();
     node->visit_count = 0;
     node->max_index = -1;
     node->max_value = -9999.9;
     node->played = false;
-    if (node->is_transitional())
-        static_cast<TransitionNode *>(node)->rewards = vec<float>(n, 0.0);
     if (recursive)
         for (const auto child : node->children)
             if (child != nullptr)
                 clear_stats(child, true);
-    node->children = vec<BaseNode *>(n, nullptr);
+}
+
+void ActionSpace::clear_priors(BaseNode *node, bool recursive)
+{
+    node->priors.clear();
+    if (recursive)
+        for (const auto child : node->children)
+            if (child != nullptr)
+                clear_priors(child, true);
+}
+
+void ActionSpace::prune(BaseNode *node)
+{
+    for (const auto child : node->children)
+        if (child != nullptr)
+        {
+            prune(child);
+            delete child;
+        }
+    std::fill(node->children.begin(), node->children.end(), nullptr);
 }
 
 void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors)

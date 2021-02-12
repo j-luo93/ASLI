@@ -68,7 +68,10 @@ class ActionSpace
     map<abc_t, abc_t> gbj_map;
     map<abc_t, abc_t> gbw_map;
 
+    void expand_stats(BaseNode *);
     void clear_stats(BaseNode *, bool);
+    void clear_priors(BaseNode *, bool);
+    void prune(BaseNode *);
 
 public:
     const ActionSpaceOpt opt;

@@ -61,7 +61,9 @@ class Mcts(PyMcts):
         # logging.debug(f'Total number of states reset: {len(self._states)}.')
         # self._state_ids: Set[int] = set()
         # self._states: List[VocabState] = list()
+        self.env.prune(self.env.start)
         self.env.clear_stats(self.env.start, True)
+        logging.info(f'#words: {self.env.num_words}')
 
     def evaluate(self, states, steps: Optional[Union[int, LT]] = None) -> List[float]:
         """Expand and evaluate the leaf node."""
@@ -153,7 +155,7 @@ class Mcts(PyMcts):
 
     def add_noise(self, state: VocabState):
         """Add Dirichlet noise to `state`, usually the root."""
-        noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(state.get_num_actions())).astype('float32')
+        noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(state.num_actions)).astype('float32')
         state.add_noise(noise, g.noise_ratio)
 
     def collect_episodes(self, init_state: VocabState, end_state: VocabState,
@@ -207,7 +209,7 @@ class Mcts(PyMcts):
                         if tracker is not None:
                             tracker.update('mcts', incr=g.expansion_batch_size)
                     if ri == 0 and ei % g.episode_check_interval == 0:
-                        k = min(20, root.get_num_actions())
+                        k = min(20, root.num_actions)
                         logging.debug(pad_for_log(str(get_tensor(root.action_counts).topk(k))))
                         logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
                     # probs, action, reward, new_state = self.play(root)

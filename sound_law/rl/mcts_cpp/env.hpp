@@ -46,4 +46,7 @@ public:
     inline void register_gbj_map(abc_t before, abc_t after) { action_space->register_gbj_map(before, after); };
     inline void register_gbw_map(abc_t before, abc_t after) { action_space->register_gbw_map(before, after); };
     inline void clear_stats(TreeNode *node, bool recursive) { action_space->clear_stats(node, recursive); };
+    inline void clear_priors(TreeNode *node, bool recursive) { action_space->clear_priors(node, recursive); };
+    inline void prune(TreeNode *node) { action_space->prune(node); };
+    inline size_t get_num_words() { return word_space->words.size(); };
 };

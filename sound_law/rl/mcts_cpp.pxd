@@ -104,8 +104,11 @@ cdef extern from "mcts_cpp/env.hpp":
         void register_gbj_map(abc_t, abc_t)
         void register_gbw_map(abc_t, abc_t)
         float get_edit_dist(IdSeq, IdSeq)
-        TreeNode *apply_action(TreeNode *node, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
-        void clear_stats(TreeNode *node, bool)
+        TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
+        void clear_stats(TreeNode *, bool)
+        void clear_priors(TreeNode *, bool)
+        void prune(TreeNode *)
+        size_t get_num_words()
 
 cdef extern from "mcts_cpp/node.hpp":
 
