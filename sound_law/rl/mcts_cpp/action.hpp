@@ -36,19 +36,19 @@ class ActionSpace
     Subpath get_best_subpath(TreeNode *, float, int, float);
     MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool);
     IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t, SpecialType);
-    void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &);
+    void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, bool);
     // void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
 
     // Methods for expanding nodes.
     void expand(TreeNode *);
     bool expand(MiniNode *, bool, bool);
     void expand_before(MiniNode *);
-    void expand_after(MiniNode *, bool, bool);
     void expand_special_type(MiniNode *, bool);
-    void expand_pre(MiniNode *, bool);
-    void expand_d_pre(MiniNode *, bool, bool);
-    void expand_post(MiniNode *, bool);
-    void expand_normal(MiniNode *, int, bool, bool);
+    void expand_after(MiniNode *, bool, bool, bool);
+    void expand_pre(MiniNode *, bool, bool);
+    void expand_d_pre(MiniNode *, bool, bool, bool);
+    void expand_post(MiniNode *, bool, bool);
+    void expand_normal(MiniNode *, int, bool, bool, bool);
     void expand_null(MiniNode *);
     bool expand_null_only(MiniNode *);
 
