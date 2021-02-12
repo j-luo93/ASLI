@@ -43,6 +43,8 @@ protected:
     virtual BaseNode *play();
 
 public:
+    virtual ~BaseNode() = default;
+
     BaseNode *const parent;
     const ChosenChar chosen_char;
     const bool stopped;
@@ -81,6 +83,8 @@ class MiniNode : public BaseNode
     MiniNode(TreeNode *, BaseNode *const, const ChosenChar &, ActionPhase, bool);
 
 public:
+    virtual ~MiniNode() = default;
+
     TreeNode *const base;
     const ActionPhase ap;
 
@@ -100,6 +104,8 @@ class TransitionNode : public MiniNode
     TransitionNode(TreeNode *, MiniNode *, const ChosenChar &, bool);
 
 public:
+    ~TransitionNode() override = default;
+
     vec<float> rewards;
 
     bool is_transitional() override;
@@ -125,6 +131,8 @@ class TreeNode : public BaseNode
     TreeNode *play() override;
 
 public:
+    ~TreeNode() override = default;
+
     const vec<Word *> words;
     const int depth;
 
