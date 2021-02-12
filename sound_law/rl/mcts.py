@@ -10,6 +10,7 @@ import numpy as np
 import torch
 
 from dev_misc import LT, NDA, add_argument, g, get_tensor, get_zeros
+from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import Tracker
 from dev_misc.utils import ScopedCache, pad_for_log
 from sound_law.rl.action import SoundChangeAction
@@ -19,6 +20,7 @@ from sound_law.rl.trajectory import Trajectory, VocabState
 
 # pylint: disable=no-name-in-module
 from .mcts_cpp import PyMcts, parallel_stack_ids
+
 # pylint: enable=no-name-in-module
 
 
@@ -82,16 +84,16 @@ class Mcts(PyMcts):
             # am_tensor = get_tensor(action_masks)
             # FIXME(j_luo) maybe transpose it first???
             id_seqs = parallel_stack_ids(outstanding_states, g.num_workers)
-            id_seqs = get_tensor(id_seqs).rename('batch', 'pos', 'word')
+            id_seqs = get_tensor(id_seqs).rename('batch', 'word', 'pos')
             if steps is not None and not isinstance(steps, int):
                 steps = steps[outstanding_idx]
 
             # TODO(j_luo) Scoped might be wrong here.
             # with ScopedCache('state_repr'):
-            meta_priors, special_priors = self.agent.get_policy(id_seqs)
-            breakpoint()  # BREAKPOINT(j_luo)
-            meta_priors = meta_priors.cpu().numpy()
-            special_priors = special_priors.cpu().numpy()
+            priors = self.agent.get_policy(id_seqs)
+            with NoName(priors):
+                meta_priors = priors[:, [0, 2, 3, 4, 5, 6]].cpu().numpy()
+                special_priors = priors[:, 1].cpu().numpy()
             if g.use_value_guidance:
                 agent_values = self.agent.get_values(id_seqs, steps=steps).cpu().numpy()
             else:
@@ -118,35 +120,36 @@ class Mcts(PyMcts):
     #            value: float):
     #     state.backup(value, g.mixing, g.game_count, g.virtual_loss)
 
-    def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, float, VocabState]:
-        exp = np.power(state.action_counts.astype('float32'), 1.0)
-        probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)
-        # if g.use_max_value:
-        #     best_i = np.argmax(state.max_value)
-        # else:
-        #     best_i = np.random.choice(range(len(probs)), p=probs)
-        # action_id = state.action_allowed[best_i]
-        # action = self.action_space.get_action(action_id)
-        # new_state, done, reward = self.env(state, best_i, action)
-        # # Set `state.played` to True. This would prevent future backups from going further up.
-        # state.play()
-        # return probs, action, reward, new_state
-        # best_i = state.max_index
-        # # This means stop action.
-        # if best_i == -1:
-        #     action_id = 0
-        #     action = self.env.action_space.get_action(0)
-        #     # FIXME(j_luo) new state is wrong.
-        #     new_state = None
-        #     reward = 0.0
-        # else:
-        #     action_id = state.max_action_id
-        #     action = self.env.action_space.get_action(action_id)
-        #     new_state, reward = self.env.step(state, best_i, action_id)
-        action_id, new_state, reward = super().play(state)
-        super().play(state)
-        action = self.env.action_space.get_action(action_id)
-        return probs, action, reward, new_state
+    # def play(self, state: VocabState) -> Tuple[NDA, SoundChangeAction, float, VocabState]:
+    #     exp = np.power(state.action_counts.astype('float32'), 1.0)
+    #     probs = exp / (exp.sum(axis=-1, keepdims=True) + 1e-8)
+    #     # if g.use_max_value:
+    #     #     best_i = np.argmax(state.max_value)
+    #     # else:
+    #     #     best_i = np.random.choice(range(len(probs)), p=probs)
+    #     # action_id = state.action_allowed[best_i]
+    #     # action = self.action_space.get_action(action_id)
+    #     # new_state, done, reward = self.env(state, best_i, action)
+    #     # # Set `state.played` to True. This would prevent future backups from going further up.
+    #     # state.play()
+    #     # return probs, action, reward, new_state
+    #     # best_i = state.max_index
+    #     # # This means stop action.
+    #     # if best_i == -1:
+    #     #     action_id = 0
+    #     #     action = self.env.action_space.get_action(0)
+    #     #     # FIXME(j_luo) new state is wrong.
+    #     #     new_state = None
+    #     #     reward = 0.0
+    #     # else:
+    #     #     action_id = state.max_action_id
+    #     #     action = self.env.action_space.get_action(action_id)
+    #     #     new_state, reward = self.env.step(state, best_i, action_id)
+    #     # new_state, reward, action_path = super().play(state)
+    #     # action = SoundChangeAction(action_path[0], action_path[2], action_path[3], action_path[4], action_path[5], action_path[6],
+    #     #                            special_type=int2st[action_path[1]])
+    #     # return probs, action, reward, new_state
+    #     return super().play(state), probs
 
     def add_noise(self, state: VocabState):
         """Add Dirichlet noise to `state`, usually the root."""
@@ -156,6 +159,7 @@ class Mcts(PyMcts):
     def collect_episodes(self, init_state: VocabState, end_state: VocabState,
                          tracker: Optional[Tracker] = None, num_episodes: int = 0) -> List[Trajectory]:
         # logging.info(f'{self.num_cached_states} states cached.')
+
         # logging.info(f'{self.env.action_space.cache_size} words cached.')
         # logging.info(f'{len(self.action_space)} actions indexed in the action space.')
         # if self.num_cached_states > 300000:
@@ -179,7 +183,8 @@ class Mcts(PyMcts):
                 self.evaluate([root], steps=steps)
                 # self.backup([root], [value])
 
-                trajectory = Trajectory(root, end_state)
+                # trajectory = Trajectory(root, end_state)
+                # trajectory = Trajectory()
                 # Episodes have max rollout length.
                 for ri in range(g.max_rollout_length):
                     # if ri == 0:
@@ -201,19 +206,22 @@ class Mcts(PyMcts):
                         #         backed_up_idx.add(state.idx)
                         if tracker is not None:
                             tracker.update('mcts', incr=g.expansion_batch_size)
-                    probs, action, reward, new_state = self.play(root)
-                    trajectory.append(action, new_state, reward, mcts_pi=probs)
                     if ri == 0 and ei % g.episode_check_interval == 0:
-                        k = min(20, root.num_actions)
+                        k = min(20, root.get_num_actions())
                         logging.debug(pad_for_log(str(get_tensor(root.action_counts).topk(k))))
                         logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
-                    root = new_state
+                    # probs, action, reward, new_state = self.play(root)
+                    # new_state = self.play(root)
+                    # trajectory.append(action, new_state, reward, mcts_pi=probs)
+                    # root = new_state
+                    root = self.play(root)
 
                     if tracker is not None:
                         tracker.update('rollout')
                     if root.stopped or root.done:
                         break
                     # self.show_stats()
+                trajectory = Trajectory(root)
                 if ei % g.episode_check_interval == 0:
                     out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
                     logging.debug(pad_for_log(out))

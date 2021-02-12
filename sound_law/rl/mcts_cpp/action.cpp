@@ -401,9 +401,10 @@ void ActionSpace::expand_before(MiniNode *node)
         node->affected.push_back(node->affected[0]);
     }
 }
-void ActionSpace::expand_normal(MiniNode *node, int offset, bool use_vowel_seq)
+void ActionSpace::expand_normal(MiniNode *node, int offset, bool use_vowel_seq, bool can_have_null)
 {
-    expand_null(node);
+    if (can_have_null)
+        expand_null(node);
 
     auto &words = node->base->words;
     auto &affected = node->parent->affected[node->chosen_char.first];
@@ -440,17 +441,17 @@ bool ActionSpace::expand_null_only(MiniNode *node)
     }
     return false;
 }
-void ActionSpace::expand_after(MiniNode *node, bool use_vowel_seq) { expand_normal(node, -1, use_vowel_seq); }
+void ActionSpace::expand_after(MiniNode *node, bool use_vowel_seq, bool can_have_null) { expand_normal(node, -1, use_vowel_seq, can_have_null); }
 void ActionSpace::expand_pre(MiniNode *node, bool use_vowel_seq)
 {
     if (!expand_null_only(node))
-        expand_normal(node, -2, use_vowel_seq);
+        expand_normal(node, -2, use_vowel_seq, true);
 }
-void ActionSpace::expand_d_pre(MiniNode *node, bool use_vowel_seq) { expand_normal(node, 1, use_vowel_seq); }
+void ActionSpace::expand_d_pre(MiniNode *node, bool use_vowel_seq, bool can_have_null) { expand_normal(node, 1, use_vowel_seq, can_have_null); }
 void ActionSpace::expand_post(MiniNode *node, bool use_vowel_seq)
 {
     if (!expand_null_only(node))
-        expand_normal(node, 2, use_vowel_seq);
+        expand_normal(node, 2, use_vowel_seq, true);
 }
 void ActionSpace::expand_null(MiniNode *node)
 {
@@ -488,14 +489,20 @@ bool ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
             expand_special_type(node, force_apply);
             break;
         case ActionPhase::AFTER:
-            expand_after(node, use_vowel_seq);
+        {
+            bool can_have_null = (static_cast<SpecialType>(node->parent->chosen_char.second) != SpecialType::CLL);
+            expand_after(node, use_vowel_seq, can_have_null);
             break;
+        }
         case ActionPhase::PRE:
             expand_pre(node, use_vowel_seq);
             break;
         case ActionPhase::D_PRE:
-            expand_d_pre(node, use_vowel_seq);
+        {
+            bool can_have_null = (static_cast<SpecialType>(node->parent->parent->parent->chosen_char.second) != SpecialType::CLR);
+            expand_d_pre(node, use_vowel_seq, can_have_null);
             break;
+        }
         case ActionPhase::POST:
             expand_post(node, use_vowel_seq);
             break;
@@ -531,6 +538,10 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         if (mini_node->ap == ActionPhase::SPECIAL_TYPE)
             if ((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id))
                 return;
+    // // FIXME(j_luo) clearer logic here -- e.g., <any> is not aviable for after_id.
+    // if ((node->is_tree_node()) || (static_cast<MiniNode *>(node)->ap == ActionPhase::SPECIAL_TYPE))
+    //     if ((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id))
+    //         return;
 
     if (!char_map.contains(unit))
     {
@@ -562,6 +573,15 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         update_affected(node, opt.any_id, order, pos, char_map);
 }
 
+inline void normalize(vec<float> &priors)
+{
+    float sum = 1e-8;
+    for (const auto prior : priors)
+        sum += prior;
+    for (auto &prior : priors)
+        prior /= sum;
+}
+
 void ActionSpace::evaluate(MiniNode *node)
 {
     assert(node->is_expanded());
@@ -578,25 +598,26 @@ void ActionSpace::evaluate(MiniNode *node)
         for (const auto unit : node->permissible_chars)
             node->priors.push_back(full_priors[unit]);
     }
+    normalize(node->priors);
 }
 
 void ActionSpace::clear_stats(BaseNode *node, bool recursive)
 {
     size_t n = node->permissible_chars.size();
-    node->children = vec<BaseNode *>(n, nullptr);
     node->action_counts = vec<visit_t>(n, 0);
     node->total_values = vec<float>(n, 0.0);
     node->priors.clear();
     node->visit_count = 0;
     node->max_index = -1;
     node->max_value = -9999.9;
-    auto tnode = dynamic_cast<TransitionNode *>(node);
-    if (tnode != nullptr)
-        tnode->rewards = vec<float>(n, 0.0);
+    node->played = false;
+    if (node->is_transitional())
+        static_cast<TransitionNode *>(node)->rewards = vec<float>(n, 0.0);
     if (recursive)
         for (const auto child : node->children)
             if (child != nullptr)
                 clear_stats(child, true);
+    node->children = vec<BaseNode *>(n, nullptr);
 }
 
 void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors)
@@ -612,4 +633,5 @@ void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, c
         //     std::cerr << full_priors.size() << " " << unit << "\n";
         node->priors.push_back(full_priors[unit]);
     // }
+    normalize(node->priors);
 }

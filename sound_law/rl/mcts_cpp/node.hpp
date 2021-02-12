@@ -40,7 +40,6 @@ protected:
     // Given the current action phase, get the best next mini node.
     ChosenChar get_best_subaction(float, int, float);
     void backup(float, int, float);
-
     virtual BaseNode *play();
 
 public:
@@ -64,6 +63,9 @@ public:
     vec<float> get_scores(float);
     size_t get_num_actions();
     void add_noise(const vec<float> &, float);
+
+    virtual bool is_transitional() = 0;
+    virtual bool is_tree_node() = 0;
 };
 
 /* ------------------------- Mini Node ------------------------ */
@@ -81,6 +83,10 @@ class MiniNode : public BaseNode
 public:
     TreeNode *const base;
     const ActionPhase ap;
+
+    bool is_tree_node() override;
+
+    virtual bool is_transitional();
 };
 
 /* ---------------------- Transition Node --------------------- */
@@ -95,6 +101,8 @@ class TransitionNode : public MiniNode
 
 public:
     vec<float> rewards;
+
+    bool is_transitional() override;
 };
 
 /* ------------------------- Tree Node ------------------------ */
@@ -114,6 +122,7 @@ class TreeNode : public BaseNode
     void common_init(const vec<Word *> &);
     TreeNode(const vec<Word *> &, int);
     TreeNode(const vec<Word *> &, int, BaseNode *const, const ChosenChar &, bool);
+    TreeNode *play() override;
 
 public:
     const vec<Word *> words;
@@ -124,9 +133,10 @@ public:
 
     // Return a vector of `MiniNode *` as the subactions.
     bool is_leaf();
-    TreeNode *play() override;
     IdSeq get_id_seq(int);
     size_t size();
+    bool is_transitional() override;
+    bool is_tree_node() override;
 };
 
 namespace str

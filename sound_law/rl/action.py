@@ -21,14 +21,6 @@ from sound_law.data.alphabet import (ANY_ID, ANY_S_ID, ANY_UNS_ID, EMP, EMP_ID,
                                      EOT_ID, NULL_ID, SOT_ID, SYL_EOT_ID,
                                      Alphabet)
 
-# pylint: disable=no-name-in-module
-# from .mcts_cpp import PyAction
-
-# from .mcts_cpp import (PyAction, PyActionSpace, PyNull_abc, PySiteSpace,
-#                        PyStop, PyWordSpace)
-
-# pylint: enable=no-name-in-module
-
 add_argument('factorize_actions', dtype=bool, default=False, msg='Flag to factorize the action space.')
 add_argument('ngram_path', dtype='path', msg='Path to the ngram list.')
 

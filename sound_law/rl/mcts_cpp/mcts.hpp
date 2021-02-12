@@ -26,4 +26,5 @@ public:
 
     vec<TreeNode *> select(TreeNode *, int, int);
     void backup(const vec<TreeNode *> &, const vec<float> &);
+    TreeNode* play(TreeNode *node) { return node->play(); };
 };

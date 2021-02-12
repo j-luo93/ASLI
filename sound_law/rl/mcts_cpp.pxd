@@ -1,6 +1,7 @@
 # distutils: language = c++
 
 from libcpp.vector cimport vector
+from libcpp.list cimport list
 from libcpp.pair cimport pair
 from libcpp cimport bool
 
@@ -112,22 +113,25 @@ cdef extern from "mcts_cpp/node.hpp":
     ctypedef pair[int, abc_t] ChosenChar
 
     cdef cppclass BaseNode nogil:
-        pass
-
-    ctypedef BaseNode * BNptr
-
-    cdef cppclass TreeNode nogil:
+        BaseNode *parent
         ChosenChar chosen_char
-        bool stopped
-
         vector[abc_t] permissible_chars
-        vector[Affected] affected
-        vector[BNptr] children
-
-        vector[float] priors
         vector[visit_t] action_counts
         vector[float] total_values
         visit_t visit_count
+
+        bool is_tree_node()
+        bool is_transitional()
+
+    cdef cppclass TransitionNode nogil:
+        vector[float] rewards
+
+    cdef cppclass TreeNode nogil:
+        bool stopped
+
+        vector[Affected] affected
+
+        vector[float] priors
         int max_index
         float max_value
 
@@ -142,13 +146,13 @@ cdef extern from "mcts_cpp/node.hpp":
         bool done
 
         bool is_leaf()
-        TreeNode *play()
         IdSeq get_id_seq(int)
         size_t size()
         size_t get_num_actions()
         void add_noise(vector[float], float)
 
 ctypedef TreeNode * TNptr
+ctypedef BaseNode * BNptr
 
 cdef extern from "mcts_cpp/mcts.hpp":
     cdef cppclass MctsOpt nogil:
@@ -166,6 +170,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
 
         vector[TNptr] select(TreeNode *, int, int)
         void backup(vector[TNptr], vector[float])
+        TreeNode *play(TreeNode *)
 
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:

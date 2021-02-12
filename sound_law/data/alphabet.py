@@ -31,6 +31,10 @@ ANY_S_ID = 6
 ANY_UNS_ID = 7
 NULL_ID = 8
 
+# NOTE(j_luo) This differs from PAD_ID in that PAD_ID is meaningful for CNN (therefore useful for id_seqs). SENTINEL_ID is used to avoid
+# issue of PAD_ID == 2 is confusing for special_type (2 is a valid type).
+SENTINEL_ID = 1023
+
 _ft = FeatureTable()
 
 
@@ -145,6 +149,8 @@ class Alphabet:
 
         logging.info(f'Alphabet for {lang}, size {len(self._id2unit)}: {self._id2unit}.')
         self.lang = lang
+
+        assert(len(self) < SENTINEL_ID)
 
     @property
     def pfm(self) -> LT:

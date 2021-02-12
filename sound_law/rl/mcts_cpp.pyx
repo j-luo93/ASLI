@@ -5,6 +5,7 @@ from .mcts_cpp cimport SpecialType, NONE, CLL, CLR, VS, GBJ, GBW
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
+from cython.operator cimport dereference as deref, preincrement as inc
 cimport cython
 
 import sound_law.data.alphabet as alphabet
@@ -12,6 +13,13 @@ import sound_law.data.alphabet as alphabet
 PyNoStress = <int>NOSTRESS
 PyStressed = <int>STRESSED
 PyUnstressed = <int>UNSTRESSED
+
+PyST_NONE = <abc_t>NONE
+PyST_CLL = <abc_t>CLL
+PyST_CLR = <abc_t>CLR
+PyST_VS = <abc_t>VS
+PyST_GBJ = <abc_t>GBJ
+PyST_GBW = <abc_t>GBW
 
 cdef class PyTreeNode:
     cdef TreeNode *ptr
@@ -84,8 +92,22 @@ cdef class PyTreeNode:
     #     return np.asarray(self.ptr.action_allowed, dtype='long')
 
     @property
+    def chosen_char(self):
+        return (<BaseNode *>self.ptr).chosen_char
+
+    @property
+    def parent(self):
+        cdef BaseNode *node = <BaseNode *>self.ptr
+        if node.parent == NULL:
+            return None
+        # We need to go back 7 times.
+        for i in range(7):
+            node = node.parent
+        return wrap_node(type(self), <TreeNode *>node)
+
+    @property
     def action_counts(self):
-        return np.asarray(self.ptr.action_counts, dtype='long')
+        return np.asarray((<BaseNode *>self.ptr).action_counts, dtype='long')
 
     # @property
     # def max_index(self):
@@ -97,7 +119,7 @@ cdef class PyTreeNode:
 
     @property
     def total_values(self):
-        return np.asarray(self.ptr.total_values, dtype='float32')
+        return np.asarray((<BaseNode *>self.ptr).total_values, dtype='float32')
 
     # @property
     # def prev_action(self):
@@ -289,14 +311,10 @@ cdef class PyMcts:
             states_vec.push_back(get_ptr(state))
         self.ptr.backup(states_vec, values)
 
-    def play(self, PyTreeNode py_tnode)
-
-    # def play(self, PyTreeNode py_tnode):
-    #     cdef uai_t action_id = self.ptr.play(py_tnode.ptr)
-    #     cdef float reward = py_tnode.ptr.rewards.at(action_id)
-    #     cdef TreeNode *new_node = py_tnode.ptr.neighbors.at(action_id)
-    #     tnode_cls = type(py_tnode)
-    #     return action_id, wrap_node(tnode_cls, new_node), reward
+    def play(self, PyTreeNode py_tnode):
+        return wrap_node(type(py_tnode), self.ptr.play(py_tnode.ptr))
+        # cdef FullActionPath full_action = self.ptr.play(py_tnode.ptr)
+        # return wrap_node(type(py_tnode), full_action.first.first), full_action.first.second, full_action.second
 
     # def enable_timer(self):
     #     stats.enable_timer()
@@ -310,29 +328,86 @@ cdef class PyMcts:
     # def set_logging_options(self, int verbose_level, bool log_to_file):
     #     self.ptr.set_logging_options(verbose_level, log_to_file)
 
-@cython.boundscheck(False)
-cpdef object parallel_stack_ids(py_nodes, int num_threads):
-    cdef size_t n = len(py_nodes)
+def parallel_stack_ids(py_nodes, int num_threads):
     cdef vector[TNptr] nodes = vector[TNptr]()
-    nodes.reserve(n)
     for node in py_nodes:
         nodes.push_back(get_ptr(node))
+    return c_parallel_stack_ids(nodes, num_threads)
 
-
+@cython.boundscheck(False)
+cdef object c_parallel_stack_ids(vector[TNptr] nodes, int num_threads):
     # Get the max length first.
     cdef int i, j, k
     cdef size_t m = 0
+    cdef size_t n = nodes.size()
     cdef size_t nw = nodes[0].size()
     for i in range(n):
         for j in range(nw):
             m = max(m, nodes[i].get_id_seq(j).size())
 
-    cdef long[:, :, ::1] arr = np.full([n, m, nw], alphabet.PAD_ID, dtype='long')
+    cdef long[:, :, ::1] arr = np.full([n, nw, m], alphabet.PAD_ID, dtype='long')
     cdef IdSeq id_seq
     with nogil:
         for i in prange(n, num_threads=num_threads):
-            for k in range(nw):
-                id_seq = nodes[i].get_id_seq(k)
-                for j in range(id_seq.size()):
-                    arr[i, j, k] = id_seq[j]
+            for j in range(nw):
+                id_seq = nodes[i].get_id_seq(j)
+                for k in range(id_seq.size()):
+                    arr[i, j, k] = id_seq[k]
     return np.asarray(arr)
+
+@cython.boundscheck(False)
+cdef object c_parallel_stack_actions(vector[BNptr] nodes, int num_threads):
+    cdef size_t i, j
+    cdef size_t n = nodes.size()
+    cdef size_t m = 0
+    cdef vector[abc_t] pc
+    cdef vector[visit_t] ac
+    cdef float vc
+    for i in range(n):
+        m = max(m, nodes[i].permissible_chars.size())
+    cdef long[:, ::1] actions = np.full([n, m], alphabet.SENTINEL_ID, dtype='long')
+    cdef float[:, ::1] mcts_pis = np.zeros([n, m], dtype='float32')
+    with nogil:
+        for i in prange(n, num_threads=num_threads):
+            pc = nodes[i].permissible_chars
+            ac = nodes[i].action_counts
+            vc = <float>(nodes[i].visit_count)
+            for j in range(pc.size()):
+                actions[i, j] = pc[j]
+                mcts_pis[i, j] = <float>(ac[j]) / vc
+    return np.asarray(actions), np.asarray(mcts_pis)
+
+# @cython.boundscheck(False)
+def parallel_gather_trajectory(PyTreeNode last_state, int num_threads):
+    cdef BaseNode *node = <BaseNode *>last_state.ptr
+    cdef list[BNptr] base_nodes_list = list[BNptr]()
+    # Reverse the backtracking order to get the right order.
+    while node != NULL:
+        base_nodes_list.push_front(node)
+        node = node.parent
+    cdef vector[BNptr] base_nodes = vector[BNptr]()
+    cdef list[BNptr].iterator it = base_nodes_list.begin()
+    while it != base_nodes_list.end():
+        base_nodes.push_back(deref(it))
+        it = inc(it)
+
+    cdef vector[TNptr] tree_nodes = vector[TNptr]()
+    cdef vector[abc_t] actions = vector[abc_t]()
+    cdef vector[float] rewards = vector[float]()
+    cdef vector[float] qs = vector[float]()
+    cdef int chosen_index
+    for i in range(base_nodes.size()):
+        node = base_nodes[i]
+        if node.is_tree_node():
+            tree_nodes.push_back(<TreeNode *>node)
+        if node.parent != NULL:
+            chosen_index = node.chosen_char.first
+            actions.push_back(node.chosen_char.second)
+            qs.push_back(node.parent.total_values[chosen_index] / node.parent.action_counts[chosen_index])
+            if node.is_tree_node():
+                rewards.push_back((<TransitionNode *>(node.parent)).rewards[chosen_index])
+    id_seqs = c_parallel_stack_ids(tree_nodes, num_threads)
+    # We don't need the last state's permissible actions since it's not explored.
+    base_nodes.pop_back()
+    permissible_actions, mcts_pis = c_parallel_stack_actions(base_nodes, num_threads)
+    return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)

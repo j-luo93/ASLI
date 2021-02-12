@@ -7,12 +7,12 @@ import numpy as np
 import torch
 
 from dev_misc import FT, add_argument, g, get_tensor, get_zeros
-from dev_misc.devlib.named_tensor import get_named_range
+from dev_misc.devlib.named_tensor import NoName, get_named_range
 from dev_misc.trainlib import (Metric, Metrics, clip_grad, get_optim_params,
                                init_params)
 from dev_misc.trainlib.base_trainer import BaseTrainer as BaseTrainerDev
 from dev_misc.utils import pad_for_log
-from sound_law.data.alphabet import Alphabet
+from sound_law.data.alphabet import SENTINEL_ID, Alphabet
 from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
                                         PaddedUnitSeqs, VSOnePairDataLoader)
 from sound_law.evaluate.edit_dist import edit_dist_batch
@@ -23,7 +23,7 @@ from sound_law.rl.mcts import Mcts
 # from sound_law.rl.mcts_cpp import parallel_stack_policies
 from sound_law.rl.reward import get_rtgs
 # pylint: enable=no-name-in-module
-from sound_law.rl.trajectory import ReplayTrajectory, Trajectory, TrEdge
+from sound_law.rl.trajectory import Trajectory, TrEdge
 from sound_law.s2s.decoder import get_beam_probs
 
 
@@ -412,10 +412,12 @@ class MctsTrainer(RLTrainer):
 
         # Add these new episodes to the replay buffer.
         for tr in new_tr:
-            replay_tr = ReplayTrajectory(tr)
-            rtgs = get_rtgs(tr.rewards, g.discount)
-            for rtg, tr_edge in zip(rtgs, replay_tr):
-                tr_edge.rtg = rtg
+            # replay_tr = ReplayTrajectory(tr)
+            # rtgs = get_rtgs(tr.rewards, g.discount)
+            # for rtg, tr_edge in zip(rtgs, replay_tr):
+            #     tr_edge.rtg = rtg
+            #     self.replay_buffer.append(tr_edge)
+            for tr_edge in tr:
                 self.replay_buffer.append(tr_edge)
 
         # Main loop.
@@ -423,32 +425,39 @@ class MctsTrainer(RLTrainer):
             for _ in range(g.num_inner_steps):
                 # Get a batch of training trajectories from the replay buffer.
                 edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
-                agent_inputs = AgentInputs.from_edges(edge_batch, self.mcts.env.action_space, sparse=True)
-                tgt_policies = list()
-                na = agent_inputs.action_masks.size('action')
-                tgt_policies = parallel_stack_policies(agent_inputs.edges, na, g.num_workers)
-                tgt_policies = get_tensor(tgt_policies)
+                agent_inputs = AgentInputs.from_edges(edge_batch)  # , self.mcts.env)#, sparse=True)
+                # tgt_policies = list()
+                # na = agent_inputs.action_masks.size('action')
+                # tgt_policies = parallel_stack_policies(agent_inputs.edges, na, g.num_workers)
+                # tgt_policies = get_tensor(tgt_policies)
 
                 self.agent.train()
                 self.optimizer.zero_grad()
 
-                policy = self.agent.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks,
-                                               indices=agent_inputs.indices, sparse=True)
-                values = self.agent.get_values(agent_inputs.id_seqs, steps=agent_inputs.steps)
-                pi_ce_losses = -tgt_policies * policy.logits
+                policies = self.agent.get_policy(agent_inputs.id_seqs)
+                # values = self.agent.get_values(agent_inputs.id_seqs, steps=agent_inputs.steps)
+                with NoName(policies, agent_inputs.permissible_actions):
+                    mask = agent_inputs.permissible_actions == SENTINEL_ID
+                    pa = agent_inputs.permissible_actions
+                    pa = torch.where(mask, torch.zeros_like(pa), pa)
+                    logits = policies.gather(2, pa)
+                    logits = torch.where(mask, torch.full_like(logits, -9999.9), logits)
+                    logits = logits.log_softmax(dim=-1)
+                pi_ce_losses = -agent_inputs.mcts_pis * logits
 
-                v_regress_losses = 0.5 * (values - agent_inputs.rtgs) ** 2
+                # v_regress_losses = 0.5 * (values - agent_inputs.qs) ** 2
 
                 pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), g.mcts_batch_size)
-                v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), g.mcts_batch_size)
-                total_loss = pi_ce_loss.total + g.regress_lambda * v_regress_loss.total
+                # v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), g.mcts_batch_size)
+                total_loss = pi_ce_loss.total  # + g.regress_lambda * v_regress_loss.total
                 total_loss = Metric('total_loss', total_loss, g.mcts_batch_size)
 
                 total_loss.mean.backward()
 
                 # Clip gradient norm.
                 grad_norm = clip_grad(self.agent.parameters(), g.mcts_batch_size)
-                metrics += Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm)
+                # metrics += Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm)
+                metrics += Metrics(total_loss, pi_ce_loss, grad_norm)
                 self.optimizer.step()
                 self.tracker.update('inner_step')
 

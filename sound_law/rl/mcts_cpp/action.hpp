@@ -43,12 +43,12 @@ class ActionSpace
     void expand(TreeNode *);
     bool expand(MiniNode *, bool, bool);
     void expand_before(MiniNode *);
-    void expand_after(MiniNode *, bool);
+    void expand_after(MiniNode *, bool, bool);
     void expand_special_type(MiniNode *, bool);
     void expand_pre(MiniNode *, bool);
-    void expand_d_pre(MiniNode *, bool);
+    void expand_d_pre(MiniNode *, bool, bool);
     void expand_post(MiniNode *, bool);
-    void expand_normal(MiniNode *, int, bool);
+    void expand_normal(MiniNode *, int, bool, bool);
     void expand_null(MiniNode *);
     bool expand_null_only(MiniNode *);
 

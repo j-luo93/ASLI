@@ -34,7 +34,7 @@ class FactorizedProjection(nn.Module):
         #     self.post_potential = nn.Linear(input_size, num_ids)
         #     self.d_pre_potential = nn.Linear(input_size, num_ids)
         #     self.d_post_potential = nn.Linear(input_size, num_ids)
-        self.potential_block = nn.Linear(input_size, num_ids * 7)
+        self.potential_block = nn.Linear(input_size, 7 * num_ids)
         self.env = env
 
     def forward(self, inp: FT, sparse: bool = False, indices: Optional[NDA] = None) -> Tuple[FT, FT]:
@@ -46,8 +46,9 @@ class FactorizedProjection(nn.Module):
 
         potentials = self.potential_block(inp)
         with NoName(potentials):
-            potentials = potentials.view(-1, len(self.env.abc), 7)
-            return potentials[..., :6].permute(0, 2, 1).rename('batch', 'phase', 'action'), potentials[:, :6, 6].rename('batch', 'special_type')
+            potentials = potentials.view(-1, 7, len(self.env.abc))
+            return potentials.rename('batch', 'phase', 'action')
+            # return potentials[..., [0, 2, 3, 4, 5, 6]].permute(0, 2, 1).rename('batch', 'phase', 'action'), potentials[:, :6, 1].rename('batch', 'special_type')
 
         # last_10 = (1 << 10) - 1
         # with NoName(potentials):

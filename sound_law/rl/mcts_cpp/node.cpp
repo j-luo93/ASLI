@@ -68,6 +68,7 @@ bool TreeNode::is_leaf() { return priors.size() == 0; }
 
 TreeNode *TreeNode::play()
 {
+    // std::cerr << "============================\n";
     MiniNode *mini_node = static_cast<MiniNode *>(BaseNode::play());
     for (int i = 0; i < 5; ++i)
         mini_node = static_cast<MiniNode *>(mini_node->play());
@@ -76,12 +77,12 @@ TreeNode *TreeNode::play()
 
 BaseNode *BaseNode::play()
 {
-    auto scores = get_scores(5.0);
-    std::cerr << "PLAY:\n";
-    for (size_t i = 0; i < scores.size(); ++i)
-        std::cerr << permissible_chars[i] << ":" << scores[i] << " ";
-    std::cerr << "\n";
-    std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
+    // auto scores = get_scores(5.0);
+    // std::cerr << "-------------------------\nPLAY:\n";
+    // for (size_t i = 0; i < scores.size(); ++i)
+    //     std::cerr << permissible_chars[i] << ":" << scores[i] << " ";
+    // std::cerr << "\n";
+    // std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
     assert(max_index != -1);
     assert(!played);
     played = true;
@@ -99,9 +100,11 @@ void BaseNode::backup(float value, int game_count, float virtual_loss)
         auto &chosen = node->chosen_char;
         int index = chosen.first;
         abc_t best_char = chosen.second;
-        auto tparent = dynamic_cast<TransitionNode *>(parent);
-        if (tparent != nullptr)
-            rtg += tparent->rewards[index];
+        // auto tparent = dynamic_cast<TransitionNode *>(parent);
+        // if (tparent != nullptr)
+        //     rtg += tparent->rewards[index];
+        if (parent->is_transitional())
+            rtg += static_cast<TransitionNode *>(parent)->rewards[index];
         parent->action_counts[index] -= game_count - 1;
         if (parent->action_counts[index] < 1)
         {
@@ -140,3 +143,9 @@ void BaseNode::add_noise(const vec<float> &noise, float noise_ratio)
     for (size_t i = 0; i < priors.size(); ++i)
         priors[i] = priors[i] * (1.0 - noise_ratio) + noise[i] * noise_ratio;
 }
+
+bool MiniNode::is_transitional() { return false; }
+bool TransitionNode::is_transitional() { return true; }
+bool TreeNode::is_transitional() { return false; }
+bool MiniNode::is_tree_node() { return false; }
+bool TreeNode::is_tree_node() { return true; }
