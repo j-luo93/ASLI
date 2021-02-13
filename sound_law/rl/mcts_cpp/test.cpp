@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
         //     std::cerr << root->permissible_chars[i] << ":" << scores[i] << " ";
         // std::cerr << "\n";
         // std::cerr << "max index: " << root->max_index << " max_value: " << root->max_value << "\n";
-        root = mcts->play(root).first.first;
+        root = mcts->play(root);
         std::cerr << str::from(root);
         SPDLOG_INFO("New dist: {}", root->dist);
     }

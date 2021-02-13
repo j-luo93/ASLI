@@ -92,7 +92,8 @@ class Mcts(PyMcts):
 
             # TODO(j_luo) Scoped might be wrong here.
             # with ScopedCache('state_repr'):
-            priors = self.agent.get_policy(id_seqs)
+            # NOTE(j_luo) Don't forget to call exp().
+            priors = self.agent.get_policy(id_seqs).exp()
             with NoName(priors):
                 meta_priors = priors[:, [0, 2, 3, 4, 5, 6]].cpu().numpy()
                 special_priors = priors[:, 1].cpu().numpy()
@@ -195,6 +196,7 @@ class Mcts(PyMcts):
                     self.add_noise(root)
                     # Run many simulations before take one action. Simulations take place in batches. Each batch
                     # would be evaluated and expanded after batched selection.
+                    # print('1')
                     num_batches = g.num_mcts_sims // g.expansion_batch_size
                     for _ in range(num_batches):
                         new_states, steps_left = self.select(root, g.expansion_batch_size, g.max_rollout_length)
@@ -212,12 +214,14 @@ class Mcts(PyMcts):
                         k = min(20, root.num_actions)
                         logging.debug(pad_for_log(str(get_tensor(root.action_counts).topk(k))))
                         logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
+                    # print('2')
                     # probs, action, reward, new_state = self.play(root)
                     # new_state = self.play(root)
                     # trajectory.append(action, new_state, reward, mcts_pi=probs)
                     # root = new_state
                     root = self.play(root)
 
+                    # print('3')
                     if tracker is not None:
                         tracker.update('rollout')
                     if root.stopped or root.done:

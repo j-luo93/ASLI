@@ -447,7 +447,7 @@ class MctsTrainer(RLTrainer):
 
                 # v_regress_losses = 0.5 * (values - agent_inputs.qs) ** 2
 
-                pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), g.mcts_batch_size)
+                pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), g.mcts_batch_size * 7)
                 # v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), g.mcts_batch_size)
                 total_loss = pi_ce_loss.total  # + g.regress_lambda * v_regress_loss.total
                 total_loss = Metric('total_loss', total_loss, g.mcts_batch_size)
