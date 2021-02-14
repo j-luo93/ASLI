@@ -56,6 +56,7 @@ public:
     vec<float> priors;
     vec<visit_t> action_counts;
     vec<float> total_values;
+    vec<float> max_values;
     visit_t visit_count = 0;
     int max_index = -1;
     float max_value = -9999.9;
@@ -64,7 +65,6 @@ public:
     bool is_evaluated();
     vec<float> get_scores(float);
     size_t get_num_actions();
-    void add_noise(const vec<float> &, float);
 
     virtual bool is_transitional() = 0;
     virtual bool is_tree_node() = 0;

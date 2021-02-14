@@ -443,11 +443,24 @@ class MctsTrainer(RLTrainer):
                     logits = policies.gather(2, pa)
                     logits = torch.where(mask, torch.full_like(logits, -9999.9), logits)
                     logits = logits.log_softmax(dim=-1)
-                pi_ce_losses = -agent_inputs.mcts_pis * logits
+                # r_max = agent_inputs.rewards.max()
+                # r_min = agent_inputs.rewards.min()
+                # weights = (agent_inputs.rewards - r_min) / (r_max - r_min + 1e-8)
+
+                # weights = weights.align_as(pi_ce_losses)
+                entropies = (-agent_inputs.mcts_pis * (1e-8 + agent_inputs.mcts_pis).log()).sum(dim=-1)
+                pi_ce_losses = (-agent_inputs.mcts_pis * logits).sum(dim=-1) - entropies
+                for i in range(6):
+                    metrics += Metric(f'entropy_{i}', entropies[:, i].sum(), g.mcts_batch_size)
+                    metrics += Metric(f'pi_ce_los_{i}', pi_ce_losses[:, i].sum(), g.mcts_batch_size)
 
                 # v_regress_losses = 0.5 * (values - agent_inputs.qs) ** 2
 
+                # pi_ce_loss = Metric('pi_ce_loss', (weights * pi_ce_losses).sum(), g.mcts_batch_size * 7)
+                # weights = get_tensor([1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]).rename('mini').align_as(pi_ce_losses)
+                # pi_ce_loss = Metric('pi_ce_loss', (weights * pi_ce_losses).sum(), g.mcts_batch_size * 7)
                 pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), g.mcts_batch_size * 7)
+                # pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses[:, 0].sum(), g.mcts_batch_size)
                 # v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), g.mcts_batch_size)
                 total_loss = pi_ce_loss.total  # + g.regress_lambda * v_regress_loss.total
                 total_loss = Metric('total_loss', total_loss, g.mcts_batch_size)

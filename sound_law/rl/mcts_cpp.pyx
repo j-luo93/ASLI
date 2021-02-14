@@ -66,9 +66,6 @@ cdef class PyTreeNode:
     def num_actions(self) -> int:
         return self.ptr.get_num_actions()
 
-    def add_noise(self, float[::1] noise, float noise_ratio):
-        self.ptr.add_noise(np2vector(noise), noise_ratio)
-
     @property
     def dist(self) -> float:
         return self.ptr.dist
@@ -285,6 +282,10 @@ cdef class PyEnv:
         cdef vector[vector[float]] meta_priors = np2nested(np_meta_priors, lengths)
         cdef vector[float] special_priors = np2vector(np_special_priors)
         self.ptr.evaluate(py_node.ptr, meta_priors, special_priors)
+
+    def add_noise(self, PyTreeNode py_tnode, float[:, ::1] meta_noise, float[::1] special_noise, float noise_ratio):
+        cdef long[::1] lengths = np.full([6], meta_noise.shape[1], dtype='long')
+        self.ptr.add_noise(py_tnode.ptr, np2nested(meta_noise, lengths), np2vector(special_noise), noise_ratio)
 
     # def step(self, PyTreeNode node, int best_i, uai_t action_id):
     #     new_node = self.ptr.apply_action(node.ptr, best_i, action_id)

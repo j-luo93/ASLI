@@ -35,6 +35,7 @@ class AgentInputs:
     edges: List[TrEdge]
     id_seqs: LT
     permissible_actions: LT
+    rewards: FT
     mcts_pis: FT
     qs: FT
     # rewards: FT
@@ -73,7 +74,7 @@ class AgentInputs:
             new_shape = [len(arrays)] + list(arrays[0].shape)
             new_shape[-1] = m
             arr = np.full(new_shape, pad_value, dtype=dtype)
-            for i in range(len(arrays)):
+            for i, array in enumerate(arrays):
                 array = arrays[i]
                 arr[i, ..., :array.shape[-1]] = array
             return arr
@@ -86,10 +87,11 @@ class AgentInputs:
         mcts_pis = mcts_pis.view(id_seqs.size('batch'), 7, -1).rename('batch', 'mini', 'action')
         qs = get_tensor(np.concatenate(gather('qs')).astype('float32'))
         qs = qs.view(-1, 7).rename('batch', 'mini')
+        rewards = get_tensor(gather('r')).float().rename("batch")
         steps = None
         if g.use_finite_horizon:
             steps = get_tensor(gather('step'))
-        return cls(edges, id_seqs, permissible_actions, mcts_pis, qs, steps=steps)
+        return cls(edges, id_seqs, permissible_actions, rewards, mcts_pis, qs, steps=steps)
         # if sparse:
         #     indices, action_masks, _ = parallel_get_sparse_action_masks(states, g.num_workers)
         #     # indices = get_tensor(indices).rename('batch', 'action')

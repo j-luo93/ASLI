@@ -62,6 +62,7 @@ class Mcts(PyMcts):
         # self._state_ids: Set[int] = set()
         # self._states: List[VocabState] = list()
         self.env.prune(self.env.start)
+        self.env.clear_priors(self.env.start, True)
         self.env.clear_stats(self.env.start, True)
         logging.info(f'#words: {self.env.num_words}')
 
@@ -156,8 +157,11 @@ class Mcts(PyMcts):
 
     def add_noise(self, state: VocabState):
         """Add Dirichlet noise to `state`, usually the root."""
-        noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(state.num_actions)).astype('float32')
-        state.add_noise(noise, g.noise_ratio)
+        noise = np.random.dirichlet(g.dirichlet_alpha * np.ones(7 * len(self.env.abc))).astype('float32')
+        noise = noise.reshape(7, -1)
+        meta_noise = noise[:6]
+        special_noise = noise[6, :6]
+        self.env.add_noise(state, meta_noise, special_noise, g.noise_ratio)
 
     def collect_episodes(self, init_state: VocabState, end_state: VocabState,
                          tracker: Optional[Tracker] = None, num_episodes: int = 0) -> List[Trajectory]:

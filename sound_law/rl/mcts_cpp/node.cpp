@@ -51,7 +51,7 @@ ChosenChar BaseNode::get_best_subaction(float puct_c, int game_count, float virt
 
 vec<float> BaseNode::get_scores(float puct_c)
 {
-    float sqrt_ns = sqrt(static_cast<float>(visit_count));
+    float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
     auto scores = vec<float>(priors.size());
     for (size_t i = 0; i < priors.size(); ++i)
     {
@@ -68,7 +68,7 @@ bool TreeNode::is_leaf() { return priors.size() == 0; }
 
 TreeNode *TreeNode::play()
 {
-    // std::cerr << "============================\n";
+    std::cerr << "============================\n";
     MiniNode *mini_node = static_cast<MiniNode *>(BaseNode::play());
     for (int i = 0; i < 5; ++i)
         mini_node = static_cast<MiniNode *>(mini_node->play());
@@ -77,12 +77,25 @@ TreeNode *TreeNode::play()
 
 BaseNode *BaseNode::play()
 {
-    // auto scores = get_scores(5.0);
-    // std::cerr << "-------------------------\nPLAY:\n";
-    // for (size_t i = 0; i < scores.size(); ++i)
-    //     std::cerr << permissible_chars[i] << ":" << scores[i] << " ";
-    // std::cerr << "\n";
-    // std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
+    auto scores = get_scores(1.0);
+    std::cerr << "-------------------------\nPLAY:\n";
+    for (size_t i = 0; i < permissible_chars.size(); ++i)
+    {
+        std::cerr << permissible_chars[i] << ":";
+        std::cerr << total_values[i] << "/" << action_counts[i] << "=";
+        std::cerr << total_values[i] / (1e-8 + action_counts[i]) << ":";
+        std::cerr << max_values[i] << " ";
+    }
+    std::cerr << "\n";
+    std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
+
+    // int index = 0;
+    // for (size_t i = 1; i < permissible_chars.size(); ++i)
+    //     if (action_counts[i] > action_counts[index])
+    //         index = i;
+    // assert(!played);
+    // played = true;
+    // return children[index];
     assert(max_index != -1);
     assert(!played);
     played = true;
@@ -120,6 +133,8 @@ void BaseNode::backup(float value, int game_count, float virtual_loss)
             parent->max_value = new_value;
             parent->max_index = index;
         }
+        if (new_value > parent->max_values[index])
+            parent->max_values[index] = new_value;
         parent->total_values[index] += game_count * virtual_loss + new_value;
         parent->visit_count -= game_count - 1;
         node = parent;
@@ -135,13 +150,6 @@ size_t BaseNode::get_num_actions()
 {
     assert(permissible_chars.size() > 0);
     return permissible_chars.size();
-}
-
-void BaseNode::add_noise(const vec<float> &noise, float noise_ratio)
-{
-    assert(noise.size() == get_num_actions());
-    for (size_t i = 0; i < priors.size(); ++i)
-        priors[i] = priors[i] * (1.0 - noise_ratio) + noise[i] * noise_ratio;
 }
 
 bool MiniNode::is_transitional() { return false; }

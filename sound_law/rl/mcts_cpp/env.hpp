@@ -49,4 +49,5 @@ public:
     inline void clear_priors(TreeNode *node, bool recursive) { action_space->clear_priors(node, recursive); };
     inline void prune(TreeNode *node) { action_space->prune(node); };
     inline size_t get_num_words() { return word_space->words.size(); };
+    inline void add_noise(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors, float noise_ratio) { action_space->add_noise(node, meta_priors, special_priors, noise_ratio); };
 };

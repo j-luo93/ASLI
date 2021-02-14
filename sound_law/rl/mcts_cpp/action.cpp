@@ -611,6 +611,7 @@ void ActionSpace::clear_stats(BaseNode *node, bool recursive)
     node->visit_count = 0;
     node->max_index = -1;
     node->max_value = -9999.9;
+    node->max_values = vec<float>(n, -9999.9);
     node->played = false;
     if (recursive)
         for (const auto child : node->children)
@@ -652,4 +653,16 @@ void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, c
         node->priors.push_back(full_priors[unit]);
     // }
     normalize(node->priors);
+}
+
+void ActionSpace::add_noise(TreeNode *node, const vec<vec<float>> &meta_noise, const vec<float> &special_noise, float noise_ratio)
+{
+    auto new_meta_priors = node->meta_priors;
+    auto new_special_priors = node->special_priors;
+    for (size_t i = 0; i < meta_noise.size(); ++i)
+        for (size_t j = 0; j < meta_noise[i].size(); ++j)
+            new_meta_priors[i][j] = new_meta_priors[i][j] * (1.0 - noise_ratio) + meta_noise[i][j] * noise_ratio;
+    for (size_t i = 0; i < special_noise.size(); ++i)
+        new_special_priors[i] = new_special_priors[i] * (1.0 - noise_ratio) + special_noise[i] * noise_ratio;
+    evaluate(node, new_meta_priors, new_special_priors);
 }
