@@ -144,7 +144,7 @@ class OnePairManager:
             t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
             env_opt = PyEnvOpt(s_arr, s_lengths, t_arr, t_lengths, g.final_reward, g.step_penalty)
             as_opt = PyActionSpaceOpt(NULL_ID, EMP_ID, SOT_ID, EOT_ID, ANY_ID, ANY_S_ID,
-                                      ANY_UNS_ID, self.tgt_abc['j'], self.tgt_abc['w'])
+                                      ANY_UNS_ID, self.tgt_abc['j'], self.tgt_abc['w'], g.site_threshold)
             ws_opt = PyWordSpaceOpt(self.tgt_abc.dist_mat, 1.0,
                                     self.tgt_abc.is_vowel,
                                     self.tgt_abc.unit_stress,
@@ -233,7 +233,7 @@ class OnePairManager:
             dl = self.dl_reg.get_loaders_by_name('rl')
             model = get_model(dl=dl)
             # if g.use_mcts:
-            mcts_opt = PyMctsOpt(g.puct_c, g.game_count, g.virtual_loss, g.num_workers)
+            mcts_opt = PyMctsOpt(g.puct_c, g.game_count, g.virtual_loss, g.num_workers, g.heur_c)
             mcts = Mcts(self.env, mcts_opt, agent=model)
             # mcts.set_logging_options(g.mcts_verbose_level, g.mcts_log_to_file)
             if g.evaluate_only:

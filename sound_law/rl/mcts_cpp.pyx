@@ -153,7 +153,7 @@ cdef class PyEnvOpt:
 cdef class PyActionSpaceOpt:
     cdef ActionSpaceOpt c_obj
 
-    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t any_s_id, abc_t any_uns_id, abc_t glide_j, abc_t glide_w):
+    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t any_s_id, abc_t any_uns_id, abc_t glide_j, abc_t glide_w, int site_threshold):
         self.c_obj = ActionSpaceOpt()
         self.c_obj.null_id = null_id
         self.c_obj.emp_id = emp_id
@@ -164,6 +164,7 @@ cdef class PyActionSpaceOpt:
         self.c_obj.any_uns_id = any_uns_id
         self.c_obj.glide_j = glide_j
         self.c_obj.glide_w = glide_w
+        self.c_obj.site_threshold = site_threshold
 
 cdef class PyWordSpaceOpt:
     cdef WordSpaceOpt c_obj
@@ -198,12 +199,14 @@ cdef class PyMctsOpt:
                   float puct_c,
                   int game_count,
                   float virtual_loss,
-                  int num_threads):
+                  int num_threads,
+                  float heur_c):
         self.c_obj = MctsOpt()
         self.c_obj.puct_c = puct_c
         self.c_obj.game_count = game_count
         self.c_obj.virtual_loss = virtual_loss
         self.c_obj.num_threads = num_threads
+        self.c_obj.heur_c = heur_c
 
 cdef class PyEnv:
     cdef Env *ptr

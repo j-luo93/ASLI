@@ -16,7 +16,7 @@ TreeNode *Mcts::select_single_thread(TreeNode *node, int depth_limit)
         // Complete sampling one action.
         SPDLOG_DEBUG("Mcts: node depth {}", node->depth);
         SPDLOG_DEBUG("Mcts: node str\n{}", str::from(node));
-        auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss);
+        auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c);
         SPDLOG_DEBUG("Mcts: node subpath found.");
         node = env->apply_action(node, subpath);
         SPDLOG_DEBUG("Mcts: action applied.");

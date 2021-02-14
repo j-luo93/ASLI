@@ -10,6 +10,7 @@ struct MctsOpt
     int game_count;
     float virtual_loss;
     int num_threads;
+    float heur_c;
 };
 
 class Mcts
@@ -26,5 +27,5 @@ public:
 
     vec<TreeNode *> select(TreeNode *, int, int);
     void backup(const vec<TreeNode *> &, const vec<float> &);
-    TreeNode* play(TreeNode *node) { return node->play(); };
+    TreeNode *play(TreeNode *node) { return node->play(); };
 };

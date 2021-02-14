@@ -185,48 +185,48 @@ void ActionSpace::register_cl_map(abc_t before, abc_t after) { cl_map[before] = 
 void ActionSpace::register_gbj_map(abc_t before, abc_t after) { gbj_map[before] = after; }
 void ActionSpace::register_gbw_map(abc_t before, abc_t after) { gbw_map[before] = after; }
 
-Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss)
+Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss, float heur_c)
 {
     SPDLOG_DEBUG("ActionSpace:: getting best subpath...");
-    auto before = node->get_best_subaction(puct_c, game_count, virtual_loss);
+    auto before = node->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
     if (expand(before_mn, false, false))
         evaluate(before_mn);
     SPDLOG_DEBUG("ActionSpace:: before done.");
 
-    auto special_type = before_mn->get_best_subaction(puct_c, game_count, virtual_loss);
+    auto special_type = before_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     auto st_mn = get_mini_node(node, before_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
     if (expand(st_mn, false, false))
         evaluate(st_mn);
     SPDLOG_DEBUG("ActionSpace:: special_type done.");
 
-    auto after = st_mn->get_best_subaction(puct_c, game_count, virtual_loss);
+    auto after = st_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     bool use_vowel_seq = (static_cast<SpecialType>(st_mn->chosen_char.second) == SpecialType::VS);
     auto after_mn = get_mini_node(node, st_mn, after, ActionPhase::AFTER, stopped);
     if (expand(after_mn, use_vowel_seq, false))
         evaluate(after_mn);
     SPDLOG_DEBUG("ActionSpace:: after done.");
 
-    auto pre = after_mn->get_best_subaction(puct_c, game_count, virtual_loss);
+    auto pre = after_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     auto pre_mn = get_mini_node(node, after_mn, pre, ActionPhase::PRE, stopped);
     if (expand(pre_mn, use_vowel_seq, false))
         evaluate(pre_mn);
     SPDLOG_DEBUG("ActionSpace:: pre done.");
 
-    auto d_pre = pre_mn->get_best_subaction(puct_c, game_count, virtual_loss);
+    auto d_pre = pre_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
     if (expand(d_pre_mn, use_vowel_seq, false))
         evaluate(d_pre_mn);
     SPDLOG_DEBUG("ActionSpace:: d_pre done.");
 
-    auto post = d_pre_mn->get_best_subaction(puct_c, game_count, virtual_loss);
+    auto post = d_pre_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
     if (expand(post_mn, use_vowel_seq, false))
         evaluate(post_mn);
     SPDLOG_DEBUG("ActionSpace:: post done.");
 
-    auto d_post = post_mn->get_best_subaction(puct_c, game_count, virtual_loss);
+    auto d_post = post_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     SPDLOG_DEBUG("ActionSpace:: d_post done.");
 
     Subpath subpath;

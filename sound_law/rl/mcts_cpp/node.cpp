@@ -34,11 +34,11 @@ TreeNode::TreeNode(const vec<Word *> &words,
 bool BaseNode::is_expanded() { return (permissible_chars.size() > 0); }
 bool BaseNode::is_evaluated() { return (priors.size() > 0); }
 
-ChosenChar BaseNode::get_best_subaction(float puct_c, int game_count, float virtual_loss)
+ChosenChar BaseNode::get_best_subaction(float puct_c, int game_count, float virtual_loss, float heur_c)
 {
     std::lock_guard<std::mutex> lock(mtx);
     assert(is_expanded() && is_evaluated());
-    auto scores = get_scores(puct_c);
+    auto scores = get_scores(puct_c, heur_c);
     auto it = std::max_element(scores.begin(), scores.end());
     int index = std::distance(scores.begin(), it);
     auto ret = ChosenChar(index, permissible_chars[index]);
@@ -49,7 +49,7 @@ ChosenChar BaseNode::get_best_subaction(float puct_c, int game_count, float virt
     return ret;
 }
 
-vec<float> BaseNode::get_scores(float puct_c)
+vec<float> BaseNode::get_scores(float puct_c, float heur_c)
 {
     float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
     auto scores = vec<float>(priors.size());
@@ -59,7 +59,8 @@ vec<float> BaseNode::get_scores(float puct_c)
         float q = total_values[i] / (nsa + 1e-8);
         float p = priors[i];
         float u = puct_c * p * sqrt_ns / (1 + nsa);
-        scores[i] = q + u;
+        float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
+        scores[i] = q + u + h;
     }
     return scores;
 }
@@ -77,7 +78,7 @@ TreeNode *TreeNode::play()
 
 BaseNode *BaseNode::play()
 {
-    auto scores = get_scores(1.0);
+    auto scores = get_scores(1.0, 1.0);
     std::cerr << "-------------------------\nPLAY:\n";
     for (size_t i = 0; i < permissible_chars.size(); ++i)
     {

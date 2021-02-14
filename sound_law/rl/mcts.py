@@ -34,6 +34,7 @@ class Mcts(PyMcts):
     add_argument('puct_c', default=5.0, dtype=float, msg='Exploration constant.')
     add_argument('virtual_loss', default=1.0, dtype=float, msg='Virtual loss per game.')
     add_argument('game_count', default=3, dtype=int, msg='How many virtual games lost.')
+    add_argument('heur_c', default=1.0, dtype=float, msg='Heuristic constant.')
     add_argument('mixing', default=0.5, dtype=float, msg='Mixing lambda hyperparameter.')
     add_argument('num_workers', default=4, dtype=int, msg='Number of workers for parallelizing MCTS.')
     add_argument('dirichlet_alpha', default=0.03, dtype=float, msg='Alpha value for the Dirichlet noise.')

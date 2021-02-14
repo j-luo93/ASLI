@@ -21,6 +21,7 @@ struct ActionSpaceOpt
     abc_t any_uns_id;
     abc_t glide_j;
     abc_t glide_w;
+    int site_threshold;
 };
 
 class Env;
@@ -33,7 +34,7 @@ class ActionSpace
 
     WordSpace *word_space;
 
-    Subpath get_best_subpath(TreeNode *, float, int, float);
+    Subpath get_best_subpath(TreeNode *, float, int, float, float);
     MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool);
     IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t, SpecialType);
     void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, bool);

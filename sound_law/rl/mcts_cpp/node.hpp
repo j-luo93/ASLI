@@ -38,7 +38,7 @@ protected:
     bool played = false;
 
     // Given the current action phase, get the best next mini node.
-    ChosenChar get_best_subaction(float, int, float);
+    ChosenChar get_best_subaction(float, int, float, float);
     void backup(float, int, float);
     virtual BaseNode *play();
 
@@ -63,7 +63,7 @@ public:
 
     bool is_expanded();
     bool is_evaluated();
-    vec<float> get_scores(float);
+    vec<float> get_scores(float, float);
     size_t get_num_actions();
 
     virtual bool is_transitional() = 0;

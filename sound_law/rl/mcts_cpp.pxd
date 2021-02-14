@@ -76,6 +76,7 @@ cdef extern from "mcts_cpp/action.hpp":
         abc_t any_uns_id
         abc_t glide_j
         abc_t glide_w
+        int site_threshold
 
         ActionSpaceOpt()
 
@@ -163,6 +164,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         int game_count
         float virtual_loss
         int num_threads
+        float heur_c
 
         MctsOpt()
 
