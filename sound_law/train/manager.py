@@ -144,7 +144,7 @@ class OnePairManager:
             t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
             env_opt = PyEnvOpt(s_arr, s_lengths, t_arr, t_lengths, g.final_reward, g.step_penalty)
             as_opt = PyActionSpaceOpt(NULL_ID, EMP_ID, SOT_ID, EOT_ID, ANY_ID, ANY_S_ID,
-                                      ANY_UNS_ID, self.tgt_abc['j'], self.tgt_abc['w'], g.site_threshold)
+                                      ANY_UNS_ID, self.tgt_abc['j'], self.tgt_abc['w'], g.site_threshold, g.dist_threshold)
             ws_opt = PyWordSpaceOpt(self.tgt_abc.dist_mat, 1.0,
                                     self.tgt_abc.is_vowel,
                                     self.tgt_abc.unit_stress,

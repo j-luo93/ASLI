@@ -65,8 +65,9 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
         float mv = max_values[i];
         float p = priors[i];
         float u = puct_c * p * sqrt_ns / (1 + nsa);
-        float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
-        // float h = (mv > -99.9) ? heur_c * mv : 0.0;
+        // float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
+        float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
+        // float h = (mv > -99.9) ? heur_c * mv / (1 + nsa) : 0.0;
         // scores[i] = q + u + h;
         // scores[i] = q + u + randf(0.001);
         // scores[i] = pruned[i] ? -9999.9 : (q + u);
@@ -78,6 +79,7 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
 
 void BaseNode::prune()
 {
+    // std::cerr << "complete: " << num_unpruned_actions << "\n";
     num_unpruned_actions = 0;
     std::fill(pruned.begin(), pruned.end(), true);
     if (parent != nullptr)
@@ -86,9 +88,14 @@ void BaseNode::prune()
 
 void BaseNode::prune(int index)
 {
-    assert(!pruned[index]);
-    pruned[index] = true;
-    --num_unpruned_actions;
+    // assert(!pruned[index]);
+    if (!pruned[index])
+    {
+        pruned[index] = true;
+        // std::cerr << "old: " << num_unpruned_actions << "\n";
+        --num_unpruned_actions;
+        // std::cerr << "new: " << num_unpruned_actions << "\n";
+    }
     if (is_pruned() && (parent != nullptr))
         parent->prune(chosen_char.first);
 }
@@ -116,61 +123,75 @@ BaseNode *BaseNode::play()
     // played = true;
     // return children[index];
 
-    // assert(max_index != -1);
-    // assert(!played);
-    // played = true;
-    // return children[max_index];
+    assert(max_index != -1);
+    assert(!played);
+    played = true;
+    return children[max_index];
 
-    auto probs = vec<float>();
-    probs.reserve(action_counts.size());
-    float sum = 0.0;
-    for (const auto mv : max_values)
-    {
-        probs.push_back((mv > -99.9) ? exp(mv * 50.0) : 0.0);
-        sum += probs.back();
-    }
-
-    // for (const auto ac : action_counts)
+    // auto probs = vec<float>();
+    // probs.reserve(action_counts.size());
+    // float sum = 0.0;
+    // for (size_t i = 0; i < max_values.size(); ++i)
     // {
-    //     probs.push_back(pow(static_cast<float>(ac), 1.0));
+    //     auto mv = max_values[i];
+    //     if (mv > -99.9)
+    //         if (pruned[i])
+    //             probs.push_back(1e-8);
+    //         else
+    //             probs.push_back(exp(mv * 100.0));
+    //     else
+    //         probs.push_back(0.0);
+    //     // probs.push_back((mv > -99.9) ? exp(mv * 50.0) : 0.0);
+    //     // std::cerr << i << " " << probs.back() << " " << mv << " " << pruned[i] << "\n";
     //     sum += probs.back();
     // }
-    for (auto &prob : probs)
-        prob /= sum;
 
-    auto scores = get_scores(1.0, 1.0);
-    std::cerr << "-------------------------\nPLAY:\n";
-    for (size_t i = 0; i < permissible_chars.size(); ++i)
-    {
-        std::cerr << permissible_chars[i] << ":";
-        std::cerr << total_values[i] << "/" << action_counts[i] << "=";
-        std::cerr << total_values[i] / (1e-8 + action_counts[i]) << ":";
-        // std::cerr << max_values[i] << " ";
-        std::cerr << max_values[i] << ":";
-        std::cerr << ((children[i] == nullptr) ? -1 : children[i]->num_unpruned_actions) << ":";
-        std::cerr << probs[i] << " ";
-    }
-    std::cerr << "\n";
-    std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
+    // // for (const auto ac : action_counts)
+    // // {
+    // //     probs.push_back(pow(static_cast<float>(ac), 1.0));
+    // //     sum += probs.back();
+    // // }
+    // for (auto &prob : probs)
+    //     prob /= sum;
 
-    float r = randf(1.0);
-    float low = 0.0;
-    float high = 0.0;
-    size_t index = 0;
-    for (size_t i = 0; i < probs.size(); ++i)
-    {
-        high += probs[i];
-        if ((r >= low) && (r < high))
-        {
-            index = i;
-            break;
-        }
-        low = high;
-    }
-    assert(!played);
-    assert(children[index] != nullptr);
-    played = true;
-    return children[index];
+    // // auto scores = get_scores(1.0, 1.0);
+    // // std::cerr << "-------------------------\nPLAY:\n";
+    // // if (parent != nullptr)
+    // //     std::cerr << "#unpruned: " << num_unpruned_actions << " "
+    // //               << "#affected: " << parent->affected[chosen_char.first].size() << "\n";
+    // // for (size_t i = 0; i < permissible_chars.size(); ++i)
+    // // {
+    // //     std::cerr << permissible_chars[i] << ":";
+    // //     std::cerr << total_values[i] << "/" << action_counts[i] << "=";
+    // //     std::cerr << total_values[i] / (1e-8 + action_counts[i]) << ":";
+    // //     // std::cerr << max_values[i] << " ";
+    // //     std::cerr << max_values[i] << ":";
+    // //     std::cerr << ((children[i] == nullptr) ? -1 : children[i]->num_unpruned_actions) << ":";
+    // //     std::cerr << probs[i] << " ";
+    // // }
+    // // std::cerr << "\n";
+    // // std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
+
+    // float r = randf(1.0);
+    // float low = 0.0;
+    // float high = 0.0;
+    // size_t index = 0;
+    // for (size_t i = 0; i < probs.size(); ++i)
+    // {
+    //     high += probs[i];
+    //     if ((r >= low) && (r < high))
+    //     {
+    //         index = i;
+    //         break;
+    //     }
+    //     low = high;
+    // }
+    // assert(!played);
+    // // assert(!pruned[index]);
+    // assert(children[index] != nullptr);
+    // // assert(children[index]->num_unpruned_actions > 0);
+    // played = true;
+    // return children[index];
 }
 
 void BaseNode::backup(float value, int game_count, float virtual_loss)

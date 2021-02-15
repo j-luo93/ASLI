@@ -22,6 +22,7 @@ struct ActionSpaceOpt
     abc_t glide_j;
     abc_t glide_w;
     int site_threshold;
+    float dist_threshold;
 };
 
 class Env;

@@ -30,9 +30,9 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
         }
         new_node = new TreeNode(new_words, node->depth + 1, last, subpath.chosen_seq[6], false);
         expand(new_node);
+        if ((last->affected[last_child_index].size() < opt.site_threshold) || ((node->dist - new_node->dist) < opt.dist_threshold))
+            new_node->prune();
     }
-    if (last->affected[last_child_index].size() < opt.site_threshold)
-        new_node->prune();
     return new_node;
 }
 
