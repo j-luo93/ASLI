@@ -62,7 +62,7 @@ class Mcts(PyMcts):
         # logging.debug(f'Total number of states reset: {len(self._states)}.')
         # self._state_ids: Set[int] = set()
         # self._states: List[VocabState] = list()
-        self.env.prune(self.env.start)
+        # self.env.prune(self.env.start)
         self.env.clear_priors(self.env.start, True)
         self.env.clear_stats(self.env.start, True)
         logging.info(f'#words: {self.env.num_words}')

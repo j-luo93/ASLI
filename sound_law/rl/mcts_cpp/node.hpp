@@ -40,6 +40,7 @@ protected:
     // Given the current action phase, get the best next mini node.
     ChosenChar get_best_subaction(float, int, float, float);
     void backup(float, int, float);
+    void prune(int);
     virtual BaseNode *play();
 
 public:
@@ -54,17 +55,21 @@ public:
     vec<BaseNode *> children;
 
     vec<float> priors;
+    vec<bool> pruned;
     vec<visit_t> action_counts;
     vec<float> total_values;
     vec<float> max_values;
     visit_t visit_count = 0;
     int max_index = -1;
     float max_value = -9999.9;
+    int num_unpruned_actions = -1;
 
     bool is_expanded();
     bool is_evaluated();
     vec<float> get_scores(float, float);
     size_t get_num_actions();
+    void prune();
+    bool is_pruned();
 
     virtual bool is_transitional() = 0;
     virtual bool is_tree_node() = 0;

@@ -54,16 +54,38 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
     float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
     auto scores = vec<float>(priors.size());
     for (size_t i = 0; i < priors.size(); ++i)
-    {
-        float nsa = static_cast<float>(action_counts[i]);
-        float q = total_values[i] / (nsa + 1e-8);
-        float p = priors[i];
-        float u = puct_c * p * sqrt_ns / (1 + nsa);
-        float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
-        scores[i] = q + u + h;
-    }
+        if (pruned[i])
+            scores[i] = -9999.9;
+        else
+        {
+            float nsa = static_cast<float>(action_counts[i]);
+            float q = total_values[i] / (nsa + 1e-8);
+            float p = priors[i];
+            float u = puct_c * p * sqrt_ns / (1 + nsa);
+            float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
+            scores[i] = q + u + h;
+        }
     return scores;
 }
+
+void BaseNode::prune()
+{
+    num_unpruned_actions = 0;
+    std::fill(pruned.begin(), pruned.end(), true);
+    if (parent != nullptr)
+        parent->prune(chosen_char.first);
+}
+
+void BaseNode::prune(int index)
+{
+    assert(!pruned[index]);
+    pruned[index] = true;
+    --num_unpruned_actions;
+    if (is_pruned() && (parent != nullptr))
+        parent->prune(chosen_char.first);
+}
+
+bool BaseNode::is_pruned() { return num_unpruned_actions == 0; }
 
 bool TreeNode::is_leaf() { return priors.size() == 0; }
 
