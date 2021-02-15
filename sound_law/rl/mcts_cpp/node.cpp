@@ -49,22 +49,30 @@ ChosenChar BaseNode::get_best_subaction(float puct_c, int game_count, float virt
     return ret;
 }
 
+inline float randf(float high)
+{
+    return high * static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+}
+
 vec<float> BaseNode::get_scores(float puct_c, float heur_c)
 {
     float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
     auto scores = vec<float>(priors.size());
     for (size_t i = 0; i < priors.size(); ++i)
-        if (pruned[i])
-            scores[i] = -9999.9;
-        else
-        {
-            float nsa = static_cast<float>(action_counts[i]);
-            float q = total_values[i] / (nsa + 1e-8);
-            float p = priors[i];
-            float u = puct_c * p * sqrt_ns / (1 + nsa);
-            float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
-            scores[i] = q + u + h;
-        }
+    {
+        float nsa = static_cast<float>(action_counts[i]);
+        float q = total_values[i] / (nsa + 1e-8);
+        float mv = max_values[i];
+        float p = priors[i];
+        float u = puct_c * p * sqrt_ns / (1 + nsa);
+        float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
+        // float h = (mv > -99.9) ? heur_c * mv : 0.0;
+        // scores[i] = q + u + h;
+        // scores[i] = q + u + randf(0.001);
+        // scores[i] = pruned[i] ? -9999.9 : (q + u);
+        scores[i] = pruned[i] ? -9999.9 : (q + u + h + randf(0.01));
+        // scores[i] = q + u; //+ h + randf(0.01);
+    }
     return scores;
 }
 
@@ -91,7 +99,7 @@ bool TreeNode::is_leaf() { return priors.size() == 0; }
 
 TreeNode *TreeNode::play()
 {
-    std::cerr << "============================\n";
+    // std::cerr << "============================\n";
     MiniNode *mini_node = static_cast<MiniNode *>(BaseNode::play());
     for (int i = 0; i < 5; ++i)
         mini_node = static_cast<MiniNode *>(mini_node->play());
@@ -100,18 +108,6 @@ TreeNode *TreeNode::play()
 
 BaseNode *BaseNode::play()
 {
-    auto scores = get_scores(1.0, 1.0);
-    std::cerr << "-------------------------\nPLAY:\n";
-    for (size_t i = 0; i < permissible_chars.size(); ++i)
-    {
-        std::cerr << permissible_chars[i] << ":";
-        std::cerr << total_values[i] << "/" << action_counts[i] << "=";
-        std::cerr << total_values[i] / (1e-8 + action_counts[i]) << ":";
-        std::cerr << max_values[i] << " ";
-    }
-    std::cerr << "\n";
-    std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
-
     // int index = 0;
     // for (size_t i = 1; i < permissible_chars.size(); ++i)
     //     if (action_counts[i] > action_counts[index])
@@ -119,10 +115,62 @@ BaseNode *BaseNode::play()
     // assert(!played);
     // played = true;
     // return children[index];
-    assert(max_index != -1);
+
+    // assert(max_index != -1);
+    // assert(!played);
+    // played = true;
+    // return children[max_index];
+
+    auto probs = vec<float>();
+    probs.reserve(action_counts.size());
+    float sum = 0.0;
+    for (const auto mv : max_values)
+    {
+        probs.push_back((mv > -99.9) ? exp(mv * 50.0) : 0.0);
+        sum += probs.back();
+    }
+
+    // for (const auto ac : action_counts)
+    // {
+    //     probs.push_back(pow(static_cast<float>(ac), 1.0));
+    //     sum += probs.back();
+    // }
+    for (auto &prob : probs)
+        prob /= sum;
+
+    auto scores = get_scores(1.0, 1.0);
+    std::cerr << "-------------------------\nPLAY:\n";
+    for (size_t i = 0; i < permissible_chars.size(); ++i)
+    {
+        std::cerr << permissible_chars[i] << ":";
+        std::cerr << total_values[i] << "/" << action_counts[i] << "=";
+        std::cerr << total_values[i] / (1e-8 + action_counts[i]) << ":";
+        // std::cerr << max_values[i] << " ";
+        std::cerr << max_values[i] << ":";
+        std::cerr << ((children[i] == nullptr) ? -1 : children[i]->num_unpruned_actions) << ":";
+        std::cerr << probs[i] << " ";
+    }
+    std::cerr << "\n";
+    std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
+
+    float r = randf(1.0);
+    float low = 0.0;
+    float high = 0.0;
+    size_t index = 0;
+    for (size_t i = 0; i < probs.size(); ++i)
+    {
+        high += probs[i];
+        if ((r >= low) && (r < high))
+        {
+            index = i;
+            break;
+        }
+        low = high;
+    }
     assert(!played);
+    assert(children[index] != nullptr);
     played = true;
-    return children[max_index];
+    return children[index];
 }
 
 void BaseNode::backup(float value, int game_count, float virtual_loss)
