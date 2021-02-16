@@ -67,6 +67,10 @@ cdef class PyTreeNode:
         return self.ptr.get_num_actions()
 
     @property
+    def num_descendants(self) -> int:
+        return self.ptr.get_num_descendants()
+
+    @property
     def dist(self) -> float:
         return self.ptr.dist
 
@@ -255,6 +259,9 @@ cdef class PyEnv:
         cdef TreeNode *new_node = self.ptr.apply_action(py_node.ptr, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, st)
         tnode_cls = type(self).tnode_cls
         return wrap_node(tnode_cls, new_node)
+
+    def evict(self, size_t until_size):
+        self.ptr.evict(until_size)
 
     def register_permissible_change(self, abc_t unit1, abc_t unit2):
         self.ptr.register_permissible_change(unit1, unit2)

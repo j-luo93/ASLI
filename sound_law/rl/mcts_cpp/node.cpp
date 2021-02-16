@@ -65,8 +65,8 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
         float mv = max_values[i];
         float p = priors[i];
         float u = puct_c * p * sqrt_ns / (1 + nsa);
-        // float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
-        float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
+        float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
+        // float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
         // float h = (mv > -99.9) ? heur_c * mv / (1 + nsa) : 0.0;
         // scores[i] = q + u + h;
         // scores[i] = q + u + randf(0.001);
@@ -138,7 +138,7 @@ BaseNode *BaseNode::play()
     //         if (pruned[i])
     //             probs.push_back(1e-8);
     //         else
-    //             probs.push_back(exp(mv * 100.0));
+    //             probs.push_back(exp(mv * 50.0));
     //     else
     //         probs.push_back(0.0);
     //     // probs.push_back((mv > -99.9) ? exp(mv * 50.0) : 0.0);
@@ -249,3 +249,12 @@ bool TransitionNode::is_transitional() { return true; }
 bool TreeNode::is_transitional() { return false; }
 bool MiniNode::is_tree_node() { return false; }
 bool TreeNode::is_tree_node() { return true; }
+
+size_t BaseNode::get_num_descendants()
+{
+    size_t ret = 1;
+    for (const auto child : children)
+        if (child != nullptr)
+            ret += child->get_num_descendants();
+    return ret;
+}

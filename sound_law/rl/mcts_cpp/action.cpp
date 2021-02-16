@@ -641,15 +641,22 @@ void ActionSpace::clear_priors(BaseNode *node, bool recursive)
                 clear_priors(child, true);
 }
 
-void ActionSpace::prune(BaseNode *node)
+void ActionSpace::prune(BaseNode *node, bool include_self)
 {
     for (const auto child : node->children)
         if (child != nullptr)
         {
-            prune(child);
+            prune(child, false);
             delete child;
         }
-    std::fill(node->children.begin(), node->children.end(), nullptr);
+    if (include_self)
+    {
+        if (node->parent != nullptr)
+            node->parent->children[node->chosen_char.first] = nullptr;
+        delete node;
+    }
+    else
+        std::fill(node->children.begin(), node->children.end(), nullptr);
 }
 
 void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors)

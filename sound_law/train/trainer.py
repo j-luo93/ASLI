@@ -391,6 +391,7 @@ class MctsTrainer(RLTrainer):
 
         self.mcts = mcts
         self.replay_buffer: Deque[TrEdge] = deque(maxlen=g.replay_buffer_size)
+        self.buffer_weight: Deque[float] = deque(maxlen=g.replay_buffer_size)
         super().__init__(*args, **kwargs)
 
     def add_trackables(self):
@@ -417,14 +418,19 @@ class MctsTrainer(RLTrainer):
             # for rtg, tr_edge in zip(rtgs, replay_tr):
             #     tr_edge.rtg = rtg
             #     self.replay_buffer.append(tr_edge)
+            weight = math.exp(tr.total_reward * 10.0)
             for tr_edge in tr:
                 self.replay_buffer.append(tr_edge)
+                self.buffer_weight.append(weight)
 
+        weights = np.asarray(self.buffer_weight)
+        weights = weights / weights.sum()
         # Main loop.
         with self.agent.policy_grad(True), self.agent.value_grad(True):
             for _ in range(g.num_inner_steps):
                 # Get a batch of training trajectories from the replay buffer.
-                edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
+                edge_batch = np.random.choice(self.replay_buffer, p=weights, size=g.mcts_batch_size)
+                # edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
                 agent_inputs = AgentInputs.from_edges(edge_batch)  # , self.mcts.env)#, sparse=True)
                 # tgt_policies = list()
                 # na = agent_inputs.action_masks.size('action')

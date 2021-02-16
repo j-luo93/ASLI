@@ -70,6 +70,7 @@ public:
     size_t get_num_actions();
     void prune();
     bool is_pruned();
+    size_t get_num_descendants();
 
     virtual bool is_transitional() = 0;
     virtual bool is_tree_node() = 0;

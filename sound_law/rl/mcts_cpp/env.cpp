@@ -22,6 +22,9 @@ Env::Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt
     // Set up the action space properly.
     action_space = new ActionSpace(word_space, as_opt);
     action_space->expand(start);
+
+    // Set up lru cache.
+    cache = LruCache();
 }
 
 TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
@@ -46,5 +49,17 @@ TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
         }
         last->rewards[last_child_index] = reward;
     }
+    for (const auto node : subpath.mini_node_seq)
+        cache.put(node);
+    cache.put(child);
     return static_cast<TreeNode *>(child);
 }
+
+void Env::evict(size_t until_size)
+{
+    while (cache.size() > until_size)
+    {
+        auto base = cache.evict();
+        action_space->prune(base, true);
+    }
+};

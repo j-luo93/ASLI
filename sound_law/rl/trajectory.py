@@ -158,9 +158,13 @@ class Trajectory:
         assert len(self.rewards) == len(self.id_seqs) - 1
         assert len(self.actions) == len(self.permissible_actions) == len(
             self.mcts_pis) == len(self.qs) == 7 * self._num_edges
+        self.total_reward = self.rewards.sum()
 
     def __len__(self):
         return self._num_edges
+
+    def __repr__(self):
+        return f'Total reward: {self.total_reward:.3f}\t' + ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in self)
 
     def __iter__(self) -> Iterator[TrEdge]:
         for i in range(self._num_edges):

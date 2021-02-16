@@ -10,6 +10,7 @@ cdef extern from "mcts_cpp/action.cpp": pass
 cdef extern from "mcts_cpp/env.cpp": pass
 cdef extern from "mcts_cpp/node.cpp": pass
 cdef extern from "mcts_cpp/mcts.cpp": pass
+cdef extern from "mcts_cpp/lru_cache.cpp": pass
 
 cdef extern from "mcts_cpp/ctpl.h": pass
 
@@ -100,6 +101,7 @@ cdef extern from "mcts_cpp/env.hpp":
         TreeNode *start
         TreeNode *end
 
+        void evict(size_t)
         void register_permissible_change(abc_t, abc_t)
         void evaluate(TreeNode *, vector[vector[float]], vector[float])
         void register_cl_map(abc_t, abc_t)
@@ -155,6 +157,7 @@ cdef extern from "mcts_cpp/node.hpp":
         IdSeq get_id_seq(int)
         size_t size()
         size_t get_num_actions()
+        size_t get_num_descendants()
 
 ctypedef TreeNode * TNptr
 ctypedef BaseNode * BNptr

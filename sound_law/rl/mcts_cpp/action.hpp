@@ -73,7 +73,7 @@ class ActionSpace
     void expand_stats(BaseNode *);
     void clear_stats(BaseNode *, bool);
     void clear_priors(BaseNode *, bool);
-    void prune(BaseNode *);
+    void prune(BaseNode *, bool);
     void add_noise(TreeNode *, const vec<vec<float>> &, const vec<float> &, float);
 
 public:

@@ -44,6 +44,9 @@ using tuple = std::tuple<TupleArgs...>;
 template <class T, size_t S>
 using array = std::array<T, S>;
 
+template <class T>
+using list = std::list<T>;
+
 using IdSeq = vec<abc_t>;
 using VocabIdSeq = vec<IdSeq>;
 

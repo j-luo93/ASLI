@@ -66,6 +66,10 @@ class Mcts(PyMcts):
         self.env.clear_priors(self.env.start, True)
         self.env.clear_stats(self.env.start, True)
         logging.info(f'#words: {self.env.num_words}')
+        num_desc = self.env.start.num_descendants
+        logging.info(f'#nodes: {num_desc}')
+        if num_desc > 1000000:
+            self.env.evict(500000)
 
     def evaluate(self, states, steps: Optional[Union[int, LT]] = None) -> List[float]:
         """Expand and evaluate the leaf node."""
@@ -181,6 +185,7 @@ class Mcts(PyMcts):
         trajectories = list()
         self.agent.eval()
         num_episodes = num_episodes or g.num_episodes
+        # self.env.evict(100000)
         with self.agent.policy_grad(False), self.agent.value_grad(False):
             # self.enable_timer()
             for ei in range(num_episodes):
@@ -234,8 +239,7 @@ class Mcts(PyMcts):
                     # self.show_stats()
                 trajectory = Trajectory(root)
                 if ei % g.episode_check_interval == 0:
-                    out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
-                    logging.debug(pad_for_log(out))
+                    logging.debug(pad_for_log(str(trajectory)))
 
                 trajectories.append(trajectory)
                 if tracker is not None:
