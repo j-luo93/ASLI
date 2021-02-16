@@ -56,7 +56,7 @@ class Mcts(PyMcts):
     def __init__(self, *args, agent: BasePG = None, **kwargs):
         self.agent = agent
 
-    def reset(self):
+    def reset(self, evict: bool = True):
         # for s in self._states:
         #     s.reset()
         # logging.debug(f'Total number of states reset: {len(self._states)}.')
@@ -68,7 +68,7 @@ class Mcts(PyMcts):
         logging.info(f'#words: {self.env.num_words}')
         num_desc = self.env.start.num_descendants
         logging.info(f'#nodes: {num_desc}')
-        if num_desc > 1000000:
+        if evict and num_desc > 1000000:
             self.env.evict(500000)
 
     def evaluate(self, states, steps: Optional[Union[int, LT]] = None) -> List[float]:
@@ -168,8 +168,8 @@ class Mcts(PyMcts):
         special_noise = noise[6, :6]
         self.env.add_noise(state, meta_noise, special_noise, g.noise_ratio)
 
-    def collect_episodes(self, init_state: VocabState, end_state: VocabState,
-                         tracker: Optional[Tracker] = None, num_episodes: int = 0) -> List[Trajectory]:
+    def collect_episodes(self, init_state: VocabState,
+                         tracker: Optional[Tracker] = None, num_episodes: int = 0, is_eval: bool = False) -> List[Trajectory]:
         # logging.info(f'{self.num_cached_states} states cached.')
 
         # logging.info(f'{self.env.action_space.cache_size} words cached.')
@@ -190,7 +190,7 @@ class Mcts(PyMcts):
             # self.enable_timer()
             for ei in range(num_episodes):
                 root = init_state
-                self.reset()
+                self.reset(evict=True)
                 steps = 0 if g.use_finite_horizon else None
                 # self.env.action_space.set_action_allowed(root)
                 self.evaluate([root], steps=steps)
@@ -203,7 +203,8 @@ class Mcts(PyMcts):
                     # if ri == 0:
                     #     self.enable_timer()
 
-                    self.add_noise(root)
+                    if not is_eval:
+                        self.add_noise(root)
                     # Run many simulations before take one action. Simulations take place in batches. Each batch
                     # would be evaluated and expanded after batched selection.
                     # print('1')

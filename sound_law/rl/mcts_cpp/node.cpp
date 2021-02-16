@@ -71,7 +71,8 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
         // scores[i] = q + u + h;
         // scores[i] = q + u + randf(0.001);
         // scores[i] = pruned[i] ? -9999.9 : (q + u);
-        scores[i] = pruned[i] ? -9999.9 : (q + u + h + randf(0.01));
+        // scores[i] = pruned[i] ? -9999.9 : (q + u + h + randf(0.01));
+        scores[i] = pruned[i] ? -9999.9 : (q + u + h);
         // scores[i] = q + u; //+ h + randf(0.01);
     }
     return scores;

@@ -404,12 +404,14 @@ class MctsTrainer(RLTrainer):
 
     def train_one_step(self, dl: OnePairDataLoader):
         # Collect episodes with the latest agent first.
-        new_tr = self.mcts.collect_episodes(self.mcts.env.start, self.mcts.env.end, self.tracker)
+        new_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker)
         # new_tr = self.mcts.collect_episodes(dl.init_state, dl.end_state, self.tracker)
         tr_rew = Metric('reward', sum(tr.rewards.sum() for tr in new_tr), g.num_episodes)
         tr_len = Metric('trajectory_length', sum(map(len, new_tr)), g.num_episodes)
         success = Metric('success', sum(tr.done for tr in new_tr), g.num_episodes)
-        metrics = Metrics(tr_rew, tr_len, success)
+
+        eval_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker, num_episodes=1, is_eval=True)[0]
+        metrics = Metrics(tr_rew, tr_len, success, Metric('eval_reward', eval_tr.total_reward, 1))
 
         # Add these new episodes to the replay buffer.
         for tr in new_tr:
@@ -418,7 +420,7 @@ class MctsTrainer(RLTrainer):
             # for rtg, tr_edge in zip(rtgs, replay_tr):
             #     tr_edge.rtg = rtg
             #     self.replay_buffer.append(tr_edge)
-            weight = math.exp(tr.total_reward * 10.0)
+            weight = math.exp(tr.total_reward * 100.0)
             for tr_edge in tr:
                 self.replay_buffer.append(tr_edge)
                 self.buffer_weight.append(weight)
@@ -429,8 +431,8 @@ class MctsTrainer(RLTrainer):
         with self.agent.policy_grad(True), self.agent.value_grad(True):
             for _ in range(g.num_inner_steps):
                 # Get a batch of training trajectories from the replay buffer.
-                edge_batch = np.random.choice(self.replay_buffer, p=weights, size=g.mcts_batch_size)
-                # edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
+                # edge_batch = np.random.choice(self.replay_buffer, p=weights, size=g.mcts_batch_size)
+                edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
                 agent_inputs = AgentInputs.from_edges(edge_batch)  # , self.mcts.env)#, sparse=True)
                 # tgt_policies = list()
                 # na = agent_inputs.action_masks.size('action')
@@ -463,8 +465,8 @@ class MctsTrainer(RLTrainer):
                 # v_regress_losses = 0.5 * (values - agent_inputs.qs) ** 2
 
                 # pi_ce_loss = Metric('pi_ce_loss', (weights * pi_ce_losses).sum(), g.mcts_batch_size * 7)
-                # weights = get_tensor([1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]).rename('mini').align_as(pi_ce_losses)
-                # pi_ce_loss = Metric('pi_ce_loss', (weights * pi_ce_losses).sum(), g.mcts_batch_size * 7)
+                # mini_weights = get_tensor([1.0, 0.1, 1.0, 0.1, 0.1, 0.1, 0.1]).rename('mini').align_as(pi_ce_losses)
+                # pi_ce_loss = Metric('pi_ce_loss', (mini_weights * pi_ce_losses).sum(), g.mcts_batch_size * 7)
                 pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), g.mcts_batch_size * 7)
                 # pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses[:, 0].sum(), g.mcts_batch_size)
                 # v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), g.mcts_batch_size)

@@ -147,8 +147,8 @@ class StateEncoder(nn.Module):
             bs, ws, es, l = emb.shape
             # NOTE(j_luo) embedding size might not match hidden size.
             emb_3d = emb.rename(None).reshape(bs * ws, es, -1)
-            ret = self.cnn(emb_3d).view(bs, ws, g.hidden_size, -1).max(dim=-1)[0]
-            return ret.rename('batch', 'word', 'emb')
+            ret = self.cnn(emb_3d).max(dim=-1)[0]
+            return ret.view(bs, ws, -1).rename('batch', 'word', 'emb')
         else:
             emb = emb.align_to('word', 'emb', 'pos')
             ret = self.cnn(emb.rename(None)).max(dim=-1)[0]
