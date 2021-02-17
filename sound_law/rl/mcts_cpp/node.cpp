@@ -65,8 +65,8 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
         float mv = max_values[i];
         float p = priors[i];
         float u = puct_c * p * sqrt_ns / (1 + nsa);
-        float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
-        // float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
+        // float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
+        float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
         // float h = (mv > -99.9) ? heur_c * mv / (1 + nsa) : 0.0;
         // scores[i] = q + u + h;
         // scores[i] = q + u + randf(0.001);
@@ -123,6 +123,16 @@ BaseNode *BaseNode::play()
     // assert(!played);
     // played = true;
     // return children[index];
+
+    // std::cerr << "-------------------------\nPLAY:\n";
+    // for (size_t i = 0; i < permissible_chars.size(); ++i)
+    // {
+    //     std::cerr << permissible_chars[i] << ":";
+    //     std::cerr << action_counts[i] << ":";
+    //     std::cerr << (pruned[i] ? "p" : "u") << " ";
+    // }
+    // std::cerr << "\n";
+    // std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
 
     assert(max_index != -1);
     assert(!played);

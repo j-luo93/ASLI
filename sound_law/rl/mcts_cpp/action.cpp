@@ -30,7 +30,7 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
         }
         new_node = new TreeNode(new_words, node->depth + 1, last, subpath.chosen_seq[6], false);
         expand(new_node);
-        if ((last->affected[last_child_index].size() < opt.site_threshold) || ((node->dist - new_node->dist) < opt.dist_threshold))
+        if ((node->dist - new_node->dist) < opt.dist_threshold)
             new_node->prune();
     }
     return new_node;
@@ -291,6 +291,11 @@ void ActionSpace::expand(TreeNode *node)
     expand_stats(node);
     SPDLOG_DEBUG("ActionSpace:: node expanded with #actions {}.", node->permissible_chars.size());
 
+    // Skip STOP.
+    for (size_t i = 1; i < node->permissible_chars.size(); ++i)
+        if (node->affected[i].size() < opt.site_threshold)
+            node->prune(i);
+
     // std::cerr << "-----------------\n";
     // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
     // {
@@ -491,6 +496,7 @@ void ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
         SPDLOG_TRACE("Phase {}, keeping only Null action due to stopped status.", str::from(node->ap));
     }
     else
+    {
         switch (node->ap)
         {
         case ActionPhase::BEFORE:
@@ -518,9 +524,14 @@ void ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
             expand_post(node, use_vowel_seq, true);
             break;
         }
+    }
 
     expand_stats(node);
     SPDLOG_DEBUG("ActionSpace:: mini node expanded with #actions {}.", node->permissible_chars.size());
+
+    for (size_t i = 0; i < node->permissible_chars.size(); ++i)
+        if (node->affected[i].size() < opt.site_threshold)
+            node->prune(i);
 
     // std::cerr << "-----------------\n";
     // std::cerr << str::from(node->ap) << " " << node->permissible_chars.size() << "\n";
