@@ -114,3 +114,49 @@ enum class SpecialType : abc_t // Treat it as a special char to compatibility wi
     GBJ,
     GBW
 };
+
+template <class K, class V>
+class Trie;
+
+template <class K, class V>
+class TrieNode
+{
+    friend class Trie<K, V>;
+    paramap<K, TrieNode<K, V> *> children;
+    V value;
+};
+
+template <class K, class V>
+class Trie
+{
+    TrieNode<K, V> *root;
+    // Get the value associated with a key. If the key already exists, return true and modify the argument `value` by reference.
+    // If it doesn't exist, return false and insert the argument `value` into the trie.
+public:
+    Trie() : root(new TrieNode<K, V>()){};
+
+    bool get(const vec<K> &key, V &new_value)
+    {
+        TrieNode<K, V> *node = root;
+        bool inserted = false;
+        for (const K k : key)
+            if (!node->children.if_contains(k, [&node](TrieNode<K, V> *const &value) { node = value; }))
+            {
+                auto new_node = new TrieNode<K, V>();
+                node->children.try_emplace_l(
+                    k, [&new_node](TrieNode<K, V> *&value) {delete new_node; new_node = value; }, new_node);
+                node = new_node;
+                inserted = true;
+            }
+        if (inserted)
+        {
+            node->value = new_value;
+            return false;
+        }
+        else
+        {
+            new_value = node->value;
+            return true;
+        }
+    };
+};

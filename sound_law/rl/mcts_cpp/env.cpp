@@ -16,8 +16,10 @@ Env::Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt
     for (int order = 0; order < n; ++order)
         word_space->set_edit_dist_at(start_words[order], order);
 
-    start = new TreeNode(start_words, 0);
-    end = new TreeNode(word_space->end_words, node::END_DEPTH);
+    // start = new TreeNode(start_words, 0);
+    // end = new TreeNode(word_space->end_words, node::END_DEPTH);
+    start = TreeNode::get_tree_node(start_words, 0);
+    end = TreeNode::get_tree_node(word_space->end_words, node::END_DEPTH);
 
     // Set up the action space properly.
     action_space = new ActionSpace(word_space, as_opt);

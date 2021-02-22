@@ -127,12 +127,17 @@ class TreeNode : public BaseNode
     friend class Env;
     friend class ActionSpace;
 
+    static Trie<Word *, TreeNode *> t_table;
+    static TreeNode *get_tree_node(const vec<Word *> &, int);
+    static TreeNode *get_tree_node(const vec<Word *> &, int, BaseNode *const, const ChosenChar &, bool);
+
     vec<vec<float>> meta_priors;
     vec<float> special_priors;
 
     void common_init(const vec<Word *> &);
     TreeNode(const vec<Word *> &, int);
     TreeNode(const vec<Word *> &, int, BaseNode *const, const ChosenChar &, bool);
+
     TreeNode *play() override;
 
 public:

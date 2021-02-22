@@ -233,3 +233,23 @@ size_t BaseNode::get_num_descendants()
             ret += child->get_num_descendants();
     return ret;
 }
+
+Trie<Word *, TreeNode *> TreeNode::t_table = Trie<Word *, TreeNode *>();
+
+TreeNode *TreeNode::get_tree_node(const vec<Word *> &words, int depth)
+{
+    auto new_node = new TreeNode(words, depth);
+    auto ret = new_node;
+    if (TreeNode::t_table.get(words, ret))
+        delete new_node;
+    return ret;
+}
+
+TreeNode *TreeNode::get_tree_node(const vec<Word *> &words, int depth, BaseNode *const parent, const ChosenChar &chosen_char, bool stopped)
+{
+    auto new_node = new TreeNode(words, depth, parent, chosen_char, stopped);
+    auto ret = new_node;
+    if (TreeNode::t_table.get(words, ret))
+        delete new_node;
+    return ret;
+}

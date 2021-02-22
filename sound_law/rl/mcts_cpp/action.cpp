@@ -24,7 +24,9 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
     SpecialType st = static_cast<SpecialType>(subpath.chosen_seq[1].second);
     TreeNode *new_node;
     if (subpath.stopped)
+        // A new node should always be created for STOP.
         new_node = new TreeNode(node->words, node->depth + 1, last, subpath.chosen_seq[6], true);
+    // new_node = TreeNode::get_tree_node(node->words, node->depth + 1, last, subpath.chosen_seq[6], true);
     else
     {
         auto new_words = vec<Word *>(node->words);
@@ -41,7 +43,8 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
             new_words[order] = new_word;
             word_space->set_edit_dist_at(new_word, order);
         }
-        new_node = new TreeNode(new_words, node->depth + 1, last, subpath.chosen_seq[6], false);
+        // new_node = new TreeNode(new_words, node->depth + 1, last, subpath.chosen_seq[6], false);
+        new_node = TreeNode::get_tree_node(new_words, node->depth + 1, last, subpath.chosen_seq[6], false);
         expand(new_node);
         if ((node->dist - new_node->dist) < opt.dist_threshold)
             new_node->prune();
