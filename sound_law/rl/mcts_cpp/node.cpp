@@ -1,6 +1,8 @@
 #include "node.hpp"
 
-BaseNode::BaseNode(BaseNode *const parent, const ChosenChar &chosen_char, bool stopped) : parent(parent), chosen_char(chosen_char), stopped(stopped) {}
+// void BaseNode::connect(BaseNode *const parent, const ChosenChar &chosen_char) { parent->children[chosen_char.first] = this; }
+
+BaseNode::BaseNode(BaseNode *const parent, const ChosenChar &chosen_char, bool stopped) : stopped(stopped) {} // { connect(parent, chosen_char); }
 
 MiniNode::MiniNode(TreeNode *base, BaseNode *const parent, const ChosenChar &chosen_char, ActionPhase ap, bool stopped) : base(base), ap(ap), BaseNode(parent, chosen_char, stopped) {}
 
@@ -83,8 +85,9 @@ void BaseNode::prune()
     // std::cerr << "complete: " << num_unpruned_actions << "\n";
     num_unpruned_actions = 0;
     std::fill(pruned.begin(), pruned.end(), true);
-    if (parent != nullptr)
-        parent->prune(chosen_char.first);
+    // FIXME(j_luo) pruning
+    // if (parent != nullptr)
+    //     parent->prune(chosen_char.first);
 }
 
 void BaseNode::prune(int index)
@@ -97,8 +100,9 @@ void BaseNode::prune(int index)
         --num_unpruned_actions;
         // std::cerr << "new: " << num_unpruned_actions << "\n";
     }
-    if (is_pruned() && (parent != nullptr))
-        parent->prune(chosen_char.first);
+    // FIXME(j_luo) pruning
+    // if (is_pruned() && (parent != nullptr))
+    //     parent->prune(chosen_char.first);
 }
 
 bool BaseNode::is_pruned() { return num_unpruned_actions == 0; }
@@ -203,46 +207,6 @@ BaseNode *BaseNode::play()
     // // assert(children[index]->num_unpruned_actions > 0);
     // played = true;
     // return children[index];
-}
-
-void BaseNode::backup(float value, int game_count, float virtual_loss)
-{
-    BaseNode *parent = this->parent;
-    BaseNode *node = this;
-    float rtg = 0.0;
-    assert(parent != nullptr);
-    while ((parent != nullptr) and (!parent->played))
-    {
-        auto &chosen = node->chosen_char;
-        int index = chosen.first;
-        abc_t best_char = chosen.second;
-        // auto tparent = dynamic_cast<TransitionNode *>(parent);
-        // if (tparent != nullptr)
-        //     rtg += tparent->rewards[index];
-        if (parent->is_transitional())
-            rtg += static_cast<TransitionNode *>(parent)->rewards[index];
-        parent->action_counts[index] -= game_count - 1;
-        if (parent->action_counts[index] < 1)
-        {
-            std::cerr << index << '\n';
-            std::cerr << best_char << '\n';
-            std::cerr << parent->action_counts[index] << '\n';
-            assert(false);
-        }
-        // Update max value of the parent.
-        float new_value = value + rtg;
-        if (new_value > parent->max_value)
-        {
-            parent->max_value = new_value;
-            parent->max_index = index;
-        }
-        if (new_value > parent->max_values[index])
-            parent->max_values[index] = new_value;
-        parent->total_values[index] += game_count * virtual_loss + new_value;
-        parent->visit_count -= game_count - 1;
-        node = parent;
-        parent = node->parent;
-    }
 }
 
 IdSeq TreeNode::get_id_seq(int order) { return words[order]->id_seq; }

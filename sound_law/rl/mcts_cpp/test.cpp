@@ -206,7 +206,10 @@ int main(int argc, char *argv[])
         show_size(root->permissible_chars, "#actions");
         for (int j = 0; j < num_sims / batch_size; j++)
         {
-            auto selected = mcts->select(root, batch_size, num_steps);
+            auto paths = mcts->select(root, batch_size, num_steps);
+            auto selected = vec<TreeNode *>();
+            for (const auto &path : paths)
+                selected.push_back(path.tree_nodes.back());
             auto unique_nodes = vec<TreeNode *>();
             unique_nodes = find_unique(selected,
                                        [](TreeNode *node) {
@@ -219,7 +222,7 @@ int main(int argc, char *argv[])
                                   uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
                               uniform(6));
             SPDLOG_DEBUG("Backing up values.");
-            mcts->backup(selected, vec<float>(selected.size(), 0.0));
+            mcts->backup(paths, vec<float>(paths.size(), 0.0));
         }
         // auto scores = root->get_scores(puct_c);
         // for (size_t i = 0; i < root->permissible_chars.size(); ++i)

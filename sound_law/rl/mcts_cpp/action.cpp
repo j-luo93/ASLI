@@ -1,5 +1,18 @@
 #include "action.hpp"
 
+void Subpath::connect(TreeNode *node) const
+{
+    BaseNode *parent = node;
+    for (size_t i = 0; i < 6; ++i)
+    {
+        auto child = mini_node_seq[i];
+        auto index = chosen_seq[i].first;
+        if (parent->children[index] == nullptr)
+            parent->children[index] = child;
+        parent = child;
+    }
+}
+
 ActionSpace::ActionSpace(WordSpace *word_space, const ActionSpaceOpt &as_opt) : word_space(word_space), opt(as_opt) {}
 
 TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
@@ -59,18 +72,25 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
                                     abc_t d_post_id,
                                     SpecialType st)
 {
+    Subpath subpath = Subpath();
+
     // std::cerr << "before\n";
     auto before = ChosenChar({get_index(before_id, node->permissible_chars), before_id});
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
-    expand(before_mn, false, false);
+    subpath.chosen_seq[0] = before;
+    subpath.mini_node_seq[0] = before_mn;
+    subpath.stopped = stopped;
+    expand(before_mn, subpath, false, false);
     dummy_evaluate(before_mn->priors, before_mn->permissible_chars.size());
 
     // std::cerr << "special_type\n";
     abc_t st_abc = static_cast<abc_t>(st);
     auto special_type = ChosenChar({get_index(st_abc, before_mn->permissible_chars), st_abc});
     auto st_mn = get_mini_node(node, before_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
-    expand(st_mn, false, true);
+    subpath.chosen_seq[1] = special_type;
+    subpath.mini_node_seq[1] = st_mn;
+    expand(st_mn, subpath, false, true);
     dummy_evaluate(st_mn->priors, st_mn->permissible_chars.size());
 
     // std::cerr << "after\n";
@@ -81,34 +101,38 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
     auto after = ChosenChar({get_index(after_id, st_mn->permissible_chars), after_id});
     auto after_mn = get_mini_node(node, st_mn, after, ActionPhase::AFTER, stopped);
     bool use_vowel_seq = (st == SpecialType::VS);
-    expand(after_mn, use_vowel_seq, false);
+    subpath.chosen_seq[2] = after;
+    subpath.mini_node_seq[2] = after_mn;
+    expand(after_mn, subpath, use_vowel_seq, false);
     dummy_evaluate(after_mn->priors, after_mn->permissible_chars.size());
 
     // std::cerr << "pre\n";
     auto pre = ChosenChar({get_index(pre_id, after_mn->permissible_chars), pre_id});
     auto pre_mn = get_mini_node(node, after_mn, pre, ActionPhase::PRE, stopped);
-    expand(pre_mn, use_vowel_seq, false);
+    subpath.chosen_seq[3] = pre;
+    subpath.mini_node_seq[3] = pre_mn;
+    expand(pre_mn, subpath, use_vowel_seq, false);
     dummy_evaluate(pre_mn->priors, pre_mn->permissible_chars.size());
 
     auto d_pre = ChosenChar({get_index(d_pre_id, pre_mn->permissible_chars), d_pre_id});
     // std::cerr << "d_pre\n";
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
-    expand(d_pre_mn, use_vowel_seq, false);
+    subpath.chosen_seq[4] = d_pre;
+    subpath.mini_node_seq[4] = d_pre_mn;
+    expand(d_pre_mn, subpath, use_vowel_seq, false);
     dummy_evaluate(d_pre_mn->priors, d_pre_mn->permissible_chars.size());
 
     // std::cerr << "post\n";
     auto post = ChosenChar({get_index(post_id, d_pre_mn->permissible_chars), post_id});
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
-    expand(post_mn, use_vowel_seq, false);
+    subpath.chosen_seq[5] = post;
+    subpath.mini_node_seq[5] = post_mn;
+    expand(post_mn, subpath, use_vowel_seq, false);
     dummy_evaluate(post_mn->priors, post_mn->permissible_chars.size());
 
     // std::cerr << "d_post\n";
     auto d_post = ChosenChar({get_index(d_post_id, post_mn->permissible_chars), d_post_id});
-
-    Subpath subpath;
-    subpath.chosen_seq = {before, special_type, after, pre, d_pre, post, d_post};
-    subpath.mini_node_seq = {before_mn, st_mn, after_mn, pre_mn, d_pre_mn, post_mn};
-    subpath.stopped = stopped;
+    subpath.chosen_seq[6] = d_post;
 
     // FIXME(j_luo) This shouldn't create a new node.
     return apply_new_action(node, subpath);
@@ -189,59 +213,72 @@ void ActionSpace::register_gbw_map(abc_t before, abc_t after) { gbw_map[before] 
 
 Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss, float heur_c)
 {
+    Subpath subpath = Subpath();
+
     // std::cerr << "before\n";
     SPDLOG_DEBUG("ActionSpace:: getting best subpath...");
     auto before = node->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
-    expand(before_mn, false, false);
+    subpath.chosen_seq[0] = before;
+    subpath.mini_node_seq[0] = before_mn;
+    subpath.stopped = stopped;
+    expand(before_mn, subpath, false, false);
     evaluate(before_mn);
     SPDLOG_DEBUG("ActionSpace:: before done.");
 
     // std::cerr << "special_type\n";
     auto special_type = before_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     auto st_mn = get_mini_node(node, before_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
-    expand(st_mn, false, false);
+    subpath.chosen_seq[1] = special_type;
+    subpath.mini_node_seq[1] = st_mn;
+    expand(st_mn, subpath, false, false);
     evaluate(st_mn);
     SPDLOG_DEBUG("ActionSpace:: special_type done.");
 
     // std::cerr << "after\n";
     auto after = st_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
-    bool use_vowel_seq = (static_cast<SpecialType>(st_mn->chosen_char.second) == SpecialType::VS);
+    bool use_vowel_seq = (static_cast<SpecialType>(special_type.second) == SpecialType::VS);
     auto after_mn = get_mini_node(node, st_mn, after, ActionPhase::AFTER, stopped);
-    expand(after_mn, use_vowel_seq, false);
+    subpath.chosen_seq[2] = after;
+    subpath.mini_node_seq[2] = after_mn;
+    expand(after_mn, subpath, use_vowel_seq, false);
     evaluate(after_mn);
     SPDLOG_DEBUG("ActionSpace:: after done.");
 
     // std::cerr << "pre\n";
     auto pre = after_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     auto pre_mn = get_mini_node(node, after_mn, pre, ActionPhase::PRE, stopped);
-    expand(pre_mn, use_vowel_seq, false);
+    subpath.chosen_seq[3] = pre;
+    subpath.mini_node_seq[3] = pre_mn;
+    expand(pre_mn, subpath, use_vowel_seq, false);
     evaluate(pre_mn);
     SPDLOG_DEBUG("ActionSpace:: pre done.");
 
     // std::cerr << "d_pre\n";
     auto d_pre = pre_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
-    expand(d_pre_mn, use_vowel_seq, false);
+    subpath.chosen_seq[4] = d_pre;
+    subpath.mini_node_seq[4] = d_pre_mn;
+    expand(d_pre_mn, subpath, use_vowel_seq, false);
     evaluate(d_pre_mn);
     SPDLOG_DEBUG("ActionSpace:: d_pre done.");
 
     // std::cerr << "post\n";
     auto post = d_pre_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
-    expand(post_mn, use_vowel_seq, false);
+    subpath.chosen_seq[5] = post;
+    subpath.mini_node_seq[5] = post_mn;
+    expand(post_mn, subpath, use_vowel_seq, false);
     evaluate(post_mn);
     SPDLOG_DEBUG("ActionSpace:: post done.");
 
     // std::cerr << "d_post\n";
     auto d_post = post_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c);
+    subpath.chosen_seq[6] = d_post;
     SPDLOG_DEBUG("ActionSpace:: d_post done.");
 
-    Subpath subpath;
-    subpath.chosen_seq = {before, special_type, after, pre, d_pre, post, d_post};
-    subpath.mini_node_seq = {before_mn, st_mn, after_mn, pre_mn, d_pre_mn, post_mn};
-    subpath.stopped = stopped;
+    subpath.connect(node);
     return subpath;
 }
 
@@ -309,12 +346,12 @@ void ActionSpace::expand(TreeNode *node)
     // }
 }
 
-void ActionSpace::expand_special_type(MiniNode *node, bool force_apply)
+void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chosen_index, abc_t before, bool force_apply)
 {
-    auto st = static_cast<SpecialType>(node->chosen_char.second);
+    auto st = static_cast<SpecialType>(parent->permissible_chars[chosen_index]);
     if ((st == SpecialType::CLL) || (st == SpecialType::CLR))
     {
-        const auto &aff = node->parent->affected[node->chosen_char.first];
+        const auto &aff = parent->affected[chosen_index];
         auto offset = (st == SpecialType::CLL) ? -1 : 1;
         auto char_map = map<abc_t, size_t>();
         for (const auto &item : aff)
@@ -344,7 +381,6 @@ void ActionSpace::expand_special_type(MiniNode *node, bool force_apply)
     else
     {
         // Must use `unit2base` since stress is included for before.
-        abc_t before = word_space->opt.unit2base[node->parent->chosen_char.second];
         if (st == SpecialType::GBJ)
             node->permissible_chars.push_back(gbj_map[before]);
         else if (st == SpecialType::GBW)
@@ -358,16 +394,16 @@ void ActionSpace::expand_special_type(MiniNode *node, bool force_apply)
         // FIXME(j_luo) This is not very efficient.
         // std::cerr << "node\n";
         // std::cerr << node->parent->chosen_char.second << "\n";
-        node->affected = vec<Affected>(node->permissible_chars.size(), node->parent->affected[node->chosen_char.first]);
+        node->affected = vec<Affected>(node->permissible_chars.size(), parent->affected[chosen_index]);
     }
 }
-void ActionSpace::expand_before(MiniNode *node)
+void ActionSpace::expand_before(MiniNode *node, BaseNode *parent, int chosen_index)
 {
-    auto unit = node->chosen_char.second;
+    auto unit = parent->permissible_chars[chosen_index];
     node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::NONE));
     if (word_space->opt.is_vowel[unit])
         node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::VS));
-    node->affected = vec<Affected>(node->permissible_chars.size(), node->parent->affected[node->chosen_char.first]);
+    node->affected = vec<Affected>(node->permissible_chars.size(), parent->affected[chosen_index]);
 
     // CLL and CLR
     // std::cerr << "cllr\n";
@@ -417,13 +453,13 @@ void ActionSpace::expand_before(MiniNode *node)
         node->affected.push_back(node->affected[0]);
     }
 }
-void ActionSpace::expand_normal(MiniNode *node, int offset, bool use_vowel_seq, bool can_have_null, bool can_have_any)
+void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_index, int offset, bool use_vowel_seq, bool can_have_null, bool can_have_any)
 {
     if (can_have_null)
-        expand_null(node);
+        expand_null(node, parent, chosen_index);
 
     auto &words = node->base->words;
-    auto &affected = node->parent->affected[node->chosen_char.first];
+    auto &affected = parent->affected[chosen_index];
     auto char_map = map<abc_t, size_t>();
     for (const auto &aff : affected)
     {
@@ -446,37 +482,37 @@ void ActionSpace::expand_normal(MiniNode *node, int offset, bool use_vowel_seq, 
         }
     }
 }
-bool ActionSpace::expand_null_only(MiniNode *node)
+bool ActionSpace::expand_null_only(MiniNode *node, BaseNode *parent, int chosen_index)
 {
-    abc_t last_unit = node->chosen_char.second;
+    abc_t last_unit = parent->permissible_chars[chosen_index];
     if ((last_unit == opt.null_id) || (last_unit == opt.any_id) || (last_unit == opt.any_s_id) || (last_unit == opt.any_uns_id))
     {
         SPDLOG_TRACE("Phase {}, keeping only Null action.", str::from(node->ap));
-        expand_null(node);
+        expand_null(node, parent, chosen_index);
         return true;
     }
     return false;
 }
-void ActionSpace::expand_after(MiniNode *node, bool use_vowel_seq, bool can_have_null, bool can_have_any) { expand_normal(node, -1, use_vowel_seq, can_have_null, can_have_any); }
-void ActionSpace::expand_pre(MiniNode *node, bool use_vowel_seq, bool can_have_any)
+void ActionSpace::expand_after(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) { expand_normal(node, parent, chosen_index, -1, use_vowel_seq, can_have_null, can_have_any); }
+void ActionSpace::expand_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any)
 {
-    if (!expand_null_only(node))
-        expand_normal(node, -2, use_vowel_seq, true, can_have_any);
+    if (!expand_null_only(node, parent, chosen_index))
+        expand_normal(node, parent, chosen_index, -2, use_vowel_seq, true, can_have_any);
 }
-void ActionSpace::expand_d_pre(MiniNode *node, bool use_vowel_seq, bool can_have_null, bool can_have_any) { expand_normal(node, 1, use_vowel_seq, can_have_null, can_have_any); }
-void ActionSpace::expand_post(MiniNode *node, bool use_vowel_seq, bool can_have_any)
+void ActionSpace::expand_d_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) { expand_normal(node, parent, chosen_index, 1, use_vowel_seq, can_have_null, can_have_any); }
+void ActionSpace::expand_post(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any)
 {
-    if (!expand_null_only(node))
-        expand_normal(node, 2, use_vowel_seq, true, can_have_any);
+    if (!expand_null_only(node, parent, chosen_index))
+        expand_normal(node, parent, chosen_index, 2, use_vowel_seq, true, can_have_any);
 }
-void ActionSpace::expand_null(MiniNode *node)
+void ActionSpace::expand_null(MiniNode *node, BaseNode *parent, int chosen_index)
 {
     node->permissible_chars.push_back(opt.null_id);
     // Affected positions will not be further narrowed down.
-    node->affected = vec<Affected>({node->parent->affected[node->chosen_char.first]});
+    node->affected = vec<Affected>({parent->affected[chosen_index]});
 }
 
-void ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
+void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_seq, bool force_apply)
 {
     std::lock_guard<std::mutex> lock(node->mtx);
 
@@ -486,8 +522,8 @@ void ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
         return;
     }
 
-    SPDLOG_TRACE("ActionSpace:: Expanding {0}, chosen_char: ({1}, {2}), parent #actions {3}",
-                 str::from(node->ap), node->chosen_char.first, node->chosen_char.second, node->parent->permissible_chars.size());
+    // SPDLOG_TRACE("ActionSpace:: Expanding {0}, chosen_char: ({1}, {2}), parent #actions {3}",
+    //              str::from(node->ap), node->chosen_char.first, node->chosen_char.second, node->parent->permissible_chars.size());
 
     if (node->stopped)
     {
@@ -500,28 +536,31 @@ void ActionSpace::expand(MiniNode *node, bool use_vowel_seq, bool force_apply)
         switch (node->ap)
         {
         case ActionPhase::BEFORE:
-            expand_before(node);
+            expand_before(node, node->base, subpath.chosen_seq[0].first);
             break;
         case ActionPhase::SPECIAL_TYPE:
-            expand_special_type(node, force_apply);
+        {
+            abc_t before = word_space->opt.unit2base[subpath.chosen_seq[0].second];
+            expand_special_type(node, subpath.mini_node_seq[0], subpath.chosen_seq[1].first, before, force_apply);
             break;
+        }
         case ActionPhase::AFTER:
         {
-            bool can_have_null = (static_cast<SpecialType>(node->parent->chosen_char.second) != SpecialType::CLL);
-            expand_after(node, use_vowel_seq, can_have_null, can_have_null);
+            bool can_have_null = (static_cast<SpecialType>(subpath.chosen_seq[1].second) != SpecialType::CLL);
+            expand_after(node, subpath.mini_node_seq[1], subpath.chosen_seq[2].first, use_vowel_seq, can_have_null, can_have_null);
             break;
         }
         case ActionPhase::PRE:
-            expand_pre(node, use_vowel_seq, true);
+            expand_pre(node, subpath.mini_node_seq[2], subpath.chosen_seq[3].first, use_vowel_seq, true);
             break;
         case ActionPhase::D_PRE:
         {
-            bool can_have_null = (static_cast<SpecialType>(node->parent->parent->parent->chosen_char.second) != SpecialType::CLR);
-            expand_d_pre(node, use_vowel_seq, can_have_null, can_have_null);
+            bool can_have_null = (static_cast<SpecialType>(subpath.chosen_seq[1].second) != SpecialType::CLR);
+            expand_d_pre(node, subpath.mini_node_seq[3], subpath.chosen_seq[4].first, use_vowel_seq, can_have_null, can_have_null);
             break;
         }
         case ActionPhase::POST:
-            expand_post(node, use_vowel_seq, true);
+            expand_post(node, subpath.mini_node_seq[4], subpath.chosen_seq[5].first, use_vowel_seq, true);
             break;
         }
     }
@@ -662,8 +701,9 @@ void ActionSpace::prune(BaseNode *node, bool include_self)
         }
     if (include_self)
     {
-        if (node->parent != nullptr)
-            node->parent->children[node->chosen_char.first] = nullptr;
+        // FIXME(j_luo) pruning
+        // if (node->parent != nullptr)
+        //     node->parent->children[node->chosen_char.first] = nullptr;
         delete node;
     }
     else

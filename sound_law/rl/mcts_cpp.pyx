@@ -93,19 +93,19 @@ cdef class PyTreeNode:
     # def action_allowed(self):
     #     return np.asarray(self.ptr.action_allowed, dtype='long')
 
-    @property
-    def chosen_char(self):
-        return (<BaseNode *>self.ptr).chosen_char
+    # @property
+    # def chosen_char(self):
+    #     return (<BaseNode *>self.ptr).chosen_char
 
-    @property
-    def parent(self):
-        cdef BaseNode *node = <BaseNode *>self.ptr
-        if node.parent == NULL:
-            return None
-        # We need to go back 7 times.
-        for i in range(7):
-            node = node.parent
-        return wrap_node(type(self), <TreeNode *>node)
+    # @property
+    # def parent(self):
+    #     cdef BaseNode *node = <BaseNode *>self.ptr
+    #     if node.parent == NULL:
+    #         return None
+    #     # We need to go back 7 times.
+    #     for i in range(7):
+    #         node = node.parent
+    #     return wrap_node(type(self), <TreeNode *>node)
 
     @property
     def action_counts(self):
@@ -401,6 +401,7 @@ cdef object c_parallel_stack_actions(vector[BNptr] nodes, int num_threads):
     return np.asarray(actions), np.asarray(mcts_pis)
 
 # @cython.boundscheck(False)
+# FIXME(j_luo) provide path here
 def parallel_gather_trajectory(PyTreeNode last_state, int num_threads):
     cdef BaseNode *node = <BaseNode *>last_state.ptr
     cdef list[BNptr] base_nodes_list = list[BNptr]()

@@ -8,6 +8,8 @@ struct Subpath
     array<ChosenChar, 7> chosen_seq;
     array<MiniNode *, 6> mini_node_seq;
     bool stopped;
+
+    void connect(TreeNode *) const;
 };
 
 struct ActionSpaceOpt
@@ -43,16 +45,16 @@ class ActionSpace
 
     // Methods for expanding nodes.
     void expand(TreeNode *);
-    void expand(MiniNode *, bool, bool);
-    void expand_before(MiniNode *);
-    void expand_special_type(MiniNode *, bool);
-    void expand_after(MiniNode *, bool, bool, bool);
-    void expand_pre(MiniNode *, bool, bool);
-    void expand_d_pre(MiniNode *, bool, bool, bool);
-    void expand_post(MiniNode *, bool, bool);
-    void expand_normal(MiniNode *, int, bool, bool, bool);
-    void expand_null(MiniNode *);
-    bool expand_null_only(MiniNode *);
+    void expand(MiniNode *, const Subpath &, bool, bool);
+    void expand_before(MiniNode *, BaseNode *, int);
+    void expand_special_type(MiniNode *, BaseNode *, int, abc_t, bool);
+    void expand_after(MiniNode *, BaseNode *, int, bool, bool, bool);
+    void expand_pre(MiniNode *, BaseNode *, int, bool, bool);
+    void expand_d_pre(MiniNode *, BaseNode *, int, bool, bool, bool);
+    void expand_post(MiniNode *, BaseNode *, int, bool, bool);
+    void expand_normal(MiniNode *, BaseNode *, int, int, bool, bool, bool);
+    void expand_null(MiniNode *, BaseNode *, int);
+    bool expand_null_only(MiniNode *, BaseNode *, int);
 
     void evaluate(MiniNode *);
     // This will create a new tree node without checking first if the child exists. Use `apply_action` in `Env` if checking is needed.

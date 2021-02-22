@@ -30,6 +30,8 @@ class BaseNode
 {
     friend class ActionSpace;
 
+    // void connect(BaseNode *const, const ChosenChar &);
+
 protected:
     std::mutex mtx;
 
@@ -39,15 +41,12 @@ protected:
 
     // Given the current action phase, get the best next mini node.
     ChosenChar get_best_subaction(float, int, float, float);
-    void backup(float, int, float);
     void prune(int);
     virtual BaseNode *play();
 
 public:
     virtual ~BaseNode() = default;
 
-    BaseNode *const parent;
-    const ChosenChar chosen_char;
     const bool stopped;
 
     vec<abc_t> permissible_chars; // What characters are permissible to act upon?

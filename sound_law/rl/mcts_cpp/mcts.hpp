@@ -13,19 +13,35 @@ struct MctsOpt
     float heur_c;
 };
 
+struct Edge
+{
+    BaseNode *s0;
+    ChosenChar a;
+    BaseNode *s1;
+};
+
+struct Path
+{
+    list<Subpath> subpaths;
+    vec<TreeNode *> tree_nodes;
+
+    // Return all edges (s0, a, s1) from the descendant to the root.
+    vec<Edge> get_edges_to_root() const;
+};
+
 class Mcts
 {
     Pool *tp;
     Env *env;
 
-    TreeNode *select_single_thread(TreeNode *, int);
+    Path select_single_thread(TreeNode *, int) const;
 
 public:
     MctsOpt opt;
 
     Mcts(Env *, const MctsOpt &);
 
-    vec<TreeNode *> select(TreeNode *, int, int);
-    void backup(const vec<TreeNode *> &, const vec<float> &);
+    vec<Path> select(TreeNode *, int, int) const;
+    void backup(const vec<Path> &, const vec<float> &) const;
     TreeNode *play(TreeNode *node) { return node->play(); };
 };

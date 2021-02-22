@@ -121,8 +121,6 @@ cdef extern from "mcts_cpp/node.hpp":
     ctypedef pair[int, abc_t] ChosenChar
 
     cdef cppclass BaseNode nogil:
-        BaseNode *parent
-        ChosenChar chosen_char
         vector[abc_t] permissible_chars
         vector[visit_t] action_counts
         vector[float] total_values
