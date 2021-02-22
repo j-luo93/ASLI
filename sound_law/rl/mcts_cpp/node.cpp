@@ -83,9 +83,11 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
 void BaseNode::prune()
 {
     // std::cerr << "complete: " << num_unpruned_actions << "\n";
+    SPDLOG_TRACE("Prune this node with #actions {}", num_unpruned_actions);
     num_unpruned_actions = 0;
     std::fill(pruned.begin(), pruned.end(), true);
-    // FIXME(j_luo) pruning
+    for (size_t i = 0; i < parents.size(); ++i)
+        parents[i]->prune(parent_indices[i]);
     // if (parent != nullptr)
     //     parent->prune(chosen_char.first);
 }
@@ -93,6 +95,7 @@ void BaseNode::prune()
 void BaseNode::prune(int index)
 {
     // assert(!pruned[index]);
+    SPDLOG_TRACE("Prune this node with #actions {0} at index {1}", num_unpruned_actions, index);
     if (!pruned[index])
     {
         pruned[index] = true;
@@ -100,7 +103,8 @@ void BaseNode::prune(int index)
         --num_unpruned_actions;
         // std::cerr << "new: " << num_unpruned_actions << "\n";
     }
-    // FIXME(j_luo) pruning
+    if (is_pruned())
+        prune();
     // if (is_pruned() && (parent != nullptr))
     //     parent->prune(chosen_char.first);
 }
@@ -252,4 +256,17 @@ TreeNode *TreeNode::get_tree_node(const vec<Word *> &words, int depth, BaseNode 
     if (TreeNode::t_table.get(words, ret))
         delete new_node;
     return ret;
+}
+
+bool BaseNode::has_child(size_t index) const
+{
+    assert(children.size() > index);
+    return (children[index] != nullptr);
+}
+
+// Returns the child (including nullptr) at the index.
+BaseNode *BaseNode::get_child(size_t index) const
+{
+    assert(children.size() > index);
+    return children[index];
 }

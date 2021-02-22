@@ -24,8 +24,11 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
     SpecialType st = static_cast<SpecialType>(subpath.chosen_seq[1].second);
     TreeNode *new_node;
     if (subpath.stopped)
-        // A new node should always be created for STOP.
+    // A new node should always be created for STOP.
+    {
         new_node = new TreeNode(node->words, node->depth + 1, last, subpath.chosen_seq[6], true);
+        EdgeBuilder::connect(last, last_child_index, new_node);
+    }
     // new_node = TreeNode::get_tree_node(node->words, node->depth + 1, last, subpath.chosen_seq[6], true);
     else
     {
@@ -45,6 +48,7 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
         }
         // new_node = new TreeNode(new_words, node->depth + 1, last, subpath.chosen_seq[6], false);
         new_node = TreeNode::get_tree_node(new_words, node->depth + 1, last, subpath.chosen_seq[6], false);
+        EdgeBuilder::connect(last, last_child_index, new_node);
         expand(new_node);
         if ((node->dist - new_node->dist) < opt.dist_threshold)
             new_node->prune();
@@ -287,13 +291,19 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
 
 MiniNode *ActionSpace::get_mini_node(TreeNode *base, BaseNode *parent, const ChosenChar &chosen, ActionPhase ap, bool stopped)
 {
-    BaseNode *&child = parent->children[chosen.first];
+    // BaseNode *&child = parent->children[chosen.first];
     bool is_transition = (ap == ActionPhase::POST);
-    if (child == nullptr)
+    BaseNode *child;
+    if (!parent->has_child(chosen.first))
+    {
         if (is_transition)
             child = new TransitionNode(base, static_cast<MiniNode *>(parent), chosen, stopped);
         else
             child = new MiniNode(base, parent, chosen, ap, stopped);
+        EdgeBuilder::connect(parent, chosen.first, child);
+    }
+    else
+        child = parent->get_child(chosen.first);
     if (is_transition)
         return static_cast<TransitionNode *>(child);
     else
@@ -704,9 +714,7 @@ void ActionSpace::prune(BaseNode *node, bool include_self)
         }
     if (include_self)
     {
-        // FIXME(j_luo) pruning
-        // if (node->parent != nullptr)
-        //     node->parent->children[node->chosen_char.first] = nullptr;
+        EdgeBuilder::disconnect_from_parent(node);
         delete node;
     }
     else

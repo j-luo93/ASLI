@@ -23,14 +23,19 @@ using Affected = vec<pair<int, size_t>>;
 using ChosenChar = pair<int, abc_t>;
 
 class ActionSpace;
+class Env;
 
 /* ------------------------- Base Node ------------------------ */
 
 class BaseNode
 {
     friend class ActionSpace;
+    friend class Env;
+    friend class EdgeBuilder;
 
     // void connect(BaseNode *const, const ChosenChar &);
+    vec<BaseNode *> parents;
+    vec<size_t> parent_indices;
 
 protected:
     std::mutex mtx;
@@ -43,6 +48,8 @@ protected:
     ChosenChar get_best_subaction(float, int, float, float);
     void prune(int);
     virtual BaseNode *play();
+
+    size_t in_degree = 0;
 
 public:
     virtual ~BaseNode() = default;
@@ -70,6 +77,9 @@ public:
     void prune();
     bool is_pruned();
     size_t get_num_descendants();
+
+    bool has_child(size_t) const;
+    BaseNode *get_child(size_t) const;
 
     virtual bool is_transitional() = 0;
     virtual bool is_tree_node() = 0;
@@ -119,7 +129,6 @@ public:
 /* ------------------------- Tree Node ------------------------ */
 
 class Mcts;
-class Env;
 
 class TreeNode : public BaseNode
 {
@@ -190,3 +199,30 @@ namespace str
         return out;
     }
 } // namespace str
+
+class EdgeBuilder
+{
+    friend class ActionSpace;
+
+private:
+    // Connect `parent` and `child` through `parent`'s action at `index`. Assume they are not connected before.
+    static void connect(BaseNode *parent, size_t index, BaseNode *child)
+    {
+        assert(parent->children[index] == nullptr);
+        parent->children[index] = child;
+        child->parents.push_back(parent);
+        child->parent_indices.push_back(index);
+        ++child->in_degree;
+    }
+
+    // Disconnect `child` from all of its parents.
+    static void disconnect_from_parent(BaseNode *child)
+    {
+        for (size_t i = 0; i < child->parents.size(); ++i)
+        {
+            const auto parent = child->parents[i];
+            const auto index = child->parent_indices[i];
+            parent->children[index] = nullptr;
+        }
+    }
+};

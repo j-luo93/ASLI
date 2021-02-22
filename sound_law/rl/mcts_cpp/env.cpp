@@ -35,8 +35,9 @@ TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
     int last_child_index = subpath.chosen_seq[6].first;
     // Lock the last node since we are modifying its members.
     std::lock_guard<std::mutex> lock(last->mtx);
-    BaseNode *&child = last->children[last_child_index];
-    if (child == nullptr)
+    // BaseNode *&child = last->children[last_child_index];
+    BaseNode *child;
+    if (!last->has_child(last_child_index))
     {
         child = action_space->apply_new_action(node, subpath);
         float reward;
