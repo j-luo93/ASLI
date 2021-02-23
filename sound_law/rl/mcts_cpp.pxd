@@ -111,7 +111,7 @@ cdef extern from "mcts_cpp/env.hpp":
         TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
         void clear_stats(TreeNode *, bool)
         void clear_priors(TreeNode *, bool)
-        void prune(TreeNode *)
+        # void prune(TreeNode *)
         size_t get_num_words()
         void add_noise(TreeNode *, vector[vector[float]], vector[float], float)
 
@@ -170,13 +170,16 @@ cdef extern from "mcts_cpp/mcts.hpp":
 
         MctsOpt()
 
+    cdef cppclass Path nogil:
+        int get_depth()
+
     cdef cppclass Mcts nogil:
         MctsOpt opt
 
         Mcts(Env *, MctsOpt)
 
-        vector[TNptr] select(TreeNode *, int, int)
-        void backup(vector[TNptr], vector[float])
+        vector[Path] select(TreeNode *, int, int, int)
+        void backup(vector[Path], vector[float])
         TreeNode *play(TreeNode *)
 
 # Convertible types between numpy and c++ template.

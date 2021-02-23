@@ -20,13 +20,25 @@ struct Edge
     BaseNode *s1;
 };
 
-struct Path
+class Path
 {
-    list<Subpath> subpaths;
+private:
+    vec<Subpath> subpaths;
     vec<TreeNode *> tree_nodes;
+    int depth;
+
+public:
+    // FIXME(j_luo) This is hacky for cython.
+    Path() = default;
+    Path(TreeNode *, const int);
 
     // Return all edges (s0, a, s1) from the descendant to the root.
     vec<Edge> get_edges_to_root() const;
+    int get_depth() const;
+    // Append both subpath and tree node at the back.
+    void append(const Subpath &, TreeNode *);
+    // Whether a new node adds a circle.
+    bool forms_a_circle(TreeNode *) const;
 };
 
 class Mcts
@@ -34,14 +46,14 @@ class Mcts
     Pool *tp;
     Env *env;
 
-    Path select_single_thread(TreeNode *, int) const;
+    Path select_single_thread(TreeNode *, const int, const int) const;
 
 public:
     MctsOpt opt;
 
     Mcts(Env *, const MctsOpt &);
 
-    vec<Path> select(TreeNode *, int, int) const;
+    vec<Path> select(TreeNode *, const int, const int, const int) const;
     void backup(const vec<Path> &, const vec<float> &) const;
     TreeNode *play(TreeNode *node) { return node->play(); };
 };

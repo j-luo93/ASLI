@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
         show_size(root->permissible_chars, "#actions");
         for (int j = 0; j < num_sims / batch_size; j++)
         {
-            auto paths = mcts->select(root, batch_size, num_steps);
+            auto paths = mcts->select(root, batch_size, i, num_steps);
             auto selected = vec<TreeNode *>();
             for (const auto &path : paths)
                 selected.push_back(path.tree_nodes.back());

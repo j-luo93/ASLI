@@ -1,5 +1,21 @@
 #include "mcts.hpp"
 
+Path::Path(TreeNode *start, const int start_depth) : depth(start_depth) { tree_nodes.push_back(start); }
+
+int Path::get_depth() const { return depth; }
+
+void Path::append(const Subpath &subpath, TreeNode *node)
+{
+    subpaths.push_back(subpath);
+    tree_nodes.push_back(node);
+    ++depth;
+}
+
+bool Path::forms_a_circle(TreeNode *node) const
+{
+    return std::find(tree_nodes.begin(), tree_nodes.end(), node) != tree_nodes.end();
+}
+
 vec<Edge> Path::get_edges_to_root() const
 {
     assert(subpaths.size() == tree_nodes.size() - 1);
@@ -44,12 +60,11 @@ Mcts::Mcts(Env *env, const MctsOpt &opt) : env(env), opt(opt)
         tp = nullptr;
 }
 
-Path Mcts::select_single_thread(TreeNode *node, int depth_limit) const
+Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int depth_limit) const
 {
     assert(!node->is_leaf());
-    auto path = Path();
-    path.tree_nodes.push_back(node);
-    while ((node->depth < depth_limit) && (!node->is_leaf()))
+    auto path = Path(node, start_depth);
+    while ((path.get_depth() < depth_limit) && (!node->is_leaf()))
     {
         // Complete sampling one action.
         SPDLOG_DEBUG("Mcts: node depth {}", node->depth);
@@ -57,14 +72,13 @@ Path Mcts::select_single_thread(TreeNode *node, int depth_limit) const
         auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c);
         SPDLOG_DEBUG("Mcts: node subpath found.");
         node = env->apply_action(node, subpath);
-        bool is_circle = std::find(path.tree_nodes.begin(), path.tree_nodes.end(), node) != path.tree_nodes.end();
+        bool is_circle = path.forms_a_circle(node);
         if (is_circle)
         {
             SPDLOG_DEBUG("Mcts: found a circle at {}!", str::from(node));
             subpath.mini_node_seq[5]->prune(subpath.chosen_seq[6].first);
         }
-        path.subpaths.push_back(subpath);
-        path.tree_nodes.push_back(node);
+        path.append(subpath, node);
         SPDLOG_DEBUG("Mcts: action applied.");
         if ((node->stopped) || (node->done) || (is_circle))
             break;
@@ -73,22 +87,22 @@ Path Mcts::select_single_thread(TreeNode *node, int depth_limit) const
     return path;
 }
 
-vec<Path> Mcts::select(TreeNode *root, int num_sims, int depth_limit) const
+vec<Path> Mcts::select(TreeNode *root, const int num_sims, const int start_depth, const int depth_limit) const
 {
     SPDLOG_DEBUG("Mcts: selecting...");
     auto paths = vec<Path>();
     paths.reserve(num_sims);
     if (tp == nullptr)
         for (size_t i = 0; i < num_sims; ++i)
-            paths.push_back(select_single_thread(root, depth_limit));
+            paths.push_back(select_single_thread(root, start_depth, depth_limit));
     else
     {
         vec<std::future<void>> results(num_sims);
         paths.resize(num_sims);
         for (size_t i = 0; i < num_sims; ++i)
             results[i] = tp->push(
-                [this, root, depth_limit, i, &paths](int) {
-                    paths[i] = this->select_single_thread(root, depth_limit);
+                [this, root, start_depth, depth_limit, i, &paths](int) {
+                    paths[i] = this->select_single_thread(root, start_depth, depth_limit);
                 });
         for (size_t i = 0; i < num_sims; ++i)
             results[i].wait();

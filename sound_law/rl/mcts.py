@@ -210,10 +210,10 @@ class Mcts(PyMcts):
                     # print('1')
                     num_batches = g.num_mcts_sims // g.expansion_batch_size
                     for _ in range(num_batches):
-                        new_states, steps_left = self.select(root, g.expansion_batch_size, g.max_rollout_length)
-                        steps = g.max_rollout_length - get_tensor(steps_left) if g.use_finite_horizon else None
-                        values = self.evaluate(new_states, steps=steps)
-                        self.backup(new_states, values)
+                        paths, steps = self.select(root, g.expansion_batch_size, ri, g.max_rollout_length)
+                        steps = get_tensor(steps) if g.use_finite_horizon else None
+                        values = self.evaluate(paths, steps=steps)
+                        self.backup(paths, values)
                         # backed_up_idx = set()
                         # for state, value in zip(new_states, values):
                         #     if state.idx not in backed_up_idx:

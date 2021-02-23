@@ -281,8 +281,8 @@ cdef class PyEnv:
     def clear_priors(self, PyTreeNode py_node, bool recursive):
         self.ptr.clear_priors(py_node.ptr, recursive)
 
-    def prune(self, PyTreeNode py_node):
-        self.ptr.prune(py_node.ptr)
+    # def prune(self, PyTreeNode py_node):
+    #     self.ptr.prune(py_node.ptr)
 
     @property
     def num_words(self) -> int:
@@ -306,6 +306,25 @@ cdef class PyEnv:
 cdef inline TreeNode *get_ptr(PyTreeNode py_node):
     return py_node.ptr
 
+cdef class PyPath:
+    cdef Path *ptr
+
+    def __cinit__(self):
+        self.ptr = NULL
+
+    def __dealloc__(self):
+        self.ptr = NULL
+
+    @staticmethod
+    cdef PyPath from_ptr(Path *path_ptr):
+        cdef PyPath obj = PyPath.__new__(PyPath)
+        obj.ptr = path_ptr
+        return obj
+
+    @staticmethod
+    cdef Path *get_c_ptr(PyPath py_path):
+        return py_path.ptr
+
 cdef class PyMcts:
     cdef Mcts *ptr
 
@@ -318,21 +337,21 @@ cdef class PyMcts:
     def __dealloc__(self):
         del self.ptr
 
-    def select(self, PyTreeNode py_tnode, int num_sims, int depth_limit):
-        cdef vector[TNptr] selected = self.ptr.select(py_tnode.ptr, num_sims, depth_limit)
-        cdef vector[int] steps_left_vec = vector[int](selected.size())
-        for i in range(selected.size()):
-            steps_left_vec[i] = selected[i].depth
-        steps_left = np.asarray(steps_left_vec, dtype='long')
-        tnode_cls = type(py_tnode)
-        return [wrap_node(tnode_cls, node) for node in selected], steps_left
+    def select(self, PyTreeNode py_tnode, int num_sims, int start_depth, int depth_limit):
+        cdef vector[Path] paths_vec = self.ptr.select(py_tnode.ptr, num_sims, start_depth, depth_limit)
+        cdef vector[int] steps_vec = vector[int](paths_vec.size())
+        paths = []
+        for i in range(paths_vec.size()):
+            steps_vec[i] = paths_vec[i].get_depth()
+            paths.append(PyPath.from_ptr(&paths_vec[i]))
+        steps = np.asarray(steps_vec, dtype='long')
+        return paths, steps
 
-    def backup(self, states, vector[float] values):
-        cdef vector[TNptr] states_vec = vector[TNptr]()
-        states_vec.reserve(len(states))
-        for state in states:
-            states_vec.push_back(get_ptr(state))
-        self.ptr.backup(states_vec, values)
+    def backup(self, py_paths, vector[float] values):
+        cdef vector[Path] paths = vector[Path]()
+        for py_p in py_paths:
+            paths.push_back(deref(PyPath.get_c_ptr(py_p)))
+        self.ptr.backup(paths, values)
 
     def play(self, PyTreeNode py_tnode):
         return wrap_node(type(py_tnode), self.ptr.play(py_tnode.ptr))
@@ -401,37 +420,37 @@ cdef object c_parallel_stack_actions(vector[BNptr] nodes, int num_threads):
     return np.asarray(actions), np.asarray(mcts_pis)
 
 # @cython.boundscheck(False)
-# FIXME(j_luo) provide path here
-def parallel_gather_trajectory(PyTreeNode last_state, int num_threads):
-    cdef BaseNode *node = <BaseNode *>last_state.ptr
-    cdef list[BNptr] base_nodes_list = list[BNptr]()
-    # Reverse the backtracking order to get the right order.
-    while node != NULL:
-        base_nodes_list.push_front(node)
-        node = node.parent
-    cdef vector[BNptr] base_nodes = vector[BNptr]()
-    cdef list[BNptr].iterator it = base_nodes_list.begin()
-    while it != base_nodes_list.end():
-        base_nodes.push_back(deref(it))
-        it = inc(it)
+# # FIXME(j_luo) provide path here
+# def parallel_gather_trajectory(PyTreeNode last_state, int num_threads):
+#     cdef BaseNode *node = <BaseNode *>last_state.ptr
+#     cdef list[BNptr] base_nodes_list = list[BNptr]()
+#     # Reverse the backtracking order to get the right order.
+#     while node != NULL:
+#         base_nodes_list.push_front(node)
+#         node = node.parent
+#     cdef vector[BNptr] base_nodes = vector[BNptr]()
+#     cdef list[BNptr].iterator it = base_nodes_list.begin()
+#     while it != base_nodes_list.end():
+#         base_nodes.push_back(deref(it))
+#         it = inc(it)
 
-    cdef vector[TNptr] tree_nodes = vector[TNptr]()
-    cdef vector[abc_t] actions = vector[abc_t]()
-    cdef vector[float] rewards = vector[float]()
-    cdef vector[float] qs = vector[float]()
-    cdef int chosen_index
-    for i in range(base_nodes.size()):
-        node = base_nodes[i]
-        if node.is_tree_node():
-            tree_nodes.push_back(<TreeNode *>node)
-        if node.parent != NULL:
-            chosen_index = node.chosen_char.first
-            actions.push_back(node.chosen_char.second)
-            qs.push_back(node.parent.total_values[chosen_index] / node.parent.action_counts[chosen_index])
-            if node.is_tree_node():
-                rewards.push_back((<TransitionNode *>(node.parent)).rewards[chosen_index])
-    id_seqs = c_parallel_stack_ids(tree_nodes, num_threads)
-    # We don't need the last state's permissible actions since it's not explored.
-    base_nodes.pop_back()
-    permissible_actions, mcts_pis = c_parallel_stack_actions(base_nodes, num_threads)
-    return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
+#     cdef vector[TNptr] tree_nodes = vector[TNptr]()
+#     cdef vector[abc_t] actions = vector[abc_t]()
+#     cdef vector[float] rewards = vector[float]()
+#     cdef vector[float] qs = vector[float]()
+#     cdef int chosen_index
+#     for i in range(base_nodes.size()):
+#         node = base_nodes[i]
+#         if node.is_tree_node():
+#             tree_nodes.push_back(<TreeNode *>node)
+#         if node.parent != NULL:
+#             chosen_index = node.chosen_char.first
+#             actions.push_back(node.chosen_char.second)
+#             qs.push_back(node.parent.total_values[chosen_index] / node.parent.action_counts[chosen_index])
+#             if node.is_tree_node():
+#                 rewards.push_back((<TransitionNode *>(node.parent)).rewards[chosen_index])
+#     id_seqs = c_parallel_stack_ids(tree_nodes, num_threads)
+#     # We don't need the last state's permissible actions since it's not explored.
+#     base_nodes.pop_back()
+#     permissible_actions, mcts_pis = c_parallel_stack_actions(base_nodes, num_threads)
+#     return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
