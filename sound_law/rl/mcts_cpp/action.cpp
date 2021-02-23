@@ -581,9 +581,10 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
     expand_stats(node);
     SPDLOG_DEBUG("ActionSpace:: mini node expanded with #actions {}.", node->permissible_chars.size());
 
-    for (size_t i = 0; i < node->permissible_chars.size(); ++i)
-        if (node->affected[i].size() < opt.site_threshold)
-            node->prune(i);
+    if (!node->stopped)
+        for (size_t i = 0; i < node->permissible_chars.size(); ++i)
+            if (node->affected[i].size() < opt.site_threshold)
+                node->prune(i);
 
     // std::cerr << "-----------------\n";
     // std::cerr << str::from(node->ap) << " " << node->permissible_chars.size() << "\n";

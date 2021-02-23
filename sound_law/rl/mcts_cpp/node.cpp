@@ -270,3 +270,5 @@ BaseNode *BaseNode::get_child(size_t index) const
     assert(children.size() > index);
     return children[index];
 }
+
+int BaseNode::get_in_degree() const { return in_degree; }

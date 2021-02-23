@@ -16,7 +16,7 @@ class LruCache
 {
     list<CacheNode> nodes;
     map<BaseNode *, list<CacheNode>::iterator> base2node_it;
-    void evict(const CacheNode &);
+    void evict(BaseNode *const);
 
 public:
     size_t size();

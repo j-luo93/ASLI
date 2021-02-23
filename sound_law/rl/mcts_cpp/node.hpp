@@ -37,6 +37,8 @@ class BaseNode
     vec<BaseNode *> parents;
     vec<size_t> parent_indices;
 
+    size_t in_degree = 0;
+
 protected:
     std::mutex mtx;
 
@@ -48,8 +50,6 @@ protected:
     ChosenChar get_best_subaction(float, int, float, float);
     void prune(int);
     virtual BaseNode *play();
-
-    size_t in_degree = 0;
 
 public:
     virtual ~BaseNode() = default;
@@ -80,6 +80,7 @@ public:
 
     bool has_child(size_t) const;
     BaseNode *get_child(size_t) const;
+    int get_in_degree() const;
 
     virtual bool is_transitional() = 0;
     virtual bool is_tree_node() = 0;
@@ -200,8 +201,10 @@ namespace str
     }
 } // namespace str
 
+class LruCache;
 class EdgeBuilder
 {
+    friend class LruCache;
     friend class ActionSpace;
 
 private:

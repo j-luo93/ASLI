@@ -141,6 +141,8 @@ int main(int argc, char *argv[])
     as_opt.any_id = 4;
     as_opt.any_s_id = 5;
     as_opt.any_uns_id = 6;
+    as_opt.site_threshold = 1;
+    as_opt.dist_threshold = 0.0;
     auto ws_opt = WordSpaceOpt();
     ws_opt.dist_mat = dist_mat;
     ws_opt.ins_cost = ins_cost;
@@ -188,13 +190,13 @@ int main(int argc, char *argv[])
     mcts_opt.virtual_loss = 0.5;
     mcts_opt.num_threads = num_threads;
     auto mcts = new Mcts(env, mcts_opt);
-    TreeNode *root = env->start;
     // SPDLOG_INFO("Start:\n{}", env->start->str());
     // SPDLOG_INFO("End:\n{}", env->end->str());
     // action_space->timer.disable();
-    SPDLOG_INFO("Start dist: {}", root->dist);
+    TreeNode *root = env->start;
     SPDLOG_INFO("Start node str:\n{}", str::from(env->start));
     SPDLOG_INFO("End node str:\n{}", str::from(env->end));
+    SPDLOG_INFO("Start dist: {}", root->dist);
     for (int i = 0; i < num_steps; i++)
     {
         // if (i == num_steps / 2)
@@ -233,6 +235,7 @@ int main(int argc, char *argv[])
         std::cerr << str::from(root);
         SPDLOG_INFO("New dist: {}", root->dist);
     }
+    env->evict(10);
     // action_space->timer.show_stats();
     // std::cerr << site_space->size() << " sites explored\n";
     // std::cerr << word_space->size() << " words explored\n";

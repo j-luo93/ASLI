@@ -52,6 +52,8 @@ TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
         }
         last->rewards[last_child_index] = reward;
     }
+    else
+        child = last->get_child(last_child_index);
     for (const auto node : subpath.mini_node_seq)
         cache.put(node);
     cache.put(child);
@@ -60,9 +62,9 @@ TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
 
 void Env::evict(size_t until_size)
 {
+    SPDLOG_TRACE("Before evicting #items: {}", cache.size());
     while (cache.size() > until_size)
-    {
         auto base = cache.evict();
-        action_space->prune(base, true);
-    }
+    // action_space->prune(base, true);
+    SPDLOG_TRACE("After evicting #items: {}", cache.size());
 };
