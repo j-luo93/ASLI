@@ -113,16 +113,23 @@ bool BaseNode::is_pruned() { return num_unpruned_actions == 0; }
 
 bool TreeNode::is_leaf() { return priors.size() == 0; }
 
-TreeNode *TreeNode::play()
+pair<TreeNode *, Subpath> TreeNode::play()
 {
     // std::cerr << "============================\n";
-    MiniNode *mini_node = static_cast<MiniNode *>(BaseNode::play());
-    for (int i = 0; i < 5; ++i)
-        mini_node = static_cast<MiniNode *>(mini_node->play());
-    return static_cast<TreeNode *>(mini_node->play());
+    BaseNode *node = this;
+    auto subpath = Subpath();
+    for (int i = 0; i < 7; ++i)
+    {
+        auto mini_ret = node->play_mini();
+        if (i < 6)
+            subpath.mini_node_seq[i] = static_cast<MiniNode *>(mini_ret.first);
+        subpath.chosen_seq[i] = mini_ret.second;
+        node = mini_ret.first;
+    }
+    return std::make_pair(static_cast<TreeNode *>(node), subpath);
 }
 
-BaseNode *BaseNode::play()
+pair<BaseNode *, ChosenChar> BaseNode::play_mini()
 {
     // int index = 0;
     // for (size_t i = 1; i < permissible_chars.size(); ++i)
@@ -145,7 +152,7 @@ BaseNode *BaseNode::play()
     assert(max_index != -1);
     assert(!played);
     played = true;
-    return children[max_index];
+    return std::make_pair(children[max_index], ChosenChar{max_index, permissible_chars[max_index]});
 
     // auto probs = vec<float>();
     // probs.reserve(action_counts.size());

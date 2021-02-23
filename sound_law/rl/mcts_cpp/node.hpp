@@ -48,7 +48,6 @@ protected:
 
     // Given the current action phase, get the best next mini node.
     ChosenChar get_best_subaction(float, int, float, float);
-    virtual BaseNode *play();
 
 public:
     virtual ~BaseNode() = default;
@@ -71,6 +70,7 @@ public:
 
     bool is_expanded();
     bool is_evaluated();
+    pair<BaseNode *, ChosenChar> play_mini();
     vec<float> get_scores(float, float);
     size_t get_num_actions();
     void prune(int);
@@ -129,6 +129,15 @@ public:
 
 /* ------------------------- Tree Node ------------------------ */
 
+struct Subpath
+{
+    array<ChosenChar, 7> chosen_seq;
+    array<MiniNode *, 6> mini_node_seq;
+    bool stopped;
+
+    void connect(TreeNode *) const;
+};
+
 class Mcts;
 
 class TreeNode : public BaseNode
@@ -148,7 +157,7 @@ class TreeNode : public BaseNode
     TreeNode(const vec<Word *> &, int);
     TreeNode(const vec<Word *> &, int, BaseNode *const, const ChosenChar &, bool);
 
-    TreeNode *play() override;
+    pair<TreeNode *, Subpath> play();
 
 public:
     ~TreeNode() override = default;

@@ -199,6 +199,7 @@ class Mcts(PyMcts):
                 # trajectory = Trajectory(root, end_state)
                 # trajectory = Trajectory()
                 # Episodes have max rollout length.
+                played_path = None
                 for ri in range(g.max_rollout_length):
                     # if ri == 0:
                     #     self.enable_timer()
@@ -212,7 +213,8 @@ class Mcts(PyMcts):
                     for _ in range(num_batches):
                         paths, steps = self.select(root, g.expansion_batch_size, ri, g.max_rollout_length)
                         steps = get_tensor(steps) if g.use_finite_horizon else None
-                        values = self.evaluate(paths, steps=steps)
+                        new_states = [path.get_last_node() for path in paths]
+                        values = self.evaluate(new_states, steps=steps)
                         self.backup(paths, values)
                         # backed_up_idx = set()
                         # for state, value in zip(new_states, values):
@@ -230,7 +232,12 @@ class Mcts(PyMcts):
                     # new_state = self.play(root)
                     # trajectory.append(action, new_state, reward, mcts_pi=probs)
                     # root = new_state
-                    root = self.play(root)
+                    new_path = self.play(root, ri)
+                    if played_path is None:
+                        played_path = new_path
+                    else:
+                        played_path.merge(new_path)
+                    root = played_path.get_last_node()
 
                     # print('3')
                     if tracker is not None:
@@ -238,7 +245,7 @@ class Mcts(PyMcts):
                     if root.stopped or root.done:
                         break
                     # self.show_stats()
-                trajectory = Trajectory(root)
+                trajectory = Trajectory(played_path)
                 if ei % g.episode_check_interval == 0:
                     logging.debug(pad_for_log(str(trajectory)))
 

@@ -682,6 +682,8 @@ void ActionSpace::expand_stats(BaseNode *node)
 
 void ActionSpace::clear_stats(BaseNode *node, bool recursive)
 {
+    if (recursive && (node->visit_count == 0))
+        return;
     size_t n = node->permissible_chars.size();
     node->action_counts = vec<visit_t>(n, 0);
     node->total_values = vec<float>(n, 0.0);
@@ -698,6 +700,8 @@ void ActionSpace::clear_stats(BaseNode *node, bool recursive)
 
 void ActionSpace::clear_priors(BaseNode *node, bool recursive)
 {
+    if (node->priors.empty())
+        return;
     node->priors.clear();
     if (recursive)
         for (const auto child : node->children)

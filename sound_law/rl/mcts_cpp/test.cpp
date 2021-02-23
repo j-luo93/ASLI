@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
             auto paths = mcts->select(root, batch_size, i, num_steps);
             auto selected = vec<TreeNode *>();
             for (const auto &path : paths)
-                selected.push_back(path.tree_nodes.back());
+                selected.push_back(path.get_last_node());
             auto unique_nodes = vec<TreeNode *>();
             unique_nodes = find_unique(selected,
                                        [](TreeNode *node) {
@@ -233,7 +233,8 @@ int main(int argc, char *argv[])
         //     std::cerr << root->permissible_chars[i] << ":" << scores[i] << " ";
         // std::cerr << "\n";
         // std::cerr << "max index: " << root->max_index << " max_value: " << root->max_value << "\n";
-        root = mcts->play(root);
+        auto played_path = mcts->play(root, i);
+        root = played_path->get_last_node();
         std::cerr << str::from(root);
         SPDLOG_INFO("New dist: {}", root->dist);
     }

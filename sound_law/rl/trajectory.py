@@ -18,7 +18,7 @@ from editdistance import eval_batch
 from sound_law.data.alphabet import NULL_ID, PAD_ID, Alphabet
 
 from .mcts_cpp import (PyST_CLL, PyST_CLR,  # pylint: disable=no-name-in-module
-                       PyST_GBJ, PyST_GBW, PyST_NONE, PyST_VS, PyTreeNode,
+                       PyST_GBJ, PyST_GBW, PyST_NONE, PyST_VS, PyTreeNode, PyPath,
                        parallel_gather_trajectory)
 
 int2st = {
@@ -149,11 +149,11 @@ class TrEdge:
 # class Trajectory(BaseTrajectory):
 class Trajectory:
 
-    def __init__(self, last_state: VocabState):
+    def __init__(self, played_path: PyPath):
         # NOTE(j_luo) They have different batch size. `id_seqs` has n + 1, `rewards` has n (last state doesn't have any q due to being unexplored), while the remaining tree have 7 * n each.
         self.id_seqs, self.actions, self.rewards, self.permissible_actions, self.mcts_pis, self.qs = parallel_gather_trajectory(
-            last_state, g.num_workers)
-        self.done = last_state.done
+            played_path, g.num_workers)
+        self.done = played_path.get_last_node().done
         self._num_edges = len(self.id_seqs) - 1
         assert len(self.rewards) == len(self.id_seqs) - 1
         assert len(self.actions) == len(self.permissible_actions) == len(

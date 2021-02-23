@@ -1,7 +1,6 @@
 # distutils: language = c++
 
 from libcpp.vector cimport vector
-from libcpp.list cimport list
 from libcpp.pair cimport pair
 from libcpp cimport bool
 
@@ -171,7 +170,14 @@ cdef extern from "mcts_cpp/mcts.hpp":
         MctsOpt()
 
     cdef cppclass Path nogil:
+        Path(Path *)
+
         int get_depth()
+        vector[BNptr] get_all_nodes()
+        vector[size_t] get_all_chosen_indices()
+        vector[abc_t] get_all_chosen_actions()
+        void merge(Path)
+        TreeNode *get_last_node()
 
     cdef cppclass Mcts nogil:
         MctsOpt opt
@@ -180,7 +186,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
 
         vector[Path] select(TreeNode *, int, int, int)
         void backup(vector[Path], vector[float])
-        TreeNode *play(TreeNode *)
+        Path *play(TreeNode *, int)
 
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:

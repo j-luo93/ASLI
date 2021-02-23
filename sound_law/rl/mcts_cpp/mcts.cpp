@@ -153,3 +153,50 @@ void Mcts::backup(const vec<Path> &paths, const vec<float> &values) const
         }
     }
 }
+
+vec<BaseNode *> Path::get_all_nodes() const
+{
+    auto ret = vec<BaseNode *>();
+    for (size_t i = 0; i < subpaths.size(); ++i)
+    {
+        const auto &subpath = subpaths[i];
+        ret.push_back(tree_nodes[i]);
+        for (auto node = subpath.mini_node_seq.begin(); node != subpath.mini_node_seq.end(); ++node)
+            ret.push_back(static_cast<BaseNode *>(*node));
+    }
+    ret.push_back(tree_nodes.back());
+    return ret;
+}
+
+vec<size_t> Path::get_all_chosen_indices() const
+{
+    auto ret = vec<size_t>();
+    for (const auto &subpath : subpaths)
+        for (const auto &chosen_char : subpath.chosen_seq)
+            ret.push_back(chosen_char.first);
+    return ret;
+}
+
+vec<abc_t> Path::get_all_chosen_actions() const
+{
+    auto ret = vec<abc_t>();
+    for (const auto &subpath : subpaths)
+        for (const auto &chosen_char : subpath.chosen_seq)
+            ret.push_back(chosen_char.second);
+    return ret;
+}
+void Path::merge(const Path &other)
+{
+    assert(other.subpaths.size() == 1);
+    assert(tree_nodes.back() == other.tree_nodes.front());
+    append(other.subpaths[0], other.tree_nodes[1]);
+}
+
+TreeNode *Path::get_last_node() const { return tree_nodes.back(); }
+
+Path::Path(Path *ptr)
+{
+    subpaths = ptr->subpaths;
+    tree_nodes = ptr->tree_nodes;
+    depth = ptr->depth;
+}

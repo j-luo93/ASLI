@@ -30,6 +30,7 @@ private:
 public:
     // FIXME(j_luo) This is hacky for cython.
     Path() = default;
+    Path(Path *);
     Path(TreeNode *, const int);
 
     // Return all edges (s0, a, s1) from the descendant to the root.
@@ -39,6 +40,12 @@ public:
     void append(const Subpath &, TreeNode *);
     // Whether a new node adds a circle.
     bool forms_a_circle(TreeNode *) const;
+
+    vec<BaseNode *> get_all_nodes() const;
+    vec<size_t> get_all_chosen_indices() const;
+    vec<abc_t> get_all_chosen_actions() const;
+    void merge(const Path &);
+    TreeNode *get_last_node() const;
 };
 
 class Mcts
@@ -55,5 +62,11 @@ public:
 
     vec<Path> select(TreeNode *, const int, const int, const int) const;
     void backup(const vec<Path> &, const vec<float> &) const;
-    TreeNode *play(TreeNode *node) { return node->play(); };
+    inline Path *play(TreeNode *node, int start_depth)
+    {
+        auto ret = new Path(node, start_depth);
+        auto play_ret = node->play();
+        ret->append(play_ret.second, play_ret.first);
+        return ret;
+    };
 };

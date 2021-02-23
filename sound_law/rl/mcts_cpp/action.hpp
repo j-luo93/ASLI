@@ -3,15 +3,6 @@
 #include "word.hpp"
 #include "node.hpp"
 
-struct Subpath
-{
-    array<ChosenChar, 7> chosen_seq;
-    array<MiniNode *, 6> mini_node_seq;
-    bool stopped;
-
-    void connect(TreeNode *) const;
-};
-
 struct ActionSpaceOpt
 {
     abc_t null_id;

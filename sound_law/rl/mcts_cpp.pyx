@@ -314,11 +314,18 @@ cdef class PyPath:
 
     def __dealloc__(self):
         self.ptr = NULL
+        # del self.ptr
+
+    def merge(self, PyPath other):
+        self.ptr.merge(deref(other.ptr))
+
+    def get_last_node(self):
+        return wrap_node(PyEnv.tnode_cls, self.ptr.get_last_node())
 
     @staticmethod
     cdef PyPath from_ptr(Path *path_ptr):
         cdef PyPath obj = PyPath.__new__(PyPath)
-        obj.ptr = path_ptr
+        obj.ptr = new Path(path_ptr)
         return obj
 
     @staticmethod
@@ -353,8 +360,8 @@ cdef class PyMcts:
             paths.push_back(deref(PyPath.get_c_ptr(py_p)))
         self.ptr.backup(paths, values)
 
-    def play(self, PyTreeNode py_tnode):
-        return wrap_node(type(py_tnode), self.ptr.play(py_tnode.ptr))
+    def play(self, PyTreeNode py_tnode, int start_depth):
+        return PyPath.from_ptr(self.ptr.play(py_tnode.ptr, start_depth))
         # cdef FullActionPath full_action = self.ptr.play(py_tnode.ptr)
         # return wrap_node(type(py_tnode), full_action.first.first), full_action.first.second, full_action.second
 
@@ -420,37 +427,40 @@ cdef object c_parallel_stack_actions(vector[BNptr] nodes, int num_threads):
     return np.asarray(actions), np.asarray(mcts_pis)
 
 # @cython.boundscheck(False)
-# # FIXME(j_luo) provide path here
-# def parallel_gather_trajectory(PyTreeNode last_state, int num_threads):
-#     cdef BaseNode *node = <BaseNode *>last_state.ptr
-#     cdef list[BNptr] base_nodes_list = list[BNptr]()
-#     # Reverse the backtracking order to get the right order.
-#     while node != NULL:
-#         base_nodes_list.push_front(node)
-#         node = node.parent
-#     cdef vector[BNptr] base_nodes = vector[BNptr]()
-#     cdef list[BNptr].iterator it = base_nodes_list.begin()
-#     while it != base_nodes_list.end():
-#         base_nodes.push_back(deref(it))
-#         it = inc(it)
-
-#     cdef vector[TNptr] tree_nodes = vector[TNptr]()
-#     cdef vector[abc_t] actions = vector[abc_t]()
-#     cdef vector[float] rewards = vector[float]()
-#     cdef vector[float] qs = vector[float]()
-#     cdef int chosen_index
-#     for i in range(base_nodes.size()):
-#         node = base_nodes[i]
-#         if node.is_tree_node():
-#             tree_nodes.push_back(<TreeNode *>node)
-#         if node.parent != NULL:
-#             chosen_index = node.chosen_char.first
-#             actions.push_back(node.chosen_char.second)
-#             qs.push_back(node.parent.total_values[chosen_index] / node.parent.action_counts[chosen_index])
-#             if node.is_tree_node():
-#                 rewards.push_back((<TransitionNode *>(node.parent)).rewards[chosen_index])
-#     id_seqs = c_parallel_stack_ids(tree_nodes, num_threads)
-#     # We don't need the last state's permissible actions since it's not explored.
-#     base_nodes.pop_back()
-#     permissible_actions, mcts_pis = c_parallel_stack_actions(base_nodes, num_threads)
-#     return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
+def parallel_gather_trajectory(PyPath path, int num_threads):
+    # cdef BaseNode *node = <BaseNode *>last_state.ptr
+    # cdef list[BNptr] base_nodes_list = list[BNptr]()
+    # # Reverse the backtracking order to get the right order.
+    # while node != NULL:
+    #     base_nodes_list.push_front(node)
+    #     node = node.parent
+    # cdef vector[BNptr] base_nodes = vector[BNptr]()
+    # cdef list[BNptr].iterator it = base_nodes_list.begin()
+    # while it != base_nodes_list.end():
+    #     base_nodes.push_back(deref(it))
+    #     it = inc(it)
+    cdef vector[BNptr] base_nodes = path.ptr.get_all_nodes()
+    cdef vector[size_t] chosen_indices = path.ptr.get_all_chosen_indices()
+    cdef vector[abc_t] chosen_actions = path.ptr.get_all_chosen_actions()
+    assert(base_nodes.size() == chosen_indices.size() + 1)
+    cdef vector[TNptr] tree_nodes = vector[TNptr]()
+    cdef vector[abc_t] actions = vector[abc_t]()
+    cdef vector[float] rewards = vector[float]()
+    cdef vector[float] qs = vector[float]()
+    cdef int chosen_index
+    for i in range(base_nodes.size()):
+        node = base_nodes[i]
+        if node.is_tree_node():
+            tree_nodes.push_back(<TreeNode *>node)
+        if i < base_nodes.size() - 1:
+            chosen_index = chosen_indices[i]
+            chosen_action = chosen_actions[i]
+            actions.push_back(chosen_action)
+            qs.push_back(node.total_values[chosen_index] / node.action_counts[chosen_index])
+        if node.is_transitional():
+            rewards.push_back((<TransitionNode *>(node)).rewards[chosen_index])
+    id_seqs = c_parallel_stack_ids(tree_nodes, num_threads)
+    # We don't need the last state's permissible actions since it's not explored.
+    base_nodes.pop_back()
+    permissible_actions, mcts_pis = c_parallel_stack_actions(base_nodes, num_threads)
+    return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
