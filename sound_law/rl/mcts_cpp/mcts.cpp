@@ -57,10 +57,16 @@ Path Mcts::select_single_thread(TreeNode *node, int depth_limit) const
         auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c);
         SPDLOG_DEBUG("Mcts: node subpath found.");
         node = env->apply_action(node, subpath);
+        bool is_circle = std::find(path.tree_nodes.begin(), path.tree_nodes.end(), node) != path.tree_nodes.end();
+        if (is_circle)
+        {
+            SPDLOG_DEBUG("Mcts: found a circle at {}!", str::from(node));
+            subpath.mini_node_seq[5]->prune(subpath.chosen_seq[6].first);
+        }
         path.subpaths.push_back(subpath);
         path.tree_nodes.push_back(node);
         SPDLOG_DEBUG("Mcts: action applied.");
-        if ((node->stopped) || (node->done))
+        if ((node->stopped) || (node->done) || (is_circle))
             break;
     }
     SPDLOG_DEBUG("Mcts: selected node dist {0} str\n{1}", node->dist, str::from(node));

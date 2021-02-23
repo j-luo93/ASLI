@@ -48,7 +48,6 @@ protected:
 
     // Given the current action phase, get the best next mini node.
     ChosenChar get_best_subaction(float, int, float, float);
-    void prune(int);
     virtual BaseNode *play();
 
 public:
@@ -74,6 +73,7 @@ public:
     bool is_evaluated();
     vec<float> get_scores(float, float);
     size_t get_num_actions();
+    void prune(int);
     void prune();
     bool is_pruned();
     size_t get_num_descendants();

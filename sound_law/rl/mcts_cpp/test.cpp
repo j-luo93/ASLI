@@ -81,6 +81,7 @@ int main(int argc, char *argv[])
     add_argument<int>(parser, "batch_size", "Batch size per evaluation", "40");
     add_argument<float>(parser, "puct_c", "puct constant", "5.0");
     add_argument<unsigned>(parser, "random_seed", "Random seed", "0");
+    add_argument<float>(parser, "dist_threshold", "Dist threshold", "0.0");
     add_flag(parser, "log_to_file", "Flag to log to file");
     add_flag(parser, "quiet", "Set log level to error to disable info logging.");
     add_flag(parser, "syncope", "Use one syncopation.");
@@ -92,6 +93,7 @@ int main(int argc, char *argv[])
     const int num_steps = args["num_steps"].as<int>();
     const float puct_c = args["puct_c"].as<float>();
     const unsigned random_seed = args["random_seed"].as<unsigned>();
+    const float dist_threshold = args["dist_threshold"].as<float>();
     const bool log_to_file = args["log_to_file"].as<bool>();
     const bool quiet = args["quiet"].as<bool>();
     const bool syncope = args["syncope"].as<bool>();
@@ -142,7 +144,7 @@ int main(int argc, char *argv[])
     as_opt.any_s_id = 5;
     as_opt.any_uns_id = 6;
     as_opt.site_threshold = 1;
-    as_opt.dist_threshold = 0.0;
+    as_opt.dist_threshold = dist_threshold;
     auto ws_opt = WordSpaceOpt();
     ws_opt.dist_mat = dist_mat;
     ws_opt.ins_cost = ins_cost;
