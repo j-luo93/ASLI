@@ -9,24 +9,23 @@ void LruCache::evict(BaseNode *const base)
     if (!base2node_it.contains(base))
     {
         assert(base2node_it.size() == nodes.size());
-        std::cerr << "stuck!\n";
         return;
     }
     auto node_it = base2node_it[base];
     auto node = *node_it;
     base2node_it.erase(base);
     nodes.erase(node_it);
-    std::cerr << 1 << "\n";
+    // std::cerr << 1 << "\n";
 
     // for (const auto child : base->children)
     //     if ((child != nullptr) && (child->get_in_degree() <= 1))
     //         evict(child);
 
     EdgeBuilder::disconnect(base);
-    std::cerr << 2 << "\n";
+    // std::cerr << 2 << "\n";
     if (base->is_tree_node() && !base->stopped)
         TreeNode::t_table.remove(static_cast<TreeNode *>(base)->words);
-    std::cerr << 3 << "\n";
+    // std::cerr << 3 << "\n";
     // if (base->is_tree_node())
     //     std::cerr << "evicting " << str::from(static_cast<TreeNode *>(base)) << "\n";
     // else
@@ -34,11 +33,12 @@ void LruCache::evict(BaseNode *const base)
     delete base;
 }
 
-void LruCache::evict() {
-    std::cerr << "evicting...\n" ;
+void LruCache::evict()
+{
+    // std::cerr << "evicting...\n" ;
     evict(nodes.back().base);
-    std::cerr << "evicted one\n" ;
-     }
+    // std::cerr << "evicted one\n" ;
+}
 
 void LruCache::put(BaseNode *const base)
 {

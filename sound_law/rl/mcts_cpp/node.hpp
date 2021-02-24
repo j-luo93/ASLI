@@ -51,7 +51,7 @@ protected:
 
     BaseNode(BaseNode *const, const ChosenChar &, bool, bool);
 
-    bool played = false;
+    // bool played = false;
 
     // Given the current action phase, get the best next mini node.
     ChosenChar get_best_subaction(float, int, float, float);
@@ -172,6 +172,8 @@ class TreeNode : public BaseNode
     pair<TreeNode *, Subpath> play();
 
 public:
+    static size_t get_num_nodes();
+
     ~TreeNode() override = default;
 
     const vec<Word *> words;

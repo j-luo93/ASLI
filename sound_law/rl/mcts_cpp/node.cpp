@@ -148,8 +148,8 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini()
     // std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
 
     assert(max_index != -1);
-    assert(!played);
-    played = true;
+    // assert(!played);
+    // played = true;
     return std::make_pair(children[max_index], ChosenChar{max_index, permissible_chars[max_index]});
 
     // auto probs = vec<float>();
@@ -308,6 +308,8 @@ void BaseNode::disconnect_from_children()
         }
     }
 }
+
+size_t TreeNode::get_num_nodes() { return t_table.size(); }
 
 // BaseNode::~BaseNode()
 // {

@@ -123,9 +123,17 @@ class TrieNode
 {
     friend class Trie<K, V>;
     paramap<K, TrieNode<K, V> *> children;
+    K key;
     V value;
 
-    inline TrieNode(V value) : value(value){};
+    TrieNode(K key, V value) : key(key), value(value){};
+    size_t size() const
+    {
+        size_t ret = 1;
+        for (const auto &child : children)
+            ret += child.second->size();
+        return ret;
+    }
 };
 
 template <class K, class V>
@@ -135,26 +143,32 @@ private:
     TrieNode<K, V> *root;
     const V default_value;
 
-    inline TrieNode<K, V> *locate_key(const vec<K> &key)
+    vec<TrieNode<K, V> *> get_path(const vec<K> &key)
     {
         TrieNode<K, V> *node = root;
+        auto path = vec<TrieNode<K, V> *>{root};
         for (const K k : key)
+        {
             if (!node->children.if_contains(k, [&node](TrieNode<K, V> *const &value) { node = value; }))
             {
-                auto new_node = new TrieNode<K, V>(default_value);
+                auto new_node = new TrieNode<K, V>(k, default_value);
                 node->children.try_emplace_l(
                     k, [&new_node](TrieNode<K, V> *&value) {delete new_node; new_node = value; }, new_node);
                 node = new_node;
             }
-        return node;
+            path.push_back(node);
+        }
+        return path;
     }
 
+    TrieNode<K, V> *locate_key(const vec<K> &key) { return get_path(key).back(); }
+
 public:
-    inline Trie(V default_value) : root(new TrieNode<K, V>(default_value)), default_value(default_value){};
+    Trie(V default_value) : root(new TrieNode<K, V>(nullptr, default_value)), default_value(default_value){};
 
     // Get the value associated with a key. If the key already exists, return true and modify the argument `value` by reference.
     // If it doesn't exist, return false and insert the argument `value` into the trie.
-    inline bool get(const vec<K> &key, V &new_value)
+    bool get(const vec<K> &key, V &new_value)
     {
         auto node = locate_key(key);
         if (default_value == node->value)
@@ -169,10 +183,39 @@ public:
         }
     };
 
-    // Remove the value associted with the key by setting the value to `default_value`.
-    inline void remove(const vec<K> &key)
+    // Remove the value associted with the key.
+    void remove(const vec<K> &key)
     {
-        auto node = locate_key(key);
-        node->value = default_value;
+        // auto node = locate_key(key);
+        // node->value = default_value;
+        vec<TrieNode<K, V> *> path = get_path(key);
+        // for (auto it = path.rbegin(); it != path.rend();)
+        // {
+        //     std::cerr << 1 << "\n";
+        //     auto k = (*it)->key;
+        //     std::cerr << 2 << "\n";
+        //     delete *it;
+        //     std::cerr << 3 << "\n";
+        //     ++it;
+        //     if (it == path.rend())
+        //         break;
+        //     std::cerr << 4 << "\n";
+        //     (*it)->children.erase(k);
+        //     std::cerr << 5 << "\n";
+        //     if (!(*it)->children.empty())
+        //         break;
+        //     std::cerr << 6 << "\n";
+        // }
+        assert(path.size() == key.size() + 1);
+        for (size_t i = key.size() - 1; i >= 0; --i)
+        {
+            delete path[i + 1];
+            auto parent = path[i];
+            parent->children.erase(key[i]);
+            if (!parent->children.empty())
+                break;
+        }
     }
+
+    size_t size() const { return root->size(); }
 };

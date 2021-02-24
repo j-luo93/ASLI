@@ -245,6 +245,7 @@ int main(int argc, char *argv[])
         }
         env->clear_priors(env->start, true);
         env->clear_stats(env->start, true);
+        SPDLOG_INFO("#trie nodes: {}", TreeNode::get_num_nodes());
         env->evict(10);
     }
 }

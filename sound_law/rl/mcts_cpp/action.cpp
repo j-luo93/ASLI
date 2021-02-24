@@ -693,7 +693,7 @@ void ActionSpace::clear_stats(BaseNode *root, bool recursive)
         node->max_index = -1;
         node->max_value = -9999.9;
         node->max_values = vec<float>(n, -9999.9);
-        node->played = false;
+        // node->played = false;
     }
 }
 
