@@ -33,7 +33,7 @@ public:
     TreeNode *start;
     TreeNode *end;
 
-    void evict(size_t);
+    size_t evict(size_t);
 
     // Various wrapper functions.
     inline void register_permissible_change(abc_t before, abc_t after) { action_space->register_permissible_change(before, after); };

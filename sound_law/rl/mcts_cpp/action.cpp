@@ -51,7 +51,8 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
         EdgeBuilder::connect(last, last_child_index, new_node);
         expand(new_node);
         if ((node->dist - new_node->dist) < opt.dist_threshold)
-            new_node->prune();
+            last->prune(last_child_index);
+        // new_node->prune();
     }
     return new_node;
 }
@@ -471,8 +472,8 @@ void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_ind
     if (can_have_null)
         expand_null(node, parent, chosen_index);
 
-    auto &words = node->base->words;
-    auto &affected = parent->affected[chosen_index];
+    const auto &words = node->base->words;
+    const auto &affected = parent->affected[chosen_index];
     auto char_map = map<abc_t, size_t>();
     for (const auto &aff : affected)
     {
@@ -613,7 +614,7 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         // Add one more permission char.
         char_map[unit] = node->permissible_chars.size();
         node->permissible_chars.push_back(unit);
-        node->affected.push_back(Affected({{order, pos}}));
+        node->affected.push_back(Affected{{{order, pos}}});
     }
     else
     {
@@ -680,33 +681,27 @@ void ActionSpace::expand_stats(BaseNode *node)
         static_cast<TransitionNode *>(node)->rewards = vec<float>(n, 0.0);
 }
 
-void ActionSpace::clear_stats(BaseNode *node, bool recursive)
+void ActionSpace::clear_stats(BaseNode *root, bool recursive)
 {
-    if (recursive && (node->visit_count == 0))
-        return;
-    size_t n = node->permissible_chars.size();
-    node->action_counts = vec<visit_t>(n, 0);
-    node->total_values = vec<float>(n, 0.0);
-    node->visit_count = 0;
-    node->max_index = -1;
-    node->max_value = -9999.9;
-    node->max_values = vec<float>(n, -9999.9);
-    node->played = false;
-    if (recursive)
-        for (const auto child : node->children)
-            if (child != nullptr)
-                clear_stats(child, true);
+    auto queue = recursive ? Traverser::bfs(root) : vec<BaseNode *>{root};
+    for (const auto node : queue)
+    {
+        size_t n = node->permissible_chars.size();
+        node->action_counts = vec<visit_t>(n, 0);
+        node->total_values = vec<float>(n, 0.0);
+        node->visit_count = 0;
+        node->max_index = -1;
+        node->max_value = -9999.9;
+        node->max_values = vec<float>(n, -9999.9);
+        node->played = false;
+    }
 }
 
-void ActionSpace::clear_priors(BaseNode *node, bool recursive)
+void ActionSpace::clear_priors(BaseNode *root, bool recursive)
 {
-    if (node->priors.empty())
-        return;
-    node->priors.clear();
-    if (recursive)
-        for (const auto child : node->children)
-            if (child != nullptr)
-                clear_priors(child, true);
+    auto queue = recursive ? Traverser::bfs(root) : vec<BaseNode *>{root};
+    for (const auto node : queue)
+        node->priors.clear();
 }
 
 void ActionSpace::prune(BaseNode *node, bool include_self)
@@ -719,7 +714,8 @@ void ActionSpace::prune(BaseNode *node, bool include_self)
         }
     if (include_self)
     {
-        EdgeBuilder::disconnect_from_parent(node);
+        assert(false);
+        // EdgeBuilder::disconnect_from_parents(node);
         delete node;
     }
     else

@@ -30,7 +30,7 @@ private:
 public:
     // FIXME(j_luo) This is hacky for cython.
     Path() = default;
-    Path(Path *);
+    Path(const Path &);
     Path(TreeNode *, const int);
 
     // Return all edges (s0, a, s1) from the descendant to the root.
@@ -62,11 +62,11 @@ public:
 
     vec<Path> select(TreeNode *, const int, const int, const int) const;
     void backup(const vec<Path> &, const vec<float> &) const;
-    inline Path *play(TreeNode *node, int start_depth)
+    inline Path play(TreeNode *node, int start_depth)
     {
-        auto ret = new Path(node, start_depth);
+        auto ret = Path(node, start_depth);
         auto play_ret = node->play();
-        ret->append(play_ret.second, play_ret.first);
+        ret.append(play_ret.second, play_ret.first);
         return ret;
     };
 };

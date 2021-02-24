@@ -124,31 +124,40 @@ class TrieNode
     friend class Trie<K, V>;
     paramap<K, TrieNode<K, V> *> children;
     V value;
+
+    inline TrieNode(V value) : value(value){};
 };
 
 template <class K, class V>
 class Trie
 {
+private:
     TrieNode<K, V> *root;
-    // Get the value associated with a key. If the key already exists, return true and modify the argument `value` by reference.
-    // If it doesn't exist, return false and insert the argument `value` into the trie.
-public:
-    Trie() : root(new TrieNode<K, V>()){};
+    const V default_value;
 
-    bool get(const vec<K> &key, V &new_value)
+    inline TrieNode<K, V> *locate_key(const vec<K> &key)
     {
         TrieNode<K, V> *node = root;
-        bool inserted = false;
         for (const K k : key)
             if (!node->children.if_contains(k, [&node](TrieNode<K, V> *const &value) { node = value; }))
             {
-                auto new_node = new TrieNode<K, V>();
+                auto new_node = new TrieNode<K, V>(default_value);
                 node->children.try_emplace_l(
                     k, [&new_node](TrieNode<K, V> *&value) {delete new_node; new_node = value; }, new_node);
                 node = new_node;
-                inserted = true;
             }
-        if (inserted)
+        return node;
+    }
+
+public:
+    inline Trie(V default_value) : root(new TrieNode<K, V>(default_value)), default_value(default_value){};
+
+    // Get the value associated with a key. If the key already exists, return true and modify the argument `value` by reference.
+    // If it doesn't exist, return false and insert the argument `value` into the trie.
+    inline bool get(const vec<K> &key, V &new_value)
+    {
+        auto node = locate_key(key);
+        if (default_value == node->value)
         {
             node->value = new_value;
             return false;
@@ -159,4 +168,11 @@ public:
             return true;
         }
     };
+
+    // Remove the value associted with the key by setting the value to `default_value`.
+    inline void remove(const vec<K> &key)
+    {
+        auto node = locate_key(key);
+        node->value = default_value;
+    }
 };

@@ -100,7 +100,7 @@ cdef extern from "mcts_cpp/env.hpp":
         TreeNode *start
         TreeNode *end
 
-        void evict(size_t)
+        size_t evict(size_t)
         void register_permissible_change(abc_t, abc_t)
         void evaluate(TreeNode *, vector[vector[float]], vector[float])
         void register_cl_map(abc_t, abc_t)
@@ -123,6 +123,7 @@ cdef extern from "mcts_cpp/node.hpp":
         vector[abc_t] permissible_chars
         vector[visit_t] action_counts
         vector[float] total_values
+        vector[bool] pruned
         visit_t visit_count
 
         bool is_tree_node()
@@ -154,7 +155,7 @@ cdef extern from "mcts_cpp/node.hpp":
         IdSeq get_id_seq(int)
         size_t size()
         size_t get_num_actions()
-        size_t get_num_descendants()
+        # size_t get_num_descendants()
 
 ctypedef TreeNode * TNptr
 ctypedef BaseNode * BNptr
@@ -170,7 +171,8 @@ cdef extern from "mcts_cpp/mcts.hpp":
         MctsOpt()
 
     cdef cppclass Path nogil:
-        Path(Path *)
+        Path()
+        Path(Path)
 
         int get_depth()
         vector[BNptr] get_all_nodes()
@@ -186,7 +188,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
 
         vector[Path] select(TreeNode *, int, int, int)
         void backup(vector[Path], vector[float])
-        Path *play(TreeNode *, int)
+        Path play(TreeNode *, int)
 
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:

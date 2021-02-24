@@ -194,9 +194,9 @@ void Path::merge(const Path &other)
 
 TreeNode *Path::get_last_node() const { return tree_nodes.back(); }
 
-Path::Path(Path *ptr)
+Path::Path(const Path &other)
 {
-    subpaths = ptr->subpaths;
-    tree_nodes = ptr->tree_nodes;
-    depth = ptr->depth;
+    subpaths = other.subpaths;
+    tree_nodes = other.tree_nodes;
+    depth = other.depth;
 }

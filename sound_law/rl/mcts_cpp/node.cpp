@@ -1,10 +1,8 @@
 #include "node.hpp"
 
-// void BaseNode::connect(BaseNode *const parent, const ChosenChar &chosen_char) { parent->children[chosen_char.first] = this; }
+BaseNode::BaseNode(BaseNode *const parent, const ChosenChar &chosen_char, bool stopped, bool persistent) : stopped(stopped), persistent(persistent) {}
 
-BaseNode::BaseNode(BaseNode *const parent, const ChosenChar &chosen_char, bool stopped) : stopped(stopped) {} // { connect(parent, chosen_char); }
-
-MiniNode::MiniNode(TreeNode *base, BaseNode *const parent, const ChosenChar &chosen_char, ActionPhase ap, bool stopped) : base(base), ap(ap), BaseNode(parent, chosen_char, stopped) {}
+MiniNode::MiniNode(TreeNode *base, BaseNode *const parent, const ChosenChar &chosen_char, ActionPhase ap, bool stopped) : base(base), ap(ap), BaseNode(parent, chosen_char, stopped, false) {}
 
 TransitionNode::TransitionNode(TreeNode *base,
                                MiniNode *parent,
@@ -23,7 +21,7 @@ void TreeNode::common_init(const vec<Word *> &words)
 TreeNode::TreeNode(const vec<Word *> &words,
                    int depth) : words(words),
                                 depth(depth),
-                                BaseNode(nullptr, ChosenChar(-1, 0), false) { common_init(words); }
+                                BaseNode(nullptr, ChosenChar(-1, 0), false, true) { common_init(words); }
 
 TreeNode::TreeNode(const vec<Word *> &words,
                    int depth,
@@ -31,7 +29,7 @@ TreeNode::TreeNode(const vec<Word *> &words,
                    const ChosenChar &chosen_char,
                    bool stopped) : words(words),
                                    depth(depth),
-                                   BaseNode(parent, chosen_char, stopped) { common_init(words); }
+                                   BaseNode(parent, chosen_char, stopped, false) { common_init(words); }
 
 bool BaseNode::is_expanded() { return (permissible_chars.size() > 0); }
 bool BaseNode::is_evaluated() { return (priors.size() > 0); }
@@ -236,16 +234,16 @@ bool TreeNode::is_transitional() { return false; }
 bool MiniNode::is_tree_node() { return false; }
 bool TreeNode::is_tree_node() { return true; }
 
-size_t BaseNode::get_num_descendants()
-{
-    size_t ret = 1;
-    for (const auto child : children)
-        if (child != nullptr)
-            ret += child->get_num_descendants();
-    return ret;
-}
+// size_t BaseNode::get_num_descendants()
+// {
+//     size_t ret = 1;
+//     for (const auto child : children)
+//         if (child != nullptr)
+//             ret += child->get_num_descendants();
+//     return ret;
+// }
 
-Trie<Word *, TreeNode *> TreeNode::t_table = Trie<Word *, TreeNode *>();
+Trie<Word *, TreeNode *> TreeNode::t_table = Trie<Word *, TreeNode *>(nullptr);
 
 TreeNode *TreeNode::get_tree_node(const vec<Word *> &words, int depth)
 {
@@ -279,3 +277,47 @@ BaseNode *BaseNode::get_child(size_t index) const
 }
 
 int BaseNode::get_in_degree() const { return in_degree; }
+
+void BaseNode::disconnect_from_parents()
+{
+    for (size_t i = 0; i < parents.size(); ++i)
+    {
+        const auto parent = parents[i];
+        const auto index = parent_indices[i];
+        parent->children[index] = nullptr;
+    }
+    parents.clear();
+    parent_indices.clear();
+    in_degree = 0;
+}
+
+void BaseNode::disconnect_from_children()
+{
+    for (size_t i = 0; i < children.size(); ++i)
+    {
+        const auto child = children[i];
+        if (child != nullptr)
+        {
+            --child->in_degree;
+            auto it = std::find(child->parents.begin(), child->parents.end(), this);
+            assert(it != child->parents.end());
+            auto index = std::distance(child->parents.begin(), it);
+            child->parents.erase(it);
+            child->parent_indices.erase(child->parent_indices.begin() + index);
+            children[i] = nullptr;
+        }
+    }
+}
+
+// BaseNode::~BaseNode()
+// {
+//     disconnect_from_parents();
+//     disconnect_from_children();
+// }
+
+// TreeNode::~TreeNode()
+// {
+//     // Only remove it from the table if it is not stopped.
+//     if (!stopped)
+//         TreeNode::t_table.remove(words);
+// }

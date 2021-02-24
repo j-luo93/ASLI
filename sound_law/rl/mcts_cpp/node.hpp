@@ -32,17 +32,24 @@ class BaseNode
     friend class ActionSpace;
     friend class Env;
     friend class EdgeBuilder;
+    friend class Traverser;
 
     // void connect(BaseNode *const, const ChosenChar &);
     vec<BaseNode *> parents;
     vec<size_t> parent_indices;
 
     size_t in_degree = 0;
+    bool visited = false;
+
+    // Disconnect the node from all of its parents.
+    void disconnect_from_parents();
+    // Disconnect the node from all of its children.
+    void disconnect_from_children();
 
 protected:
     std::mutex mtx;
 
-    BaseNode(BaseNode *const, const ChosenChar &, bool);
+    BaseNode(BaseNode *const, const ChosenChar &, bool, bool);
 
     bool played = false;
 
@@ -53,6 +60,7 @@ public:
     virtual ~BaseNode() = default;
 
     const bool stopped;
+    const bool persistent;
 
     vec<abc_t> permissible_chars; // What characters are permissible to act upon?
     vec<Affected> affected;       // What positions are affected by each permissible character?
@@ -76,7 +84,7 @@ public:
     void prune(int);
     void prune();
     bool is_pruned();
-    size_t get_num_descendants();
+    // size_t get_num_descendants();
 
     bool has_child(size_t) const;
     BaseNode *get_child(size_t) const;
@@ -99,7 +107,7 @@ class MiniNode : public BaseNode
     MiniNode(TreeNode *, BaseNode *const, const ChosenChar &, ActionPhase, bool);
 
 public:
-    virtual ~MiniNode() = default;
+    virtual ~MiniNode() override = default;
 
     TreeNode *const base;
     const ActionPhase ap;
@@ -139,12 +147,14 @@ struct Subpath
 };
 
 class Mcts;
+class LruCache;
 
 class TreeNode : public BaseNode
 {
     friend class Mcts;
     friend class Env;
     friend class ActionSpace;
+    friend class LruCache;
 
     static Trie<Word *, TreeNode *> t_table;
     static TreeNode *get_tree_node(const vec<Word *> &, int);
@@ -154,7 +164,9 @@ class TreeNode : public BaseNode
     vec<float> special_priors;
 
     void common_init(const vec<Word *> &);
+    // This is used for persistent nodes (e.g., start and end nodes).
     TreeNode(const vec<Word *> &, int);
+    // This is used for everything else.
     TreeNode(const vec<Word *> &, int, BaseNode *const, const ChosenChar &, bool);
 
     pair<TreeNode *, Subpath> play();
@@ -197,9 +209,11 @@ namespace str
         }
     }
 
+    inline string from(BaseNode *node) { return "stopped: " + from(node->stopped); };
+
     inline string from(TreeNode *node)
     {
-        string out = "";
+        string out = from(static_cast<BaseNode *>(node)) + "\n";
         for (const auto word : node->words)
         {
             for (const auto unit : word->id_seq)
@@ -208,9 +222,11 @@ namespace str
         }
         return out;
     }
+
+    inline string from(MiniNode *node) { return from(static_cast<BaseNode *>(node)) + " phase: " + from(node->ap) + " base: " + from(node->base); }
+
 } // namespace str
 
-class LruCache;
 class EdgeBuilder
 {
     friend class LruCache;
@@ -227,14 +243,46 @@ private:
         ++child->in_degree;
     }
 
-    // Disconnect `child` from all of its parents.
-    static void disconnect_from_parent(BaseNode *child)
+    // Disconnet `node` from all of its children and parents.
+    static void disconnect(BaseNode *node)
     {
-        for (size_t i = 0; i < child->parents.size(); ++i)
+        node->disconnect_from_parents();
+        node->disconnect_from_children();
+    }
+};
+
+class Traverser
+{
+    friend class ActionSpace;
+
+private:
+    // Visit one node and append it to the queue if it hasn't been visited.
+    static void visit(BaseNode *node, vec<BaseNode *> &queue)
+    {
+        if (!node->visited)
         {
-            const auto parent = child->parents[i];
-            const auto index = child->parent_indices[i];
-            parent->children[index] = nullptr;
+            node->visited = true;
+            queue.push_back(node);
         }
+    };
+
+    // Traverse from `start` using bfs.
+    static vec<BaseNode *> bfs(BaseNode *start)
+    {
+        auto queue = vec<BaseNode *>();
+        visit(start, queue);
+        size_t i = 0;
+        while (i < queue.size())
+        {
+            auto selected = queue[i];
+            for (const auto child : selected->children)
+                if (child != nullptr)
+                    visit(child, queue);
+            ++i;
+        }
+
+        for (const auto node : queue)
+            node->visited = false;
+        return queue;
     }
 };

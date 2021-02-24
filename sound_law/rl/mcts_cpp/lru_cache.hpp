@@ -20,6 +20,6 @@ class LruCache
 
 public:
     size_t size();
-    BaseNode *evict();
+    void evict();
     void put(BaseNode *const);
 };

@@ -79,6 +79,7 @@ int main(int argc, char *argv[])
     add_argument<int>(parser, "num_steps", "Number of steps", "20");
     add_argument<int>(parser, "num_sims", "Number of simulations", "1000");
     add_argument<int>(parser, "batch_size", "Batch size per evaluation", "40");
+    add_argument<int>(parser, "num_episodes", "Number of episodes", "1");
     add_argument<float>(parser, "puct_c", "puct constant", "5.0");
     add_argument<unsigned>(parser, "random_seed", "Random seed", "0");
     add_argument<float>(parser, "dist_threshold", "Dist threshold", "0.0");
@@ -99,6 +100,7 @@ int main(int argc, char *argv[])
     const bool syncope = args["syncope"].as<bool>();
     const int num_sims = args["num_sims"].as<int>();
     const int batch_size = args["batch_size"].as<int>();
+    const int num_episodes = args["num_episodes"].as<int>();
 
     srand(random_seed);
     std::cerr << "num threads " << num_threads << '\n';
@@ -181,10 +183,6 @@ int main(int argc, char *argv[])
                 env->register_permissible_change(i, j);
         env->register_permissible_change(i, as_opt.emp_id);
     }
-    env->evaluate(env->start,
-                  vec<vec<float>>{
-                      uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
-                  uniform(6));
 
     auto mcts_opt = MctsOpt();
     mcts_opt.puct_c = puct_c;
@@ -195,51 +193,58 @@ int main(int argc, char *argv[])
     // SPDLOG_INFO("Start:\n{}", env->start->str());
     // SPDLOG_INFO("End:\n{}", env->end->str());
     // action_space->timer.disable();
-    TreeNode *root = env->start;
     SPDLOG_INFO("Start node str:\n{}", str::from(env->start));
     SPDLOG_INFO("End node str:\n{}", str::from(env->end));
-    SPDLOG_INFO("Start dist: {}", root->dist);
-    for (int i = 0; i < num_steps; i++)
+    for (int n = 0; n < num_episodes; ++n)
     {
-        // if (i == num_steps / 2)
-        //     action_space->timer.enable();
-        if ((root->stopped) || (root->done))
-            break;
-        SPDLOG_INFO("Step: {}", i + 1);
-        // SPDLOG_DEBUG("Current root:\n{}", root->str());
-        show_size(root->permissible_chars, "#actions");
-        for (int j = 0; j < num_sims / batch_size; j++)
+        SPDLOG_INFO("=========Episode {}==========", (n + 1));
+        TreeNode *root = env->start;
+        env->evaluate(root,
+                      vec<vec<float>>{
+                          uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
+                      uniform(6));
+        SPDLOG_INFO("Start dist: {}", root->dist);
+        for (int i = 0; i < num_steps; i++)
         {
-            auto paths = mcts->select(root, batch_size, i, num_steps);
-            auto selected = vec<TreeNode *>();
-            for (const auto &path : paths)
-                selected.push_back(path.get_last_node());
-            auto unique_nodes = vec<TreeNode *>();
-            unique_nodes = find_unique(selected,
-                                       [](TreeNode *node) {
-                                           return ((!node->done) && (!node->stopped));
-                                       });
-            SPDLOG_DEBUG("#nodes to evaluate: {}", unique_nodes.size());
-            for (const auto node : unique_nodes)
-                env->evaluate(node,
-                              vec<vec<float>>{
-                                  uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
-                              uniform(6));
-            SPDLOG_DEBUG("Backing up values.");
-            mcts->backup(paths, vec<float>(paths.size(), 0.0));
+            // if (i == num_steps / 2)
+            //     action_space->timer.enable();
+            if ((root->stopped) || (root->done))
+                break;
+            SPDLOG_INFO("Step: {}", i + 1);
+            // SPDLOG_DEBUG("Current root:\n{}", root->str());
+            show_size(root->permissible_chars, "#actions");
+            for (int j = 0; j < num_sims / batch_size; j++)
+            {
+                auto paths = mcts->select(root, batch_size, i, num_steps);
+                auto selected = vec<TreeNode *>();
+                for (const auto &path : paths)
+                    selected.push_back(path.get_last_node());
+                auto unique_nodes = vec<TreeNode *>();
+                unique_nodes = find_unique(selected,
+                                           [](TreeNode *node) {
+                                               return ((!node->done) && (!node->stopped));
+                                           });
+                SPDLOG_DEBUG("#nodes to evaluate: {}", unique_nodes.size());
+                for (const auto node : unique_nodes)
+                    env->evaluate(node,
+                                  vec<vec<float>>{
+                                      uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
+                                  uniform(6));
+                SPDLOG_DEBUG("Backing up values.");
+                mcts->backup(paths, vec<float>(paths.size(), 0.0));
+            }
+            // auto scores = root->get_scores(puct_c);
+            // for (size_t i = 0; i < root->permissible_chars.size(); ++i)
+            //     std::cerr << root->permissible_chars[i] << ":" << scores[i] << " ";
+            // std::cerr << "\n";
+            // std::cerr << "max index: " << root->max_index << " max_value: " << root->max_value << "\n";
+            auto played_path = mcts->play(root, i);
+            root = played_path.get_last_node();
+            std::cerr << str::from(root);
+            SPDLOG_INFO("New dist: {}", root->dist);
         }
-        // auto scores = root->get_scores(puct_c);
-        // for (size_t i = 0; i < root->permissible_chars.size(); ++i)
-        //     std::cerr << root->permissible_chars[i] << ":" << scores[i] << " ";
-        // std::cerr << "\n";
-        // std::cerr << "max index: " << root->max_index << " max_value: " << root->max_value << "\n";
-        auto played_path = mcts->play(root, i);
-        root = played_path->get_last_node();
-        std::cerr << str::from(root);
-        SPDLOG_INFO("New dist: {}", root->dist);
+        env->clear_priors(env->start, true);
+        env->clear_stats(env->start, true);
+        env->evict(10);
     }
-    env->evict(10);
-    // action_space->timer.show_stats();
-    // std::cerr << site_space->size() << " sites explored\n";
-    // std::cerr << word_space->size() << " words explored\n";
 }

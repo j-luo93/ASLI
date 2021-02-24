@@ -66,9 +66,9 @@ cdef class PyTreeNode:
     def num_actions(self) -> int:
         return self.ptr.get_num_actions()
 
-    @property
-    def num_descendants(self) -> int:
-        return self.ptr.get_num_descendants()
+    # @property
+    # def num_descendants(self) -> int:
+    #     return self.ptr.get_num_descendants()
 
     @property
     def dist(self) -> float:
@@ -122,6 +122,10 @@ cdef class PyTreeNode:
     @property
     def total_values(self):
         return np.asarray((<BaseNode *>self.ptr).total_values, dtype='float32')
+
+    @property
+    def pruned(self):
+        return np.asarray((<BaseNode *>self.ptr).pruned, dtype='bool')
 
     # @property
     # def prev_action(self):
@@ -261,7 +265,7 @@ cdef class PyEnv:
         return wrap_node(tnode_cls, new_node)
 
     def evict(self, size_t until_size):
-        self.ptr.evict(until_size)
+        return self.ptr.evict(until_size)
 
     def register_permissible_change(self, abc_t unit1, abc_t unit2):
         self.ptr.register_permissible_change(unit1, unit2)
@@ -308,29 +312,30 @@ cdef inline TreeNode *get_ptr(PyTreeNode py_node):
 
 cdef class PyPath:
     cdef Path *ptr
+    cdef dict __dict__
 
-    def __cinit__(self):
+    def __cinit__(self, tnode_cls):
         self.ptr = NULL
+        self.__dict__['tnode_cls'] = tnode_cls
 
     def __dealloc__(self):
-        self.ptr = NULL
-        # del self.ptr
+        del self.ptr
 
     def merge(self, PyPath other):
         self.ptr.merge(deref(other.ptr))
 
     def get_last_node(self):
-        return wrap_node(PyEnv.tnode_cls, self.ptr.get_last_node())
+        return wrap_node(self.__dict__['tnode_cls'], self.ptr.get_last_node())
 
     @staticmethod
-    cdef PyPath from_ptr(Path *path_ptr):
-        cdef PyPath obj = PyPath.__new__(PyPath)
-        obj.ptr = new Path(path_ptr)
+    cdef PyPath from_c_obj(Path path, tnode_cls):
+        cdef PyPath obj = PyPath.__new__(PyPath, tnode_cls)
+        obj.ptr = new Path(path)
         return obj
 
     @staticmethod
-    cdef Path *get_c_ptr(PyPath py_path):
-        return py_path.ptr
+    cdef Path get_c_obj(PyPath py_path):
+        return deref(py_path.ptr)
 
 cdef class PyMcts:
     cdef Mcts *ptr
@@ -350,18 +355,18 @@ cdef class PyMcts:
         paths = []
         for i in range(paths_vec.size()):
             steps_vec[i] = paths_vec[i].get_depth()
-            paths.append(PyPath.from_ptr(&paths_vec[i]))
+            paths.append(PyPath.from_c_obj(paths_vec[i], type(py_tnode)))
         steps = np.asarray(steps_vec, dtype='long')
         return paths, steps
 
     def backup(self, py_paths, vector[float] values):
         cdef vector[Path] paths = vector[Path]()
         for py_p in py_paths:
-            paths.push_back(deref(PyPath.get_c_ptr(py_p)))
+            paths.push_back(PyPath.get_c_obj(py_p))
         self.ptr.backup(paths, values)
 
     def play(self, PyTreeNode py_tnode, int start_depth):
-        return PyPath.from_ptr(self.ptr.play(py_tnode.ptr, start_depth))
+        return PyPath.from_c_obj(self.ptr.play(py_tnode.ptr, start_depth), type(py_tnode))
         # cdef FullActionPath full_action = self.ptr.play(py_tnode.ptr)
         # return wrap_node(type(py_tnode), full_action.first.first), full_action.first.second, full_action.second
 

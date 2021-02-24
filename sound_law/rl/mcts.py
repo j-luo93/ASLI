@@ -69,7 +69,7 @@ class Mcts(PyMcts):
         # num_desc = self.env.start.num_descendants
         # logging.info(f'#nodes: {num_desc}')
         # if evict and num_desc > 1000000:
-        self.env.evict(1000000)
+        logging.info(f'#nodes: {self.env.evict(500000)}')
 
     def evaluate(self, states, steps: Optional[Union[int, LT]] = None) -> List[float]:
         """Expand and evaluate the leaf node."""
