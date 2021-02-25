@@ -72,7 +72,7 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
         // scores[i] = q + u + randf(0.001);
         // scores[i] = pruned[i] ? -9999.9 : (q + u);
         // scores[i] = pruned[i] ? -9999.9 : (q + u + h + randf(0.01));
-        scores[i] = pruned[i] ? -9999.9 : (q + u + h);
+        scores[i] = pruned[i] ? -9999.9 : (q + u + h + randf(1e-8));
         // scores[i] = q + u; //+ h + randf(0.01);
     }
     return scores;
@@ -80,31 +80,23 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
 
 void BaseNode::prune()
 {
-    // std::cerr << "complete: " << num_unpruned_actions << "\n";
     SPDLOG_TRACE("Prune this node with #actions {}", num_unpruned_actions);
     num_unpruned_actions = 0;
     std::fill(pruned.begin(), pruned.end(), true);
     for (size_t i = 0; i < parents.size(); ++i)
         parents[i]->prune(parent_indices[i]);
-    // if (parent != nullptr)
-    //     parent->prune(chosen_char.first);
 }
 
 void BaseNode::prune(int index)
 {
-    // assert(!pruned[index]);
     SPDLOG_TRACE("Prune this node with #actions {0} at index {1}", num_unpruned_actions, index);
     if (!pruned[index])
     {
         pruned[index] = true;
-        // std::cerr << "old: " << num_unpruned_actions << "\n";
         --num_unpruned_actions;
-        // std::cerr << "new: " << num_unpruned_actions << "\n";
     }
     if (is_pruned())
         prune();
-    // if (is_pruned() && (parent != nullptr))
-    //     parent->prune(chosen_char.first);
 }
 
 bool BaseNode::is_pruned() { return num_unpruned_actions == 0; }
@@ -234,15 +226,6 @@ bool TreeNode::is_transitional() { return false; }
 bool MiniNode::is_tree_node() { return false; }
 bool TreeNode::is_tree_node() { return true; }
 
-// size_t BaseNode::get_num_descendants()
-// {
-//     size_t ret = 1;
-//     for (const auto child : children)
-//         if (child != nullptr)
-//             ret += child->get_num_descendants();
-//     return ret;
-// }
-
 Trie<Word *, TreeNode *> TreeNode::t_table = Trie<Word *, TreeNode *>(nullptr);
 
 TreeNode *TreeNode::get_tree_node(const vec<Word *> &words, int depth)
@@ -310,16 +293,3 @@ void BaseNode::disconnect_from_children()
 }
 
 size_t TreeNode::get_num_nodes() { return t_table.size(); }
-
-// BaseNode::~BaseNode()
-// {
-//     disconnect_from_parents();
-//     disconnect_from_children();
-// }
-
-// TreeNode::~TreeNode()
-// {
-//     // Only remove it from the table if it is not stopped.
-//     if (!stopped)
-//         TreeNode::t_table.remove(words);
-// }
