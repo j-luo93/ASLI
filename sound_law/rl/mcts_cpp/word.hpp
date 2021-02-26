@@ -7,19 +7,18 @@ class TreeNode;
 class Word
 {
     friend class WordSpace;
-    friend class TreeNode;
 
     Word(const IdSeq &, const IdSeq &, const vec<size_t> &);
 
-    // FIXME(j_luo) optimize this later.
     paramap<int, float> dists;
-
-    float get_edit_dist_at(int);
 
 public:
     const IdSeq id_seq;
     const IdSeq vowel_seq;
     const vec<size_t> id2vowel;
+
+    // Get edit distance at a given `order`.
+    float get_edit_dist_at(int) const;
 };
 
 struct WordSpaceOpt
@@ -35,18 +34,18 @@ struct WordSpaceOpt
 
 class WordSpace
 {
-    friend class ActionSpace;
-    friend class Env;
-
-    WordSpace(const VocabIdSeq &, const WordSpaceOpt &);
 
     paramap<IdSeq, Word *> words;
-    vec<Word *> end_words;
-
-    void set_edit_dist_at(Word *, int);
-    Word *get_word(const IdSeq &);
-    float get_edit_dist(const IdSeq &, const IdSeq &);
 
 public:
+    WordSpace(const WordSpaceOpt &, const VocabIdSeq &);
+
     const WordSpaceOpt opt;
+    const vec<Word *> end_words;
+
+    void set_edit_dist_at(Word *, int) const;
+    Word *get_word(const IdSeq &);
+    vec<Word *> get_words(const VocabIdSeq &);
+    float get_edit_dist(const IdSeq &, const IdSeq &) const;
+    size_t size() const;
 };

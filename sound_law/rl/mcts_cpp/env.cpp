@@ -5,7 +5,7 @@ Env::Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt
     assert(opt.start_ids.size() == opt.end_ids.size());
 
     // Set up the word space properly.
-    word_space = new WordSpace(opt.end_ids, ws_opt);
+    word_space = new WordSpace(ws_opt, opt.end_ids);
 
     // Set up start and end states.
     size_t n = opt.start_ids.size();
@@ -14,7 +14,10 @@ Env::Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt
     for (const auto &id_seq : opt.start_ids)
         start_words.push_back(word_space->get_word(id_seq));
     for (int order = 0; order < n; ++order)
+    {
         word_space->set_edit_dist_at(start_words[order], order);
+        word_space->set_edit_dist_at(word_space->end_words[order], order);
+    }
 
     // start = new TreeNode(start_words, 0);
     // end = new TreeNode(word_space->end_words, node::END_DEPTH);

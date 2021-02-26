@@ -6,14 +6,9 @@ Word::Word(const IdSeq &id_seq,
                                           vowel_seq(vowel_seq),
                                           id2vowel(id2vowel) {}
 
-float Word::get_edit_dist_at(int order) { return dists[order]; }
+float Word::get_edit_dist_at(int order) const { return dists.at(order); }
 
-WordSpace::WordSpace(const VocabIdSeq &end_ids, const WordSpaceOpt &ws_opt) : opt(ws_opt)
-{
-    end_words.reserve(end_ids.size());
-    for (const auto &id_seq : end_ids)
-        end_words.push_back(get_word(id_seq));
-}
+WordSpace::WordSpace(const WordSpaceOpt &ws_opt, const VocabIdSeq &end_ids) : opt(ws_opt), end_words(get_words(end_ids)) {}
 
 Word *WordSpace::get_word(const IdSeq &id_seq)
 {
@@ -50,17 +45,26 @@ Word *WordSpace::get_word(const IdSeq &id_seq)
     return output;
 }
 
-void WordSpace::set_edit_dist_at(Word *word, int order)
+vec<Word *> WordSpace::get_words(const VocabIdSeq &vocab)
+{
+    auto words = vec<Word *>();
+    words.reserve(vocab.size());
+    for (const auto &id_seq : vocab)
+        words.push_back(get_word(id_seq));
+    return words;
+}
+
+void WordSpace::set_edit_dist_at(Word *word, int order) const
 {
     if (word->dists.if_contains(order, [](const float dist) {}))
         return;
 
     auto dist = get_edit_dist(word->id_seq, end_words[order]->id_seq);
     word->dists.try_emplace_l(
-        order, [](float dist) {}, dist);
+        order, [](float &dist) {}, dist);
 };
 
-float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2)
+float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2) const
 {
     size_t l1 = seq1.size();
     size_t l2 = seq2.size();
@@ -86,3 +90,5 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2)
     free(dist);
     return ret;
 }
+
+size_t WordSpace::size() const { return words.size(); }
