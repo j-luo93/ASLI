@@ -64,9 +64,18 @@ size_t Env::evict(size_t until_size)
 {
     size_t size_before = cache.size();
     SPDLOG_TRACE("Before evicting #items: {}", size_before);
-    while (cache.size() > until_size)
+    std::cerr << cache.persistent_size() << "\n";
+    int num_to_evict = cache.size() - until_size;
+    while (num_to_evict-- > 0)
         cache.evict();
     // action_space->prune(base, true);
     SPDLOG_TRACE("After evicting #items: {}", cache.size());
     return size_before;
 };
+
+void Env::make_persistent(BaseNode *node)
+{
+    node->persistent = true;
+    // Re-invoke this to make it persistent in the cache.
+    cache.put(node);
+}

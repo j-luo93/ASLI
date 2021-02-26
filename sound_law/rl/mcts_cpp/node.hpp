@@ -27,12 +27,14 @@ class Env;
 
 /* ------------------------- Base Node ------------------------ */
 
+class LruCache;
 class BaseNode
 {
     friend class ActionSpace;
     friend class Env;
     friend class EdgeBuilder;
     friend class Traverser;
+    friend class LruCache;
 
     // void connect(BaseNode *const, const ChosenChar &);
     vec<BaseNode *> parents;
@@ -40,6 +42,7 @@ class BaseNode
 
     size_t in_degree = 0;
     bool visited = false;
+    bool persistent;
 
     // Disconnect the node from all of its parents.
     void disconnect_from_parents();
@@ -60,7 +63,6 @@ public:
     virtual ~BaseNode() = default;
 
     const bool stopped;
-    const bool persistent;
 
     vec<abc_t> permissible_chars; // What characters are permissible to act upon?
     vec<Affected> affected;       // What positions are affected by each permissible character?

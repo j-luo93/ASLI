@@ -68,6 +68,8 @@ public:
         auto ret = Path(node, start_depth);
         auto play_ret = node->play();
         ret.append(play_ret.second, play_ret.first);
+        for (const auto node : ret.get_all_nodes())
+            env->make_persistent(node);
         return ret;
     };
 };

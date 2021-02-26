@@ -25,6 +25,7 @@ class Env
     LruCache cache;
 
     TreeNode *apply_action(TreeNode *, const Subpath &);
+    void make_persistent(BaseNode *);
 
 public:
     Env(const EnvOpt &, const ActionSpaceOpt &, const WordSpaceOpt &);

@@ -2,7 +2,8 @@
 
 CacheNode::CacheNode(BaseNode *const base) : base(base) {}
 
-size_t LruCache::size() { return nodes.size(); }
+size_t LruCache::size() const { return nodes.size() + persistent_nodes.size(); }
+size_t LruCache::persistent_size() const { return persistent_nodes.size(); }
 
 void LruCache::evict(BaseNode *const base)
 {
@@ -43,13 +44,12 @@ void LruCache::evict()
 void LruCache::put(BaseNode *const base)
 {
     // For persistent nodes, we should not evict them ever, therefore not put in the cache.
-    if (base->persistent)
-        return;
     assert(base != nullptr);
     if (base2node_it.contains(base))
     {
         auto node_it = base2node_it[base];
         nodes.erase(node_it);
+        base2node_it.erase(base);
         SPDLOG_TRACE("LruCache: entry already exists.");
     }
     else
@@ -58,6 +58,11 @@ void LruCache::put(BaseNode *const base)
     //     std::cerr << "putting " << str::from(static_cast<TreeNode *>(base)) << "\n";
     // else
     //     std::cerr << "putting " << str::from(static_cast<MiniNode *>(base)) << "\n";
-    nodes.push_front(CacheNode(base));
-    base2node_it[base] = nodes.begin();
+    if (base->persistent)
+        persistent_nodes.insert(base);
+    else
+    {
+        nodes.push_front(CacheNode(base));
+        base2node_it[base] = nodes.begin();
+    }
 }
