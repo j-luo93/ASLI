@@ -193,6 +193,7 @@ class MctsTrainer(RLTrainer):
     add_argument('regress_lambda', default=0.01, dtype=float, msg='Hyperparameter for regression loss.')
     add_argument('use_value_guidance', default=True, dtype=bool,
                  msg='Flag to use predicted values to guide the search.')
+    add_argument('tau', default = 0.0, dtype=float, msg='Temperature for sampling episodes.')
 
     def __init__(self, *args, mcts: Mcts = None, **kwargs):
         if mcts is None:
@@ -228,7 +229,12 @@ class MctsTrainer(RLTrainer):
 
         # Add these new episodes to the replay buffer.
         for tr in new_tr:
-            weight = math.exp(tr.total_reward * 100.0)
+            # NOTE(j_luo) Use temperature if it's positive.
+            if g.tau > 0.0:
+                weight = math.exp(tr.total_reward * 10.0)
+            else:
+                weight = 1.0
+
             for tr_edge in tr:
                 self.replay_buffer.append(tr_edge)
                 self.buffer_weight.append(weight)
@@ -239,8 +245,8 @@ class MctsTrainer(RLTrainer):
         with self.agent.policy_grad(True), self.agent.value_grad(True):
             for _ in range(g.num_inner_steps):
                 # Get a batch of training trajectories from the replay buffer.
-                # edge_batch = np.random.choice(self.replay_buffer, p=weights, size=g.mcts_batch_size)
-                edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
+                edge_batch = np.random.choice(self.replay_buffer, p=weights, size=g.mcts_batch_size)
+                # edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
                 agent_inputs = AgentInputs.from_edges(edge_batch)  # , self.mcts.env)#, sparse=True)
 
                 self.agent.train()
