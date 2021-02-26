@@ -189,6 +189,7 @@ int main(int argc, char *argv[])
     mcts_opt.game_count = 3;
     mcts_opt.virtual_loss = 0.5;
     mcts_opt.num_threads = num_threads;
+    mcts_opt.add_noise = false;
     auto mcts = new Mcts(env, mcts_opt);
     // SPDLOG_INFO("Start:\n{}", env->start->str());
     // SPDLOG_INFO("End:\n{}", env->end->str());

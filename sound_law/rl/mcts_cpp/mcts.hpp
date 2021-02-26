@@ -11,6 +11,7 @@ struct MctsOpt
     float virtual_loss;
     int num_threads;
     float heur_c;
+    bool add_noise;
 };
 
 struct Edge

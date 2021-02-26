@@ -28,7 +28,7 @@ class ActionSpace
 
     WordSpace *word_space;
 
-    Subpath get_best_subpath(TreeNode *, float, int, float, float);
+    Subpath get_best_subpath(TreeNode *, float, int, float, float, bool);
     MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool);
     IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t, SpecialType);
     void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, bool);

@@ -34,11 +34,11 @@ TreeNode::TreeNode(const vec<Word *> &words,
 bool BaseNode::is_expanded() { return (permissible_chars.size() > 0); }
 bool BaseNode::is_evaluated() { return (priors.size() > 0); }
 
-ChosenChar BaseNode::get_best_subaction(float puct_c, int game_count, float virtual_loss, float heur_c)
+ChosenChar BaseNode::get_best_subaction(float puct_c, int game_count, float virtual_loss, float heur_c, bool add_noise)
 {
     std::lock_guard<std::mutex> lock(mtx);
     assert(is_expanded() && is_evaluated());
-    auto scores = get_scores(puct_c, heur_c);
+    auto scores = get_scores(puct_c, heur_c, add_noise);
     auto it = std::max_element(scores.begin(), scores.end());
     int index = std::distance(scores.begin(), it);
     auto ret = ChosenChar(index, permissible_chars[index]);
@@ -54,7 +54,7 @@ inline float randf(float high)
     return high * static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 }
 
-vec<float> BaseNode::get_scores(float puct_c, float heur_c)
+vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise)
 {
     float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
     auto scores = vec<float>(priors.size());
@@ -72,7 +72,8 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c)
         // scores[i] = q + u + randf(0.001);
         // scores[i] = pruned[i] ? -9999.9 : (q + u);
         // scores[i] = pruned[i] ? -9999.9 : (q + u + h + randf(0.01));
-        scores[i] = pruned[i] ? -9999.9 : (q + u + h + randf(1e-8));
+        float noise = add_noise ? randf(1e-8) : 0.0;
+        scores[i] = pruned[i] ? -9999.9 : (q + u + h + noise);
         // scores[i] = q + u; //+ h + randf(0.01);
     }
     return scores;
@@ -139,10 +140,22 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini()
     // std::cerr << "\n";
     // std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
 
+    // // Select the most visted.
+    // auto it = std::max_element(action_counts.begin(), action_counts.end());
+    // size_t index = std::distance(action_counts.begin(), it);
+
+    // Select the node with the max return;
     assert(max_index != -1);
+    size_t index = max_index;
+
+    // // Select the node with the max average return, i.e., both puct_c and heur_c are set to 0.
+    // auto scores = get_scores(0.0, 0.0);
+    // auto it = std::max_element(scores.begin(), scores.end());
+    // size_t index = std::distance(scores.begin(), it);
+
     // assert(!played);
     // played = true;
-    return std::make_pair(children[max_index], ChosenChar{max_index, permissible_chars[max_index]});
+    return std::make_pair(children[index], ChosenChar{index, permissible_chars[index]});
 
     // auto probs = vec<float>();
     // probs.reserve(action_counts.size());

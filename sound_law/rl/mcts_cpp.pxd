@@ -167,6 +167,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         float virtual_loss
         int num_threads
         float heur_c
+        bool add_noise
 
         MctsOpt()
 

@@ -209,13 +209,15 @@ cdef class PyMctsOpt:
                   int game_count,
                   float virtual_loss,
                   int num_threads,
-                  float heur_c):
+                  float heur_c,
+                  bool add_noise):
         self.c_obj = MctsOpt()
         self.c_obj.puct_c = puct_c
         self.c_obj.game_count = game_count
         self.c_obj.virtual_loss = virtual_loss
         self.c_obj.num_threads = num_threads
         self.c_obj.heur_c = heur_c
+        self.c_obj.add_noise = add_noise
 
 cdef class PyEnv:
     cdef Env *ptr
