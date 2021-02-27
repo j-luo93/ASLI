@@ -1,11 +1,11 @@
 #include "lru_cache.hpp"
 
-CacheNode::CacheNode(BaseNode *const base) : base(base) {}
+CacheNode::CacheNode(BaseNode *base) : base(base) {}
 
 size_t LruCache::size() const { return nodes.size() + persistent_nodes.size(); }
 size_t LruCache::persistent_size() const { return persistent_nodes.size(); }
 
-void LruCache::evict(BaseNode *const base)
+void LruCache::evict(BaseNode *base)
 {
     if (!base2node_it.contains(base))
     {
@@ -24,7 +24,7 @@ void LruCache::evict()
     evict(nodes.back().base);
 }
 
-void LruCache::put(BaseNode *const base)
+void LruCache::put(BaseNode *base)
 {
     assert(base != nullptr);
     if (base2node_it.contains(base))

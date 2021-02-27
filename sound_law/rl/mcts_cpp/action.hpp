@@ -28,26 +28,26 @@ class ActionSpace
 
     WordSpace *word_space;
 
-    Subpath get_best_subpath(TreeNode *, float, int, float, float, bool);
-    MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool);
+    Subpath get_best_subpath(TreeNode *, float, int, float, float, bool) const;
+    MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool) const;
     IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t, SpecialType);
-    void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, bool);
+    void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, bool) const;
     // void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
 
     // Methods for expanding nodes.
-    void expand(TreeNode *);
-    void expand(MiniNode *, const Subpath &, bool, bool);
-    void expand_before(MiniNode *, int);
-    void expand_special_type(MiniNode *, BaseNode *, int, abc_t, bool);
-    void expand_after(MiniNode *, BaseNode *, int, bool, bool, bool);
-    void expand_pre(MiniNode *, BaseNode *, int, bool, bool);
-    void expand_d_pre(MiniNode *, BaseNode *, int, bool, bool, bool);
-    void expand_post(MiniNode *, BaseNode *, int, bool, bool);
-    void expand_normal(MiniNode *, BaseNode *, int, int, bool, bool, bool);
-    void expand_null(MiniNode *, BaseNode *, int);
-    bool expand_null_only(MiniNode *, BaseNode *, int);
+    void expand(TreeNode *) const;
+    void expand(MiniNode *, const Subpath &, bool, bool) const;
+    void expand_before(MiniNode *, int) const;
+    void expand_special_type(MiniNode *, BaseNode *, int, abc_t, bool) const;
+    void expand_after(MiniNode *, BaseNode *, int, bool, bool, bool) const;
+    void expand_pre(MiniNode *, BaseNode *, int, bool, bool) const;
+    void expand_d_pre(MiniNode *, BaseNode *, int, bool, bool, bool) const;
+    void expand_post(MiniNode *, BaseNode *, int, bool, bool) const;
+    void expand_normal(MiniNode *, BaseNode *, int, int, bool, bool, bool) const;
+    void expand_null(MiniNode *, BaseNode *, int) const;
+    bool expand_null_only(MiniNode *, BaseNode *, int) const;
 
-    void evaluate(MiniNode *);
+    void evaluate(MiniNode *) const;
     // This will create a new tree node without checking first if the child exists. Use `apply_action` in `Env` if checking is needed.
     TreeNode *apply_new_action(TreeNode *, const Subpath &);
     TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType);
@@ -57,7 +57,7 @@ class ActionSpace
     void register_gbw_map(abc_t, abc_t);
     void evaluate(TreeNode *, const vec<vec<float>> &, const vec<float> &);
 
-    void connect(BaseNode *, const Subpath &);
+    void connect(BaseNode *, const Subpath &) const;
 
     ActionSpace(WordSpace *, const ActionSpaceOpt &);
     map<abc_t, vec<abc_t>> permissible_changes;
@@ -65,11 +65,11 @@ class ActionSpace
     map<abc_t, abc_t> gbj_map;
     map<abc_t, abc_t> gbw_map;
 
-    void expand_stats(BaseNode *);
-    void clear_stats(BaseNode *, bool);
-    void clear_priors(BaseNode *, bool);
+    void expand_stats(BaseNode *) const;
+    void clear_stats(BaseNode *, bool) const;
+    void clear_priors(BaseNode *, bool) const;
     // void prune(BaseNode *, bool);
-    void add_noise(TreeNode *, const vec<vec<float>> &, const vec<float> &, float);
+    void add_noise(TreeNode *, const vec<vec<float>> &, const vec<float> &, float) const;
 
 public:
     const ActionSpaceOpt opt;

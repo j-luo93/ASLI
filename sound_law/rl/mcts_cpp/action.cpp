@@ -190,7 +190,7 @@ void ActionSpace::register_cl_map(abc_t before, abc_t after) { cl_map[before] = 
 void ActionSpace::register_gbj_map(abc_t before, abc_t after) { gbj_map[before] = after; }
 void ActionSpace::register_gbw_map(abc_t before, abc_t after) { gbw_map[before] = after; }
 
-Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss, float heur_c, bool add_noise)
+Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss, float heur_c, bool add_noise) const
 {
     Subpath subpath = Subpath();
 
@@ -261,7 +261,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     return subpath;
 }
 
-MiniNode *ActionSpace::get_mini_node(TreeNode *base, BaseNode *parent, const ChosenChar &chosen, ActionPhase ap, bool stopped)
+MiniNode *ActionSpace::get_mini_node(TreeNode *base, BaseNode *parent, const ChosenChar &chosen, ActionPhase ap, bool stopped) const
 {
     // BaseNode *&child = parent->children[chosen.first];
     bool is_transition = (ap == ActionPhase::POST);
@@ -284,7 +284,7 @@ MiniNode *ActionSpace::get_mini_node(TreeNode *base, BaseNode *parent, const Cho
 
 inline bool in_bound(int pos, size_t max) { return ((pos >= 0) && (pos < max)); }
 
-void ActionSpace::expand(TreeNode *node)
+void ActionSpace::expand(TreeNode *node) const
 {
     SPDLOG_DEBUG("ActionSpace:: expanding node...");
 
@@ -329,7 +329,7 @@ void ActionSpace::expand(TreeNode *node)
     // }
 }
 
-void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chosen_index, abc_t before, bool force_apply)
+void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chosen_index, abc_t before, bool force_apply) const
 {
     auto st = static_cast<SpecialType>(parent->get_action_at(chosen_index));
     const auto &aff = parent->get_affected_at(chosen_index);
@@ -345,7 +345,7 @@ void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chos
             auto base_unit = word_space->opt.unit2base[unit];
             // FIXME(j_luo) we really don't need to pass order and pos (and create item) separately -- we just need to decide whether to keep it or not.
             assert(cl_map.contains(base_unit));
-            update_affected(node, cl_map[base_unit], order, pos, char_map, false);
+            update_affected(node, cl_map.at(base_unit), order, pos, char_map, false);
         }
         // std::cerr << "CLLR\n";
 
@@ -365,19 +365,20 @@ void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chos
     {
         // Must use `unit2base` since stress is included for before.
         if (st == SpecialType::GBJ)
-            ActionManager::add_action(node, gbj_map[before], aff);
+            ActionManager::add_action(node, gbj_map.at(before), aff);
         else if (st == SpecialType::GBW)
-            ActionManager::add_action(node, gbw_map[before], aff);
+            ActionManager::add_action(node, gbw_map.at(before), aff);
         else if (force_apply)
             // HACK(j_luo) this is hacky.
             for (abc_t after_id = 0; after_id < 1000; ++after_id)
                 ActionManager::add_action(node, after_id, aff);
         else
-            for (abc_t after_id : permissible_changes[before])
+            for (abc_t after_id : permissible_changes.at(before))
                 ActionManager::add_action(node, after_id, aff);
     }
 }
-void ActionSpace::expand_before(MiniNode *node, int chosen_index)
+
+void ActionSpace::expand_before(MiniNode *node, int chosen_index) const
 {
     auto unit = node->base->get_action_at(chosen_index);
     const auto &aff = node->base->get_affected_at(chosen_index);
@@ -423,7 +424,7 @@ void ActionSpace::expand_before(MiniNode *node, int chosen_index)
         ActionManager::add_action(node, static_cast<abc_t>(SpecialType::GBW), full_aff);
 }
 
-void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_index, int offset, bool use_vowel_seq, bool can_have_null, bool can_have_any)
+void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_index, int offset, bool use_vowel_seq, bool can_have_null, bool can_have_any) const
 {
     if (can_have_null)
         expand_null(node, parent, chosen_index);
@@ -452,7 +453,8 @@ void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_ind
         }
     }
 }
-bool ActionSpace::expand_null_only(MiniNode *node, BaseNode *parent, int chosen_index)
+
+bool ActionSpace::expand_null_only(MiniNode *node, BaseNode *parent, int chosen_index) const
 {
     abc_t last_unit = parent->get_action_at(chosen_index);
     if ((last_unit == opt.null_id) || (last_unit == opt.any_id) || (last_unit == opt.any_s_id) || (last_unit == opt.any_uns_id))
@@ -463,34 +465,36 @@ bool ActionSpace::expand_null_only(MiniNode *node, BaseNode *parent, int chosen_
     }
     return false;
 }
-void ActionSpace::expand_after(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) { expand_normal(node, parent, chosen_index, -1, use_vowel_seq, can_have_null, can_have_any); }
-void ActionSpace::expand_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any)
+
+void ActionSpace::expand_after(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) const { expand_normal(node, parent, chosen_index, -1, use_vowel_seq, can_have_null, can_have_any); }
+
+void ActionSpace::expand_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any) const
 {
     if (!expand_null_only(node, parent, chosen_index))
         expand_normal(node, parent, chosen_index, -2, use_vowel_seq, true, can_have_any);
 }
-void ActionSpace::expand_d_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) { expand_normal(node, parent, chosen_index, 1, use_vowel_seq, can_have_null, can_have_any); }
-void ActionSpace::expand_post(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any)
+
+void ActionSpace::expand_d_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) const { expand_normal(node, parent, chosen_index, 1, use_vowel_seq, can_have_null, can_have_any); }
+
+void ActionSpace::expand_post(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any) const
 {
     if (!expand_null_only(node, parent, chosen_index))
         expand_normal(node, parent, chosen_index, 2, use_vowel_seq, true, can_have_any);
 }
-void ActionSpace::expand_null(MiniNode *node, BaseNode *parent, int chosen_index)
+
+void ActionSpace::expand_null(MiniNode *node, BaseNode *parent, int chosen_index) const
 {
     // Affected positions will not be further narrowed down.
     ActionManager::add_action(node, opt.null_id, parent->get_affected_at(chosen_index));
 }
 
-void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_seq, bool force_apply)
+void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_seq, bool force_apply) const
 {
     if (node->is_expanded())
     {
         SPDLOG_TRACE("MiniNode expanded already.");
         return;
     }
-
-    // SPDLOG_TRACE("ActionSpace:: Expanding {0}, chosen_char: ({1}, {2}), parent #actions {3}",
-    //              str::from(node->ap), node->chosen_char.first, node->chosen_char.second, node->parent->permissible_chars.size());
 
     if (node->stopped)
     {
@@ -555,7 +559,7 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
     return;
 }
 
-void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map, bool can_have_any)
+void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map, bool can_have_any) const
 {
     // FIXME(j_luo) clearer logic here -- e.g., <any> is not aviable for after_id.
     if (((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id)) && !can_have_any)
@@ -589,12 +593,12 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         update_affected(node, opt.any_id, order, pos, char_map, can_have_any);
 }
 
-void ActionSpace::evaluate(MiniNode *node)
+void ActionSpace::evaluate(MiniNode *node) const
 {
     ActionManager::evaluate(node);
 }
 
-void ActionSpace::expand_stats(BaseNode *node)
+void ActionSpace::expand_stats(BaseNode *node) const
 {
     size_t n = node->get_num_actions();
     clear_stats(node, false);
@@ -605,14 +609,14 @@ void ActionSpace::expand_stats(BaseNode *node)
         ActionManager::init_rewards(static_cast<TransitionNode *>(node));
 }
 
-void ActionSpace::clear_stats(BaseNode *root, bool recursive)
+void ActionSpace::clear_stats(BaseNode *root, bool recursive) const
 {
     auto queue = recursive ? Traverser::bfs(root) : vec<BaseNode *>{root};
     for (const auto node : queue)
         ActionManager::init_stats(node);
 }
 
-void ActionSpace::clear_priors(BaseNode *root, bool recursive)
+void ActionSpace::clear_priors(BaseNode *root, bool recursive) const
 {
     auto queue = recursive ? Traverser::bfs(root) : vec<BaseNode *>{root};
     for (const auto node : queue)
@@ -621,12 +625,12 @@ void ActionSpace::clear_priors(BaseNode *root, bool recursive)
 
 void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors) { ActionManager::evaluate(node, meta_priors, special_priors); }
 
-void ActionSpace::add_noise(TreeNode *node, const vec<vec<float>> &meta_noise, const vec<float> &special_noise, float noise_ratio)
+void ActionSpace::add_noise(TreeNode *node, const vec<vec<float>> &meta_noise, const vec<float> &special_noise, float noise_ratio) const
 {
     ActionManager::add_noise(node, meta_noise, special_noise, noise_ratio);
 }
 
-void ActionSpace::connect(BaseNode *base, const Subpath &subpath)
+void ActionSpace::connect(BaseNode *base, const Subpath &subpath) const
 {
     BaseNode *parent = base;
     for (size_t i = 0; i < 6; ++i)
