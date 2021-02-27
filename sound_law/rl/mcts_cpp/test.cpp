@@ -204,16 +204,16 @@ int main(int argc, char *argv[])
                       vec<vec<float>>{
                           uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
                       uniform(6));
-        SPDLOG_INFO("Start dist: {}", root->dist);
+        SPDLOG_INFO("Start dist: {}", root->get_dist());
         for (int i = 0; i < num_steps; i++)
         {
             // if (i == num_steps / 2)
             //     action_space->timer.enable();
-            if ((root->stopped) || (root->done))
+            if ((root->stopped) || (root->is_done()))
                 break;
             SPDLOG_INFO("Step: {}", i + 1);
             // SPDLOG_DEBUG("Current root:\n{}", root->str());
-            show_size(root->permissible_chars, "#actions");
+            SPDLOG_INFO("#actions {}", root->get_num_actions());
             for (int j = 0; j < num_sims / batch_size; j++)
             {
                 auto paths = mcts->select(root, batch_size, i, num_steps);
@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
                 auto unique_nodes = vec<TreeNode *>();
                 unique_nodes = find_unique(selected,
                                            [](TreeNode *node) {
-                                               return ((!node->done) && (!node->stopped));
+                                               return ((!node->is_done()) && (!node->stopped));
                                            });
                 SPDLOG_DEBUG("#nodes to evaluate: {}", unique_nodes.size());
                 for (const auto node : unique_nodes)
@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
             auto played_path = mcts->play(root, i);
             root = played_path.get_last_node();
             std::cerr << str::from(root);
-            SPDLOG_INFO("New dist: {}", root->dist);
+            SPDLOG_INFO("New dist: {}", root->get_dist());
         }
         env->clear_priors(env->start, true);
         env->clear_stats(env->start, true);

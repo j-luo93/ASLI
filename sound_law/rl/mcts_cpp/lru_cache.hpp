@@ -24,4 +24,5 @@ public:
     size_t persistent_size() const;
     void evict();
     void put(BaseNode *const);
+    void put_persistent(BaseNode *);
 };

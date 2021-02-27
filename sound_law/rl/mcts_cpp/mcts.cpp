@@ -67,20 +67,25 @@ Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int
     while ((path.get_depth() < depth_limit) && (!node->is_leaf()))
     {
         // Complete sampling one action.
-        SPDLOG_DEBUG("Mcts: node depth {}", node->depth);
         SPDLOG_DEBUG("Mcts: node str\n{}", str::from(node));
         auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c, opt.add_noise);
         SPDLOG_DEBUG("Mcts: node subpath found.");
+
+        // Add virtual loss.
+        StatsManager::virtual_select(node, subpath.chosen_seq[0].first, opt.game_count, opt.virtual_loss);
+        for (size_t i = 0; i < 6; ++i)
+            StatsManager::virtual_select(subpath.mini_node_seq[i], subpath.chosen_seq[i + 1].first, opt.game_count, opt.virtual_loss);
+
         node = env->apply_action(node, subpath);
         bool is_circle = path.forms_a_circle(node);
         if (is_circle)
         {
             SPDLOG_DEBUG("Mcts: found a circle at {}!", str::from(node));
-            subpath.mini_node_seq[5]->prune(subpath.chosen_seq[6].first);
+            PruningManager::prune(subpath.mini_node_seq[5], subpath.chosen_seq[6].first);
         }
         path.append(subpath, node);
         SPDLOG_DEBUG("Mcts: action applied.");
-        if ((node->stopped) || (node->done) || (is_circle))
+        if ((node->stopped) || (node->is_done()) || (is_circle))
             break;
     }
     SPDLOG_DEBUG("Mcts: selected node dist {0} str\n{1}", node->dist, str::from(node));
@@ -124,32 +129,12 @@ void Mcts::backup(const vec<Path> &paths, const vec<float> &values) const
         {
             auto &edge = *it;
             int index = edge.a.first;
-            abc_t best_char = edge.a.second;
+            // abc_t best_char = edge.a.second;
             BaseNode *parent = edge.s1; // Since the edge points from child to parent, `s1` is used instead of `s0`.
-            // auto tparent = dynamic_cast<TransitionNode *>(parent);
-            // if (tparent != nullptr)
-            //     rtg += tparent->rewards[index];
             if (parent->is_transitional())
-                rtg += static_cast<TransitionNode *>(parent)->rewards[index];
-            parent->action_counts[index] -= opt.game_count - 1;
-            if (parent->action_counts[index] < 1)
-            {
-                std::cerr << index << '\n';
-                std::cerr << best_char << '\n';
-                std::cerr << parent->action_counts[index] << '\n';
-                assert(false);
-            }
-            // Update max value of the parent.
+                rtg += static_cast<TransitionNode *>(parent)->get_reward_at(index);
             float new_value = value + rtg;
-            if (new_value > parent->max_value)
-            {
-                parent->max_value = new_value;
-                parent->max_index = index;
-            }
-            if (new_value > parent->max_values[index])
-                parent->max_values[index] = new_value;
-            parent->total_values[index] += opt.game_count * opt.virtual_loss + new_value;
-            parent->visit_count -= opt.game_count - 1;
+            StatsManager::update_stats(parent, index, new_value, opt.game_count, opt.virtual_loss);
         }
     }
 }

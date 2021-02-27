@@ -38,7 +38,7 @@ cdef class PyTreeNode:
 
     @property
     def done(self) -> bool:
-        return self.ptr.done
+        return self.ptr.is_done()
 
     @property
     def vocab_array(self):
@@ -66,66 +66,24 @@ cdef class PyTreeNode:
     def num_actions(self) -> int:
         return self.ptr.get_num_actions()
 
-    # @property
-    # def num_descendants(self) -> int:
-    #     return self.ptr.get_num_descendants()
-
     @property
     def dist(self) -> float:
-        return self.ptr.dist
+        return self.ptr.get_dist()
 
     def is_leaf(self) -> bool:
         return self.ptr.is_leaf()
 
-    # def expand(self, float[::1] prior):
-    #     cdef vector[float] prior_vec = np2vector(prior)
-    #     self.ptr.expand(prior_vec)
-
-    # def add_noise(self, float[::1] noise, float noise_ratio):
-    #     cdef vector[float] noise_vec = np2vector(noise)
-    #     self.ptr.add_noise(noise_vec, noise_ratio)
-
-    # @property
-    # def num_actions(self):
-    #     return self.ptr.action_allowed.size()
-
-    # @property
-    # def action_allowed(self):
-    #     return np.asarray(self.ptr.action_allowed, dtype='long')
-
-    # @property
-    # def chosen_char(self):
-    #     return (<BaseNode *>self.ptr).chosen_char
-
-    # @property
-    # def parent(self):
-    #     cdef BaseNode *node = <BaseNode *>self.ptr
-    #     if node.parent == NULL:
-    #         return None
-    #     # We need to go back 7 times.
-    #     for i in range(7):
-    #         node = node.parent
-    #     return wrap_node(type(self), <TreeNode *>node)
-
     @property
     def action_counts(self):
-        return np.asarray((<BaseNode *>self.ptr).action_counts, dtype='long')
-
-    # @property
-    # def max_index(self):
-    #     return self.ptr.max_index
-
-    # @property
-    # def max_action_id(self):
-    #     return self.ptr.max_action_id
+        return np.asarray((<BaseNode *>self.ptr).get_action_counts(), dtype='long')
 
     @property
     def total_values(self):
-        return np.asarray((<BaseNode *>self.ptr).total_values, dtype='float32')
+        return np.asarray((<BaseNode *>self.ptr).get_total_values(), dtype='float32')
 
     @property
     def pruned(self):
-        return np.asarray((<BaseNode *>self.ptr).pruned, dtype='bool')
+        return np.asarray((<BaseNode *>self.ptr).get_pruned(), dtype='bool')
 
     # @property
     # def prev_action(self):
@@ -287,9 +245,6 @@ cdef class PyEnv:
     def clear_priors(self, PyTreeNode py_node, bool recursive):
         self.ptr.clear_priors(py_node.ptr, recursive)
 
-    # def prune(self, PyTreeNode py_node):
-    #     self.ptr.prune(py_node.ptr)
-
     @property
     def num_words(self) -> int:
         return self.ptr.get_num_words()
@@ -420,14 +375,14 @@ cdef object c_parallel_stack_actions(vector[BNptr] nodes, int num_threads):
     cdef vector[visit_t] ac
     cdef float vc
     for i in range(n):
-        m = max(m, nodes[i].permissible_chars.size())
+        m = max(m, nodes[i].get_actions().size())
     cdef long[:, ::1] actions = np.full([n, m], alphabet.SENTINEL_ID, dtype='long')
     cdef float[:, ::1] mcts_pis = np.zeros([n, m], dtype='float32')
     with nogil:
         for i in prange(n, num_threads=num_threads):
-            pc = nodes[i].permissible_chars
-            ac = nodes[i].action_counts
-            vc = <float>(nodes[i].visit_count)
+            pc = nodes[i].get_actions()
+            ac = nodes[i].get_action_counts()
+            vc = <float>(nodes[i].get_visit_count())
             for j in range(pc.size()):
                 actions[i, j] = pc[j]
                 mcts_pis[i, j] = <float>(ac[j]) / vc
@@ -463,9 +418,9 @@ def parallel_gather_trajectory(PyPath path, int num_threads):
             chosen_index = chosen_indices[i]
             chosen_action = chosen_actions[i]
             actions.push_back(chosen_action)
-            qs.push_back(node.total_values[chosen_index] / node.action_counts[chosen_index])
+            qs.push_back(node.get_total_values()[chosen_index] / node.get_action_counts()[chosen_index])
         if node.is_transitional():
-            rewards.push_back((<TransitionNode *>(node)).rewards[chosen_index])
+            rewards.push_back((<TransitionNode *>(node)).get_rewards()[chosen_index])
     id_seqs = c_parallel_stack_ids(tree_nodes, num_threads)
     # We don't need the last state's permissible actions since it's not explored.
     base_nodes.pop_back()

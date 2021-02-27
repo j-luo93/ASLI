@@ -1,18 +1,5 @@
 #include "action.hpp"
 
-void Subpath::connect(TreeNode *node) const
-{
-    BaseNode *parent = node;
-    for (size_t i = 0; i < 6; ++i)
-    {
-        auto child = mini_node_seq[i];
-        auto index = chosen_seq[i].first;
-        if (parent->children[index] == nullptr)
-            parent->children[index] = child;
-        parent = child;
-    }
-}
-
 ActionSpace::ActionSpace(WordSpace *word_space, const ActionSpaceOpt &as_opt) : word_space(word_space), opt(as_opt) {}
 
 TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
@@ -26,14 +13,13 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
     if (subpath.stopped)
     // A new node should always be created for STOP.
     {
-        new_node = new TreeNode(node->words, node->depth + 1, last, subpath.chosen_seq[6], true);
+        new_node = NodeFactory::get_stopped_node(node);
         EdgeBuilder::connect(last, last_child_index, new_node);
     }
-    // new_node = TreeNode::get_tree_node(node->words, node->depth + 1, last, subpath.chosen_seq[6], true);
     else
     {
         auto new_words = vec<Word *>(node->words);
-        const auto &aff = last->affected[last_child_index];
+        const auto &aff = last->get_affected_at(last_child_index);
         // FIXME(j_luo) If everything is ordered, then perhaps we don't need hashing.
         auto order2pos = map<int, vec<size_t>>();
         for (const auto &item : aff)
@@ -46,30 +32,15 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
             new_words[order] = new_word;
             word_space->set_edit_dist_at(new_word, order);
         }
-        // new_node = new TreeNode(new_words, node->depth + 1, last, subpath.chosen_seq[6], false);
-        new_node = TreeNode::get_tree_node(new_words, node->depth + 1, last, subpath.chosen_seq[6], false);
+        new_node = NodeFactory::get_tree_node(new_words, false);
         EdgeBuilder::connect(last, last_child_index, new_node);
         expand(new_node);
-        if ((node->dist - new_node->dist) < opt.dist_threshold)
-            last->prune(last_child_index);
+        if ((node->get_dist() - new_node->get_dist()) < opt.dist_threshold)
+            PruningManager::prune(last, last_child_index);
         // new_node->prune();
     }
     return new_node;
 }
-
-inline int get_index(abc_t target, const vec<abc_t> &chars)
-{
-    for (int i = 0; i < chars.size(); ++i)
-        if (chars[i] == target)
-            return i;
-    // std::cerr << target << "\n";
-    // for (const auto c : chars)
-    //     std::cerr << c << " ";
-    // assert(false);
-    throw std::runtime_error("Target not found.");
-}
-
-inline void dummy_evaluate(vec<float> &priors, size_t size) { priors = vec<float>(size, 0.0); }
 
 TreeNode *ActionSpace::apply_action(TreeNode *node,
                                     abc_t before_id,
@@ -83,63 +54,63 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
     Subpath subpath = Subpath();
 
     // std::cerr << "before\n";
-    auto before = ChosenChar({get_index(before_id, node->permissible_chars), before_id});
+    auto before = ChosenChar({node->get_action_index(before_id), before_id});
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
     subpath.chosen_seq[0] = before;
     subpath.mini_node_seq[0] = before_mn;
     subpath.stopped = stopped;
     expand(before_mn, subpath, false, false);
-    dummy_evaluate(before_mn->priors, before_mn->permissible_chars.size());
+    ActionManager::dummy_evaluate(before_mn);
 
     // std::cerr << "special_type\n";
     abc_t st_abc = static_cast<abc_t>(st);
-    auto special_type = ChosenChar({get_index(st_abc, before_mn->permissible_chars), st_abc});
+    auto special_type = ChosenChar({before_mn->get_action_index(st_abc), st_abc});
     auto st_mn = get_mini_node(node, before_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
     subpath.chosen_seq[1] = special_type;
     subpath.mini_node_seq[1] = st_mn;
     expand(st_mn, subpath, false, true);
-    dummy_evaluate(st_mn->priors, st_mn->permissible_chars.size());
+    ActionManager::dummy_evaluate(st_mn);
 
     // std::cerr << "after\n";
     // std::cerr << after_id << "\n";
     // for (const auto x : st_mn->permissible_chars)
     //     std::cerr << x << " ";
     // std::cerr << "\n";
-    auto after = ChosenChar({get_index(after_id, st_mn->permissible_chars), after_id});
+    auto after = ChosenChar({st_mn->get_action_index(after_id), after_id});
     auto after_mn = get_mini_node(node, st_mn, after, ActionPhase::AFTER, stopped);
     bool use_vowel_seq = (st == SpecialType::VS);
     subpath.chosen_seq[2] = after;
     subpath.mini_node_seq[2] = after_mn;
     expand(after_mn, subpath, use_vowel_seq, false);
-    dummy_evaluate(after_mn->priors, after_mn->permissible_chars.size());
+    ActionManager::dummy_evaluate(after_mn);
 
     // std::cerr << "pre\n";
-    auto pre = ChosenChar({get_index(pre_id, after_mn->permissible_chars), pre_id});
+    auto pre = ChosenChar({after_mn->get_action_index(pre_id), pre_id});
     auto pre_mn = get_mini_node(node, after_mn, pre, ActionPhase::PRE, stopped);
     subpath.chosen_seq[3] = pre;
     subpath.mini_node_seq[3] = pre_mn;
     expand(pre_mn, subpath, use_vowel_seq, false);
-    dummy_evaluate(pre_mn->priors, pre_mn->permissible_chars.size());
+    ActionManager::dummy_evaluate(pre_mn);
 
-    auto d_pre = ChosenChar({get_index(d_pre_id, pre_mn->permissible_chars), d_pre_id});
+    auto d_pre = ChosenChar({pre_mn->get_action_index(d_pre_id), d_pre_id});
     // std::cerr << "d_pre\n";
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
     subpath.chosen_seq[4] = d_pre;
     subpath.mini_node_seq[4] = d_pre_mn;
     expand(d_pre_mn, subpath, use_vowel_seq, false);
-    dummy_evaluate(d_pre_mn->priors, d_pre_mn->permissible_chars.size());
+    ActionManager::dummy_evaluate(d_pre_mn);
 
     // std::cerr << "post\n";
-    auto post = ChosenChar({get_index(post_id, d_pre_mn->permissible_chars), post_id});
+    auto post = ChosenChar({d_pre_mn->get_action_index(post_id), post_id});
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
     subpath.chosen_seq[5] = post;
     subpath.mini_node_seq[5] = post_mn;
     expand(post_mn, subpath, use_vowel_seq, false);
-    dummy_evaluate(post_mn->priors, post_mn->permissible_chars.size());
+    ActionManager::dummy_evaluate(post_mn);
 
     // std::cerr << "d_post\n";
-    auto d_post = ChosenChar({get_index(d_post_id, post_mn->permissible_chars), d_post_id});
+    auto d_post = ChosenChar({post_mn->get_action_index(d_post_id), d_post_id});
     subpath.chosen_seq[6] = d_post;
 
     // FIXME(j_luo) This shouldn't create a new node.
@@ -225,7 +196,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
 
     // std::cerr << "before\n";
     SPDLOG_DEBUG("ActionSpace:: getting best subpath...");
-    auto before = node->get_best_subaction(puct_c, game_count, virtual_loss, heur_c, add_noise);
+    auto before = node->get_best_action(puct_c, heur_c, add_noise);
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
     subpath.chosen_seq[0] = before;
@@ -236,7 +207,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: before done.");
 
     // std::cerr << "special_type\n";
-    auto special_type = before_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c, add_noise);
+    auto special_type = before_mn->get_best_action(puct_c, heur_c, add_noise);
     auto st_mn = get_mini_node(node, before_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
     subpath.chosen_seq[1] = special_type;
     subpath.mini_node_seq[1] = st_mn;
@@ -245,7 +216,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: special_type done.");
 
     // std::cerr << "after\n";
-    auto after = st_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c, add_noise);
+    auto after = st_mn->get_best_action(puct_c, heur_c, add_noise);
     bool use_vowel_seq = (static_cast<SpecialType>(special_type.second) == SpecialType::VS);
     auto after_mn = get_mini_node(node, st_mn, after, ActionPhase::AFTER, stopped);
     subpath.chosen_seq[2] = after;
@@ -255,7 +226,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: after done.");
 
     // std::cerr << "pre\n";
-    auto pre = after_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c, add_noise);
+    auto pre = after_mn->get_best_action(puct_c, heur_c, add_noise);
     auto pre_mn = get_mini_node(node, after_mn, pre, ActionPhase::PRE, stopped);
     subpath.chosen_seq[3] = pre;
     subpath.mini_node_seq[3] = pre_mn;
@@ -264,7 +235,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: pre done.");
 
     // std::cerr << "d_pre\n";
-    auto d_pre = pre_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c, add_noise);
+    auto d_pre = pre_mn->get_best_action(puct_c, heur_c, add_noise);
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
     subpath.chosen_seq[4] = d_pre;
     subpath.mini_node_seq[4] = d_pre_mn;
@@ -273,7 +244,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: d_pre done.");
 
     // std::cerr << "post\n";
-    auto post = d_pre_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c, add_noise);
+    auto post = d_pre_mn->get_best_action(puct_c, heur_c, add_noise);
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
     subpath.chosen_seq[5] = post;
     subpath.mini_node_seq[5] = post_mn;
@@ -282,11 +253,11 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: post done.");
 
     // std::cerr << "d_post\n";
-    auto d_post = post_mn->get_best_subaction(puct_c, game_count, virtual_loss, heur_c, add_noise);
+    auto d_post = post_mn->get_best_action(puct_c, heur_c, add_noise);
     subpath.chosen_seq[6] = d_post;
     SPDLOG_DEBUG("ActionSpace:: d_post done.");
 
-    subpath.connect(node);
+    connect(node, subpath);
     return subpath;
 }
 
@@ -298,9 +269,9 @@ MiniNode *ActionSpace::get_mini_node(TreeNode *base, BaseNode *parent, const Cho
     if (!parent->has_child(chosen.first))
     {
         if (is_transition)
-            child = new TransitionNode(base, static_cast<MiniNode *>(parent), chosen, stopped);
+            child = NodeFactory::get_transition_node(base, stopped);
         else
-            child = new MiniNode(base, parent, chosen, ap, stopped);
+            child = NodeFactory::get_mini_node(base, ap, stopped);
         EdgeBuilder::connect(parent, chosen.first, child);
     }
     else
@@ -315,7 +286,6 @@ inline bool in_bound(int pos, size_t max) { return ((pos >= 0) && (pos < max)); 
 
 void ActionSpace::expand(TreeNode *node)
 {
-    std::lock_guard<std::mutex> lock(node->mtx);
     SPDLOG_DEBUG("ActionSpace:: expanding node...");
 
     if (node->is_expanded())
@@ -325,8 +295,7 @@ void ActionSpace::expand(TreeNode *node)
     }
 
     // Null/Stop option.
-    node->permissible_chars.push_back(opt.null_id);
-    node->affected = vec<Affected>({{}});
+    ActionManager::add_action(node, opt.null_id, Affected());
 
     auto char_map = map<abc_t, size_t>();
     for (int order = 0; order < node->words.size(); ++order)
@@ -340,12 +309,12 @@ void ActionSpace::expand(TreeNode *node)
     }
 
     expand_stats(node);
-    SPDLOG_DEBUG("ActionSpace:: node expanded with #actions {}.", node->permissible_chars.size());
+    SPDLOG_DEBUG("ActionSpace:: node expanded with #actions {}.", node->get_num_actions());
 
     // Skip STOP.
-    for (size_t i = 1; i < node->permissible_chars.size(); ++i)
-        if (node->affected[i].size() < opt.site_threshold)
-            node->prune(i);
+    for (size_t i = 1; i < node->get_num_actions(); ++i)
+        if (node->get_num_affected_at(i) < opt.site_threshold)
+            PruningManager::prune(node, i);
 
     // std::cerr << "-----------------\n";
     // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
@@ -362,10 +331,10 @@ void ActionSpace::expand(TreeNode *node)
 
 void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chosen_index, abc_t before, bool force_apply)
 {
-    auto st = static_cast<SpecialType>(parent->permissible_chars[chosen_index]);
+    auto st = static_cast<SpecialType>(parent->get_action_at(chosen_index));
+    const auto &aff = parent->get_affected_at(chosen_index);
     if ((st == SpecialType::CLL) || (st == SpecialType::CLR))
     {
-        const auto &aff = parent->affected[chosen_index];
         auto offset = (st == SpecialType::CLL) ? -1 : 1;
         auto char_map = map<abc_t, size_t>();
         for (const auto &item : aff)
@@ -396,34 +365,32 @@ void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chos
     {
         // Must use `unit2base` since stress is included for before.
         if (st == SpecialType::GBJ)
-            node->permissible_chars.push_back(gbj_map[before]);
+            ActionManager::add_action(node, gbj_map[before], aff);
         else if (st == SpecialType::GBW)
-            node->permissible_chars.push_back(gbw_map[before]);
+            ActionManager::add_action(node, gbw_map[before], aff);
         else if (force_apply)
             // HACK(j_luo) this is hacky.
             for (abc_t after_id = 0; after_id < 1000; ++after_id)
-                node->permissible_chars.push_back(after_id);
+                ActionManager::add_action(node, after_id, aff);
         else
-            node->permissible_chars = permissible_changes[before];
-        // FIXME(j_luo) This is not very efficient.
-        // std::cerr << "node\n";
-        // std::cerr << node->parent->chosen_char.second << "\n";
-        node->affected = vec<Affected>(node->permissible_chars.size(), parent->affected[chosen_index]);
+            for (abc_t after_id : permissible_changes[before])
+                ActionManager::add_action(node, after_id, aff);
     }
 }
-void ActionSpace::expand_before(MiniNode *node, BaseNode *parent, int chosen_index)
+void ActionSpace::expand_before(MiniNode *node, int chosen_index)
 {
-    auto unit = parent->permissible_chars[chosen_index];
-    node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::NONE));
+    auto unit = node->base->get_action_at(chosen_index);
+    const auto &aff = node->base->get_affected_at(chosen_index);
+    ActionManager::add_action(node, static_cast<abc_t>(SpecialType::NONE), aff);
     if (word_space->opt.is_vowel[unit])
-        node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::VS));
-    node->affected = vec<Affected>(node->permissible_chars.size(), parent->affected[chosen_index]);
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::VS), aff);
 
     // CLL and CLR
     // std::cerr << "cllr\n";
+    auto full_aff = node->get_affected_at(0);
     auto cll_aff = Affected();
     auto clr_aff = Affected();
-    for (const auto &item : node->affected[0])
+    for (const auto &item : full_aff)
     {
         auto order = item.first;
         auto pos = item.second;
@@ -442,38 +409,27 @@ void ActionSpace::expand_before(MiniNode *node, BaseNode *parent, int chosen_ind
         }
     }
     if (cll_aff.size() > 0)
-    {
-        node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::CLL));
-        node->affected.push_back(cll_aff);
-    }
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::CLL), cll_aff);
     if (clr_aff.size() > 0)
-    {
-        node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::CLR));
-        node->affected.push_back(clr_aff);
-    }
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::CLR), clr_aff);
     // GBJ
     // std::cerr << "gbj\n";
     auto base_unit = word_space->opt.unit2base[unit];
     if (gbj_map.contains(base_unit))
-    {
-        node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::GBJ));
-        node->affected.push_back(node->affected[0]);
-    }
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::GBJ), full_aff);
     // GBW
     // std::cerr << "gbw\n";
     if (gbw_map.contains(base_unit))
-    {
-        node->permissible_chars.push_back(static_cast<abc_t>(SpecialType::GBW));
-        node->affected.push_back(node->affected[0]);
-    }
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::GBW), full_aff);
 }
+
 void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_index, int offset, bool use_vowel_seq, bool can_have_null, bool can_have_any)
 {
     if (can_have_null)
         expand_null(node, parent, chosen_index);
 
     const auto &words = node->base->words;
-    const auto &affected = parent->affected[chosen_index];
+    const auto &affected = parent->get_affected_at(chosen_index);
     auto char_map = map<abc_t, size_t>();
     for (const auto &aff : affected)
     {
@@ -498,7 +454,7 @@ void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_ind
 }
 bool ActionSpace::expand_null_only(MiniNode *node, BaseNode *parent, int chosen_index)
 {
-    abc_t last_unit = parent->permissible_chars[chosen_index];
+    abc_t last_unit = parent->get_action_at(chosen_index);
     if ((last_unit == opt.null_id) || (last_unit == opt.any_id) || (last_unit == opt.any_s_id) || (last_unit == opt.any_uns_id))
     {
         SPDLOG_TRACE("Phase {}, keeping only Null action.", str::from(node->ap));
@@ -521,15 +477,12 @@ void ActionSpace::expand_post(MiniNode *node, BaseNode *parent, int chosen_index
 }
 void ActionSpace::expand_null(MiniNode *node, BaseNode *parent, int chosen_index)
 {
-    node->permissible_chars.push_back(opt.null_id);
     // Affected positions will not be further narrowed down.
-    node->affected = vec<Affected>({parent->affected[chosen_index]});
+    ActionManager::add_action(node, opt.null_id, parent->get_affected_at(chosen_index));
 }
 
 void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_seq, bool force_apply)
 {
-    std::lock_guard<std::mutex> lock(node->mtx);
-
     if (node->is_expanded())
     {
         SPDLOG_TRACE("MiniNode expanded already.");
@@ -541,8 +494,7 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
 
     if (node->stopped)
     {
-        node->permissible_chars.push_back(opt.null_id);
-        node->affected = vec<Affected>({{}});
+        ActionManager::add_action(node, opt.null_id, Affected());
         SPDLOG_TRACE("Phase {}, keeping only Null action due to stopped status.", str::from(node->ap));
     }
     else
@@ -550,7 +502,7 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
         switch (node->ap)
         {
         case ActionPhase::BEFORE:
-            expand_before(node, node->base, subpath.chosen_seq[0].first);
+            expand_before(node, subpath.chosen_seq[0].first);
             break;
         case ActionPhase::SPECIAL_TYPE:
         {
@@ -580,12 +532,12 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
     }
 
     expand_stats(node);
-    SPDLOG_DEBUG("ActionSpace:: mini node expanded with #actions {}.", node->permissible_chars.size());
+    SPDLOG_DEBUG("ActionSpace:: mini node expanded with #actions {}.", node->get_num_actions());
 
     if (!node->stopped)
-        for (size_t i = 0; i < node->permissible_chars.size(); ++i)
-            if (node->affected[i].size() < opt.site_threshold)
-                node->prune(i);
+        for (size_t i = 0; i < node->get_num_actions(); ++i)
+            if (node->get_num_affected_at(i) < opt.site_threshold)
+                PruningManager::prune(node, i);
 
     // std::cerr << "-----------------\n";
     // std::cerr << str::from(node->ap) << " " << node->permissible_chars.size() << "\n";
@@ -612,15 +564,13 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
     if (!char_map.contains(unit))
     {
         // Add one more permission char.
-        char_map[unit] = node->permissible_chars.size();
-        node->permissible_chars.push_back(unit);
-        node->affected.push_back(Affected{{{order, pos}}});
+        char_map[unit] = node->get_num_actions();
+        ActionManager::add_action(node, unit, Affected{{{order, pos}}});
     }
     else
     {
         // Add one more position.
-        auto &aff = node->affected[char_map[unit]];
-        aff.push_back({order, pos});
+        ActionManager::update_affected_at(node, char_map[unit], order, pos);
     }
 
     Stress stress = word_space->opt.unit_stress[unit];
@@ -639,115 +589,51 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         update_affected(node, opt.any_id, order, pos, char_map, can_have_any);
 }
 
-inline void normalize(vec<float> &priors)
-{
-    float sum = 1e-8;
-    for (const auto prior : priors)
-        sum += prior;
-    for (auto &prior : priors)
-        prior /= sum;
-}
-
 void ActionSpace::evaluate(MiniNode *node)
 {
-    assert(node->is_expanded());
-    if (node->is_evaluated())
-        return;
-    node->priors.clear();
-    node->priors.reserve(node->permissible_chars.size());
-    if (node->ap == ActionPhase::SPECIAL_TYPE)
-    {
-        for (const auto st : node->permissible_chars)
-            node->priors.push_back(node->base->special_priors[st]);
-    }
-    else
-    {
-        auto &full_priors = node->base->meta_priors[static_cast<int>(node->ap) + 1]; // +1 because the first is used for the tree node.
-        for (const auto unit : node->permissible_chars)
-            node->priors.push_back(full_priors[unit]);
-    }
-    normalize(node->priors);
+    ActionManager::evaluate(node);
 }
 
 void ActionSpace::expand_stats(BaseNode *node)
 {
-    size_t n = node->permissible_chars.size();
+    size_t n = node->get_num_actions();
     clear_stats(node, false);
     clear_priors(node, false);
-    node->num_unpruned_actions = n;
-    node->children = vec<BaseNode *>(n, nullptr);
-    node->pruned = vec<bool>(n, false);
+    EdgeBuilder::init_edges(node);
+    ActionManager::init_pruned(node);
     if (node->is_transitional())
-        static_cast<TransitionNode *>(node)->rewards = vec<float>(n, 0.0);
+        ActionManager::init_rewards(static_cast<TransitionNode *>(node));
 }
 
 void ActionSpace::clear_stats(BaseNode *root, bool recursive)
 {
     auto queue = recursive ? Traverser::bfs(root) : vec<BaseNode *>{root};
     for (const auto node : queue)
-    {
-        size_t n = node->permissible_chars.size();
-        node->action_counts = vec<visit_t>(n, 0);
-        node->total_values = vec<float>(n, 0.0);
-        node->visit_count = 0;
-        node->max_index = -1;
-        node->max_value = -9999.9;
-        node->max_values = vec<float>(n, -9999.9);
-        // node->played = false;
-    }
+        ActionManager::init_stats(node);
 }
 
 void ActionSpace::clear_priors(BaseNode *root, bool recursive)
 {
     auto queue = recursive ? Traverser::bfs(root) : vec<BaseNode *>{root};
     for (const auto node : queue)
-        node->priors.clear();
+        ActionManager::clear_priors(node);
 }
 
-void ActionSpace::prune(BaseNode *node, bool include_self)
-{
-    for (const auto child : node->children)
-        if (child != nullptr)
-        {
-            prune(child, false);
-            delete child;
-        }
-    if (include_self)
-    {
-        assert(false);
-        // EdgeBuilder::disconnect_from_parents(node);
-        delete node;
-    }
-    else
-        std::fill(node->children.begin(), node->children.end(), nullptr);
-}
-
-void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors)
-{
-    assert(node->is_expanded());
-    if (node->is_evaluated())
-        return;
-    node->meta_priors = meta_priors;
-    node->special_priors = special_priors;
-    node->priors.clear();
-    node->priors.reserve(node->permissible_chars.size());
-    auto &full_priors = node->meta_priors[0];
-    for (const auto unit : node->permissible_chars)
-        // {
-        //     std::cerr << full_priors.size() << " " << unit << "\n";
-        node->priors.push_back(full_priors[unit]);
-    // }
-    normalize(node->priors);
-}
+void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors) { ActionManager::evaluate(node, meta_priors, special_priors); }
 
 void ActionSpace::add_noise(TreeNode *node, const vec<vec<float>> &meta_noise, const vec<float> &special_noise, float noise_ratio)
 {
-    auto new_meta_priors = node->meta_priors;
-    auto new_special_priors = node->special_priors;
-    for (size_t i = 0; i < meta_noise.size(); ++i)
-        for (size_t j = 0; j < meta_noise[i].size(); ++j)
-            new_meta_priors[i][j] = new_meta_priors[i][j] * (1.0 - noise_ratio) + meta_noise[i][j] * noise_ratio;
-    for (size_t i = 0; i < special_noise.size(); ++i)
-        new_special_priors[i] = new_special_priors[i] * (1.0 - noise_ratio) + special_noise[i] * noise_ratio;
-    evaluate(node, new_meta_priors, new_special_priors);
+    ActionManager::add_noise(node, meta_noise, special_noise, noise_ratio);
+}
+
+void ActionSpace::connect(BaseNode *base, const Subpath &subpath)
+{
+    BaseNode *parent = base;
+    for (size_t i = 0; i < 6; ++i)
+    {
+        auto child = subpath.mini_node_seq[i];
+        auto index = subpath.chosen_seq[i].first;
+        EdgeBuilder::connect(parent, index, child);
+        parent = child;
+    }
 }

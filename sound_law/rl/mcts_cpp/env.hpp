@@ -25,7 +25,6 @@ class Env
     LruCache cache;
 
     TreeNode *apply_action(TreeNode *, const Subpath &);
-    void make_persistent(BaseNode *);
 
 public:
     Env(const EnvOpt &, const ActionSpaceOpt &, const WordSpaceOpt &);
@@ -53,7 +52,7 @@ public:
     inline void register_gbw_map(abc_t before, abc_t after) { action_space->register_gbw_map(before, after); };
     inline void clear_stats(TreeNode *node, bool recursive) { action_space->clear_stats(node, recursive); };
     inline void clear_priors(TreeNode *node, bool recursive) { action_space->clear_priors(node, recursive); };
-    inline void prune(TreeNode *node) { action_space->prune(node, false); };
+    // inline void prune(TreeNode *node) { action_space->prune(node, false); };
     inline size_t get_num_words() { return word_space->size(); };
     inline void add_noise(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors, float noise_ratio) { action_space->add_noise(node, meta_priors, special_priors, noise_ratio); };
 };

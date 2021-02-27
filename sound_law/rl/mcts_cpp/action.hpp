@@ -37,7 +37,7 @@ class ActionSpace
     // Methods for expanding nodes.
     void expand(TreeNode *);
     void expand(MiniNode *, const Subpath &, bool, bool);
-    void expand_before(MiniNode *, BaseNode *, int);
+    void expand_before(MiniNode *, int);
     void expand_special_type(MiniNode *, BaseNode *, int, abc_t, bool);
     void expand_after(MiniNode *, BaseNode *, int, bool, bool, bool);
     void expand_pre(MiniNode *, BaseNode *, int, bool, bool);
@@ -57,6 +57,8 @@ class ActionSpace
     void register_gbw_map(abc_t, abc_t);
     void evaluate(TreeNode *, const vec<vec<float>> &, const vec<float> &);
 
+    void connect(BaseNode *, const Subpath &);
+
     ActionSpace(WordSpace *, const ActionSpaceOpt &);
     map<abc_t, vec<abc_t>> permissible_changes;
     map<abc_t, abc_t> cl_map;
@@ -66,7 +68,7 @@ class ActionSpace
     void expand_stats(BaseNode *);
     void clear_stats(BaseNode *, bool);
     void clear_priors(BaseNode *, bool);
-    void prune(BaseNode *, bool);
+    // void prune(BaseNode *, bool);
     void add_noise(TreeNode *, const vec<vec<float>> &, const vec<float> &, float);
 
 public:

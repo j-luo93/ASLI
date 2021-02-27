@@ -110,7 +110,6 @@ cdef extern from "mcts_cpp/env.hpp":
         TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
         void clear_stats(TreeNode *, bool)
         void clear_priors(TreeNode *, bool)
-        # void prune(TreeNode *)
         size_t get_num_words()
         void add_noise(TreeNode *, vector[vector[float]], vector[float], float)
 
@@ -120,17 +119,16 @@ cdef extern from "mcts_cpp/node.hpp":
     ctypedef pair[int, abc_t] ChosenChar
 
     cdef cppclass BaseNode nogil:
-        vector[abc_t] permissible_chars
-        vector[visit_t] action_counts
-        vector[float] total_values
-        vector[bool] pruned
-        visit_t visit_count
-
+        vector[bool] get_pruned()
+        vector[abc_t] get_actions()
+        vector[visit_t] get_action_counts()
+        vector[float] get_total_values()
+        visit_t get_visit_count()
         bool is_tree_node()
         bool is_transitional()
 
     cdef cppclass TransitionNode nogil:
-        vector[float] rewards
+        vector[float] get_rewards()
 
     cdef cppclass TreeNode nogil:
         bool stopped
@@ -146,11 +144,9 @@ cdef extern from "mcts_cpp/node.hpp":
         vector[float] get_scores(float)
 
         vector[Wptr] words
-        int depth
 
-        float dist
-        bool done
-
+        float get_dist()
+        bool is_done()
         bool is_leaf()
         IdSeq get_id_seq(int)
         size_t size()

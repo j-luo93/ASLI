@@ -21,8 +21,8 @@ Env::Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt
 
     // start = new TreeNode(start_words, 0);
     // end = new TreeNode(word_space->end_words, node::END_DEPTH);
-    start = TreeNode::get_tree_node(start_words, 0);
-    end = TreeNode::get_tree_node(word_space->end_words, node::END_DEPTH);
+    start = NodeFactory::get_tree_node(start_words);
+    end = NodeFactory::get_tree_node(word_space->end_words);
 
     // Set up the action space properly.
     action_space = new ActionSpace(word_space, as_opt);
@@ -36,8 +36,6 @@ TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
 {
     auto *last = static_cast<TransitionNode *>(subpath.mini_node_seq[5]);
     int last_child_index = subpath.chosen_seq[6].first;
-    // Lock the last node since we are modifying its members.
-    std::lock_guard<std::mutex> lock(last->mtx);
     // BaseNode *&child = last->children[last_child_index];
     BaseNode *child;
     if (!last->has_child(last_child_index))
@@ -49,11 +47,11 @@ TreeNode *Env::apply_action(TreeNode *node, const Subpath &subpath)
         {
             auto *tchild = static_cast<TreeNode *>(child);
             // reward = (node->dist - tchild->dist);
-            float final_reward = tchild->done ? opt.final_reward : -opt.step_penalty;
-            float incremental_reward = (node->dist - tchild->dist) / start->dist;
+            float final_reward = tchild->is_done() ? opt.final_reward : -opt.step_penalty;
+            float incremental_reward = (node->get_dist() - tchild->get_dist()) / start->get_dist();
             reward = final_reward + incremental_reward;
         }
-        last->rewards[last_child_index] = reward;
+        RewardManager::set_reward_at(last, last_child_index, reward);
     }
     else
         child = last->get_child(last_child_index);
@@ -75,10 +73,3 @@ size_t Env::evict(size_t until_size)
     SPDLOG_TRACE("After evicting #items: {}", cache.size());
     return size_before;
 };
-
-void Env::make_persistent(BaseNode *node)
-{
-    node->persistent = true;
-    // Re-invoke this to make it persistent in the cache.
-    cache.put(node);
-}
