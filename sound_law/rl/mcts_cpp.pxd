@@ -52,6 +52,7 @@ cdef extern from "mcts_cpp/word.hpp":
     cdef cppclass WordSpaceOpt nogil:
         vector[vector[float]] dist_mat
         float ins_cost
+        bool use_alignment
         vector[bool] is_vowel
         vector[Stress] unit_stress
         vector[abc_t] unit2base

@@ -137,6 +137,7 @@ cdef class PyWordSpaceOpt:
     cdef WordSpaceOpt c_obj
 
     def __cinit__(self, float[:, ::1] np_dist_mat, float ins_cost,
+                  bool use_alignment,
                   bool[::1] np_is_vowel, int[::1] np_unit_stress,
                   abc_t[::1] np_unit2base, abc_t[::1] np_unit2stressed,
                   abc_t[::1] np_unit2unstressed):
@@ -149,6 +150,7 @@ cdef class PyWordSpaceOpt:
         self.c_obj = WordSpaceOpt()
         self.c_obj.dist_mat = np2nested(np_dist_mat, lengths)
         self.c_obj.ins_cost = ins_cost
+        self.c_obj.use_alignment = use_alignment
         self.c_obj.is_vowel = np2vector(np_is_vowel)
         cdef size_t num_abc = len(np_is_vowel)
         cdef vector[Stress] unit_stress = vector[Stress](num_abc)

@@ -4,6 +4,7 @@
 
 class TreeNode;
 
+using Alignment = pair<vec<size_t>, vec<size_t>>;
 class Word
 {
     friend class WordSpace;
@@ -11,6 +12,7 @@ class Word
     Word(const IdSeq &, const IdSeq &, const vec<size_t> &);
 
     paramap<int, float> dists;
+    paramap<int, Alignment> almts;
 
 public:
     const IdSeq id_seq;
@@ -19,12 +21,15 @@ public:
 
     // Get edit distance at a given `order`.
     float get_edit_dist_at(int) const;
+    // Get alignment at a given `order`.
+    const Alignment &get_almt_at(int) const;
 };
 
 struct WordSpaceOpt
 {
     vec<vec<float>> dist_mat;
     float ins_cost;
+    bool use_alignment;
     vec<bool> is_vowel;
     vec<Stress> unit_stress;
     vec<abc_t> unit2base;
@@ -47,5 +52,6 @@ public:
     Word *get_word(const IdSeq &);
     vec<Word *> get_words(const VocabIdSeq &);
     float get_edit_dist(const IdSeq &, const IdSeq &) const;
+    float get_edit_dist(const IdSeq &, const IdSeq &, Alignment &) const;
     size_t size() const;
 };

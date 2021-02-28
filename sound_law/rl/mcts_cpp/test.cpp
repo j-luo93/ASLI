@@ -86,6 +86,7 @@ int main(int argc, char *argv[])
     add_flag(parser, "log_to_file", "Flag to log to file");
     add_flag(parser, "quiet", "Set log level to error to disable info logging.");
     add_flag(parser, "syncope", "Use one syncopation.");
+    add_flag(parser, "use_alignment", "Use alignment.");
     auto args = parser.parse(argc, argv);
     const int num_threads = args["num_threads"].as<int>();
     const int num_words = args["num_words"].as<int>();
@@ -98,6 +99,7 @@ int main(int argc, char *argv[])
     const bool log_to_file = args["log_to_file"].as<bool>();
     const bool quiet = args["quiet"].as<bool>();
     const bool syncope = args["syncope"].as<bool>();
+    const bool use_alignment = args["use_alignment"].as<bool>();
     const int num_sims = args["num_sims"].as<int>();
     const int batch_size = args["batch_size"].as<int>();
     const int num_episodes = args["num_episodes"].as<int>();
@@ -150,6 +152,7 @@ int main(int argc, char *argv[])
     auto ws_opt = WordSpaceOpt();
     ws_opt.dist_mat = dist_mat;
     ws_opt.ins_cost = ins_cost;
+    ws_opt.use_alignment = use_alignment;
     ws_opt.is_vowel = vec<bool>(num_abc);
     ws_opt.unit_stress = vec<Stress>(num_abc);
     ws_opt.unit2base = vec<abc_t>(num_abc);
@@ -191,9 +194,6 @@ int main(int argc, char *argv[])
     mcts_opt.num_threads = num_threads;
     mcts_opt.add_noise = false;
     auto mcts = new Mcts(env, mcts_opt);
-    // SPDLOG_INFO("Start:\n{}", env->start->str());
-    // SPDLOG_INFO("End:\n{}", env->end->str());
-    // action_space->timer.disable();
     SPDLOG_INFO("Start node str:\n{}", str::from(env->start));
     SPDLOG_INFO("End node str:\n{}", str::from(env->end));
     for (int n = 0; n < num_episodes; ++n)

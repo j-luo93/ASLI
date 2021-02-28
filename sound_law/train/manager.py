@@ -60,6 +60,8 @@ add_argument('site_threshold', dtype=int, default=1, msg='Site threshold for pru
 add_argument('mcts_verbose_level', dtype=int, default=0, msg="Verbose level for debugging MCTS.")
 add_argument('mcts_log_to_file', dtype=bool, default=False, msg="Flag to log to file for debugging MCTS.")
 add_argument('add_noise', dtype=bool, default=False, msg="Flag to add noise to rewards.")
+add_argument('use_alignment', dtype=bool, default=False,
+             msg="Flag to use alignment to learn representations and compute heuristics.")
 
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
@@ -147,6 +149,7 @@ class OnePairManager:
             as_opt = PyActionSpaceOpt(NULL_ID, EMP_ID, SOT_ID, EOT_ID, ANY_ID, ANY_S_ID,
                                       ANY_UNS_ID, self.tgt_abc['j'], self.tgt_abc['w'], g.site_threshold, g.dist_threshold)
             ws_opt = PyWordSpaceOpt(self.tgt_abc.dist_mat, 1.0,
+                                    g.use_alignment,
                                     self.tgt_abc.is_vowel,
                                     self.tgt_abc.unit_stress,
                                     self.tgt_abc.unit2base,

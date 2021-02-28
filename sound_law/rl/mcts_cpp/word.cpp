@@ -56,39 +56,142 @@ vec<Word *> WordSpace::get_words(const VocabIdSeq &vocab)
 
 void WordSpace::set_edit_dist_at(Word *word, int order) const
 {
-    if (word->dists.if_contains(order, [](const float dist) {}))
+    if (word->dists.if_contains(order, [](const float &dist) {}))
         return;
 
-    auto dist = get_edit_dist(word->id_seq, end_words[order]->id_seq);
+    float dist;
+    Alignment almt;
+    if (opt.use_alignment)
+        dist = get_edit_dist(word->id_seq, end_words[order]->id_seq, almt);
+    else
+        dist = get_edit_dist(word->id_seq, end_words[order]->id_seq);
     word->dists.try_emplace_l(
         order, [](float &dist) {}, dist);
+    if (opt.use_alignment)
+        word->almts.try_emplace_l(
+            order, [](Alignment &almt) {}, almt);
 };
 
 float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2) const
+{
+    auto almt = Alignment();
+    return get_edit_dist(seq1, seq2, almt);
+}
+
+enum class EditOp : int
+{
+    INSERTION,
+    DELETION,
+    SUBSTITUTION,
+};
+
+float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2, Alignment &almt) const
 {
     size_t l1 = seq1.size();
     size_t l2 = seq2.size();
     float **dist = (float **)malloc((l1 + 1) * sizeof(float **));
     for (size_t i = 0; i < l1 + 1; ++i)
         dist[i] = (float *)malloc((l2 + 1) * sizeof(float *));
+    // This records what is the best op.
+    EditOp **best = (EditOp **)malloc((l1 + 1) * sizeof(EditOp **));
+    for (size_t i = 0; i < l1 + 1; ++i)
+        best[i] = (EditOp *)malloc((l2 + 1) * sizeof(EditOp *));
 
     for (size_t i = 0; i < l1 + 1; ++i)
+    {
         dist[i][0] = i * opt.ins_cost;
+        best[i][0] = EditOp::INSERTION;
+    }
     for (size_t i = 0; i < l2 + 1; ++i)
+    {
         dist[0][i] = i * opt.ins_cost;
+        best[0][i] = EditOp::DELETION;
+    }
 
-    float sub_cost;
+    float cost, icost, dcost;
     for (size_t i = 1; i < l1 + 1; ++i)
         for (size_t j = 1; j < l2 + 1; ++j)
         {
-            sub_cost = opt.dist_mat[seq1.at(i - 1)][seq2.at(j - 1)];
-            dist[i][j] = std::min(dist[i - 1][j - 1] + sub_cost, std::min(dist[i - 1][j], dist[i][j - 1]) + opt.ins_cost);
+            cost = opt.dist_mat[seq1[i - 1]][seq2[j - 1]] + dist[i - 1][j - 1];
+            dist[i][j] = cost;
+            best[i][j] = EditOp::SUBSTITUTION;
+            icost = dist[i - 1][j] + opt.ins_cost;
+            if (icost < cost)
+            {
+                dist[i][j] = icost;
+                best[i][j] = EditOp::INSERTION;
+                cost = icost;
+            }
+            dcost = dist[i][j - 1] + opt.ins_cost;
+            if (dcost < cost)
+            {
+                dist[i][j] = dcost;
+                best[i][j] = EditOp::DELETION;
+            }
+            // dist[i][j] = std::min(dist[i - 1][j - 1] + scost, std::min(dist[i - 1][j], dist[i][j - 1]) + opt.ins_cost);
         }
     float ret = dist[l1][l2];
+    // Backtrack to get the best alignment.
+    size_t best_i = l1;
+    size_t best_j = l2;
+    EditOp op;
+    // Get the (reversed) list of edit ops first.
+    auto ops = vec<EditOp>();
+    ops.reserve(l1 + l2);
+    while (true)
+    {
+        op = best[best_i][best_j];
+        ops.push_back(op);
+        switch (op)
+        {
+        case EditOp::INSERTION:
+            --best_i;
+            break;
+        case EditOp::DELETION:
+            --best_j;
+            break;
+        case EditOp::SUBSTITUTION:
+            --best_i;
+            --best_j;
+            break;
+        }
+        if ((best_i == 0) && (best_j == 0))
+            break;
+    }
+    // Go backwards and find the aligned indices.
+    size_t almt_pos1 = 0;
+    size_t almt_pos2 = 0;
+    auto &almt1 = almt.first;
+    almt1.reserve(l1);
+    auto &almt2 = almt.second;
+    almt2.reserve(l1);
+    for (auto it = ops.rbegin(); it != ops.rend(); ++it)
+    {
+        switch (*it)
+        {
+        case EditOp::INSERTION:
+            almt1.push_back(almt_pos1++);
+            ++almt_pos2;
+            break;
+        case EditOp::DELETION:
+            ++almt_pos1;
+            almt2.push_back(almt_pos2++);
+            break;
+        case EditOp::SUBSTITUTION:
+            almt1.push_back(almt_pos1++);
+            almt2.push_back(almt_pos2++);
+            break;
+        }
+    }
     for (size_t i = 0; i < l1 + 1; ++i)
         free(dist[i]);
     free(dist);
+    for (size_t i = 0; i < l1 + 1; ++i)
+        free(best[i]);
+    free(best);
     return ret;
 }
 
 size_t WordSpace::size() const { return words.size(); }
+
+const Alignment &Word::get_almt_at(int order) const { return almts.at(order); }

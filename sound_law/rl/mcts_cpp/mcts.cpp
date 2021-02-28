@@ -88,7 +88,7 @@ Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int
         if ((node->stopped) || (node->is_done()) || (is_circle))
             break;
     }
-    SPDLOG_DEBUG("Mcts: selected node dist {0} str\n{1}", node->dist, str::from(node));
+    SPDLOG_DEBUG("Mcts: selected node dist {0} str\n{1}", node->get_dist(), str::from(node));
     return path;
 }
 
@@ -170,6 +170,7 @@ vec<abc_t> Path::get_all_chosen_actions() const
             ret.push_back(chosen_char.second);
     return ret;
 }
+
 void Path::merge(const Path &other)
 {
     assert(other.subpaths.size() == 1);
