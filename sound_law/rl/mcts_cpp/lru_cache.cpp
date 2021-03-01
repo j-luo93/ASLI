@@ -3,6 +3,7 @@
 CacheNode::CacheNode(BaseNode *base) : base(base) {}
 
 size_t LruCache::size() const { return nodes.size() + persistent_nodes.size(); }
+
 size_t LruCache::persistent_size() const { return persistent_nodes.size(); }
 
 void LruCache::evict(BaseNode *base)
@@ -26,6 +27,13 @@ void LruCache::evict()
 
 void LruCache::put(BaseNode *base)
 {
+    // Call `put_persisten` if `base` is persistent.
+    if (base->is_persistent())
+    {
+        put_persistent(base);
+        return;
+    }
+
     assert(base != nullptr);
     if (base2node_it.contains(base))
     {
@@ -41,6 +49,7 @@ void LruCache::put(BaseNode *base)
 
 void LruCache::put_persistent(BaseNode *base)
 {
+    MemoryManager::make_persistent(base);
     // For persistent nodes, we should not evict them ever, therefore not put in the cache.
     if (base2node_it.contains(base))
     {

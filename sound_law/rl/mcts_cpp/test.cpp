@@ -205,6 +205,7 @@ int main(int argc, char *argv[])
                           uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
                       uniform(6));
         SPDLOG_INFO("Start dist: {}", root->get_dist());
+        auto played_path = Path(root, 0);
         for (int i = 0; i < num_steps; i++)
         {
             // if (i == num_steps / 2)
@@ -216,7 +217,7 @@ int main(int argc, char *argv[])
             SPDLOG_INFO("#actions {}", root->get_num_actions());
             for (int j = 0; j < num_sims / batch_size; j++)
             {
-                auto paths = mcts->select(root, batch_size, i, num_steps);
+                auto paths = mcts->select(root, batch_size, i, num_steps, played_path);
                 auto selected = vec<TreeNode *>();
                 for (const auto &path : paths)
                     selected.push_back(path.get_last_node());
@@ -239,14 +240,15 @@ int main(int argc, char *argv[])
             //     std::cerr << root->permissible_chars[i] << ":" << scores[i] << " ";
             // std::cerr << "\n";
             // std::cerr << "max index: " << root->max_index << " max_value: " << root->max_value << "\n";
-            auto played_path = mcts->play(root, i);
-            root = played_path.get_last_node();
+            auto extended_path = mcts->play(root, i);
+            root = extended_path.get_last_node();
             std::cerr << str::from(root);
+            played_path.merge(extended_path);
             SPDLOG_INFO("New dist: {}", root->get_dist());
         }
         env->clear_priors(env->start, true);
         env->clear_stats(env->start, true);
         SPDLOG_INFO("#trie nodes: {}", TreeNode::get_num_nodes());
-        env->evict(10);
+        env->evict(1);
     }
 }

@@ -186,6 +186,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         Mcts(Env *, MctsOpt)
 
         vector[Path] select(TreeNode *, int, int, int)
+        vector[Path] select(TreeNode *, int, int, int, Path)
         void backup(vector[Path], vector[float])
         Path play(TreeNode *, int)
 

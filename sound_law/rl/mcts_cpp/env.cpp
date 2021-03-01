@@ -66,7 +66,7 @@ size_t Env::evict(size_t until_size)
     size_t size_before = cache.size();
     SPDLOG_TRACE("Before evicting #items: {}", size_before);
     std::cerr << cache.persistent_size() << "\n";
-    int num_to_evict = cache.size() - until_size;
+    int num_to_evict = cache.size() - until_size - cache.persistent_size();
     while (num_to_evict-- > 0)
         cache.evict();
     // action_space->prune(base, true);

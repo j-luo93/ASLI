@@ -290,6 +290,7 @@ void ActionSpace::expand(TreeNode *node) const
 
     if (node->is_expanded())
     {
+        assert(node->get_pruned().size() > 0);
         SPDLOG_DEBUG("ActionSpace:: node already expanded.");
         return;
     }
@@ -492,6 +493,7 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
 {
     if (node->is_expanded())
     {
+        assert(node->get_pruned().size() > 0);
         SPDLOG_TRACE("MiniNode expanded already.");
         return;
     }

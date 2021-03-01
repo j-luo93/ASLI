@@ -148,7 +148,7 @@ protected:
     BaseNode(bool, bool);
 
     // Destructor is protected so that the derived classes can call it.
-    virtual ~BaseNode();
+    ~BaseNode();
 
 public:
     const bool stopped;
@@ -219,6 +219,7 @@ class TreeNode : public BaseNode
 
 private:
     friend class NodeFactory;
+    friend class MemoryManager;
 
     void common_init(const vec<Word *> &);
     // This is used for persistent nodes (e.g., start and end nodes).
@@ -231,6 +232,7 @@ private:
     // Create a new node if it is not in the trie.
     static TreeNode *get_tree_node(const vec<Word *> &);
     static TreeNode *get_tree_node(const vec<Word *> &, bool);
+    static void remove_node_from_t_table(TreeNode *);
 
 public:
     static size_t get_num_nodes();
@@ -244,8 +246,6 @@ private:
     vec<float> special_priors;
     float dist = 0.0;
     bool done = false;
-
-    ~TreeNode() override;
 
     void evaluate(const vec<vec<float>> &, const vec<float> &);
     void add_noise(const vec<vec<float>> &, const vec<float> &, float);
@@ -358,7 +358,13 @@ class MemoryManager
     friend class LruCache;
 
     static void make_persistent(BaseNode *node) { node->make_persistent(); }
-    static void release(BaseNode *node) { delete node; }
+    // Release memory allocated to `node` by calling `delete`, and remove its entry in the `t_table` if needed.
+    static void release(BaseNode *node)
+    {
+        if (node->is_tree_node())
+            TreeNode::remove_node_from_t_table(static_cast<TreeNode *>(node));
+        delete node;
+    }
 };
 
 // Used by MCTS to update stats.

@@ -54,7 +54,7 @@ class Mcts
     Pool *tp;
     Env *env;
 
-    Path select_single_thread(TreeNode *, const int, const int) const;
+    Path select_single_thread(TreeNode *, const int, const int, const Path &) const;
 
 public:
     MctsOpt opt;
@@ -62,6 +62,7 @@ public:
     Mcts(Env *, const MctsOpt &);
 
     vec<Path> select(TreeNode *, const int, const int, const int) const;
+    vec<Path> select(TreeNode *, const int, const int, const int, const Path &) const;
     void backup(const vec<Path> &, const vec<float> &) const;
     inline Path play(TreeNode *node, int start_depth)
     {

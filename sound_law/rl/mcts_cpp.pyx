@@ -307,8 +307,12 @@ cdef class PyMcts:
     def __dealloc__(self):
         del self.ptr
 
-    def select(self, PyTreeNode py_tnode, int num_sims, int start_depth, int depth_limit):
-        cdef vector[Path] paths_vec = self.ptr.select(py_tnode.ptr, num_sims, start_depth, depth_limit)
+    def select(self, PyTreeNode py_tnode, int num_sims, int start_depth, int depth_limit, PyPath old_path = None):
+        cdef vector[Path] paths_vec
+        if old_path is None:
+            paths_vec = self.ptr.select(py_tnode.ptr, num_sims, start_depth, depth_limit)
+        else:
+            paths_vec = self.ptr.select(py_tnode.ptr, num_sims, start_depth, depth_limit, deref(old_path.ptr))
         cdef vector[int] steps_vec = vector[int](paths_vec.size())
         paths = []
         for i in range(paths_vec.size()):

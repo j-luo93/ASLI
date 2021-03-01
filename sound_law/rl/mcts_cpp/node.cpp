@@ -44,8 +44,10 @@ inline float randf(float high)
 
 vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise) const
 {
+    assert(!stopped || !is_tree_node());
     float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
     auto scores = vec<float>(priors.size());
+    assert(priors.size() == pruned.size());
     for (size_t i = 0; i < priors.size(); ++i)
     {
         float nsa = static_cast<float>(action_counts[i]);
@@ -94,6 +96,7 @@ bool TreeNode::is_leaf() const { return priors.size() == 0; }
 
 pair<TreeNode *, Subpath> TreeNode::play() const
 {
+    SPDLOG_TRACE("Playing one step.");
     auto subpath = Subpath();
     auto mini_ret = play_mini();
     BaseNode *node = mini_ret.first;
@@ -107,6 +110,7 @@ pair<TreeNode *, Subpath> TreeNode::play() const
         subpath.chosen_seq[i] = mini_ret.second;
         node = mini_ret.first;
     }
+    SPDLOG_TRACE("Played one step.");
     return std::make_pair(static_cast<TreeNode *>(node), subpath);
 }
 
@@ -297,10 +301,10 @@ BaseNode::~BaseNode()
     disconnect_from_children();
 }
 
-TreeNode::~TreeNode()
+void TreeNode::remove_node_from_t_table(TreeNode *node)
 {
-    if (!stopped)
-        TreeNode::t_table.remove(words);
+    if (!node->stopped)
+        TreeNode::t_table.remove(node->words);
 }
 
 bool BaseNode::is_persistent() const { return persistent; }
@@ -437,6 +441,7 @@ void BaseNode::virtual_select(size_t index, int game_count, float virtual_loss)
     total_values[index] -= game_count * virtual_loss;
     visit_count += game_count;
 }
+
 void BaseNode::init_pruned()
 {
     size_t n = permissible_chars.size();

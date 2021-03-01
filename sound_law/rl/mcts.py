@@ -64,13 +64,14 @@ class Mcts(PyMcts):
 
         # Collect states that need evaluation.
         if outstanding_states:
+            almts1 = almts2 = None
             if g.use_alignment:
                 id_seqs, almts1, almts2 = parallel_stack_ids(
                     outstanding_states, g.num_workers, True, self.env.max_end_length)
                 almts1 = get_tensor(almts1).rename('batch', 'word', 'pos')
                 almts2 = get_tensor(almts2).rename('batch', 'word', 'pos')
             else:
-                id_seqs = parallel_stack_ids(outstanding_states, g.num_workers, False)
+                id_seqs = parallel_stack_ids(outstanding_states, g.num_workers, False, self.env.max_end_length)
             id_seqs = get_tensor(id_seqs).rename('batch', 'word', 'pos')
             if steps is not None and not isinstance(steps, int):
                 steps = steps[outstanding_idx]
@@ -126,7 +127,7 @@ class Mcts(PyMcts):
                     # would be evaluated and expanded after batched selection.
                     num_batches = g.num_mcts_sims // g.expansion_batch_size
                     for _ in range(num_batches):
-                        paths, steps = self.select(root, g.expansion_batch_size, ri, g.max_rollout_length)
+                        paths, steps = self.select(root, g.expansion_batch_size, ri, g.max_rollout_length, played_path)
                         steps = get_tensor(steps) if g.use_finite_horizon else None
                         new_states = [path.get_last_node() for path in paths]
                         values = self.evaluate(new_states, steps=steps)

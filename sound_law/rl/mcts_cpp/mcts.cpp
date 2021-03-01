@@ -60,11 +60,12 @@ Mcts::Mcts(Env *env, const MctsOpt &opt) : env(env), opt(opt)
         tp = nullptr;
 }
 
-Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int depth_limit) const
+Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int depth_limit, const Path &old_path) const
 {
     assert(!node->is_leaf());
-    auto path = Path(node, start_depth);
-    while ((path.get_depth() < depth_limit) && (!node->is_leaf()))
+    auto path = Path(old_path);              // This extends the old path. Used for detecting circles.
+    auto new_path = Path(node, start_depth); // This only records the extended part. Used for backing up values later.
+    while ((new_path.get_depth() < depth_limit) && (!node->is_leaf()))
     {
         // Complete sampling one action.
         SPDLOG_DEBUG("Mcts: node str\n{}", str::from(node));
@@ -83,31 +84,39 @@ Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int
             SPDLOG_DEBUG("Mcts: found a circle at {}!", str::from(node));
             PruningManager::prune(subpath.mini_node_seq[5], subpath.chosen_seq[6].first);
         }
+        new_path.append(subpath, node);
         path.append(subpath, node);
         SPDLOG_DEBUG("Mcts: action applied.");
         if ((node->stopped) || (node->is_done()) || (is_circle))
             break;
     }
     SPDLOG_DEBUG("Mcts: selected node dist {0} str\n{1}", node->get_dist(), str::from(node));
-    return path;
+    return new_path;
 }
 
 vec<Path> Mcts::select(TreeNode *root, const int num_sims, const int start_depth, const int depth_limit) const
+{
+    assert(start_depth == 0);
+    auto old_path = Path(root, 0);
+    return select(root, num_sims, start_depth, depth_limit, old_path);
+}
+
+vec<Path> Mcts::select(TreeNode *root, const int num_sims, const int start_depth, const int depth_limit, const Path &old_path) const
 {
     SPDLOG_DEBUG("Mcts: selecting...");
     auto paths = vec<Path>();
     paths.reserve(num_sims);
     if (tp == nullptr)
         for (size_t i = 0; i < num_sims; ++i)
-            paths.push_back(select_single_thread(root, start_depth, depth_limit));
+            paths.push_back(select_single_thread(root, start_depth, depth_limit, old_path));
     else
     {
         vec<std::future<void>> results(num_sims);
         paths.resize(num_sims);
         for (size_t i = 0; i < num_sims; ++i)
             results[i] = tp->push(
-                [this, root, start_depth, depth_limit, i, &paths](int) {
-                    paths[i] = this->select_single_thread(root, start_depth, depth_limit);
+                [this, root, start_depth, depth_limit, i, &old_path, &paths](int) {
+                    paths[i] = this->select_single_thread(root, start_depth, depth_limit, old_path);
                 });
         for (size_t i = 0; i < num_sims; ++i)
             results[i].wait();
