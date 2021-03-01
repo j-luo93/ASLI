@@ -55,4 +55,11 @@ public:
     // inline void prune(TreeNode *node) { action_space->prune(node, false); };
     inline size_t get_num_words() { return word_space->size(); };
     inline void add_noise(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors, float noise_ratio) { action_space->add_noise(node, meta_priors, special_priors, noise_ratio); };
+    inline size_t get_max_end_length()
+    {
+        size_t ret = 0;
+        for (const auto word : end->words)
+            ret = std::max(ret, word->id_seq.size());
+        return ret;
+    }
 };

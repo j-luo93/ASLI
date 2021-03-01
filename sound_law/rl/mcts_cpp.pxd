@@ -113,6 +113,7 @@ cdef extern from "mcts_cpp/env.hpp":
         void clear_priors(TreeNode *, bool)
         size_t get_num_words()
         void add_noise(TreeNode *, vector[vector[float]], vector[float], float)
+        size_t get_max_end_length()
 
 cdef extern from "mcts_cpp/node.hpp":
 
@@ -152,7 +153,7 @@ cdef extern from "mcts_cpp/node.hpp":
         IdSeq get_id_seq(int)
         size_t size()
         size_t get_num_actions()
-        # size_t get_num_descendants()
+        pair[vector[vector[size_t]], vector[vector[size_t]]] get_alignments()
 
 ctypedef TreeNode * TNptr
 ctypedef BaseNode * BNptr

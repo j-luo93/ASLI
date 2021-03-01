@@ -482,3 +482,19 @@ vec<float> TreeNode::evaluate_special_actions(const vec<abc_t> &actions) const
 float TreeNode::get_dist() const { return dist; };
 
 bool TreeNode::is_done() const { return done; };
+
+pair<vec<vec<size_t>>, vec<vec<size_t>>> TreeNode::get_alignments() const
+{
+    auto ret = pair<vec<vec<size_t>>, vec<vec<size_t>>>();
+    auto &almts1 = ret.first;
+    auto &almts2 = ret.second;
+    almts1.reserve(words.size());
+    almts2.reserve(words.size());
+    for (size_t i = 0; i < words.size(); ++i)
+    {
+        const auto &almt = words[i]->get_almt_at(i);
+        almts1.push_back(almt.first);
+        almts2.push_back(almt.second);
+    }
+    return ret;
+}

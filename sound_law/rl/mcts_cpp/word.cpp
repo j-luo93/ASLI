@@ -164,7 +164,7 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2, Alignment &
     auto &almt1 = almt.first;
     almt1.reserve(l1);
     auto &almt2 = almt.second;
-    almt2.reserve(l1);
+    almt2.reserve(l2);
     for (auto it = ops.rbegin(); it != ops.rend(); ++it)
     {
         switch (*it)
@@ -183,6 +183,8 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2, Alignment &
             break;
         }
     }
+    assert(almt1.size() == l1);
+    assert(almt2.size() == l2);
     for (size_t i = 0; i < l1 + 1; ++i)
         free(dist[i]);
     free(dist);

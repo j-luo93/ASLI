@@ -45,6 +45,8 @@ class AgentInputs:
     # done: Optional[BT] = None
     # indices: Optional[NDA] = None
     steps: Optional[LT] = None
+    almts1: Optional[LT] = None
+    almts2: Optional[LT] = None
     # trajectories: Optional[List[Trajectory]] = None
     # rtgs: Optional[FT] = None
 
@@ -91,7 +93,11 @@ class AgentInputs:
         steps = None
         if g.use_finite_horizon:
             steps = get_tensor(gather('step'))
-        return cls(edges, id_seqs, permissible_actions, rewards, mcts_pis, qs, steps=steps)
+        almts1 = almts2 = None
+        if g.use_alignment:
+            almts1 = get_tensor(pad(gather('almt1'), PAD_ID, 'long')).rename('batch', 'word', 'pos')
+            almts2 = get_tensor(pad(gather('almt2'), PAD_ID, 'long')).rename('batch', 'word', 'pos')
+        return cls(edges, id_seqs, permissible_actions, rewards, mcts_pis, qs, steps=steps, almts1=almts1, almts2=almts2)
         # if sparse:
         #     indices, action_masks, _ = parallel_get_sparse_action_masks(states, g.num_workers)
         #     # indices = get_tensor(indices).rename('batch', 'action')
@@ -210,7 +216,8 @@ class BasePG(nn.Module, metaclass=ABCMeta):
             return self.value_net(curr_ids, end_ids, steps=steps, done=done)
 
     def get_policy(self,
-                   state_or_ids: Union[VocabState, LT]):
+                   state_or_ids: Union[VocabState, LT],
+                   almts: Optional[Tuple[LT, LT]] = None):
         """Get policy distribution based on current state (and end state)."""
         if isinstance(state_or_ids, VocabState):
             curr_ids = state_or_ids.tensor
@@ -218,7 +225,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
             curr_ids = state_or_ids
         end_ids = self.end_state.tensor
         with torch.set_grad_enabled(self._policy_grad):
-            return self.policy_net(curr_ids, end_ids)
+            return self.policy_net(curr_ids, end_ids, almts=almts)
 
     def sample_action(self, policy: Distribution) -> SoundChangeAction:
         with torch.set_grad_enabled(self._policy_grad):

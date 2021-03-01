@@ -11,13 +11,12 @@ from torch.distributions.distribution import Distribution
 from dev_misc import BT, FT, LT, NDA, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.utils import ScopedCache, cacheable
+from sound_law.data.alphabet import PAD_ID
 from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
 from .action import SoundChangeAction
 from .env import SoundChangeEnv
-
-# from .mcts_cpp import PyNull_abc  # pylint: disable=no-name-in-module
 
 
 class FactorizedProjection(nn.Module):
@@ -132,16 +131,43 @@ class StateEncoder(nn.Module):
 
     # FIXME(j_luo) this might not be instance-specific.
     @cacheable(switch='state_repr')
-    def forward(self, curr_ids: LT, end_ids: LT):
-        word_repr = self._get_word_embedding(curr_ids)
-        end_word_repr = self._get_word_embedding(end_ids)
-        state_repr = (word_repr - end_word_repr).mean(dim='word')
+    def forward(self, curr_ids: LT, end_ids: LT, almts: Optional[Tuple[LT, LT]] = None):
+        if g.use_alignment and almts is None:
+            raise RuntimeError(f'Must pass `almts` if `use_alignment` is True.')
+
+        if g.use_alignment:
+            curr_almts, end_almts = almts
+            assert curr_almts.shape == curr_ids.shape
+            assert end_almts.shape[1:] == end_ids.shape
+            # NOTE(j_luo) +1 for 0-index, +1 for storing fake scattered values.
+            max_len = max(curr_almts.max(), end_almts.max()) + 2
+            new_shape = curr_almts.shape[:-1] + (max_len, )
+            aligned_curr_ids = get_zeros(*new_shape).long().fill_(PAD_ID)
+            aligned_end_ids = get_zeros(*new_shape).long().fill_(PAD_ID)
+
+            with NoName(curr_almts, curr_ids, end_almts, end_ids):
+                curr_mask = curr_almts == -1
+                curr_almts[curr_mask] = max_len - 1
+
+                end_mask = end_almts == -1
+                end_almts[end_mask] = max_len - 1
+
+                aligned_curr_ids.scatter_(-1, curr_almts, curr_ids)
+                aligned_end_ids.scatter_(-1, end_almts, end_ids.expand_as(end_almts))
+
+            aligned_curr_ids = aligned_curr_ids.narrow(-1, 0, max_len - 1).rename('batch', 'word', 'pos')
+            aligned_end_ids = aligned_end_ids.narrow(-1, 0, max_len - 1).rename('batch', 'word', 'pos')
+            curr_char_emb = self._get_char_embedding(aligned_curr_ids)
+            end_char_emb = self._get_char_embedding(aligned_end_ids)
+            state_repr = self._get_word_embedding_from_chars(curr_char_emb - end_char_emb).mean(dim='word')
+        else:
+            word_repr = self._get_word_embedding(curr_ids)
+            end_word_repr = self._get_word_embedding(end_ids)
+            state_repr = (word_repr - end_word_repr).mean(dim='word')
         return state_repr
 
-    def _get_word_embedding(self, ids: LT) -> FT:
-        """Get word embeddings based on ids."""
-        names = ids.names + ('emb',)
-        emb = self.char_emb(ids).rename(*names)
+    def _get_word_embedding_from_chars(self, emb: FT) -> FT:
+        """Get word embeddings based on character embeddings."""
         if emb.ndim == 4:
             emb = emb.align_to('batch', 'word', 'emb', 'pos')
             bs, ws, es, l = emb.shape
@@ -155,6 +181,15 @@ class StateEncoder(nn.Module):
             return ret.rename('word', 'emb')
 
         return emb.mean(dim='pos')
+
+    def _get_char_embedding(self, ids: LT) -> FT:
+        """Get character embeddings from id sequences."""
+        names = ids.names + ('emb',)
+        return self.char_emb(ids).rename(*names)
+
+    def _get_word_embedding(self, ids: LT) -> FT:
+        """Get word embeddings based on ids."""
+        return self._get_word_embedding_from_chars(self._get_char_embedding(ids))
 
 
 class PolicyNetwork(nn.Module):
@@ -191,12 +226,13 @@ class PolicyNetwork(nn.Module):
                 end_ids: LT,
                 # action_masks: BT,
                 sparse: bool = False,
-                indices: Optional[NDA] = None):
+                indices: Optional[NDA] = None,
+                almts: Optional[Tuple[LT, LT]] = None):
         """Get policy distribution based on current state (and end state)."""
         if sparse and indices is None:
             raise TypeError(f'Must provide `indices` in sparse mode.')
 
-        state_repr = self.enc(curr_ids, end_ids)
+        state_repr = self.enc(curr_ids, end_ids, almts=almts)
 
         hid = self.hidden(state_repr)
         if sparse:

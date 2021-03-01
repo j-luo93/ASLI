@@ -193,7 +193,7 @@ class MctsTrainer(RLTrainer):
     add_argument('regress_lambda', default=0.01, dtype=float, msg='Hyperparameter for regression loss.')
     add_argument('use_value_guidance', default=True, dtype=bool,
                  msg='Flag to use predicted values to guide the search.')
-    add_argument('tau', default = 0.0, dtype=float, msg='Temperature for sampling episodes.')
+    add_argument('tau', default=0.0, dtype=float, msg='Temperature for sampling episodes.')
 
     def __init__(self, *args, mcts: Mcts = None, **kwargs):
         if mcts is None:
@@ -252,7 +252,7 @@ class MctsTrainer(RLTrainer):
                 self.agent.train()
                 self.optimizer.zero_grad()
 
-                policies = self.agent.get_policy(agent_inputs.id_seqs)
+                policies = self.agent.get_policy(agent_inputs.id_seqs, almts=(agent_inputs.almts1, agent_inputs.almts2))
                 # values = self.agent.get_values(agent_inputs.id_seqs, steps=agent_inputs.steps)
                 with NoName(policies, agent_inputs.permissible_actions):
                     mask = agent_inputs.permissible_actions == SENTINEL_ID

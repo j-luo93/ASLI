@@ -265,6 +265,7 @@ public:
     size_t size() const;
     bool is_transitional() const override;
     bool is_tree_node() const override;
+    pair<vec<vec<size_t>>, vec<vec<size_t>>> get_alignments() const;
 };
 
 namespace str

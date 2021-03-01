@@ -64,7 +64,13 @@ class Mcts(PyMcts):
 
         # Collect states that need evaluation.
         if outstanding_states:
-            id_seqs = parallel_stack_ids(outstanding_states, g.num_workers)
+            if g.use_alignment:
+                id_seqs, almts1, almts2 = parallel_stack_ids(
+                    outstanding_states, g.num_workers, True, self.env.max_end_length)
+                almts1 = get_tensor(almts1).rename('batch', 'word', 'pos')
+                almts2 = get_tensor(almts2).rename('batch', 'word', 'pos')
+            else:
+                id_seqs = parallel_stack_ids(outstanding_states, g.num_workers, False)
             id_seqs = get_tensor(id_seqs).rename('batch', 'word', 'pos')
             if steps is not None and not isinstance(steps, int):
                 steps = steps[outstanding_idx]
@@ -72,7 +78,7 @@ class Mcts(PyMcts):
             # TODO(j_luo) Scoped might be wrong here.
             # with ScopedCache('state_repr'):
             # NOTE(j_luo) Don't forget to call exp().
-            priors = self.agent.get_policy(id_seqs).exp()
+            priors = self.agent.get_policy(id_seqs, almts=(almts1, almts2)).exp()
             with NoName(priors):
                 meta_priors = priors[:, [0, 2, 3, 4, 5, 6]].cpu().numpy()
                 special_priors = priors[:, 1].cpu().numpy()
@@ -144,7 +150,7 @@ class Mcts(PyMcts):
                     if root.stopped or root.done:
                         break
                     # self.show_stats()
-                trajectory = Trajectory(played_path)
+                trajectory = Trajectory(played_path, self.env.max_end_length)
                 if ei % g.episode_check_interval == 0:
                     logging.debug(pad_for_log(str(trajectory)))
 

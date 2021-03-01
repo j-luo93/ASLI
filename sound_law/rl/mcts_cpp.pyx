@@ -261,10 +261,9 @@ cdef class PyEnv:
         cdef long[::1] lengths = np.full([6], meta_noise.shape[1], dtype='long')
         self.ptr.add_noise(py_tnode.ptr, np2nested(meta_noise, lengths), np2vector(special_noise), noise_ratio)
 
-    # def step(self, PyTreeNode node, int best_i, uai_t action_id):
-    #     new_node = self.ptr.apply_action(node.ptr, best_i, action_id)
-    #     tnode_cls = type(node)
-    #     return wrap_node(tnode_cls, new_node)
+    @property
+    def max_end_length(self) -> int:
+        return self.ptr.get_max_end_length()
 
 cdef inline TreeNode *get_ptr(PyTreeNode py_node):
     return py_node.ptr
@@ -341,14 +340,14 @@ cdef class PyMcts:
     # def set_logging_options(self, int verbose_level, bool log_to_file):
     #     self.ptr.set_logging_options(verbose_level, log_to_file)
 
-def parallel_stack_ids(py_nodes, int num_threads):
+def parallel_stack_ids(py_nodes, int num_threads, bool use_alignment, int max_end_length):
     cdef vector[TNptr] nodes = vector[TNptr]()
     for node in py_nodes:
         nodes.push_back(get_ptr(node))
-    return c_parallel_stack_ids(nodes, num_threads)
+    return c_parallel_stack_ids(nodes, num_threads, use_alignment, max_end_length)
 
 @cython.boundscheck(False)
-cdef object c_parallel_stack_ids(vector[TNptr] nodes, int num_threads):
+cdef object c_parallel_stack_ids(vector[TNptr] nodes, int num_threads, bool use_alignment, int max_end_length):
     # Get the max length first.
     cdef int i, j, k
     cdef size_t m = 0
@@ -359,14 +358,32 @@ cdef object c_parallel_stack_ids(vector[TNptr] nodes, int num_threads):
             m = max(m, nodes[i].get_id_seq(j).size())
 
     cdef long[:, :, ::1] arr = np.full([n, nw, m], alphabet.PAD_ID, dtype='long')
+    cdef long[:, :, ::1] almts1 = np.full([n, nw, m], -1, dtype='long')
+    cdef long[:, :, ::1] almts2 = np.full([n, nw, max_end_length], -1, dtype='long')
     cdef IdSeq id_seq
+    cdef pair[vector[vector[size_t]], vector[vector[size_t]]] almts
+    cdef vector[vector[size_t]] almts_first, almts_second
     with nogil:
         for i in prange(n, num_threads=num_threads):
+            if use_alignment:
+                almts = nodes[i].get_alignments()
+                almts_first = almts.first
+                almts_second = almts.second
             for j in range(nw):
                 id_seq = nodes[i].get_id_seq(j)
                 for k in range(id_seq.size()):
                     arr[i, j, k] = id_seq[k]
-    return np.asarray(arr)
+                    if use_alignment:
+                        almts1[i, j, k] = almts_first[j][k]
+                if use_alignment:
+                    m = almts_second[j].size()
+                    for k in range(m):
+                        almts2[i, j, k] = almts_second[j][k]
+
+    if use_alignment:
+        return np.asarray(arr), np.asarray(almts1), np.asarray(almts2)
+    else:
+        return np.asarray(arr)
 
 @cython.boundscheck(False)
 cdef object c_parallel_stack_actions(vector[BNptr] nodes, int num_threads):
@@ -391,7 +408,7 @@ cdef object c_parallel_stack_actions(vector[BNptr] nodes, int num_threads):
     return np.asarray(actions), np.asarray(mcts_pis)
 
 # @cython.boundscheck(False)
-def parallel_gather_trajectory(PyPath path, int num_threads):
+def parallel_gather_trajectory(PyPath path, int num_threads, bool use_alignment, int max_end_length):
     # cdef BaseNode *node = <BaseNode *>last_state.ptr
     # cdef list[BNptr] base_nodes_list = list[BNptr]()
     # # Reverse the backtracking order to get the right order.
@@ -423,8 +440,14 @@ def parallel_gather_trajectory(PyPath path, int num_threads):
             qs.push_back(node.get_total_values()[chosen_index] / node.get_action_counts()[chosen_index])
         if node.is_transitional():
             rewards.push_back((<TransitionNode *>(node)).get_rewards()[chosen_index])
-    id_seqs = c_parallel_stack_ids(tree_nodes, num_threads)
+    if use_alignment:
+        id_seqs, almts1, almts2 = c_parallel_stack_ids(tree_nodes, num_threads, True, max_end_length)
+    else:
+        id_seqs = c_parallel_stack_ids(tree_nodes, num_threads, False, max_end_length)
     # We don't need the last state's permissible actions since it's not explored.
     base_nodes.pop_back()
     permissible_actions, mcts_pis = c_parallel_stack_actions(base_nodes, num_threads)
-    return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
+    if use_alignment:
+        return id_seqs, almts1, almts2, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
+    else:
+        return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)

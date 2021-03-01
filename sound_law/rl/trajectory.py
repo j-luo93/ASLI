@@ -74,14 +74,21 @@ class TrEdge:
     qs: NDA
     s1: VocabState
     mcts_pi: NDA
+    almt1: Optional[NDA] = None
+    almt2: Optional[NDA] = None
 
 
 class Trajectory:
 
-    def __init__(self, played_path: PyPath):
+    def __init__(self, played_path: PyPath, max_end_length: int):
         # NOTE(j_luo) They have different batch size. `id_seqs` has n + 1, `rewards` has n (last state doesn't have any q due to being unexplored), while the remaining tree have 7 * n each.
-        self.id_seqs, self.actions, self.rewards, self.permissible_actions, self.mcts_pis, self.qs = parallel_gather_trajectory(
-            played_path, g.num_workers)
+        if g.use_alignment:
+            self.id_seqs, self.almts1, self.almts2, self.actions, self.rewards, self.permissible_actions, self.mcts_pis, self.qs = parallel_gather_trajectory(
+                played_path, g.num_workers, g.use_alignment, max_end_length)
+            assert len(self.id_seqs) == len(self.almts1) == len(self.almts2)
+        else:
+            self.id_seqs, self.actions, self.rewards, self.permissible_actions, self.mcts_pis, self.qs = parallel_gather_trajectory(
+                played_path, g.num_workers, g.use_alignment, max_end_length)
         self.done = played_path.get_last_node().done
         self._num_edges = len(self.id_seqs) - 1
         assert len(self.rewards) == len(self.id_seqs) - 1
@@ -107,4 +114,8 @@ class Trajectory:
             qs = self.qs[start:end]
             pa = self.permissible_actions[start: end]
             mcts_pi = self.mcts_pis[start: end]
-            yield TrEdge(i, s0, action, pa, r, qs, s1, mcts_pi)
+            almt1 = almt2 = None
+            if g.use_alignment:
+                almt1 = self.almts1[i]
+                almt2 = self.almts2[i]
+            yield TrEdge(i, s0, action, pa, r, qs, s1, mcts_pi, almt1=almt1, almt2=almt2)
