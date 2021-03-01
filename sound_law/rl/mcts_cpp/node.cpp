@@ -56,7 +56,15 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise) cons
         float p = priors[i];
         float u = puct_c * p * sqrt_ns / (1 + nsa);
         // float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
-        float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
+        // float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
+        // float h = heur_c * sqrt(static_cast<float>(affected[i].num_misaligned())) / (1 + nsa);
+        float h = heur_c * static_cast<float>(affected[i].num_misaligned()) / (1 + nsa);
+
+        // std::cerr << "--------------\n";
+        // std::cerr << affected[i].num_misaligned() << " ";
+        // for (size_t j = 0; j < affected[i].size(); ++j)
+        //     std::cerr << affected[i].positions[j] << " ";
+        // std::cerr << "\n";
         // float h = (mv > -99.9) ? heur_c * mv / (1 + nsa) : 0.0;
         // scores[i] = q + u + h;
         // scores[i] = q + u + randf(0.001);
@@ -149,7 +157,6 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini() const
 
     // assert(!played);
     // played = true;
-    return std::make_pair(children[index], ChosenChar{index, permissible_chars[index]});
 
     // auto probs = vec<float>();
     // probs.reserve(action_counts.size());
@@ -215,6 +222,50 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini() const
     // // assert(children[index]->num_unpruned_actions > 0);
     // played = true;
     // return children[index];
+
+    // auto probs = vec<float>();
+    // probs.reserve(action_counts.size());
+    // float sum = 0.0;
+
+    // for (size_t i = 0; i < max_values.size(); ++i)
+    // {
+    //     auto mv = max_values[i];
+    //     if (mv > -99.9)
+    //         if (pruned[i])
+    //             probs.push_back(1e-8);
+    //         else
+    //             probs.push_back(exp(mv * 50.0));
+    //     else
+    //         probs.push_back(0.0);
+    //     // probs.push_back((mv > -99.9) ? exp(mv * 50.0) : 0.0);
+    //     // std::cerr << i << " " << probs.back() << " " << mv << " " << pruned[i] << "\n";
+    //     sum += probs.back();
+    // }
+
+    // for (const auto ac : action_counts)
+    // {
+    //     probs.push_back(pow(static_cast<float>(ac), 10.0));
+    //     sum += probs.back();
+    // }
+    // for (auto &prob : probs)
+    //     prob /= sum;
+
+    // float r = randf(1.0);
+    // float low = 0.0;
+    // float high = 0.0;
+    // size_t index = 0;
+    // for (size_t i = 0; i < probs.size(); ++i)
+    // {
+    //     high += probs[i];
+    //     if ((r >= low) && (r < high))
+    //     {
+    //         index = i;
+    //         break;
+    //     }
+    //     low = high;
+    // }
+
+    return std::make_pair(children[index], ChosenChar{index, permissible_chars[index]});
 }
 
 const IdSeq &TreeNode::get_id_seq(int order) const { return words[order]->id_seq; }
@@ -372,7 +423,7 @@ size_t BaseNode::get_num_affected_at(size_t index) const { return affected[index
 
 abc_t BaseNode::get_action_at(size_t index) const { return permissible_chars[index]; }
 
-void BaseNode::update_affected_at(size_t index, int order, size_t pos) { affected[index].push_back({order, pos}); }
+void BaseNode::update_affected_at(size_t index, int order, size_t pos, bool aligned) { affected[index].push_back(order, pos, aligned); }
 
 void BaseNode::init_stats()
 {
@@ -498,8 +549,8 @@ pair<vec<vec<size_t>>, vec<vec<size_t>>> TreeNode::get_alignments() const
     for (size_t i = 0; i < words.size(); ++i)
     {
         const auto &almt = words[i]->get_almt_at(i);
-        almts1.push_back(almt.first);
-        almts2.push_back(almt.second);
+        almts1.push_back(almt.pos_seq1);
+        almts2.push_back(almt.pos_seq2);
     }
     return ret;
 }

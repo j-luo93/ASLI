@@ -14,7 +14,23 @@ enum class ActionPhase : int
     SPECIAL_TYPE,
 };
 
-using Affected = vec<pair<int, size_t>>;
+struct Affected
+{
+    vec<int> orders;
+    vec<size_t> positions;
+    vec<bool> aligned;
+
+    inline size_t size() const { return orders.size(); };
+    inline void push_back(int order, size_t position, bool aligned)
+    {
+        orders.push_back(order);
+        positions.push_back(position);
+        this->aligned.push_back(aligned);
+    }
+    inline size_t num_misaligned() const { return std::count(aligned.begin(), aligned.end(), false); }
+};
+
+// using Affected = vec<pair<int, size_t>>;
 using ChosenChar = pair<int, abc_t>;
 
 class ActionSpace;
@@ -101,7 +117,7 @@ private:
 
     void add_action(abc_t, const Affected &);
     void add_action(abc_t, Affected &&);
-    void update_affected_at(size_t, int, size_t);
+    void update_affected_at(size_t, int, size_t, bool);
     void clear_priors();
     // Set prior to 0.0.
     void dummy_evaluate();
@@ -148,7 +164,7 @@ protected:
     BaseNode(bool, bool);
 
     // Destructor is protected so that the derived classes can call it.
-    ~BaseNode();
+    virtual ~BaseNode();
 
 public:
     const bool stopped;
@@ -384,7 +400,7 @@ class ActionManager
 
     static void add_action(BaseNode *node, abc_t action, const Affected &affected) { node->add_action(action, affected); }
     static void add_action(BaseNode *node, abc_t action, Affected &&affected) { node->add_action(action, affected); }
-    static void update_affected_at(BaseNode *node, size_t index, int order, size_t pos) { node->update_affected_at(index, order, pos); }
+    static void update_affected_at(BaseNode *node, size_t index, int order, size_t pos, bool aligned) { node->update_affected_at(index, order, pos, aligned); }
     static void init_pruned(BaseNode *node) { node->init_pruned(); }
     static void init_stats(BaseNode *node) { node->init_stats(); };
     static void init_rewards(TransitionNode *node) { node->init_rewards(); }

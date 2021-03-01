@@ -22,8 +22,9 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
         const auto &aff = last->get_affected_at(last_child_index);
         // FIXME(j_luo) If everything is ordered, then perhaps we don't need hashing.
         auto order2pos = map<int, vec<size_t>>();
-        for (const auto &item : aff)
-            order2pos[item.first].push_back(item.second);
+        // for (const auto &item : aff)
+        for (size_t i = 0; i < aff.size(); ++i)
+            order2pos[aff.orders[i]].push_back(aff.positions[i]);
         for (const auto &item : order2pos)
         {
             auto order = item.first;
@@ -338,10 +339,11 @@ void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chos
     {
         auto offset = (st == SpecialType::CLL) ? -1 : 1;
         auto char_map = map<abc_t, size_t>();
-        for (const auto &item : aff)
+        // for (const auto &item : aff)
+        for (size_t i = 0; i < aff.size(); ++i)
         {
-            auto order = item.first;
-            auto pos = item.second;
+            auto order = aff.orders[i];  //item.first;
+            auto pos = aff.positions[i]; // item.second;
             auto unit = node->base->words[order]->id_seq[pos + offset];
             auto base_unit = word_space->opt.unit2base[unit];
             // FIXME(j_luo) we really don't need to pass order and pos (and create item) separately -- we just need to decide whether to keep it or not.
@@ -392,22 +394,24 @@ void ActionSpace::expand_before(MiniNode *node, int chosen_index) const
     auto full_aff = node->get_affected_at(0);
     auto cll_aff = Affected();
     auto clr_aff = Affected();
-    for (const auto &item : full_aff)
+    // for (const auto &item : full_aff)
+    for (size_t i = 0; i < full_aff.size(); ++i)
     {
-        auto order = item.first;
-        auto pos = item.second;
-        auto &id_seq = node->base->words[order]->id_seq;
+        auto order = full_aff.orders[i];  //item.first;
+        auto pos = full_aff.positions[i]; //item.second;
+        auto word = node->base->words[order];
+        auto &id_seq = word->id_seq;
         if (pos > 0)
         {
             auto base_unit = word_space->opt.unit2base[id_seq[pos - 1]];
             if (cl_map.contains(base_unit))
-                cll_aff.push_back(item);
+                cll_aff.push_back(order, pos, word_space->is_aligned(word, order, pos));
         }
         if (pos < (id_seq.size() - 1))
         {
             auto base_unit = word_space->opt.unit2base[id_seq[pos + 1]];
             if (cl_map.contains(base_unit))
-                clr_aff.push_back(item);
+                clr_aff.push_back(order, pos, word_space->is_aligned(word, order, pos));
         }
     }
     if (cll_aff.size() > 0)
@@ -433,24 +437,26 @@ void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_ind
     const auto &words = node->base->words;
     const auto &affected = parent->get_affected_at(chosen_index);
     auto char_map = map<abc_t, size_t>();
-    for (const auto &aff : affected)
+    // for (const auto &aff : affected)
+    for (size_t i = 0; i < affected.size(); ++i)
     {
-        int order = aff.first;
+        int order = affected.orders[i]; // aff.first;
+        auto old_pos = affected.positions[i];
         auto word = words[order];
         if (use_vowel_seq)
         {
             // Get the position/index in the vowel seq.
-            auto vowel_pos = word->id2vowel[aff.second] + offset;
+            auto vowel_pos = word->id2vowel[old_pos] + offset;
             auto &vowel_seq = words[order]->vowel_seq;
             if (in_bound(vowel_pos, vowel_seq.size()))
-                update_affected(node, vowel_seq[vowel_pos], order, aff.second, char_map, can_have_any);
+                update_affected(node, vowel_seq[vowel_pos], order, old_pos, char_map, can_have_any);
         }
         else
         {
-            auto pos = aff.second + offset;
+            auto pos = old_pos + offset;
             auto &id_seq = words[order]->id_seq;
             if (in_bound(pos, id_seq.size()))
-                update_affected(node, id_seq[pos], order, aff.second, char_map, can_have_any);
+                update_affected(node, id_seq[pos], order, old_pos, char_map, can_have_any);
         }
     }
 }
@@ -567,16 +573,23 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
     if (((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id)) && !can_have_any)
         return;
 
+    Word *word;
+    if (node->is_tree_node())
+        word = static_cast<TreeNode *>(node)->words[order];
+    else
+        word = static_cast<MiniNode *>(node)->base->words[order];
+    auto aligned = word_space->is_aligned(word, order, pos);
+
     if (!char_map.contains(unit))
     {
         // Add one more permission char.
         char_map[unit] = node->get_num_actions();
-        ActionManager::add_action(node, unit, Affected{{{order, pos}}});
+        ActionManager::add_action(node, unit, Affected{{order}, {pos}, {aligned}});
     }
     else
     {
         // Add one more position.
-        ActionManager::update_affected_at(node, char_map[unit], order, pos);
+        ActionManager::update_affected_at(node, char_map[unit], order, pos, aligned);
     }
 
     Stress stress = word_space->opt.unit_stress[unit];

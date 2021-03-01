@@ -4,7 +4,18 @@
 
 class TreeNode;
 
-using Alignment = pair<vec<size_t>, vec<size_t>>;
+namespace alignment
+{
+    const int INSERTED = -1;
+};
+
+struct Alignment
+{
+    vec<size_t> pos_seq1;
+    vec<size_t> pos_seq2;
+    vec<int> aligned_pos;
+};
+
 class Word
 {
     friend class WordSpace;
@@ -54,4 +65,6 @@ public:
     float get_edit_dist(const IdSeq &, const IdSeq &) const;
     float get_edit_dist(const IdSeq &, const IdSeq &, Alignment &) const;
     size_t size() const;
+    // Whether `word` is corrected aligned with the end state at `order` at `position`.
+    bool is_aligned(const Word *, int, size_t) const;
 };

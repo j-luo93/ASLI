@@ -161,30 +161,36 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2, Alignment &
     // Go backwards and find the aligned indices.
     size_t almt_pos1 = 0;
     size_t almt_pos2 = 0;
-    auto &almt1 = almt.first;
-    almt1.reserve(l1);
-    auto &almt2 = almt.second;
-    almt2.reserve(l2);
+    auto &pos_seq1 = almt.pos_seq1;
+    pos_seq1.reserve(l1);
+    auto &pos_seq2 = almt.pos_seq2;
+    pos_seq2.reserve(l2);
+    auto &aligned_pos = almt.aligned_pos;
+    aligned_pos.reserve(l1);
     for (auto it = ops.rbegin(); it != ops.rend(); ++it)
     {
         switch (*it)
         {
         case EditOp::INSERTION:
-            almt1.push_back(almt_pos1++);
+            aligned_pos.push_back(alignment::INSERTED);
+            pos_seq1.push_back(almt_pos1++);
             ++almt_pos2;
             break;
         case EditOp::DELETION:
             ++almt_pos1;
-            almt2.push_back(almt_pos2++);
+            pos_seq2.push_back(almt_pos2++);
             break;
         case EditOp::SUBSTITUTION:
-            almt1.push_back(almt_pos1++);
-            almt2.push_back(almt_pos2++);
+            aligned_pos.push_back(almt_pos2);
+            pos_seq1.push_back(almt_pos1++);
+            pos_seq2.push_back(almt_pos2++);
             break;
         }
     }
-    assert(almt1.size() == l1);
-    assert(almt2.size() == l2);
+    assert(pos_seq1.size() == l1);
+    assert(pos_seq2.size() == l2);
+    assert(aligned_pos.size() == l1);
+
     for (size_t i = 0; i < l1 + 1; ++i)
         free(dist[i]);
     free(dist);
@@ -197,3 +203,12 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2, Alignment &
 size_t WordSpace::size() const { return words.size(); }
 
 const Alignment &Word::get_almt_at(int order) const { return almts.at(order); }
+
+bool WordSpace::is_aligned(const Word *word, int order, size_t position) const
+{
+    assert(opt.use_alignment);
+    const auto &almt = word->get_almt_at(order);
+    const auto c1 = word->id_seq[position];
+    const auto c2 = end_words[order]->id_seq[almt.aligned_pos[position]];
+    return opt.dist_mat[c1][c2] == 0.0;
+}
