@@ -24,7 +24,7 @@ TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
         auto order2pos = map<int, vec<size_t>>();
         // for (const auto &item : aff)
         for (size_t i = 0; i < aff.size(); ++i)
-            order2pos[aff.orders[i]].push_back(aff.positions[i]);
+            order2pos[aff.get_order_at(i)].push_back(aff.get_position_at(i));
         for (const auto &item : order2pos)
         {
             auto order = item.first;
@@ -342,8 +342,8 @@ void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chos
         // for (const auto &item : aff)
         for (size_t i = 0; i < aff.size(); ++i)
         {
-            auto order = aff.orders[i];  //item.first;
-            auto pos = aff.positions[i]; // item.second;
+            auto order = aff.get_order_at(i);  //item.first;
+            auto pos = aff.get_position_at(i); // item.second;
             auto unit = node->base->words[order]->id_seq[pos + offset];
             auto base_unit = word_space->opt.unit2base[unit];
             // FIXME(j_luo) we really don't need to pass order and pos (and create item) separately -- we just need to decide whether to keep it or not.
@@ -397,8 +397,8 @@ void ActionSpace::expand_before(MiniNode *node, int chosen_index) const
     // for (const auto &item : full_aff)
     for (size_t i = 0; i < full_aff.size(); ++i)
     {
-        auto order = full_aff.orders[i];  //item.first;
-        auto pos = full_aff.positions[i]; //item.second;
+        auto order = full_aff.get_order_at(i);  //item.first;
+        auto pos = full_aff.get_position_at(i); //item.second;
         auto word = node->base->words[order];
         auto &id_seq = word->id_seq;
         if (pos > 0)
@@ -440,8 +440,8 @@ void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_ind
     // for (const auto &aff : affected)
     for (size_t i = 0; i < affected.size(); ++i)
     {
-        int order = affected.orders[i]; // aff.first;
-        auto old_pos = affected.positions[i];
+        int order = affected.get_order_at(i); // aff.first;
+        auto old_pos = affected.get_position_at(i);
         auto word = words[order];
         if (use_vowel_seq)
         {
@@ -584,7 +584,9 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
     {
         // Add one more permission char.
         char_map[unit] = node->get_num_actions();
-        ActionManager::add_action(node, unit, Affected{{order}, {pos}, {aligned}});
+        auto aff = Affected();
+        aff.push_back(order, pos, aligned);
+        ActionManager::add_action(node, unit, aff);
     }
     else
     {

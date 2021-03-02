@@ -14,20 +14,28 @@ enum class ActionPhase : int
     SPECIAL_TYPE,
 };
 
-struct Affected
+class Affected
 {
+private:
+    size_t num_misaligned = 0;
+
     vec<int> orders;
     vec<size_t> positions;
     vec<bool> aligned;
 
+public:
     inline size_t size() const { return orders.size(); };
     inline void push_back(int order, size_t position, bool aligned)
     {
         orders.push_back(order);
         positions.push_back(position);
         this->aligned.push_back(aligned);
+        if (!aligned)
+            ++num_misaligned;
     }
-    inline size_t num_misaligned() const { return std::count(aligned.begin(), aligned.end(), false); }
+    inline size_t get_num_misaligned() const { return num_misaligned; }
+    inline int get_order_at(size_t index) const { return orders[index]; };
+    inline int get_position_at(size_t index) const { return positions[index]; };
 };
 
 // using Affected = vec<pair<int, size_t>>;
@@ -116,7 +124,6 @@ private:
     friend class ActionManager;
 
     void add_action(abc_t, const Affected &);
-    void add_action(abc_t, Affected &&);
     void update_affected_at(size_t, int, size_t, bool);
     void clear_priors();
     // Set prior to 0.0.
@@ -399,7 +406,6 @@ class ActionManager
     friend class ActionSpace;
 
     static void add_action(BaseNode *node, abc_t action, const Affected &affected) { node->add_action(action, affected); }
-    static void add_action(BaseNode *node, abc_t action, Affected &&affected) { node->add_action(action, affected); }
     static void update_affected_at(BaseNode *node, size_t index, int order, size_t pos, bool aligned) { node->update_affected_at(index, order, pos, aligned); }
     static void init_pruned(BaseNode *node) { node->init_pruned(); }
     static void init_stats(BaseNode *node) { node->init_stats(); };

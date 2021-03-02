@@ -58,7 +58,7 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise) cons
         // float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
         // float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
         // float h = heur_c * sqrt(static_cast<float>(affected[i].num_misaligned())) / (1 + nsa);
-        float h = heur_c * static_cast<float>(affected[i].num_misaligned()) / (1 + nsa);
+        float h = heur_c * static_cast<float>(affected[i].get_num_misaligned()) / (1 + nsa);
 
         // std::cerr << "--------------\n";
         // std::cerr << affected[i].num_misaligned() << " ";
@@ -411,12 +411,6 @@ void BaseNode::add_action(abc_t action, const Affected &affected)
 {
     permissible_chars.push_back(action);
     this->affected.push_back(affected);
-}
-
-void BaseNode::add_action(abc_t action, Affected &&affected)
-{
-    permissible_chars.push_back(action);
-    this->affected.push_back(std::forward<Affected>(affected));
 }
 
 size_t BaseNode::get_num_affected_at(size_t index) const { return affected[index].size(); }
