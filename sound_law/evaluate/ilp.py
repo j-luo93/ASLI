@@ -108,7 +108,8 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
     # interpret solution as a matching:
     # TODO implement, for now just print out
     for name, var in v.items():
-        print('%s = %d' % (var.name(), var.solution_value()))
+        if var.solution_value():
+            print('%s = %d' % (var.name(), var.solution_value()))
     
     return
 
