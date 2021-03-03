@@ -80,7 +80,7 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
             dist = env.dist_between(gold_state, curr_state)
             objective.SetCoefficient(v[a_var], dist)
         for j, rule1 in enumerate(cand):
-            for k, rule2 in enumerate(cand[j+1:]):
+            for k, rule2 in enumerate(cand[j+1:], start=j+1):
                 b_var = 'b_' + str(i) + '(' + str(j) + str(k) + ')'
                 v[b_var] = solver.IntVar(0, 1, b_var)
                 c['gold_' + str(i)].SetCoefficient(v[b_var], 1)
