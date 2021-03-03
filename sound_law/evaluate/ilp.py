@@ -58,7 +58,7 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
     # or of form a_0i + ... + a_ni + b_0(0i) + ... + b_0(in) <= 1
     # one such constraint exists for each gold block/cand rule. Only one of the variables a/b can be equal to 1, so only one matching occurs, if any. 
     for i in range(len(gold)):
-        c['gold_' + str(i)] = solver.Constraint(0, 1) # FIXME investigate if the range (-solver.infinity(), 1) leads to better performance: all the examples use neg infty as the lower bound, even though here <0 isn't attainable.
+        c['gold_' + str(i)] = solver.Constraint(1, 1) # FIXME investigate if the range (-solver.infinity(), 1) leads to better performance: all the examples use neg infty as the lower bound, even though here <0 isn't attainable.
     for j in range(len(cand)):
         c['cand_' + str(j)] = solver.Constraint(0, 1)
 
