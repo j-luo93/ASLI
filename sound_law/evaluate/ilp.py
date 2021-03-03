@@ -71,7 +71,7 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
     for i, block in enumerate(gold):
         gold_state = env.apply_block(block, curr_state)
         for j, rule in enumerate(cand):
-            a_var = 'a_' + str(i) + str(j)
+            a_var = 'a_' + str(i) + ',' + str(j)
             v[a_var] = solver.IntVar(0, 1, a_var)
             c['gold_' + str(i)].SetCoefficient(v[a_var], 1)
             c['cand_' + str(j)].SetCoefficient(v[a_var], 1)
