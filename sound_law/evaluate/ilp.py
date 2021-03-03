@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar, List, Set, Dict, Optional, Union
 
 from ortools.linear_solver import pywraplp
+import random
 
 # from dev_misc import add_argument, g
 # from sound_law.data.alphabet import Alphabet
@@ -19,7 +20,6 @@ from ortools.linear_solver import pywraplp
 
 
 class ToyEnv():
-    import random
 
     def __init__(self, init_state):
         self.init_state = init_state
@@ -57,10 +57,10 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
     # constraint is of form a_i0 + ... + a_im + b_i(01) + ... <= 1
     # or of form a_0i + ... + a_ni + b_0(0i) + ... + b_0(in) <= 1
     # one such constraint exists for each gold block/cand rule. Only one of the variables a/b can be equal to 1, so only one matching occurs, if any. 
-    for i in range(gold):
-        c['gold_' + i] = solver.Constraint(0, 1) # FIXME investigate if the range (-solver.infinity(), 1) leads to better performance: all the examples use neg infty as the lower bound, even though here <0 isn't attainable.
-    for j in range(cand):
-        c['cand_' + j] = solver.Constraint(0, 1)
+    for i in range(len(gold)):
+        c['gold_' + str(i)] = solver.Constraint(0, 1) # FIXME investigate if the range (-solver.infinity(), 1) leads to better performance: all the examples use neg infty as the lower bound, even though here <0 isn't attainable.
+    for j in range(len(cand)):
+        c['cand_' + str(j)] = solver.Constraint(0, 1)
 
     # TODO implement real SoundChangeEnv; currently using toy data "ToyEnv"
     curr_state = env.init_state
@@ -71,21 +71,21 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
     for i, block in enumerate(gold):
         gold_state = env.apply_block(block, curr_state)
         for j, rule in enumerate(cand):
-            a_var = 'a_' + i + j
+            a_var = 'a_' + str(i) + str(j)
             v[a_var] = solver.IntVar(0, 1, a_var)
-            c['gold_' + i].SetCoefficient(v[a_var], 1)
-            c['cand_' + j].SetCoefficient(v[a_var], 1)
+            c['gold_' + str(i)].SetCoefficient(v[a_var], 1)
+            c['cand_' + str(j)].SetCoefficient(v[a_var], 1)
             # calculate edit distance and add to Objective function
             cand_state = env.apply_action(rule, curr_state)
             dist = env.dist_between(gold_state, curr_state)
             objective.SetCoefficient(v[a_var], dist)
         for j, rule1 in enumerate(cand):
             for k, rule2 in enumerate(cand[j+1:]):
-                b_var = 'b_' + i + '(' + j + k + ')'
+                b_var = 'b_' + str(i) + '(' + str(j) + str(k) + ')'
                 v[b_var] = solver.IntVar(0, 1, b_var)
-                c['gold_' + i].SetCoefficient(v[b_var], 1)
-                c['cand_' + j].SetCoefficient(v[b_var], 1)
-                c['cand_' + k].SetCoefficient(v[b_var], 1)
+                c['gold_' + str(i)].SetCoefficient(v[b_var], 1)
+                c['cand_' + str(j)].SetCoefficient(v[b_var], 1)
+                c['cand_' + str(k)].SetCoefficient(v[b_var], 1)
 
                 cand_state = env.apply_block([rule1, rule2], curr_state)
                 dist = env.dist_between(gold_state, curr_state)
