@@ -37,7 +37,7 @@ class ToyEnv():
 
     def dist_between(self, state1, state2):
         # somehow compute the edit distance between these two states
-        return random.random() * random.randint(1, 20)
+        return (random.random() + 1) * random.randint(1, 20)
 
     def compare_effects(self, act1, act2, state):
         state1 = self.apply_action(act1, state)
@@ -45,9 +45,11 @@ class ToyEnv():
         return self.dist_between(state1, state2)
 
 
-def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChangeEnv) -> List[Tuple[Int, Tuple[Int]]]:
+def match_rulesets(gold: List[List[Action]],
+                   cand: List[Action], 
+                   env: SoundChangeEnv,
+                   match_proportion: float = .7) -> List[Tuple[Int, Tuple[Int]]]:
     '''Finds the optimal matching of rule blocks in the gold ruleset to 0, 1, or 2 rules in the candidate ruleset. Frames the problem as an integer linear program. Returns a list of tuples with the matching.'''
-        # FIXME matchings with b variables don't seem to occur for some reason. Why?
 
     solver = pywraplp.Solver.CreateSolver('SCIP') # TODO investigate other solvers
     # form the different variables in this ILP
@@ -60,16 +62,20 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
     # or of form a_0i + ... + a_ni + b_0(0i) + ... + b_0(in) <= 1
     # one such constraint exists for each gold block/cand rule. Only one of the variables a/b can be equal to 1, so only one matching occurs, if any. 
     for i in range(len(gold)):
-        c['gold_' + str(i)] = solver.Constraint(1, 1) # must have matches for each gold ruleset, but not necc. matches for each cand rule
+        c['gold_' + str(i)] = solver.Constraint(0, 1)
     for j in range(len(cand)):
         c['cand_' + str(j)] = solver.Constraint(0, 1)
+    # finally, this matching constraint forces the model to match at least some of the rules (otherwise it would just match no rules to vacuously achieve a minimum objective of 0)
+    # it stipulates that the sum of all variables must be >= some minimum match number
+    # by the handshake lemma, only a constraint needs to be placed on gold — this implies some amount of matching with candidate
+    min_match_number = int(match_proportion * len(gold))
+    c['min_match'] = solver.Constraint(min_match_number, len(gold))
 
     # TODO implement real SoundChangeEnv; currently using toy data "ToyEnv"
     curr_state = env.init_state
     objective = solver.Objective()
 
     # create variables
-    # FIXME also calculate distances while iterating to put into the objective function?
     for i, block in enumerate(gold):
         gold_state = env.apply_block(block, curr_state)
         for j, rule in enumerate(cand):
@@ -77,6 +83,8 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
             v[a_var] = solver.IntVar(0, 1, a_var)
             c['gold_' + str(i)].SetCoefficient(v[a_var], 1)
             c['cand_' + str(j)].SetCoefficient(v[a_var], 1)
+            c['min_match'].SetCoefficient(v[a_var], 1)
+
             # calculate edit distance and add to Objective function
             cand_state = env.apply_action(rule, curr_state)
             dist = env.dist_between(gold_state, cand_state)
@@ -89,6 +97,7 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
                 c['gold_' + str(i)].SetCoefficient(v[b_var], 1)
                 c['cand_' + str(j)].SetCoefficient(v[b_var], 1)
                 c['cand_' + str(k)].SetCoefficient(v[b_var], 1)
+                c['min_match'].SetCoefficient(v[b_var], 1)
 
                 cand_state = env.apply_block([rule1, rule2], curr_state)
                 dist = env.dist_between(gold_state, cand_state)
@@ -123,7 +132,7 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
 #     ['e', 'f']
 # ]
 # cand = ['alpha', 'beta', 'gamma', 'delta']
-gold = [[x,x] for x in range(100)]
+gold = [[x,x] for x in range(50)]
 cand = [x for x in range(100)]
 env = ToyEnv('foo')
 
