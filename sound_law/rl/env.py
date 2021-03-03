@@ -12,7 +12,7 @@ from dev_misc import FT, LT, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib import pad_to_dense
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.utils import handle_sequence_inputs
-from sound_law.data.alphabet import PAD_ID
+# from sound_law.data.alphabet import PAD_ID
 
 from .action import SoundChangeAction, SoundChangeActionSpace
 from .agent import AgentInputs, VanillaPolicyGradient
