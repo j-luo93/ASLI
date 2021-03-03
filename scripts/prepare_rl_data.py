@@ -9,12 +9,12 @@ from typing import List
 import pandas as pd
 from cltk.phonology.old_english.orthophonology import \
     OldEnglishOrthophonology as oe
+from cltk.phonology.old_norse.orthophonology import on
 from lingpy.sequence.sound_classes import ipa2tokens
 
 from pypheature.nphthong import Nphthong
 from pypheature.process import FeatureProcessor
 from xib.aligned_corpus.transcriber import RuleBasedTranscriber
-from cltk.phonology.old_norse.orthophonology import on
 
 
 @lru_cache(maxsize=None)
@@ -38,7 +38,7 @@ def PGmc_ipa_trans(word: str) -> str:  # only for latin-transliterated Gothic an
 
     # consonants
     word = re.sub(r"h", "x", word)
-    word = re.sub(r"f", "ɸ", word)
+    word = re.sub(r"f", "f", word)
     word = re.sub(r"xw", "xʷ", word)
     word = re.sub(r"kw", "kʷ", word)
     word = re.sub(r"þ", "θ", word)
@@ -53,12 +53,12 @@ def PGmc_ipa_trans(word: str) -> str:  # only for latin-transliterated Gothic an
     word = re.sub(r"b", "β", word)
     word = re.sub(r"^β", "b", word)
 
-    word = re.sub(r"g", "ɣ", word)
-    word = re.sub(r"ɣw", "ɡʷ", word)
+    word = re.sub(r"g", "ɡ", word)
+    word = re.sub(r"ɡw", "ɡʷ", word)
 
     word = re.sub(r"nk", "ŋk", word)
-    word = re.sub(r"nɡ", "ŋɡ", word)
-    word = re.sub(r"nɡ", "ŋɡ", word)
+    word = re.sub(r"ng", "ŋɡ", word)
+    word = re.sub(r"ng", "ŋɡ", word)
 
     return word
 
@@ -124,7 +124,8 @@ to_break_got = {
     'ɛːa': ['ɛː', 'a']
 }
 to_break_pgm = {
-    'eːa': ['eː', 'a']
+    'eːa': ['eː', 'a'],
+    'oːa': ['oː', 'a']
 }
 to_break = {
     'got': to_break_got,
@@ -165,6 +166,11 @@ if __name__ == "__main__":
     desc = desc[~desc['gem-pro'].isin(dups)].reset_index(drop=True)
 
     # IPA transcription.
+    def replace(s: str) -> str:
+        for x, y in to_rectify:
+            s = s.replace(x, y)
+        return s
+
     if args.lang == "got":
         ipa_col = 'got_ipa'
         form_col = 'latin'
@@ -175,13 +181,19 @@ if __name__ == "__main__":
         ipa_col = 'ang_ipa'
         form_col = 'desc_form'
         # NOTE(j_luo) Use the simple `a` phoneme to conform to other transcribers.
+        to_rectify = [('ɑ', 'a'), ('g', 'ɡ'), ('h', 'x'), ('hʷ', 'xʷ'), ('ç', 'x')]
+
         desc[ipa_col] = desc[form_col].apply(lambda s: oe(
-            s.strip('-'))).apply(i2t).apply(lambda s: [ss.replace('ɑ', 'a') for ss in s])
+            s.strip('-').replace('ċ', 'c').replace('ġ', 'g'))).apply(i2t).apply(lambda lst: [replace(x) for x in lst])
     elif args.lang == 'non':
         ipa_col = 'non_ipa'
         form_col = 'desc_form'
         # NOTE(j_luo) Use the simple `a` phoneme to conform to other transcribers.
-        desc[ipa_col] = desc[form_col].apply(on.transcribe).str.replace('g', 'ɡ').apply(i2t)
+        # desc[ipa_col] = desc[form_col].apply(on.transcribe).str.replace(
+        #     'g', 'ɡ').str.replace('ɸ', 'f').str.replace('h', 'x').apply(i2t).str.replace('')
+        to_rectify = [('g', 'ɡ'), ('gʷ', 'ɡʷ'), ('h', 'x'), ('hʷ', 'xʷ'), ('ɛ', 'e'), ('ɣ', 'ɡ'), ('ɔ', 'o')]
+        desc[ipa_col] = desc[form_col].apply(on.transcribe).apply(i2t).apply(lambda lst: [replace(x) for x in lst])
+
     else:
         raise ValueError(f'Unrecognized language "{args.lang}".')
 

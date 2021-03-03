@@ -7,13 +7,16 @@ class Word
 {
     friend class WordSpace;
 
-    Word(const IdSeq &, const vec<SiteNode *> &, size_t);
+    Word(const IdSeq &, const IdSeq &, const vec<SiteNode *> &, const vec<SiteNode *> &, size_t);
 
 public:
     const IdSeq id_seq;
-    ParaMap<usi_t, Word *> neighbors;
-    // ActionMap<Word *> neighbors;
+    const IdSeq vowel_seq;
+    ParaMap<usi_t, vec<Word *>> neighbors;
+    ParaMap<usi_t, vec<Word *>> vowel_neighbors;
+
     vec<SiteNode *> site_roots;
+    vec<SiteNode *> vowel_site_roots;
     std::string str();
     DistTable dists;
 };
@@ -26,16 +29,16 @@ class WordSpace
     friend class ActionSpace;
     friend class Env;
 
-    // IdSeqMap<Word *> words;
     ParaMap<IdSeq, Word *> words;
-    float get_edit_dist(Word *, Word *);
     vec<Word *> end_words;
+
+    float get_edit_dist(Word *, Word *);
+    vec<SiteNode *> get_site_roots(const IdSeq &);
 
 public:
     SiteSpace *site_space;
     const vec<vec<float>> dist_mat;
     const float ins_cost;
-    Timer &timer = Timer::getInstance();
 
     WordSpace(SiteSpace *, const vec<vec<float>> &, float);
 

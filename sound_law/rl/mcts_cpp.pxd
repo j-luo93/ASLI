@@ -5,6 +5,8 @@ from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp cimport bool
 
+cdef extern from "mcts_cpp/timer.cpp": pass
+cdef extern from "mcts_cpp/stats.cpp": pass
 cdef extern from "mcts_cpp/site.cpp": pass
 cdef extern from "mcts_cpp/word.cpp": pass
 cdef extern from "mcts_cpp/tree_node.cpp": pass
@@ -32,21 +34,44 @@ cdef extern from "mcts_cpp/common.hpp":
     ctypedef unsigned long uai_t
     ctypedef unsigned long usi_t
 
+    cdef cppclass SpecialType:
+        pass
+
+    cdef cppclass Stress:
+        pass
+
     ctypedef threadpool Pool
 
-    cdef cppclass Timer nogil:
-        void enable()
-        void disable()
+cdef extern from "mcts_cpp/stats.hpp":
+    cdef cppclass Stats nogil:
+        void enable_timer()
+        void disable_timer()
         void show_stats()
+
+    cdef Stats stats
+
+cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
+    cdef SpecialType CLL
+    cdef SpecialType CLR
+    cdef SpecialType VS
+    cdef SpecialType GBJ
+    cdef SpecialType GBW
+
+cdef extern from "mcts_cpp/common.hpp" namespace "Stress":
+    cdef Stress NOSTRESS
+    cdef Stress STRESSED
+    cdef Stress UNSTRESSED
 
 cdef extern from "mcts_cpp/common.hpp" namespace "action":
     uai_t combine(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t)
+    uai_t combine_special(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType)
     abc_t get_after_id(uai_t)
     abc_t get_before_id(uai_t)
     abc_t get_d_post_id(uai_t)
     abc_t get_post_id(uai_t)
     abc_t get_d_pre_id(uai_t)
     abc_t get_pre_id(uai_t)
+    SpecialType get_special_type(uai_t)
 
 cdef extern from "mcts_cpp/site.hpp":
     cdef cppclass SiteNode nogil:
@@ -61,7 +86,7 @@ cdef extern from "mcts_cpp/site.hpp":
         abc_t any_id
         abc_t emp_id
 
-        SiteSpace(abc_t, abc_t, abc_t, abc_t)
+        SiteSpace(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t)
 
         size_t size()
         void get_node(SiteNode *, usi_t)
@@ -158,11 +183,15 @@ cdef extern from "mcts_cpp/action.hpp":
         WordSpace *word_space
         float dist_threshold
         int site_threshold
-        Timer timer
 
         ActionSpace(SiteSpace *, WordSpace *, float, int)
 
         void register_edge(abc_t, abc_t)
+        void register_cl_map(abc_t, abc_t)
+        void register_gbj(abc_t, abc_t)
+        void register_gbw(abc_t, abc_t)
+        void set_vowel_info(vector[bool], vector[abc_t], vector[Stress], vector[abc_t], vector[abc_t])
+        void set_glide_info(abc_t, abc_t)
         void set_action_allowed(Pool *, vector[TNptr])
         void set_action_allowed(TreeNode *)
         IdSeq apply_action(IdSeq, uai_t)
@@ -198,9 +227,11 @@ cdef extern from "mcts_cpp/mcts.hpp":
 
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:
+    int
     float
     long
     abc_t
+    bool
 
 cdef inline vector[vector[convertible]] np2nested(convertible[:, ::1] arr,
                                                   long[::1] lengths):

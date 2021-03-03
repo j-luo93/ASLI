@@ -1,5 +1,5 @@
 # distutils: language = c++
-from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector
+from .mcts_cpp cimport Mcts, Env, ActionSpace, SiteSpace, WordSpace, np2nested, TNptr, TreeNode, DetachedTreeNode, anyTNptr, uai_t, abc_t, combine, np2vector, CLL, CLR, VS, GBJ, GBW, Stress, NOSTRESS, STRESSED, UNSTRESSED, stats, get_special_type
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -7,7 +7,8 @@ from cython.operator cimport dereference as deref, preincrement as inc
 
 cimport cython
 
-from sound_law.data.alphabet import PAD_ID
+from typing import Optional
+import sound_law.data.alphabet as alphabet
 
 cdef extern from "limits.h":
     cdef uai_t ULONG_MAX
@@ -19,13 +20,16 @@ cdef uai_t STOP = combine(NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL
 PyNull_abc = NULL_ABC
 PyNull_action = NULL_ACTION
 PyStop = STOP
+PyNoStress = <int>NOSTRESS
+PyStressed = <int>STRESSED
+PyUnstressed = <int>UNSTRESSED
 
 
 cdef class PySiteSpace:
     cdef SiteSpace *ptr
 
-    def __cinit__(self, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id):
-        self.ptr = new SiteSpace(sot_id, eot_id, any_id, emp_id)
+    def __cinit__(self, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t emp_id, abc_t syl_eot_id, abc_t any_s_id, abc_t any_uns_id):
+        self.ptr = new SiteSpace(sot_id, eot_id, any_id, emp_id, syl_eot_id, any_s_id, any_uns_id)
 
     def __dealloc__(self):
         del self.ptr
@@ -80,7 +84,22 @@ cdef class PyAction:
                   abc_t d_pre_id,
                   abc_t post_id,
                   abc_t d_post_id,
-                  action_id = None):
+                  action_id = None,
+                  special_type: Optional[str] = None):
+        if action_id is not None:
+            assert special_type is None, "Do not provide `special_type` if `action_id` is known."
+            c_st = <long>get_special_type(action_id)
+            if c_st == <long>CLL:
+                special_type = 'CLL'
+            elif c_st == <long>CLR:
+                special_type = 'CLR'
+            elif c_st == <long>VS:
+                special_type = 'VS'
+            elif c_st == <long>GBJ:
+                special_type = 'GBJ'
+            elif c_st == <long>GBW:
+                special_type = 'GBW'
+
         self.before_id = before_id
         self.after_id = after_id
         self.pre_id = pre_id
@@ -97,8 +116,21 @@ cdef class PyAction:
             self.post_cond.push_back(post_id)
         if d_post_id != NULL_ABC:
             self.post_cond.push_back(d_post_id)
+
+        self.special_type = special_type
         if action_id is None:
-            action_id = combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id)
+            if special_type == 'CLL':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, CLL)
+            elif special_type == 'CLR':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, CLR)
+            elif special_type == 'VS':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, VS)
+            elif special_type == 'GBJ':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, GBJ)
+            elif special_type == 'GBW':
+                action_id = combine_special(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id, GBW)
+            else:
+                action_id = combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id)
         self.action_id = action_id
 
 cdef class PyActionSpace:
@@ -116,6 +148,31 @@ cdef class PyActionSpace:
 
     def register_edge(self, abc_t before_id, abc_t after_id):
         self.ptr.register_edge(before_id, after_id)
+
+    def register_cl_map(self, abc_t before_id, abc_t after_id):
+        self.ptr.register_cl_map(before_id, after_id)
+
+    def register_gbj(self, abc_t before_id, abc_t after_id):
+        self.ptr.register_gbj(before_id, after_id)
+
+    def register_gbw(self, abc_t before_id, abc_t after_id):
+        self.ptr.register_gbw(before_id, after_id)
+
+    def set_vowel_info(self, bool[::1] vowel_mask, abc_t[::1] vowel_base, int[::1] vowel_stress, abc_t[::1] stressed_vowel, abc_t[::1] unstressed_vowel):
+        cdef vector[bool] vowel_mask_vec = np2vector(vowel_mask)
+        cdef vector[abc_t] vowel_base_vec = np2vector(vowel_base)
+        cdef vector[int] vowel_stress_int_vec = np2vector(vowel_stress)
+        cdef vector[abc_t] stressed_vowel_vec = np2vector(stressed_vowel)
+        cdef vector[abc_t] unstressed_vowel_vec = np2vector(unstressed_vowel)
+        cdef size_t n = vowel_stress_int_vec.size()
+        cdef vector[Stress] vowel_stress_vec = vector[Stress](n)
+        cdef size_t i
+        for i in range(n):
+            vowel_stress_vec[i] = <Stress>vowel_stress_int_vec[i]
+        self.ptr.set_vowel_info(vowel_mask_vec, vowel_base_vec, vowel_stress_vec, stressed_vowel_vec, unstressed_vowel_vec)
+
+    def set_glide_info(self, abc_t glide_j, abc_t glide_w):
+        self.ptr.set_glide_info(glide_j, glide_w)
 
     def get_action(self, action_id):
         return self.action_cls(get_before_id(action_id), get_after_id(action_id),
@@ -170,7 +227,7 @@ cdef class PyTreeNode:
         cdef int n = self.ptr.size()
         cdef int m = max([self.ptr.get_id_seq(i).size() for i in range(n)])
         # Fill in the array.
-        arr = np.full([n, m], PAD_ID, dtype='long')
+        arr = np.full([n, m], alphabet.PAD_ID, dtype='long')
         cdef IdSeq id_seq
         for i in range(n):
             id_seq = self.ptr.get_id_seq(i)
@@ -317,13 +374,13 @@ cdef class PyMcts:
         return action_id, wrap_node(tnode_cls, new_node), reward
 
     def enable_timer(self):
-        self.ptr.env.action_space.timer.enable()
+        stats.enable_timer()
 
     def disable_timer(self):
-        self.ptr.env.action_space.timer.disable()
+        stats.disable_timer()
 
-    def show_timer_stats(self):
-        self.ptr.env.action_space.timer.show_stats()
+    def show_stats(self):
+        stats.show_stats()
 
     def set_logging_options(self, int verbose_level, bool log_to_file):
         self.ptr.set_logging_options(verbose_level, log_to_file)
@@ -405,7 +462,7 @@ cdef object c_parallel_stack_ids(vector[anyTNptr] nodes, int num_threads):
                 lengths_view[i, j] = nodes[i].get_id_seq(j).size()
     cdef size_t m = lengths.max()
 
-    arr = np.full([n, m, nw], PAD_ID, dtype='long')
+    arr = np.full([n, m, nw], alphabet.PAD_ID, dtype='long')
     cdef long[:, :, ::1] arr_view = arr
     cdef IdSeq id_seq
     with nogil:

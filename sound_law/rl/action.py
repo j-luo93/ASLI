@@ -17,8 +17,8 @@ import torch
 import sound_law.rl.trajectory as tr
 from dev_misc import BT, add_argument, g, get_tensor, get_zeros
 from dev_misc.utils import Singleton, pbar
-from sound_law.data.alphabet import (ANY_ID, EMP, EMP_ID, EOT_ID, SOT_ID,
-                                     Alphabet)
+from sound_law.data.alphabet import (ANY_ID, ANY_S_ID, ANY_UNS_ID, EMP, EMP_ID,
+                                     EOT_ID, SOT_ID, SYL_EOT_ID, Alphabet)
 
 # pylint: disable=no-name-in-module
 from .mcts_cpp import (PyAction, PyActionSpace, PyNull_abc, PySiteSpace,
@@ -42,7 +42,8 @@ class SoundChangeAction(PyAction):
                  pre: Optional[str] = None,
                  d_pre: Optional[str] = None,
                  post: Optional[str] = None,
-                 d_post: Optional[str] = None) -> SoundChangeAction:
+                 d_post: Optional[str] = None,
+                 special_type: Optional[str] = None) -> SoundChangeAction:
         if cls.abc is None:
             raise RuntimeError(f"No alphabet has been specified.")
         if d_pre is not None and pre is None:
@@ -55,15 +56,22 @@ class SoundChangeAction(PyAction):
                 return EMP_ID
             if unit == '.':
                 return ANY_ID
+            if unit == '.{+}':
+                return ANY_S_ID
+            if unit == '.{-}':
+                return ANY_UNS_ID
             if unit == "#":
                 return SOT_ID if before_or_after == 'b' else EOT_ID
+            if unit == '##':
+                return SYL_EOT_ID
             if unit is None:
                 return PyNull_abc
             return cls.abc[unit]
 
         return cls(cls.abc[before], to_int(after, 'a'),
                    to_int(pre, 'b'), to_int(d_pre, 'b'),
-                   to_int(post, 'a'), to_int(d_post, 'a'))
+                   to_int(post, 'a'), to_int(d_post, 'a'),
+                   special_type=special_type)
 
     def __repr__(self):
         if self.action_id == PyStop:
@@ -76,6 +84,10 @@ class SoundChangeAction(PyAction):
                 return '.'
             elif idx == EMP_ID:
                 return 'Ø'
+            elif idx == ANY_S_ID:
+                return '.{+}'
+            elif idx == ANY_UNS_ID:
+                return '.{-}'
             return self.abc[idx]  # pylint: disable=unsubscriptable-object
 
         def get_cond(cond):
@@ -97,7 +109,8 @@ class SoundChangeAction(PyAction):
         before = str(self.before_id) if self.abc is None else get_str(self.before_id)
         after = str(self.after_id) if self.abc is None else get_str(self.after_id)
 
-        return f'{pre}{before}{post} > {after}'
+        special = '' if self.special_type is None else (self.special_type + ': ')
+        return f'{special}{pre}{before}{post} > {after}'
 
 
 class SoundChangeActionSpace(PyActionSpace):
@@ -115,23 +128,37 @@ class SoundChangeActionSpace(PyActionSpace):
 
         # Register unconditional actions first.
         units = [u for u in self.abc if u not in self.abc.special_units]
-        possible_path: Dict[str, List[str]] = defaultdict(list)
 
-        def register_uncondional_action(u1: str, u2: str):
+        def register_uncondional_action(u1: str, u2: str, cl: bool = False, gb: bool = False):
             id1 = abc[u1]
             id2 = abc[u2]
-            self.register_edge(id1, id2)
-            possible_path[id1].append(id2)
+            if cl:
+                self.register_cl_map(id1, id2)
+            elif gb:
+                if u1.startswith('i'):
+                    self.register_gbj(id1, id2)
+                else:
+                    assert u1.startswith('u')
+                    self.register_gbw(id1, id2)
+            else:
+                self.register_edge(id1, id2)
 
         if g.use_mcts:
             for u1, u2 in abc.edges:
                 register_uncondional_action(u1, u2)
             for u in units:
                 register_uncondional_action(u, EMP)
+            for u1, u2 in abc.cl_map.items():
+                register_uncondional_action(u1, u2, cl=True)
+            for u1, u2 in abc.gb_map.items():
+                register_uncondional_action(u1, u2, gb=True)
         else:
             for u1, u2 in product(units, repeat=2):
                 if u1 != u2:
                     register_uncondional_action(u1, u2)
+
+        self.set_vowel_info(abc.vowel_mask, abc.vowel_base, abc.vowel_stress, abc.stressed_vowel, abc.unstressed_vowel)
+        self.set_glide_info(abc['j'], abc['w'])
 
     def apply_action(self, unit_seq: Sequence[str], action: SoundChangeAction) -> List[str]:
         id_seq = [self.abc[u] for u in unit_seq]

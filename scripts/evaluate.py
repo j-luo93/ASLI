@@ -3,36 +3,52 @@ from __future__ import annotations
 import pickle
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, List, Set, Dict, Optional, Union
+from typing import ClassVar, Dict, List, Optional, Set, Tuple, Union
 
 import pandas as pd
 
 from dev_misc import add_argument, g
 from pypheature.nphthong import Nphthong
-from pypheature.process import FeatureProcessor
+from pypheature.process import (FeatureProcessor, NoMappingFound,
+                                NonUniqueMapping)
 from pypheature.segment import Segment
-from sound_law.data.alphabet import Alphabet
+from sound_law.data.alphabet import EOT, SOT, Alphabet
 from sound_law.main import setup
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 from sound_law.rl.mcts_cpp import \
     PyNull_abc  # pylint: disable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.train.manager import OnePairManager
+from copy import deepcopy
 
 _fp = FeatureProcessor()
+# NOTE(j_luo) We use `a` to represent the back vowel `ɑ`.
+back_a = _fp._base_segments['ɑ']
+front_a = deepcopy(back_a)
+front_a.base = 'a'
+_fp._base_segments['a'] = front_a
+
+
+syl_info = ''.join([
+    '(',
+    r'\{',
+    r'[\+\-\w, ]+',
+    r'\}'
+    ')?'
+])
 
 
 def named_ph(name: str) -> str:
-    ph = ''.join([
+    return ''.join([
         fr'(?P<{name}>',       # named capture group start
         '('
-        r'[^+\(\)\[\] ]+',           # acceptable characters (everything except '+', ' ', '(' and ')')
+        r'[^+\(\)\[\]\{\} ]+',           # acceptable characters (everything except '+', ' ', '(' and ')')
         '|',
-        r'\[[\w ,\+\-]+\]',
+        r'\[[\w̃  ,\+\-!]+\]',   # specify natural classes
         ')',
+        syl_info,
         ')'                   # capture group end
     ])
-    return ph
 
 
 pre_cond_pat = ''.join([
@@ -76,124 +92,284 @@ post_cond_pat = ''.join([
     ')?'     # optional end 1
 ])
 
-pat = re.compile(fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
+pat = re.compile(
+    fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
 
-error_codes = {'OOS', 'IRG', 'CIS', 'EPTh'}
+error_codes = {'OOS', 'IRG', 'CIS', 'EPTh', 'MTTh'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
-# Gothic: B, ON: A-E, OHG: A-C-F, OE: NW-D.1-D.2-G
+# Gothic: B, ON: A-E, OHG: A-C-F, OE: A-D.1-D.2-G
 ref_no = {
     'got': ['B'],
     'non': ['A', 'E'],
+    'ang': ['A', 'C', 'D.1', 'D.2', 'G']
 }
 
 
-class Boundary:
+stress_pat = re.compile(r'\{[\w, \+\-]+\}')
+
+
+@dataclass
+class HandwrittenSegment:
+    """This represents a handwritten segment (including natural class)."""
+
+    def __init__(self, raw_seg: Union[str, None], raw_stress: Union[str, None]):
+        raw_seg = None if raw_seg == '' else raw_seg
+        raw_stress = None if raw_stress == '' else raw_stress
+        if raw_stress:
+            segs = [seg.strip() for seg in raw_stress.strip('{}').split(',')]
+            segs = [seg for seg in segs if 'heavy' not in seg]
+            if segs:
+                assert len(segs) == 1
+                raw_stress = '{' + segs[0][0] + '}'
+            else:
+                raw_stress = None
+
+        self._raw_seg = raw_seg
+        self._raw_stress = raw_stress
+        self.expandable = self._raw_seg is not None and '[' in self._raw_seg
+        self.fv = None
+        if self.expandable:
+            self.fv = [part.strip() for part in raw_seg.strip('[]').split(',')]
+
+        assert self._raw_stress in ['{+}', '{-}', None]
+
+    @classmethod
+    def from_str(cls, raw: Union[str, None]) -> HandwrittenSegment:
+        if not raw:
+            return HandwrittenSegment(None, None)
+        raw = raw.strip()
+
+        if '{' in raw:
+            raw_stress = stress_pat.search(raw).group()
+            raw_seg = raw[:-len(raw_stress)]
+        else:
+            raw_seg = raw
+            raw_stress = None
+        return HandwrittenSegment(raw_seg, raw_stress)
+
+    def is_cll(self) -> bool:
+        return self._raw_seg == 'CLL'
+
+    def is_clr(self) -> bool:
+        return self._raw_seg == 'CLR'
+
+    def is_gbj(self) -> bool:
+        return self._raw_seg == 'GBJ'
+
+    def is_gbw(self) -> bool:
+        return self._raw_seg == 'GBW'
+
+    def to_segment(self) -> Union[Nphthong, Segment]:
+        assert not self.expandable
+        return _fp.process(self._raw_seg)
 
     def __str__(self):
-        return '#'
-
-
-SegmentLike = Union[Segment, Nphthong, Boundary]
-
-
-@dataclass
-class Expandable:
-    raw: Optional[str] = None
-    expandable: bool = field(init=False, repr=False)
-    fv: List[str] = field(init=False, repr=False, default=None)
-
-    def __post_init__(self):
-        if self.raw is not None and '[' in self.raw:
-            self.fv = [part.strip() for part in self.raw.strip('[]').split(',')]
-            self.expandable = True
+        if self._raw_seg is None:
+            return ''
         else:
-            self.expandable = False
+            return self._raw_seg + self.stress_str
 
     def exists(self) -> bool:
-        return self.raw is not None
+        return self._raw_seg is not None
 
-    def match(self, segment: SegmentLike) -> bool:
-        assert self.exists()
-        if isinstance(segment, Nphthong):
-            return not self.expandable and self.raw == str(segment)
-        if isinstance(segment, Boundary):
-            return self.raw == '#'
+    def has_stress(self) -> bool:
+        return self._raw_stress is not None
+
+    def __repr__(self):
+        return repr(str(self))
+
+    @property
+    def stress_str(self) -> str:
+        return '' if self._raw_stress is None else self._raw_stress
+
+    @property
+    def segment_str(self) -> str:
+        return '' if self._raw_seg is None else self._raw_seg
+
+    def match(self, ph: HS) -> bool:
+        if not self.exists():
+            return True
+        if not ph.exists():
+            return False
+
+        if self.has_stress():
+            if self.stress_str != ph.stress_str:
+                return False
+
+        if self._raw_seg == '.':
+            return ph.segment_str not in [EOT, SOT]
+
+        if self._raw_seg == '#':
+            return ph.segment_str in [EOT, SOT]
+
         if self.expandable:
-            return segment.check_features(self.fv)
-        return self.raw == str(segment)
+            if ph.segment_str in [EOT, SOT]:
+                return False
+            seg = _fp.process(ph.segment_str)
+            # Special case for `voice`.
+            if isinstance(seg, Nphthong):
+                if self.fv == ['+voice']:
+                    return True
+
+            return not isinstance(seg, Nphthong) and seg.check_features(self.fv)
+
+        assert self._raw_seg != '##'
+
+        return ph.segment_str == self.segment_str
+
+
+HS = HandwrittenSegment
+
+
+def get_arg(hs: HS) -> Union[str, None]:
+    """Get argument for `SoundChangeAction` initialization."""
+    if hs.exists():
+        return str(hs)
+    return None
 
 
 @dataclass
-class ExpandableAction:
-    """This is under-specified and would be specialized into `SoundChangeAction` later and be indexed."""
-    before: Expandable
-    after: Expandable
-    pre: Expandable
-    d_pre: Expandable
-    post: Expandable
-    d_post: Expandable
+class HandwrittenRule:
+    """This represents a handwritten rule (from annotations). But it can also represent system-generated rules."""
 
-    def __post_init__(self):
-        if self.d_pre is not None and self.pre is None:
-            raise ValueError(f"`pre` must be present for `d_pre`.")
-        if self.d_post is not None and self.post is None:
-            raise ValueError(f"`post` must be present for `d_post`.")
+    before: HS
+    after: HS
+    pre: HS
+    d_pre: HS
+    post: HS
+    d_post: HS
+    expandable: bool
+    special_type: Union[None, str]
+    ref: Optional[str] = None
+
+    @classmethod
+    def from_str(cls, raw: str, ref: Optional[str] = None) -> HandwrittenRule:
+        special_type = None
+        if raw.startswith('VS:'):
+            special_type = 'VS'
+            raw = raw[3:].strip()
+
+        def get_segment(name: str) -> HS:
+            return HandwrittenSegment.from_str(result.group(name))
+
+        result = pat.match(raw)
+        d_pre = get_segment('d_pre')
+        pre = get_segment('pre')
+        before = get_segment('before')
+        post = get_segment('post')
+        d_post = get_segment('d_post')
+        after = get_segment('after')
+        expandable = '[' in raw
+
+        if after.is_cll() or after.is_clr() or after.is_gbj() or after.is_gbw():
+            assert special_type is None
+            if after.is_cll():
+                special_type = 'CLL'
+            elif after.is_clr():
+                special_type = 'CLR'
+            elif after.is_gbj():
+                special_type = 'GBJ'
+            else:
+                special_type = 'GBW'
+        return cls(before, after, pre, d_pre, post, d_post, expandable, special_type, ref=ref)
+
+    def to_action(self) -> SoundChangeAction:
+        assert not self.expandable
+
+        def get_arg(seg: HS) -> Union[str, None]:
+            ret = str(seg)
+            return ret if ret else None
+
+        before = get_arg(self.before)
+        after = get_arg(self.after)
+        pre = get_arg(self.pre)
+        d_pre = get_arg(self.d_pre)
+        post = get_arg(self.post)
+        d_post = get_arg(self.d_post)
+
+        if self.special_type in ['CLL', 'CLR']:
+            tgt = self.pre if self.special_type == 'CLL' else self.post
+            tgt_seg = tgt.to_segment()
+            assert isinstance(tgt_seg, Nphthong) or tgt_seg.is_short()
+            after = f'{tgt_seg}ː{tgt.stress_str}'
+        elif self.special_type in ['GBJ', 'GBW']:
+            before_seg = self.before.to_segment()
+            assert isinstance(before_seg, Nphthong)
+            assert len(before_seg.vowels) == 2
+            first_v = str(before_seg.vowels[0])
+            assert first_v in ['i', 'u']
+            if first_v == 'i':
+                assert self.special_type == 'GBJ'
+            else:
+                assert self.special_type == 'GBW'
+            after = str(before_seg.vowels[1]) + self.before.stress_str
+
+        return SoundChangeAction.from_str(before, after, pre, d_pre, post, d_post, special_type=self.special_type)
 
     def specialize(self, state: PlainState) -> List[SoundChangeAction]:
+        assert self.expandable
+        assert self.special_type != 'GB'
+
+        def safe_get(segments: List[HS], idx: int) -> HS:
+            if idx < 0 or idx >= len(segments):
+                return HandwrittenSegment.from_str(None)
+            return segments[idx]
+
+        def realize(seg: HS, ph: HS) -> HS:
+            if seg.exists():
+                if seg.has_stress():
+                    return ph
+                else:
+                    return HandwrittenSegment.from_str(ph.segment_str)
+            return HandwrittenSegment.from_str(None)
+
+        def is_vowel(ph: HS) -> bool:
+            seg = _fp.process(ph.segment_str)
+            return isinstance(seg, Nphthong) or seg.is_vowel()
+
+        segs = [self.d_pre, self.pre, self.before, self.post, self.d_post]
         ret = set()
         for segments in state.segments:
-            segments = [Boundary()] + [_fp.process(seg) for seg in segments[1:-1]] + [Boundary()]
-            n = len(segments)
-            for i, seg in enumerate(segments[1:-1], 1):
-                applied = self.before.match(seg)
-                if applied and self.pre.exists():
-                    applied = i > 0 and self.pre.match(segments[i - 1])
-                if applied and self.d_pre.exists():
-                    applied = i > 1 and self.d_pre.match(segments[i - 2])
-                if applied and self.post.exists():
-                    applied = i < n - 1 and self.post.match(segments[i + 1])
-                if applied and self.d_post.exists():
-                    applied = i < n - 2 and self.d_post.match(segments[i + 2])
+            segments = [HandwrittenSegment.from_str(ph) for ph in segments]
+            # Deal with vowel sequence.
+            if self.special_type == 'VS':
+                segments = [segments[0]] + [seg for seg in segments[1:-1] if is_vowel(seg)] + [segments[-1]]
 
-                if applied:
-                    if self.after.expandable:
-                        after = str(_fp.change_features(seg, self.after.fv))
+            n = len(segments)
+            for i in range(1, n - 1):
+                site = [safe_get(segments, i - 2), safe_get(segments, i - 1), safe_get(segments, i),
+                        safe_get(segments, i + 1), safe_get(segments, i + 2)]
+                if all(hs.match(s) for hs, s in zip(segs, site)):
+                    d_pre, pre, before, post, d_post = [realize(hs, s) for hs, s in zip(segs, site)]
+                    if self.special_type in ['CLL', 'CLR']:
+                        tgt = pre if self.special_type == 'CLL' else post
+                        tgt_seg = tgt.to_segment()
+                        if not (isinstance(tgt_seg, Nphthong) or tgt_seg.is_short()):
+                            continue
+                        after = tgt.segment_str + 'ː' + tgt.stress_str
+                    elif self.after.expandable:
+                        try:
+                            after = str(_fp.change_features(before.to_segment(), self.after.fv))
+                        except (NonUniqueMapping, NoMappingFound):
+                            continue
                     else:
-                        after = self.after.raw
-                    pre = str(segments[i - 1]) if self.pre.exists() else None
-                    d_pre = str(segments[i - 2]) if self.d_pre.exists() else None
-                    post = str(segments[i + 1]) if self.post.exists() else None
-                    d_post = str(segments[i + 2]) if self.d_post.exists() else None
-                    ret.add(SoundChangeAction.from_str(str(seg), after, pre, d_pre, post, d_post))
+                        after = str(self.after)
+                    ret.add(SoundChangeAction.from_str(get_arg(before), after, get_arg(pre), get_arg(d_pre),
+                                                       get_arg(post), get_arg(d_post), special_type=self.special_type))
         return list(ret)
 
 
-Action = Union[SoundChangeAction, ExpandableAction]
-
-
-def get_action(raw_line: str) -> Action:
-    result = pat.match(raw_line)
-    d_pre = result.group('d_pre')
-    pre = result.group('pre')
-    before = result.group('before')
-    post = result.group('post')
-    d_post = result.group('d_post')
-    after = result.group('after')
-
-    if '[' in raw_line:
-        return ExpandableAction(Expandable(before), Expandable(after), Expandable(pre), Expandable(d_pre), Expandable(post), Expandable(d_post))
-    return SoundChangeAction.from_str(before, after, pre, d_pre, post, d_post)
-
-
-def get_actions(series, orders) -> List[Action]:
-    rules = [None] * len(series)
-    for i, (cell, order) in enumerate(zip(series, orders)):
+def get_actions(raw_rules: List[str], orders: List[str], refs: Optional[List[str]] = None) -> List[HandwrittenRule]:
+    rules = [None] * len(raw_rules)
+    if refs is None:
+        refs = [None] * len(raw_rules)
+    for i, (cell, order, ref) in enumerate(zip(raw_rules, orders, refs)):
         if not pd.isnull(cell):
             cell_results = list()
-            for line in cell.strip().split('\n'):
-                if all(code not in line for code in error_codes):
-                    cell_results.append(get_action(line))
-            order = i if pd.isnull(order) else int(order)
+            for raw in cell.strip().split('\n'):
+                if all(code not in raw for code in error_codes):
+                    cell_results.append(HandwrittenRule.from_str(raw, ref=ref))
+            order = i if pd.isnull(order) else (int(order) - 1)
             if cell_results:
                 rules[order] = cell_results
     ret = list()
@@ -223,6 +399,7 @@ class PlainState:
         new_segments = list()
         for seg in self.segments:
             new_segments.append(cls.action_space.apply_action(seg, action))
+
         return cls(new_segments)
 
     def dist_from(self, tgt_segments: List[List[str]]):
@@ -237,12 +414,15 @@ class PlainState:
             dist += cls.action_space.word_space.get_edit_dist(s1, s2)
         return dist
 
-    @property
+    @ property
     def dist(self) -> float:
         '''Returns the distance between the current state and the end state'''
         cls = type(self)
         assert cls.end_state is not None
         return self.dist_from(cls.end_state.segments)
+
+
+Action = SoundChangeAction
 
 
 def order_matters(a: Action, b: Action, state: PlainState) -> bool:
@@ -263,19 +443,19 @@ def build_action_graph(actions: List[Action], state: PlainState) -> Dict[Action,
     '''Builds a directed graph in which nodes are actions and edge u->v exists if the order of actions u and v on the state matter, and u precedes v in actions'''
     # FIXME the function signature isn't correct since it uses action_id in the dict, not actions themselves.
     nodes = {act.action_id for act in gold}
-    edges = {} # maps an action_id to a set of action_ids that it has edges to
+    edges = {}  # maps an action_id to a set of action_ids that it has edges to
     current_state = initial_state
     for i, act1 in enumerate(gold):
-        for act2 in gold[i+1:]:
+        for act2 in gold[i + 1:]:
             if order_matters(act1, act2, current_state):
                 if act1.action_id not in edges:
                     edges[act1.action_id] = set()
                 edges[act1.action_id].add(act2.action_id)
-        current_state = current_state.apply_action(act1) # evolve the system
+        current_state = current_state.apply_action(act1)  # evolve the system
     # for each node, we BFS from it to identify all nodes reachable from it. We memoize to make this computationally efficient — we only need to visit each node once.
-    reachable = {} # maps an action_id to /all/ action_id that action can reach in the graph
+    reachable = {}  # maps an action_id to /all/ action_id that action can reach in the graph
     for act in nodes:
-      stack = []
+        stack = []
     # TODO implement
     # when you reach a node already in reachable, just extend that node's reachable nodes.
     return edges
@@ -283,7 +463,7 @@ def build_action_graph(actions: List[Action], state: PlainState) -> Dict[Action,
 
 def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[Action]]:
     # FIXME the function signature isn't correct since it uses action_id in the dicts, not actions themselves.
-    descendants = {} # maps an action_id to a set of all action_id that are reachable from it
+    descendants = {}  # maps an action_id to a set of all action_id that are reachable from it
     queue = [edges[next(edges.keys())]]
     visited = set()
     # run BFS on the graph using the queue
@@ -362,9 +542,8 @@ def match_rules(gold: List[List[Action]], candidate: List[List[Action]], initial
     
     return rule_matching
         
-
-
-if __name__ == "__main__":
+  
+def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] = None) -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState], List[str]]:
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     add_argument("calc_metric", dtype=bool, default=False, msg="Whether to calculate the metrics.")
     # Get alphabet and action space.
@@ -376,50 +555,63 @@ if __name__ == "__main__":
     _fp.load_repository(dump['proto_ph_map'].keys())
 
     # Get the list of rules.
-    if g.in_path:
+    gold = list()
+    if raw_inputs is not None:
+        for ri in raw_inputs:
+            gold.extend(get_actions(*ri))
+    elif g.in_path:
         with open(g.in_path, 'r', encoding='utf8') as fin:
             lines = [line.strip() for line in fin.readlines()]
             gold = get_actions(lines, range(len(lines)))
     else:
         df = pd.read_csv('data/test_annotations.csv')
         df = df.dropna(subset=['ref no.'])
-        # got_df_rules = df[df['ref no.'].str.startswith('B')]['v0.4']
-        # got_rows = df[df['ref no.'].str.startswith('B')]
-        # gold = get_actions(got_rows['v0.4'], got_rows['order'])
-        gold = list()
         for ref in ref_no[g.tgt_lang]:
             rows = df[df['ref no.'].str.startswith(ref)]
-            gold.extend(get_actions(rows['w/o SS'], rows['order']))
+            gold.extend(get_actions(rows['w/ SS'], rows['order'], refs=rows['ref no.']))
 
     # Simulate the actions and get the distance.
-    state = PlainState.from_vocab_state(manager.env.start)
     PlainState.action_space = manager.action_space
     PlainState.end_state = PlainState.from_vocab_state(manager.env.end)
     PlainState.abc = manager.tgt_abc
-    initial_state = state  # keep a pointer to this, we'll reuse it later for checking rule ordering
+    state = PlainState.from_vocab_state(manager.env.start)
+    states = [state]
+    actions = list()
+    refs = list()
     expanded_gold = list()
+
     print(state.dist)
-    for action in gold:
-        if isinstance(action, SoundChangeAction):
+    for hr in gold:
+        if hr.expandable:
+            action_q = hr.specialize(state)
+            print(hr)
+        else:
+            action_q = [hr.to_action()]
+        for action in action_q:
             state = state.apply_action(action)
+            states.append(state)
+            actions.append(action)
+            refs.append(hr.ref)
+            expanded_gold.append(action)
             print(action)
             print(state.dist)
-            expanded_gold.append(action)
-        else:
-            for a in action.specialize(state):
-                state = state.apply_action(a)
-                print(a)
-                print(state.dist)
-                expanded_gold.append(a)
-    # NOTE(j_luo) We can only score based on expanded rules (i.e., excluding ExpandableAction).
+
+    # NOTE(j_luo) We can only score based on expanded rules.
     gold = expanded_gold
+    return manager, gold, states, refs
+
+
+if __name__ == "__main__":
+
+    manager, gold, states = simulate()
+    initial_state = states[0]
 
     if g.calc_metric:
         # compute the similarity between the candidate ruleset and the gold standard ruleset
         candidate: List[SoundChangeAction] = None  # let this be the model's ruleset, which we are comparing to gold
         # first, what % of the gold ruleset is present in candidate?
         n_shared_actions = 0
-        n_similar_actions = 0 # similar actions get half credit. We count separately so these are stored as int
+        n_similar_actions = 0  # similar actions get half credit. We count separately so these are stored as int
         # TODO(djwyen) weight "partial credit" based on how similar the effects of the rules are, which can be calculated off distance
         for action in gold:
             similar_actions = manager.action_space.get_similar_actions(action)
@@ -444,7 +636,7 @@ if __name__ == "__main__":
                     # we do the checks in this order because the below is more computationally intensive than the above
                     if order_matters(act1, act2, current_state):
                         swaps += 1
-            current_state.apply_action(gold[i]) # update current state using gold action
+            current_state.apply_action(gold[i])  # update current state using gold action
         print(str(swaps) + ' pairs of rules in wrong order in candidate')
         # TODO two improvements for this metric:
         # 1. we currently use initial_state to test ordering, but should the state that we test the orderings on not evolve as we apply more rules? it may be that the context where the ordering matters only comes up after some rules have been applied; or that by the time the 2 rules in question are applied, any contexts such that the order matters are destroyed. So maybe each step we should change the state by the current action.
