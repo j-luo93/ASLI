@@ -11,11 +11,39 @@ from ortools.linear_solver import pywraplp
 # from sound_law.data.alphabet import Alphabet
 # from sound_law.main import setup
 # from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
-from sound_law.rl.env import ToyEnv
+# from sound_law.rl.env import ToyEnv
 # from sound_law.rl.mcts_cpp import \
 #     PyNull_abc  # pylint: disable=no-name-in-module
 # from sound_law.rl.trajectory import VocabState
 # from sound_law.train.manager import OnePairManager
+
+
+class ToyEnv():
+    import random
+
+    def __init__(self, init_state):
+        self.init_state = init_state
+
+    def apply_action(self, act, state):
+        # somehow apply action to state
+        new_state = state
+        return new_state
+    
+    def apply_block(self, block, state):
+        '''Applies a block of actions in order'''
+        for act in block:
+            state = self.apply_action(act, state)
+        return state
+
+    def dist_between(self, state1, state2):
+        # somehow compute the edit distance between these two states
+        return random.random() * random.randint(1, 20)
+
+    def compare_effects(self, act1, act2, state):
+        state1 = self.apply_action(act1, state)
+        state2 = self.apply_action(act2, state)
+        return self.dist_between(state1, state2)
+
 
 def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChangeEnv) -> List[Tuple[Int, Tuple[Int]]]:
     '''Finds the optimal matching of rule blocks in the gold ruleset to 0, 1, or 2 rules in the candidate ruleset. Frames the problem as an integer linear program. Returns a list of tuples with the matching.'''

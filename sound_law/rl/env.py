@@ -47,32 +47,6 @@ class SoundChangeEnv(nn.Module, PyEnv):
             out.append(f'{action}, {reward:.3f}')
         return '(' + ', '.join(out) + ')'
 
-class ToyEnv(SoundChangeEnv):
-    import random
-
-    def __init__(self, init_state):
-        self.init_state = init_state
-
-    def apply_action(self, act, state):
-        # somehow apply action to state
-        new_state = state
-        return new_state
-    
-    def apply_block(self, block, state):
-        '''Applies a block of actions in order'''
-        for act in block:
-            state = self.apply_action(act, state)
-        return state
-
-    def dist_between(self, state1, state2):
-        # somehow compute the edit distance between these two states
-        return random.random() * random.randint(1, 20)
-
-    def compare_effects(self, act1, act2, state):
-        state1 = self.apply_action(act1, state)
-        state2 = self.apply_action(act2, state)
-        return self.dist_between(state1, state2)
-
 
 class TrajectoryCollector:
     """This collects trajectories and (flattened/batched) samples."""
