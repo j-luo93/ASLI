@@ -468,6 +468,74 @@ def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[A
     return descendants
 
 
+def match_rules(gold: List[List[Action]], candidate: List[List[Action]], initial_state: PlainState) -> List[Tuple[Int]]:
+    '''
+    Determines the best matching of rules between gold and candidate under the current ordering and bundling of rules. Bundled rules are treated as a block; only the end state after applying all of the rules is considered.
+
+    Assumes there are more bundles in candidate than in gold; that is, every block in gold will be matched with something, while the blocks in candidate may not get matched to anything.
+    
+    Returns the optimal partitioning.
+    '''
+    # TODO(djwyen) update so that candidate is just a list of actions instead, so we don't presuppose any blocking?
+    m = len(gold)
+    n = len(candidate)
+    memo = {} # for memoization. maps a tuple (i,j) to the value of subproblem x(i,j)
+    gold_state_dict = {} # maps index i to state s_i, the state achieved after applying gold rules 0 through i in gold to initial_state.
+    cand_state_dict = {} # similarly, maps index j to state s_j obtained by appling rules 0-j in candidate to initial_state
+    subproblem_graph = {} # maps (i,j) to (k,l) if subproblem (i,j) goes to subproblem (k,l). Use to reconstruct the matching discovered
+
+    # populate the dictionaries
+    current_state = initial_state
+    for i, block in enumerate(gold):
+        for act in block:
+            current_state = current_state.apply_action(act)
+        gold_state_dict[i] = current_state
+    current_state = initial_state
+    for j, block in enumerate(candidate):
+        for act in block:
+            current_state = current_state.apply_action(act)
+        cand_state_dict[j] = current_state
+
+    def x(i: int, j: int) -> float:
+        '''Returns the minimum distance achievable matching rules gold[i:] to candidate[j:] using dynamic programming.'''
+        
+        if (i,j) in memo:
+            return memo[(i,j)]
+        if i == m: # matching complete
+            return 0
+        if j == n and i != m: # must match everything in gold
+            return float('inf')
+
+        s_i = gold_state_dict[i]
+        s_j = cand_state_dict[j]
+        dist = s_i.dist_from(s_j.segments)
+        take_dist = x(i+1, j+1) + dist # ie match i to j
+        skip_dist = x(i, j+1) # match i with something else
+
+        if take_dist <= skip_dist:
+            memo[(i,j)] = take_dist
+            subproblem_graph[(i,j)] = (i+1, j+1)
+            return take_dist
+        else:
+            memo[(i,j)] = skip_dist
+            subproblem_graph[(i,j)] = (i, j+1)
+            return skip_dist
+    
+    # run the DP problem to populate subproblem_graph
+    min_dist = x(0,0)
+    # reconstruct the solution
+    i = 0
+    j = 0
+    rule_matching = [] # contains tuple (i,j) if matching i->j was established
+    while i != m:
+        i_new, j_new = subproblem_graph[(i, j)]
+        if i_new == i+1: # the take route was taken, so matching i->j was established
+            rule_matching.append((i, j))
+        i, j = i_new, j_new
+    
+    return rule_matching
+        
+  
 def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] = None) -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState], List[str]]:
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     add_argument("calc_metric", dtype=bool, default=False, msg="Whether to calculate the metrics.")
@@ -568,25 +636,39 @@ if __name__ == "__main__":
         # 2. there may be situations where A->B->C, that is that the ordering of A and B matter and the ordering of B and C matter, but the ordering of A and C do not matter. However, because of how the relationship is, we should care about the relative ordering of A and C; but this model won't detect that directly. One counterpoint: if A and C are in the wrong order, then at least one of them is in the wrong order relative to B, so it will be detected. But even still, perhaps the penalty should be higher than the penalty you normally accrue for swapping two rules, as the ordering of A and C are also wrong.
         # a complicated fix to the above would be to make a graph of actions and then use that to discover if a path A to C exists (and that therefore relative order matters) but it's unclear if this could be done for each of the n choose 2 ~ O(n^2) pairs of rules in a computationally efficient matter. One slightly good thing is that you can memoize to reduce the amount of searches to perhaps visiting each vertex exactly once.
 
-        # greedily match the rules one-to-one
+        # greedily match up to 3 rules to each rule in gold
+        threshold = 10 # amount a rule must decrease the distance by to be included in a poly-matching
         unmatched_rule_indices = set(range(len(candidate)))
-        rule_pairings = {}  # maps the index of a rule in gold to the index of its matched rule in candidate
+        rule_pairings = {} # maps the index of a rule in gold to a list of indices of its matched rules in candidate
         current_state = initial_state
         for i, act1 in enumerate(gold):
             next_state = current_state.apply_action(act1)
             next_segments = next_state.segments
-            # greedily identify the most similar action to act1, ie the act that results in the most similar next state
+            rule_pairings[i] = []
+            
+            # greedily identify up to 3 rules in candidate to be matched to rule i
             lowest_dist = None
             lowest_dist_ind = None
-            for j in unmatched_rule_indices:
-                act2 = candidate[j]
-                dist = current_state.apply_action(act2).dist_from(next_segments)
-                if dist < lowest_dist or lowest_dist is None:
-                    lowest_dist = dist
-                    lowest_dist_ind = j
+            last_rule_ind = -1 # rules are ordered, so we can only consider appending rules that come after the last picked rule
+            cand_base_state = current_state # the state resulting after all current matched rules are applied
+            base_dist = current_state.dist_from(next_segments) # distance resulting after all current matched rules are applied
+            for j in range(3):
+                for ind in filter(lambda x: x > last_rule_ind, unmatched_rule_indices):
+                    act2 = candidate[ind]
+                    dist = cand_base_state.apply_action(act2).dist_from(next_segments)
+                    if lowest_dist is None or (dist < lowest_dist and dist <= base_dist - threshold):
+                        lowest_dist = dist
+                        lowest_dist_ind = ind
+                
+                if lowest_dist_ind is None: # no match found
+                    break
 
-            rule_pairings[i] = lowest_dist_ind
-            unmatched_rule_indices.remove(lowest_dist_ind)
+                rule_pairings[i].append(lowest_dist_ind)
+                unmatched_rule_indices.remove(lowest_dist_ind)
+                last_rule_ind = lowest_dist_ind
+                cand_base_state = cand_base_state.apply_action(candidate[lowest_dist_ind])
+                base_dist = cand_base_state.dist_from(next_segments)
+
             current_state = next_state
 
         # evaluate how similar each rule in the pairing is by evaluating each of the paired rules and comparing how similar the results are
