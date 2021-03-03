@@ -113,12 +113,14 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
     return
 
 # toy data
-gold = [
-    ['a', 'b'],
-    ['c', 'd'],
-    ['e', 'f']
-]
-cand = ['alpha', 'beta', 'gamma', 'delta']
+# gold = [
+#     ['a', 'b'],
+#     ['c', 'd'],
+#     ['e', 'f']
+# ]
+# cand = ['alpha', 'beta', 'gamma', 'delta']
+gold = [[x,x] for x in range(100)]
+cand = [x for x in range(100)]
 env = ToyEnv('foo')
 
 match_rulesets(gold, cand, env)
