@@ -431,6 +431,13 @@ def order_matters(a: Action, b: Action, state: PlainState) -> bool:
     ordering2 = state.apply_action(b).apply_action(a)  # apply B then A
     return ordering1.segments == ordering2.segments
 
+def contextual_order_matters(a: int, b: int, actions: List[Action], state: PlainState) -> bool:
+    '''Checks whether swapping actions a and b changes the final state'''
+    # apply all actions a->b
+    # apply all actions b->a
+    # TODO implement this
+    return False
+
 
 def build_action_graph(actions: List[Action], state: PlainState) -> Dict[Action, Set[Action]]:
     '''Builds a directed graph in which nodes are actions and edge u->v exists if the order of actions u and v on the state matter, and u precedes v in actions'''

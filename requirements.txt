@@ -12,3 +12,4 @@ inflection
 altair
 prompt_toolkit
 Cython==3.0a6
+ortools
