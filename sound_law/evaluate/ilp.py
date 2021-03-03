@@ -77,8 +77,9 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
             c['cand_' + str(j)].SetCoefficient(v[a_var], 1)
             # calculate edit distance and add to Objective function
             cand_state = env.apply_action(rule, curr_state)
-            dist = env.dist_between(gold_state, curr_state)
+            dist = env.dist_between(gold_state, cand_state)
             objective.SetCoefficient(v[a_var], dist)
+
         for j, rule1 in enumerate(cand):
             for k, rule2 in enumerate(cand[j+1:], start=j+1):
                 b_var = 'b_' + str(i) + '(' + str(j) + ',' + str(k) + ')'
@@ -88,7 +89,7 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
                 c['cand_' + str(k)].SetCoefficient(v[b_var], 1)
 
                 cand_state = env.apply_block([rule1, rule2], curr_state)
-                dist = env.dist_between(gold_state, curr_state)
+                dist = env.dist_between(gold_state, cand_state)
                 objective.SetCoefficient(v[b_var], dist)
         # update state and continue
         curr_state = gold_state
