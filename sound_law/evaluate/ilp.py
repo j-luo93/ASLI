@@ -11,6 +11,7 @@ from dev_misc import add_argument, g
 from sound_law.data.alphabet import Alphabet
 from sound_law.main import setup
 from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
+from sound_law.rl.env import ToyEnv
 from sound_law.rl.mcts_cpp import \
     PyNull_abc  # pylint: disable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
@@ -33,18 +34,23 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
     for j in range(cand):
         c['cand_' + j] = solver.Constraint(0, 1)
 
-    # FIXME work on this after actually merging and determining what the SoundChangeEnv provides
+    # TODO implement real SoundChangeEnv; currently using toy data "ToyEnv"
     curr_state = env.init_state
+    objective = solver.Objective()
 
     # create variables
     # FIXME also calculate distances while iterating to put into the objective function?
     for i, block in enumerate(gold):
-        gold_state = None # FIXME
+        gold_state = env.apply_block(block, curr_state)
         for j, rule in enumerate(cand):
             a_var = 'a_' + i + j
             v[a_var] = solver.IntVar(0, 1, a_var)
             c['gold_' + i].SetCoefficient(v[a_var], 1)
             c['cand_' + j].SetCoefficient(v[a_var], 1)
+            # calculate edit distance and add to Objective function
+            cand_state = env.apply_action(rule, curr_state)
+            dist = env.dist_between(gold_state, curr_state)
+            objective.SetCoefficient(v[a_var], dist)
         for j, rule1 in enumerate(cand):
             for k, rule2 in enumerate(cand[j+1:]):
                 b_var = 'b_' + i + '(' + j + k + ')'
@@ -53,24 +59,38 @@ def match_rulesets(gold: List[List[Action]], cand: List[Action], env: SoundChang
                 c['cand_' + j].SetCoefficient(v[b_var], 1)
                 c['cand_' + k].SetCoefficient(v[b_var], 1)
 
-    # calculate the distances to create the objective function
+                cand_state = env.apply_block([rule1, rule2], curr_state)
+                dist = env.dist_between(gold_state, curr_state)
+                objective.SetCoefficient(v[b_var], dist)
+        # update state and continue
+        curr_state = gold_state
 
     # solve the ILP
-
-    objective = solver.Objective()
-
-    # the solver can only maximize, so we input the coefficients as the negative distances so it's effectively a minimiziation problem
-    objective.SetCoefficient(var, dist) # do this for all variables 
-
-    objective.SetMaximization()
+    objective.SetMinimization()
     solver.Solve()
 
     # reconstruct the solution and return it
-    print('Maximum objective function value = %d' % solver.Objective().Value())
-    print()
-    # Print the value of each variable in the solution.
-    for variable in v.keys():
-        print('%s = %d' % (variable.name(), variable.solution_value()))
-    # [END print_solution]
+    print('Minimum objective function value = %d' % solver.Objective().Value())
+    # print()
+    # # Print the value of each variable in the solution.
+    # for variable in v.keys():
+    #     print('%s = %d' % (variable.name(), variable.solution_value()))
+    # # [END print_solution]
+
+    # interpret solution as a matching:
+    # TODO implement, for now just print out
+    for name, var in v.items():
+        print('%s = %d' % (var.name(), var.solution_value()))
     
     return
+
+# toy data
+gold = [
+    ['a', 'b'],
+    ['c', 'd'],
+    ['e', 'f']
+]
+cand = ['alpha', 'beta', 'gamma', 'delta']
+env = ToyEnv('foo')
+
+match_rulesets(gold, cand, env)
