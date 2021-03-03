@@ -70,10 +70,11 @@ using Pool = ctpl::thread_pool;
 template <class T>
 inline void show_size(const T &obj, std::string msg) { SPDLOG_INFO("{0} size: {1}", msg, obj.size()); }
 
-static const uint64_t last_10 = (1 << 10) - 1;
-static const abc_t NULL_ABC = static_cast<abc_t>(last_10);
-static const uai_t NULL_ACTION = std::numeric_limits<uai_t>::max();
-static const usi_t NULL_SITE = std::numeric_limits<usi_t>::max();
+constexpr uint64_t last_10 = (static_cast<uint64_t>(1) << 10) - 1;
+constexpr uint64_t first_4 = ((static_cast<uint64_t>(1) << 4) - 1) << 60;
+constexpr abc_t NULL_ABC = static_cast<abc_t>(last_10);
+constexpr uai_t NULL_ACTION = std::numeric_limits<uai_t>::max();
+constexpr usi_t NULL_SITE = std::numeric_limits<usi_t>::max();
 
 template <class... TupleArgs>
 auto get_tuple_at(size_t index, const std::tuple<TupleArgs...> &inputs_tuple)
@@ -205,6 +206,23 @@ void find_unique(vec<K> &outputs, const vec<vec<K>> &inputs, const UMap<K, V> &c
         }
 }
 
+enum class SpecialType : uai_t
+{
+    NONE = (static_cast<uai_t>(0) << 60),
+    CLL = (static_cast<uai_t>(1) << 60),
+    CLR = (static_cast<uai_t>(2) << 60),
+    VS = (static_cast<uai_t>(3) << 60),
+    GBJ = (static_cast<uai_t>(4) << 60),
+    GBW = (static_cast<uai_t>(5) << 60)
+};
+
+enum class Stress : int
+{
+    NOSTRESS,
+    STRESSED,
+    UNSTRESSED
+};
+
 namespace action
 {
     // Each action has the following format:
@@ -215,11 +233,13 @@ namespace action
     inline abc_t get_d_post_id(uai_t action) { return static_cast<abc_t>((action >> 20) & last_10); }
     inline abc_t get_post_id(uai_t action) { return static_cast<abc_t>((action >> 30) & last_10); }
     inline abc_t get_d_pre_id(uai_t action) { return static_cast<abc_t>((action >> 40) & last_10); }
-    inline abc_t get_pre_id(uai_t action) { return static_cast<abc_t>(action >> 50); }
+    inline abc_t get_pre_id(uai_t action) { return static_cast<abc_t>((action >> 50) & last_10); }
+    inline SpecialType get_special_type(uai_t action) { return static_cast<SpecialType>(action & first_4); }
 
     // Obtain a UAI by combining a USI with after_id;
     inline usi_t get_site(uai_t action) { return action >> 10; }
     inline uai_t combine_after_id(usi_t site, abc_t after_id) { return ((site << 10) | static_cast<abc_t>(after_id)); }
+    inline uai_t combine_after_id_special(usi_t site, abc_t after_id, SpecialType st) { return ((site << 10) | static_cast<abc_t>(after_id) | static_cast<uai_t>(st)); }
     inline uai_t combine(abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id, abc_t before_id, abc_t after_id)
     {
         return ((static_cast<uai_t>(pre_id) << 50) |
@@ -230,6 +250,10 @@ namespace action
                 static_cast<uai_t>(after_id));
     }
     static const uai_t STOP = combine(NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC, NULL_ABC);
+    inline uai_t combine_special(abc_t pre_id, abc_t d_pre_id, abc_t post_id, abc_t d_post_id, abc_t before_id, abc_t after_id, SpecialType st)
+    {
+        return (combine(pre_id, d_pre_id, post_id, d_post_id, before_id, after_id) | static_cast<uai_t>(st));
+    }
 
     inline std::string str(uai_t action)
     {
@@ -263,90 +287,29 @@ namespace site
     }
 } // namespace site
 
-typedef std::chrono::high_resolution_clock Time;
-typedef std::chrono::duration<float> fsec;
-typedef std::chrono::_V2::system_clock::time_point time_point;
-
-class Timer
-{
-    // Copied from https://stackoverflow.com/questions/1008019/c-singleton-design-pattern.
-    UMap<std::string, float> elapsed;
-    UMap<std::string, time_point> start_time;
-    bool enabled = false;
-    bool started = false;
-    std::string last_activity;
-
-    Timer() {} // Constructor? (the {} brackets) are needed here.
-
-public:
-    static Timer &getInstance()
-    {
-        static Timer instance; // Guaranteed to be destroyed.
-                               // Instantiated on first use.
-        return instance;
-    }
-
-    Timer(Timer const &) = delete;
-    void operator=(Timer const &) = delete;
-
-    inline void enable()
-    {
-        enabled = true;
-        std::cerr << "timer enabled.\n";
-    }
-    inline void disable()
-    {
-        enabled = false;
-        std::cerr << "timer disabled.\n";
-    }
-    inline void start(const std::string &name)
-    {
-        if (enabled)
-            start_time[name] = Time::now();
-    }
-    inline void end(const std::string &name)
-    {
-        if (enabled)
-        {
-            fsec fs = Time::now() - start_time.at(name);
-            elapsed[name] += fs.count();
-            start_time.erase(name);
-        }
-    }
-    inline void show_stats()
-    {
-        float total = 0.0;
-        for (const auto &item : elapsed)
-            total += item.second;
-        std::cerr << elapsed.size() << " stats available. Total time elapsed " << total << '\n';
-        for (const auto &item : elapsed)
-        {
-            std::cerr << item.first << ": " << item.second << "s (" << item.second / total * 100 << "%) elapsed.\n";
-        }
-    }
-};
-
 class DistTable
 {
-    const size_t size;
+    const size_t table_size;
     vec<std::atomic<float>> data;
 
 public:
-    inline DistTable(size_t size) : size(size), data(vec<std::atomic<float>>(size))
+    inline DistTable(size_t table_size) : table_size(table_size), data(vec<std::atomic<float>>(table_size))
     {
-        for (size_t i = 0; i < size; i++)
+        for (size_t i = 0; i < table_size; i++)
             set(i, -1.0);
     }
     inline float get(size_t index)
     {
-        assert(index < size);
+        assert(index < table_size);
         assert(data[index] >= 0);
         return data[index];
     }
     inline std::atomic<float> *locate(size_t index)
     {
-        assert(index < size);
+        assert(index < table_size);
         return &data[index];
     }
     inline void set(size_t index, float value) { data[index] = value; }
+
+    inline size_t size() const { return table_size; }
 };

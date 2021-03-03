@@ -10,10 +10,7 @@ class SiteNode
 
 public:
     const usi_t site;
-    SiteNode *lchild = nullptr;
-    SiteNode *lxchild = nullptr;
-    SiteNode *rchild = nullptr;
-    SiteNode *rxchild = nullptr;
+    vec<SiteNode *> children;
 };
 
 class WordSpace;
@@ -22,7 +19,9 @@ class SiteSpace
 {
     friend class WordSpace;
 
-    Timer &timer = Timer::getInstance();
+    vec<bool> vowel_mask;
+    vec<abc_t> vowel_base;
+    vec<Stress> vowel_stress;
 
     void get_node(SiteNode *&, abc_t, abc_t, abc_t, abc_t, abc_t);
 
@@ -32,12 +31,16 @@ public:
     const abc_t eot_id;
     const abc_t any_id;
     const abc_t emp_id;
+    const abc_t syl_eot_id;
+    const abc_t any_s_id;
+    const abc_t any_uns_id;
 
-    SiteSpace(abc_t, abc_t, abc_t, abc_t);
+    SiteSpace(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t);
 
     size_t size() const;
     void get_node(SiteNode *&, usi_t);
     void get_nodes(Pool *, vec<vec<SiteNode *>> &, const vec<vec<usi_t>> &);
+    void set_vowel_info(const vec<bool> &, const vec<abc_t> &, const vec<Stress> &);
 };
 
 // A wrapper class around SiteNode that includes stats.
@@ -50,10 +53,7 @@ class GraphNode
 
 public:
     SiteNode *base;
-    GraphNode *lchild = nullptr;
-    GraphNode *rchild = nullptr;
-    GraphNode *lxchild = nullptr;
-    GraphNode *rxchild = nullptr;
+    vec<GraphNode *> children;
     int num_sites = 0;
     USet<int> linked_words; // the orders for the linked words -- use set since one word might have multiple identical sites
 };

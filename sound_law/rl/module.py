@@ -32,7 +32,7 @@ class FactorizedProjection(nn.Module):
         #     self.post_potential = nn.Linear(input_size, num_ids)
         #     self.d_pre_potential = nn.Linear(input_size, num_ids)
         #     self.d_post_potential = nn.Linear(input_size, num_ids)
-        self.potential_block = nn.Linear(input_size, num_ids * 6)
+        self.potential_block = nn.Linear(input_size, num_ids * 7)
         self.action_space = action_space
 
     def forward(self, inp: FT, sparse: bool = False, indices: Optional[NDA] = None) -> FT:
@@ -50,17 +50,18 @@ class FactorizedProjection(nn.Module):
             d_post_id = (indices >> 20) & last_10
             post_id = (indices >> 30) & last_10
             d_pre_id = (indices >> 40) & last_10
-            pre_id = indices >> 50
-            a2i = torch.stack([before_id, after_id, pre_id, d_pre_id, post_id, d_post_id], dim=-1)
+            pre_id = (indices >> 50) & last_10
+            special_type = (indices >> 60)
+            a2i = torch.stack([before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, special_type], dim=-1)
             # a2i = get_tensor(parallel_gather_action_info(self.action_space, indices, g.num_workers))
             mask = a2i == PyNull_abc
             a2i = torch.where(mask, torch.zeros_like(a2i), a2i)
             num_ids = len(self.action_space.abc)
             batch_ids = get_tensor(np.arange(indices.shape[0])).long().view(-1, 1, 1)
-            order = get_tensor(np.arange(6)).long()
-            ret = potentials.view(-1, num_ids, 6)[batch_ids, a2i, order]
+            order = get_tensor(np.arange(7)).long()
+            ret = potentials.view(-1, num_ids, 7)[batch_ids, a2i, order]
             ret = torch.where(mask, torch.zeros_like(ret), ret)
-            ret = ret.view(-1, indices.shape[-1], 6).sum(dim=-1)
+            ret = ret.view(-1, indices.shape[-1], 7).sum(dim=-1)
             return ret.rename('batch', 'action')
 
 

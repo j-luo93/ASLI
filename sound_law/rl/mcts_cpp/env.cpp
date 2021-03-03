@@ -51,17 +51,26 @@ TreeNode *Env::apply_action(TreeNode *node, int best_i, uai_t action)
         // Obtain new list of words.
         SPDLOG_DEBUG("Applying action {0}, best_i {1}.", action::str(action), best_i);
         auto new_words = vec<Word *>();
-        int i = 0;
+        SpecialType st = action::get_special_type(action);
+        bool use_vowel_seq = (st == SpecialType::VS);
         for (const auto word : node->words)
         {
-            if (word->neighbors.find(action) == word->neighbors.end())
+            usi_t site = action::get_site(action);
+            auto &w_neighbors = use_vowel_seq ? word->vowel_neighbors : word->neighbors;
+            bool pushed = false;
+            if (w_neighbors.contains(site))
             {
-                assert(word->id_seq == action_space->apply_action(word->id_seq, action));
-                new_words.push_back(word);
+                abc_t before_id = action::get_before_id(action);
+                abc_t after_id = action::get_after_id(action);
+                int idx = action_space->locate_edge_index(before_id, st, after_id, use_vowel_seq);
+                if (idx > 0)
+                {
+                    pushed = true;
+                    new_words.push_back(w_neighbors[site][idx]);
+                }
             }
-            else
-                new_words.push_back(word->neighbors.at(action));
-            i++;
+            if (!pushed)
+                new_words.push_back(word);
         }
         new_node = new TreeNode(new_words, prev_action, node, false);
 

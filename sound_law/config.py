@@ -291,6 +291,13 @@ class OPRLPgmcNon(OPRLFake):
     max_rollout_length: int = 40
 
 
+@reg
+class OPRLPgmcAng(OPRLFake):
+    src_lang: str = 'pgmc'
+    tgt_lang: str = 'ang'
+    max_rollout_length: int = 50
+
+
 @mcts_reg
 class BasicMcts:
     use_mcts: bool = True
@@ -298,13 +305,15 @@ class BasicMcts:
     expansion_batch_size: int = 10
     num_mcts_sims: int = 40
     num_inner_steps: int = 50
+    step_penalty: float = 0.001
     learning_rate: float = 1e-3
     virtual_loss: float = 0.5
     game_count: int = 3
     num_workers: int = 10
     mixing: float = 0.0
-    puct_c: float = 5.0
+    puct_c: float = 1.0
     num_episodes: int = 500
+    save_interval: int = 1
     episode_check_interval: int = 50
     dirichlet_alpha: float = 0.3
     segments_dump_path: 'path' = 'data/nel_segs.pkl'

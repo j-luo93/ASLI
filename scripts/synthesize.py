@@ -11,7 +11,8 @@ import pandas as pd
 from dev_misc import g
 from dev_misc.arglib import disable_duplicate_check, set_argument
 from dev_misc.trainlib.base_trainer import BaseTrainer
-from sound_law.data.alphabet import ANY_ID, EMP_ID, EOT_ID, SOT_ID
+from sound_law.data.alphabet import (ANY_ID, ANY_S_ID, ANY_UNS_ID, EMP_ID,
+                                     EOT_ID, SOT_ID, SYL_EOT_ID)
 from sound_law.data.cognate import CognateRegistry
 from sound_law.main import setup
 from sound_law.rl.action import SoundChangeActionSpace
@@ -93,13 +94,14 @@ if __name__ == "__main__":
     parser.add_argument('--length', type=int, help='Length of synthesizing random rules.')
     parser.add_argument('--random_seed', type=int, default=1234, help='Random seed')
     parser.add_argument('--options', default='', type=str, help='Extra options')
+    parser.add_argument('--debug', action='store_true', help='debug mode')
     args = parser.parse_args()
 
     if args.mode == 'random':
 
         sys.argv = f'''
         sound_law/main.py
-            --config OPRLPgmcGot
+            --config {"OPRLFakeR30C" if args.debug else "OPRLPgmcGot"}
             --mcts_config LargeSims
             --no_use_value_guidance
             --use_conditional
@@ -121,7 +123,7 @@ if __name__ == "__main__":
         tgt_seqs = dl.entire_batch.tgt_seqs
         t_arr = np.ascontiguousarray(tgt_seqs.ids.t().cpu().numpy()).astype("uint16")
         t_lengths = np.ascontiguousarray(tgt_seqs.lengths.t().cpu().numpy())
-        py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID)
+        py_ss = PySiteSpace(SOT_ID, EOT_ID, ANY_ID, EMP_ID, SYL_EOT_ID, ANY_S_ID, ANY_UNS_ID)
         py_ws = PyWordSpace(py_ss, manager.tgt_abc.dist_mat, 2.0)
         action_space = SoundChangeActionSpace(py_ss, py_ws, g.dist_threshold,
                                               g.site_threshold, manager.tgt_abc)
@@ -140,8 +142,6 @@ if __name__ == "__main__":
                 best_i = np.random.choice(state.num_actions)
                 print(state.num_actions, 'allowed.')
                 # for i, a in enumerate(state.action_allowed):
-                #     new, _ = env.step(state, i, a)
-                #     from sound_law.rl.mcts.mcts_fast import PyStop
                 #     print(env.action_space.get_action(a))
                 # 1 / 0
                 #assert new.dist < state.dist or PyStop == a, new.dist

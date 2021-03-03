@@ -180,7 +180,7 @@ class Mcts(PyMcts):
         self.agent.eval()
         num_episodes = num_episodes or g.num_episodes
         with self.agent.policy_grad(False), self.agent.value_grad(False):
-            # self.disable_timer()
+            self.enable_timer()
             for ei in range(num_episodes):
                 root = init_state
                 self.reset()
@@ -223,8 +223,7 @@ class Mcts(PyMcts):
                         tracker.update('rollout')
                     if root.stopped or root.done:
                         break
-                    # if ri == 0:
-                    #     self.show_timer_stats()
+                    self.show_stats()
                 if ei % g.episode_check_interval == 0:
                     out = ', '.join(f'({edge.a}, {edge.r:.3f})' for edge in trajectory)
                     logging.debug(pad_for_log(out))
