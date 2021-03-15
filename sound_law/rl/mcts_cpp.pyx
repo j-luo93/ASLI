@@ -203,23 +203,23 @@ cdef class PyEnv:
                      PyTreeNode py_node,
                      abc_t before_id,
                      abc_t after_id,
+                     rtype: str,
                      abc_t pre_id,
                      abc_t d_pre_id,
                      abc_t post_id,
-                     abc_t d_post_id,
-                     special_type: Optional[str] = None):
+                     abc_t d_post_id):
         cdef SpecialType st
-        if special_type is None:
+        if rtype == 'basic':
             st = NONE
-        elif special_type == 'VS':
+        elif rtype == 'VS':
             st = VS
-        elif special_type == 'CLL':
+        elif rtype == 'CLL':
             st = CLL
-        elif special_type == 'CLR':
+        elif rtype == 'CLR':
             st = CLR
-        elif special_type == 'GBJ':
+        elif rtype == 'GBJ':
             st = GBJ
-        elif special_type == 'GBW':
+        elif rtype == 'GBW':
             st = GBW
 
         cdef TreeNode *new_node = self.ptr.apply_action(py_node.ptr, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, st)

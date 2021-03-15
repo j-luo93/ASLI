@@ -56,19 +56,12 @@ def named_ph(name: str) -> str:
 pre_cond_pat = ''.join([
     '(',     # optional start 1
     ' *',    # optional whitespace
-    r'\(',    # left parenthesis
     '(',     # optional start 2
     ' *',
     named_ph('d_pre'),      # d_pre
     ' *',    # optional whitespace
-    r'\+',    # plus sign
-    ' *',    # optional whitespace
     ')?',    # optional end 2
     named_ph('pre'),      # pre
-    ' *',
-    r'\)',    # right parenthesis
-    ' *',    # optional whitespace
-    r'\+',    # plus sign
     ' *',    # optional whitespace
     ')?'     # optional end 1
 ])
@@ -77,27 +70,35 @@ pre_cond_pat = ''.join([
 post_cond_pat = ''.join([
     '(',     # optional start 1
     ' *',
-    r'\+',
-    ' *',
-    r'\(',    # left parenthesis
-    ' *',
     named_ph('post'),
     '(',     # optional start 2
-    ' *',
-    r'\+',
     ' *',
     named_ph('d_post'),
     ' *',
     ')?',    # optional end 2
-    r'\)',    # right parenthesis
     ' *',
     ')?'     # optional end 1
 ])
 
-pat = re.compile(
-    fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
+rtype_pat = ''.join([
+    r'(?P<rtype>',
+    'basic',
+    '|',
+    'VS',
+    '|',
+    'GB',
+    '|',
+    'CLL',
+    '|',
+    'CLR'
+    ')'
+])
 
-error_codes = {'OOS', 'IRG', 'CIS', 'EPTh', 'MTTh'}
+pat = re.compile(
+    # fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
+    fr'^{rtype_pat}: *{named_ph("before")} *> *{named_ph("after")} *(/ *{pre_cond_pat} *_ *{post_cond_pat} *)*$')
+
+error_codes = {'OOS', 'IRG', 'EPTh', 'MTTh'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
 # Gothic: B, ON: A-E, OHG: A-C-F, OE: A-D.1-D.2-G
 ref_no = {
@@ -148,18 +149,6 @@ class HandwrittenSegment:
             raw_seg = raw
             raw_stress = None
         return HandwrittenSegment(raw_seg, raw_stress)
-
-    def is_cll(self) -> bool:
-        return self._raw_seg == 'CLL'
-
-    def is_clr(self) -> bool:
-        return self._raw_seg == 'CLR'
-
-    def is_gbj(self) -> bool:
-        return self._raw_seg == 'GBJ'
-
-    def is_gbw(self) -> bool:
-        return self._raw_seg == 'GBW'
 
     def to_segment(self) -> Union[Nphthong, Segment]:
         assert not self.expandable
@@ -236,25 +225,22 @@ class HandwrittenRule:
 
     before: HS
     after: HS
+    rtype: str
     pre: HS
     d_pre: HS
     post: HS
     d_post: HS
     expandable: bool
-    special_type: Union[None, str]
     ref: Optional[str] = None
 
     @classmethod
     def from_str(cls, raw: str, ref: Optional[str] = None) -> HandwrittenRule:
-        special_type = None
-        if raw.startswith('VS:'):
-            special_type = 'VS'
-            raw = raw[3:].strip()
 
         def get_segment(name: str) -> HS:
             return HandwrittenSegment.from_str(result.group(name))
 
         result = pat.match(raw)
+        rtype = result.group('rtype')
         d_pre = get_segment('d_pre')
         pre = get_segment('pre')
         before = get_segment('before')
@@ -263,17 +249,7 @@ class HandwrittenRule:
         after = get_segment('after')
         expandable = '[' in raw
 
-        if after.is_cll() or after.is_clr() or after.is_gbj() or after.is_gbw():
-            assert special_type is None
-            if after.is_cll():
-                special_type = 'CLL'
-            elif after.is_clr():
-                special_type = 'CLR'
-            elif after.is_gbj():
-                special_type = 'GBJ'
-            else:
-                special_type = 'GBW'
-        return cls(before, after, pre, d_pre, post, d_post, expandable, special_type, ref=ref)
+        return cls(before, after, rtype, pre, d_pre, post, d_post, expandable, ref=ref)
 
     def to_action(self) -> SoundChangeAction:
         assert not self.expandable
@@ -289,28 +265,27 @@ class HandwrittenRule:
         post = get_arg(self.post)
         d_post = get_arg(self.d_post)
 
-        if self.special_type in ['CLL', 'CLR']:
-            tgt = self.pre if self.special_type == 'CLL' else self.post
+        # There is a minor difference in implementation regarding GB-type rules. Here "GB" is enough, but for c++, two types "GBJ" and "GBW" are used.
+        cpp_rtype = self.rtype
+        if self.rtype in ['CLL', 'CLR']:
+            tgt = self.pre if self.rtype == 'CLL' else self.post
             tgt_seg = tgt.to_segment()
             assert isinstance(tgt_seg, Nphthong) or tgt_seg.is_short()
             after = f'{tgt_seg}ː{tgt.stress_str}'
-        elif self.special_type in ['GBJ', 'GBW']:
+        elif self.rtype == 'GB':
             before_seg = self.before.to_segment()
             assert isinstance(before_seg, Nphthong)
             assert len(before_seg.vowels) == 2
             first_v = str(before_seg.vowels[0])
             assert first_v in ['i', 'u']
-            if first_v == 'i':
-                assert self.special_type == 'GBJ'
-            else:
-                assert self.special_type == 'GBW'
             after = str(before_seg.vowels[1]) + self.before.stress_str
+            cpp_rtype = 'GBJ' if first_v == 'i' else 'GBW'
 
-        return SoundChangeAction.from_str(before, after, pre, d_pre, post, d_post, special_type=self.special_type)
+        return SoundChangeAction.from_str(before, after, cpp_rtype, pre, d_pre, post, d_post)
 
     def specialize(self, state: PlainState) -> List[SoundChangeAction]:
         assert self.expandable
-        assert self.special_type != 'GB'
+        assert self.rtype != 'GB'
 
         def safe_get(segments: List[HS], idx: int) -> HS:
             if idx < 0 or idx >= len(segments):
@@ -334,7 +309,7 @@ class HandwrittenRule:
         for segments in state.segments:
             segments = [HandwrittenSegment.from_str(ph) for ph in segments]
             # Deal with vowel sequence.
-            if self.special_type == 'VS':
+            if self.rtype == 'VS':
                 segments = [segments[0]] + [seg for seg in segments[1:-1] if is_vowel(seg)] + [segments[-1]]
 
             n = len(segments)
@@ -343,8 +318,8 @@ class HandwrittenRule:
                         safe_get(segments, i + 1), safe_get(segments, i + 2)]
                 if all(hs.match(s) for hs, s in zip(segs, site)):
                     d_pre, pre, before, post, d_post = [realize(hs, s) for hs, s in zip(segs, site)]
-                    if self.special_type in ['CLL', 'CLR']:
-                        tgt = pre if self.special_type == 'CLL' else post
+                    if self.rtype in ['CLL', 'CLR']:
+                        tgt = pre if self.rtype == 'CLL' else post
                         tgt_seg = tgt.to_segment()
                         if not (isinstance(tgt_seg, Nphthong) or tgt_seg.is_short()):
                             continue
@@ -356,24 +331,33 @@ class HandwrittenRule:
                             continue
                     else:
                         after = str(self.after)
-                    ret.add(SoundChangeAction.from_str(get_arg(before), after, get_arg(pre), get_arg(d_pre),
-                                                       get_arg(post), get_arg(d_post), special_type=self.special_type))
+                    ret.add(SoundChangeAction.from_str(get_arg(before), after, self.rtype, get_arg(pre), get_arg(d_pre),
+                                                       get_arg(post), get_arg(d_post)))
         return list(ret)
 
 
-def get_actions(raw_rules: List[str], orders: List[str], refs: Optional[List[str]] = None) -> List[HandwrittenRule]:
+def get_actions(raw_rules: List[str], orders: List[str],
+                extended_rules: Optional[List[str]] = None,
+                refs: Optional[List[str]] = None) -> List[HandwrittenRule]:
     rules = [None] * len(raw_rules)
     if refs is None:
         refs = [None] * len(raw_rules)
-    for i, (cell, order, ref) in enumerate(zip(raw_rules, orders, refs)):
-        if not pd.isnull(cell):
-            cell_results = list()
-            for raw in cell.strip().split('\n'):
-                if all(code not in raw for code in error_codes):
-                    cell_results.append(HandwrittenRule.from_str(raw, ref=ref))
-            order = i if pd.isnull(order) else (int(order) - 1)
-            if cell_results:
-                rules[order] = cell_results
+    for i, (cell, extended_cell, order, ref) in enumerate(zip(raw_rules, extended_rules, orders, refs)):
+        # Validate data first: one of the `cell` and `extended_cell` must not be empty.
+        assert not pd.isnull(cell) or not pd.isnull(extended_cell)
+        # If `extended_cell` contains an error code, `cell` must be empty. And then skip this row.
+        if not pd.isnull(extended_cell) and any(code in extended_cell for code in error_codes):
+            assert pd.isnull(cell)
+            continue
+
+        # Main body: use `cell_extended` if it's not empty, o/w use `cell`.
+        cell_results = list()
+        target_cell = extended_cell if not pd.isnull(extended_cell) else cell
+        for raw in target_cell.strip().split('\n'):
+            cell_results.append(HandwrittenRule.from_str(raw, ref=ref))
+        order = i if pd.isnull(order) else (int(order) - 1)
+        if cell_results:
+            rules[order] = cell_results
     ret = list()
     for cell_results in rules:
         if cell_results:
@@ -397,8 +381,8 @@ class PlainState:
         cls = type(self)
         assert cls.env is not None
         try:
-            new_node = cls.env.apply_action(self._node, action.before_id, action.after_id,
-                                            action.pre_id, action.d_pre_id, action.post_id, action.d_post_id, action.special_type)
+            new_node = cls.env.apply_action(self._node, action.before_id, action.after_id, action.rtype,
+                                            action.pre_id, action.d_pre_id, action.post_id, action.d_post_id)
             return cls(new_node)
 
         except RuntimeError:
@@ -434,6 +418,7 @@ def order_matters(a: Action, b: Action, state: PlainState) -> bool:
     ordering1 = state.apply_action(a).apply_action(b)  # apply A then B
     ordering2 = state.apply_action(b).apply_action(a)  # apply B then A
     return ordering1.segments == ordering2.segments
+
 
 def contextual_order_matters(a: int, b: int, actions: List[Action], state: PlainState) -> bool:
     '''Checks whether swapping actions a and b changes the final state'''
@@ -484,16 +469,18 @@ def match_rules(gold: List[List[Action]], candidate: List[List[Action]], initial
     Determines the best matching of rules between gold and candidate under the current ordering and bundling of rules. Bundled rules are treated as a block; only the end state after applying all of the rules is considered.
 
     Assumes there are more bundles in candidate than in gold; that is, every block in gold will be matched with something, while the blocks in candidate may not get matched to anything.
-    
+
     Returns the optimal partitioning.
     '''
     # TODO(djwyen) update so that candidate is just a list of actions instead, so we don't presuppose any blocking?
     m = len(gold)
     n = len(candidate)
-    memo = {} # for memoization. maps a tuple (i,j) to the value of subproblem x(i,j)
-    gold_state_dict = {} # maps index i to state s_i, the state achieved after applying gold rules 0 through i in gold to initial_state.
-    cand_state_dict = {} # similarly, maps index j to state s_j obtained by appling rules 0-j in candidate to initial_state
-    subproblem_graph = {} # maps (i,j) to (k,l) if subproblem (i,j) goes to subproblem (k,l). Use to reconstruct the matching discovered
+    memo = {}  # for memoization. maps a tuple (i,j) to the value of subproblem x(i,j)
+    # maps index i to state s_i, the state achieved after applying gold rules 0 through i in gold to initial_state.
+    gold_state_dict = {}
+    cand_state_dict = {}  # similarly, maps index j to state s_j obtained by appling rules 0-j in candidate to initial_state
+    # maps (i,j) to (k,l) if subproblem (i,j) goes to subproblem (k,l). Use to reconstruct the matching discovered
+    subproblem_graph = {}
 
     # populate the dictionaries
     current_state = initial_state
@@ -509,44 +496,44 @@ def match_rules(gold: List[List[Action]], candidate: List[List[Action]], initial
 
     def x(i: int, j: int) -> float:
         '''Returns the minimum distance achievable matching rules gold[i:] to candidate[j:] using dynamic programming.'''
-        
-        if (i,j) in memo:
-            return memo[(i,j)]
-        if i == m: # matching complete
+
+        if (i, j) in memo:
+            return memo[(i, j)]
+        if i == m:  # matching complete
             return 0
-        if j == n and i != m: # must match everything in gold
+        if j == n and i != m:  # must match everything in gold
             return float('inf')
 
         s_i = gold_state_dict[i]
         s_j = cand_state_dict[j]
         dist = s_i.dist_from(s_j.segments)
-        take_dist = x(i+1, j+1) + dist # ie match i to j
-        skip_dist = x(i, j+1) # match i with something else
+        take_dist = x(i + 1, j + 1) + dist  # ie match i to j
+        skip_dist = x(i, j + 1)  # match i with something else
 
         if take_dist <= skip_dist:
-            memo[(i,j)] = take_dist
-            subproblem_graph[(i,j)] = (i+1, j+1)
+            memo[(i, j)] = take_dist
+            subproblem_graph[(i, j)] = (i + 1, j + 1)
             return take_dist
         else:
-            memo[(i,j)] = skip_dist
-            subproblem_graph[(i,j)] = (i, j+1)
+            memo[(i, j)] = skip_dist
+            subproblem_graph[(i, j)] = (i, j + 1)
             return skip_dist
-    
+
     # run the DP problem to populate subproblem_graph
-    min_dist = x(0,0)
+    min_dist = x(0, 0)
     # reconstruct the solution
     i = 0
     j = 0
-    rule_matching = [] # contains tuple (i,j) if matching i->j was established
+    rule_matching = []  # contains tuple (i,j) if matching i->j was established
     while i != m:
         i_new, j_new = subproblem_graph[(i, j)]
-        if i_new == i+1: # the take route was taken, so matching i->j was established
+        if i_new == i + 1:  # the take route was taken, so matching i->j was established
             rule_matching.append((i, j))
         i, j = i_new, j_new
-    
+
     return rule_matching
-        
-  
+
+
 def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] = None) -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState], List[str]]:
     add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
     add_argument("calc_metric", dtype=bool, default=False, msg="Whether to calculate the metrics.")
@@ -572,7 +559,9 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
         df = df.dropna(subset=['ref no.'])
         for ref in ref_no[g.tgt_lang]:
             rows = df[df['ref no.'].str.startswith(ref)]
-            gold.extend(get_actions(rows['w/ SS'], rows['order'], refs=rows['ref no.']))
+            gold.extend(get_actions(rows['std_rule'], rows['order'],
+                                    extended_rules=rows['extended_rule'],
+                                    refs=rows['ref no.']))
 
     # Simulate the actions and get the distance.
     PlainState.env = manager.env
@@ -653,21 +642,22 @@ if __name__ == "__main__":
         # a complicated fix to the above would be to make a graph of actions and then use that to discover if a path A to C exists (and that therefore relative order matters) but it's unclear if this could be done for each of the n choose 2 ~ O(n^2) pairs of rules in a computationally efficient matter. One slightly good thing is that you can memoize to reduce the amount of searches to perhaps visiting each vertex exactly once.
 
         # greedily match up to 3 rules to each rule in gold
-        threshold = 10 # amount a rule must decrease the distance by to be included in a poly-matching
+        threshold = 10  # amount a rule must decrease the distance by to be included in a poly-matching
         unmatched_rule_indices = set(range(len(candidate)))
-        rule_pairings = {} # maps the index of a rule in gold to a list of indices of its matched rules in candidate
+        rule_pairings = {}  # maps the index of a rule in gold to a list of indices of its matched rules in candidate
         current_state = initial_state
         for i, act1 in enumerate(gold):
             next_state = current_state.apply_action(act1)
             next_segments = next_state.segments
             rule_pairings[i] = []
-            
+
             # greedily identify up to 3 rules in candidate to be matched to rule i
             lowest_dist = None
             lowest_dist_ind = None
-            last_rule_ind = -1 # rules are ordered, so we can only consider appending rules that come after the last picked rule
-            cand_base_state = current_state # the state resulting after all current matched rules are applied
-            base_dist = current_state.dist_from(next_segments) # distance resulting after all current matched rules are applied
+            last_rule_ind = -1  # rules are ordered, so we can only consider appending rules that come after the last picked rule
+            cand_base_state = current_state  # the state resulting after all current matched rules are applied
+            # distance resulting after all current matched rules are applied
+            base_dist = current_state.dist_from(next_segments)
             for j in range(3):
                 for ind in filter(lambda x: x > last_rule_ind, unmatched_rule_indices):
                     act2 = candidate[ind]
@@ -675,8 +665,8 @@ if __name__ == "__main__":
                     if lowest_dist is None or (dist < lowest_dist and dist <= base_dist - threshold):
                         lowest_dist = dist
                         lowest_dist_ind = ind
-                
-                if lowest_dist_ind is None: # no match found
+
+                if lowest_dist_ind is None:  # no match found
                     break
 
                 rule_pairings[i].append(lowest_dist_ind)

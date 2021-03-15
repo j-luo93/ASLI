@@ -31,27 +31,26 @@ class SoundChangeAction:
 
     before_id: int
     after_id: int
+    rtype: str
     pre_id: int
     d_pre_id: int
     post_id: int
     d_post_id: int
-    special_type: Optional[str] = None
 
     abc: ClassVar[Alphabet] = None
 
-    # def __hash__(self):
-    #     return hash(f"{self.special_type}: {self.before_id} {self.after_id} {self.pre_id} {self.d_pre_id} {self.post_id} {self.d_post_id}")
+    def __hash__(self):
+        return hash(repr(self))
 
-    # def __eq__(self, other: SoundChangeAction):
-    #     return self.before_id == other.before_id and self.after_id == other.after_id and self.pre_id== self.other_id
+    def __eq__(self, other: SoundChangeAction):
+        return repr(self) == repr(other)
 
     @classmethod
-    def from_str(cls, before: str, after: str,
+    def from_str(cls, before: str, after: str, rtype: str,
                  pre: Optional[str] = None,
                  d_pre: Optional[str] = None,
                  post: Optional[str] = None,
-                 d_post: Optional[str] = None,
-                 special_type: Optional[str] = None) -> SoundChangeAction:
+                 d_post: Optional[str] = None) -> SoundChangeAction:
         if cls.abc is None:
             raise RuntimeError(f"No alphabet has been specified.")
         if d_pre is not None and pre is None:
@@ -60,7 +59,7 @@ class SoundChangeAction:
             raise ValueError(f"`post` must be present for `d_post`.")
 
         def to_int(unit: Union[None, str], before_or_after: str) -> int:
-            if unit in ["empty", 'Ø']:
+            if unit == '∅':
                 return EMP_ID
             if unit == '.':
                 return ANY_ID
@@ -70,16 +69,16 @@ class SoundChangeAction:
                 return ANY_UNS_ID
             if unit == "#":
                 return SOT_ID if before_or_after == 'b' else EOT_ID
-            if unit == '##':
-                return SYL_EOT_ID
+            # if unit == '##':
+            #     return SYL_EOT_ID
             if unit is None:
                 return NULL_ID
             return cls.abc[unit]  # pylint: disable=unsubscriptable-object
 
         return cls(cls.abc[before], to_int(after, 'a'),  # pylint: disable=unsubscriptable-object
+                   rtype,
                    to_int(pre, 'b'), to_int(d_pre, 'b'),
-                   to_int(post, 'a'), to_int(d_post, 'a'),
-                   special_type=special_type)
+                   to_int(post, 'a'), to_int(d_post, 'a'))
 
     def __repr__(self):
         # if self.action_id == PyStop:
@@ -92,7 +91,7 @@ class SoundChangeAction:
             elif idx == ANY_ID:
                 return '.'
             elif idx == EMP_ID:
-                return 'Ø'
+                return '∅'
             elif idx == ANY_S_ID:
                 return '.{+}'
             elif idx == ANY_UNS_ID:
@@ -101,25 +100,22 @@ class SoundChangeAction:
 
         def get_cond(cond):
             if self.abc is None:
-                ret = ' + '.join(map(str, cond))
+                ret = ' '.join(map(str, cond))
             else:
-                ret = ' + '.join(map(str, [get_str(i) for i in cond]))
-            if ret:
-                ret = f'({ret})'
+                ret = ' '.join(map(str, [get_str(i) for i in cond]))
             return ret
 
         pre = get_cond([idx for idx in [self.d_pre_id, self.pre_id] if idx != NULL_ID])
-        if pre:
-            pre = f'{pre} + '
         post = get_cond([idx for idx in [self.post_id, self.d_post_id] if idx != NULL_ID])
-        if post:
-            post = f' + {post}'
 
         before = str(self.before_id) if self.abc is None else get_str(self.before_id)
         after = str(self.after_id) if self.abc is None else get_str(self.after_id)
 
-        special = '' if self.special_type is None else (self.special_type + ': ')
-        return f'{special}{pre}{before}{post} > {after}'
+        if pre or post:
+            condition = ' '.join(filter(bool, [pre, '_', post]))
+            return f'{self.rtype}: {before} > {after} / {condition}'
+        else:
+            return f'{self.rtype}: {before} > {after}'
 
 
 # class SoundChangeActionSpace(PyActionSpace):
