@@ -336,13 +336,25 @@ class HandwrittenRule:
         return list(ret)
 
 
-def get_actions(raw_rules: List[str], orders: List[str],
+def get_actions(raw_rules: List[str],
+                orders: Optional[List[str]] = None,
                 extended_rules: Optional[List[str]] = None,
                 refs: Optional[List[str]] = None) -> List[HandwrittenRule]:
-    rules = [None] * len(raw_rules)
+    if orders is None:
+        orders = [None] * len(raw_rules)
+    # If `orders` is provided, `refs` must be too.
+    else:
+        assert refs is not None
+        assert len(refs) == len(orders) == len(raw_rules)
+    assert len(raw_rules) == len(extended_rules)
+
     if refs is None:
-        refs = [None] * len(raw_rules)
+        refs = list(range(1, len(raw_rules) + 1))
+
+    rules = dict() # ref-to-rules mapping.
+    ordered_refs = list() # This stores the (chronologically) ordered list of ref numbers.
     for i, (cell, extended_cell, order, ref) in enumerate(zip(raw_rules, extended_rules, orders, refs)):
+        assert ref not in rules, 'Duplicate ref number!'
         # Validate data first: one of the `cell` and `extended_cell` must not be empty.
         assert not pd.isnull(cell) or not pd.isnull(extended_cell)
         # If `extended_cell` contains an error code, `cell` must be empty. And then skip this row.
@@ -355,11 +367,17 @@ def get_actions(raw_rules: List[str], orders: List[str],
         target_cell = extended_cell if not pd.isnull(extended_cell) else cell
         for raw in target_cell.strip().split('\n'):
             cell_results.append(HandwrittenRule.from_str(raw, ref=ref))
-        order = i if pd.isnull(order) else (int(order) - 1)
-        if cell_results:
-            rules[order] = cell_results
+
+        # When `order` is not null, we need to adjust the rule ordering.
+        if not pd.isnull(order):
+            assert order in rules
+            ordered_refs.insert(ordered_refs.index(order), ref)
+        else:
+            ordered_refs.append(ref)
+        rules[ref] = cell_results
     ret = list()
-    for cell_results in rules:
+    for ref in ordered_refs:
+        cell_results = rules[ref]
         if cell_results:
             ret.extend(cell_results)
     return ret
@@ -559,7 +577,8 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
         df = df.dropna(subset=['ref no.'])
         for ref in ref_no[g.tgt_lang]:
             rows = df[df['ref no.'].str.startswith(ref)]
-            gold.extend(get_actions(rows['std_rule'], rows['order'],
+            gold.extend(get_actions(rows['std_rule'],
+                                    orders=rows['order'],
                                     extended_rules=rows['extended_rule'],
                                     refs=rows['ref no.']))
 
