@@ -59,7 +59,7 @@ pre_cond_pat = ''.join([
     '(',     # optional start 2
     ' *',
     named_ph('d_pre'),      # d_pre
-    ' *',    # optional whitespace
+    ' +',    # optional whitespace
     ')?',    # optional end 2
     named_ph('pre'),      # pre
     ' *',    # optional whitespace
@@ -72,7 +72,7 @@ post_cond_pat = ''.join([
     ' *',
     named_ph('post'),
     '(',     # optional start 2
-    ' *',
+    ' +',
     named_ph('d_post'),
     ' *',
     ')?',    # optional end 2
@@ -98,7 +98,7 @@ pat = re.compile(
     # fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
     fr'^{rtype_pat}: *{named_ph("before")} *> *{named_ph("after")} *(/ *{pre_cond_pat} *_ *{post_cond_pat} *)*$')
 
-error_codes = {'OOS', 'IRG', 'EPTh', 'MTTh'}
+error_codes = {'OOS', 'IRG', 'EPTh', 'MTTh', 'DUP'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
 # Gothic: B, ON: A-E, OHG: A-C-F, OE: A-D.1-D.2-G
 ref_no = {
@@ -338,7 +338,6 @@ class HandwrittenRule:
 
 def get_actions(raw_rules: List[str],
                 orders: Optional[List[str]] = None,
-                extended_rules: Optional[List[str]] = None,
                 refs: Optional[List[str]] = None) -> List[HandwrittenRule]:
     if orders is None:
         orders = [None] * len(raw_rules)
@@ -346,26 +345,21 @@ def get_actions(raw_rules: List[str],
     else:
         assert refs is not None
         assert len(refs) == len(orders) == len(raw_rules)
-    assert len(raw_rules) == len(extended_rules)
 
     if refs is None:
         refs = list(range(1, len(raw_rules) + 1))
 
-    rules = dict() # ref-to-rules mapping.
-    ordered_refs = list() # This stores the (chronologically) ordered list of ref numbers.
-    for i, (cell, extended_cell, order, ref) in enumerate(zip(raw_rules, extended_rules, orders, refs)):
+    rules = dict()  # ref-to-rules mapping.
+    ordered_refs = list()  # This stores the (chronologically) ordered list of ref numbers.
+    for i, (cell, order, ref) in enumerate(zip(raw_rules, orders, refs)):
         assert ref not in rules, 'Duplicate ref number!'
-        # Validate data first: one of the `cell` and `extended_cell` must not be empty.
-        assert not pd.isnull(cell) or not pd.isnull(extended_cell)
-        # If `extended_cell` contains an error code, `cell` must be empty. And then skip this row.
-        if not pd.isnull(extended_cell) and any(code in extended_cell for code in error_codes):
-            assert pd.isnull(cell)
+        # If `cell` contains an error code, skip this row.
+        if any(code in cell for code in error_codes):
             continue
 
         # Main body: use `cell_extended` if it's not empty, o/w use `cell`.
         cell_results = list()
-        target_cell = extended_cell if not pd.isnull(extended_cell) else cell
-        for raw in target_cell.strip().split('\n'):
+        for raw in cell.strip().split('\n'):
             cell_results.append(HandwrittenRule.from_str(raw, ref=ref))
 
         # When `order` is not null, we need to adjust the rule ordering.
@@ -577,9 +571,8 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
         df = df.dropna(subset=['ref no.'])
         for ref in ref_no[g.tgt_lang]:
             rows = df[df['ref no.'].str.startswith(ref)]
-            gold.extend(get_actions(rows['std_rule'],
+            gold.extend(get_actions(rows['rule'],
                                     orders=rows['order'],
-                                    extended_rules=rows['extended_rule'],
                                     refs=rows['ref no.']))
 
     # Simulate the actions and get the distance.
