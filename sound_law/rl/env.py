@@ -73,58 +73,12 @@ class SoundChangeEnv(PyEnv):
             out.append(f'{action}, {reward:.3f}')
         return '(' + ', '.join(out) + ')'
 
-
-# class TrajectoryCollector:
-#     """This collects trajectories and (flattened/batched) samples."""
-
-#     def __init__(self,
-#                  max_sample_size: int,
-#                  max_rollout_length: Optional[int] = None,
-#                  truncate_last: bool = False):
-#         self._max_sample_size = max_sample_size
-#         self._max_rollout_length = max_rollout_length
-#         # Whether to truncate the last trajectory if enough samples have been collected.
-#         self._truncate_last = truncate_last
-
-#     @torch.no_grad()
-#     def collect(self,
-#                 agent: VanillaPolicyGradient,
-#                 env: SoundChangeEnv,
-#                 init_state: VocabState,
-#                 end_state: VocabState) -> AgentInputs:
-#         """Collect a batch of states, actions and rewards."""
-#         # Collect in eval mode.
-#         agent.eval()
-
-#         def get_new_trajectory() -> Trajectory:
-#             return Trajectory(init_state, end_state)
-
-#         trajectory = get_new_trajectory()
-#         trajectories = [trajectory]
-#         n_samples = 0
-#         while True:
-#             # Whether we have collected enough samples for the last trajectory (which might not have a reasonably long action sequence).
-#             collected_enough_last = self._truncate_last and n_samples >= self._max_sample_size
-#             if collected_enough_last:
-#                 break
-
-#             # Whether the current rollout is long enough to be truncated (regardless of whether the trajectory is done or not).
-#             long_rollout = self._max_rollout_length is not None and len(trajectory) >= self._max_rollout_length
-#             if trajectory.done or long_rollout:
-#                 trajectory = get_new_trajectory()
-#                 trajectories.append(trajectory)
-#                 # Stop when we have collected enough samples (either done or with properly long rollouts).
-#                 if n_samples >= self._max_sample_size:
-#                     break
-
-#             state = trajectory.latest_state
-
-#             action_masks = get_tensor(env.action_space.get_action_mask(state))
-#             policy = agent.get_policy(state, action_masks)
-#             action = agent.sample_action(policy)
-#             next_state, done, next_reward = env(state, action)
-#             trajectory.append(action, next_state, done, next_reward)
-#             n_samples += 1
-
-#         # Make a batch out of all the states and actions in the list of trajectories. Note that only starting states are batched.
-#         return AgentInputs.from_trajectories(trajectories, env.action_space)
+    def apply_action(self, state: VocabState, action: SoundChangeAction) -> VocabState:
+        return super().apply_action(state,
+                                    action.before_id,
+                                    action.after_id,
+                                    action.rtype,
+                                    action.pre_id,
+                                    action.d_pre_id,
+                                    action.post_id,
+                                    action.d_post_id)
