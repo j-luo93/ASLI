@@ -102,6 +102,22 @@ def match_rulesets(gold: List[List[Action]],
                 cand_state = env.apply_block([rule1, rule2], curr_state)
                 dist = env.dist_between(gold_state, cand_state)
                 objective.SetCoefficient(v[b_var], dist)
+
+        for j, rule1 in enumerate(cand):
+            for k, rule2 in enumerate(cand[j+1:], start=j+1):
+                for l, rule3 in enumerate(cand[k+1:], start=k+1):
+                    c_var = 'c_' + str(i) + '(' + str(j) + ',' + str(k) + ',' + str(l) + ')'
+                    v[c_var] = solver.IntVar(0, 1, c_var)
+                    c['gold_' + str(i)].SetCoefficient(v[c_var], 1)
+                    c['cand_' + str(j)].SetCoefficient(v[c_var], 1)
+                    c['cand_' + str(k)].SetCoefficient(v[c_var], 1)
+                    c['cand_' + str(l)].SetCoefficient(v[c_var], 1)
+                    c['min_match'].SetCoefficient(v[c_var], 1)
+
+                    cand_state = env.apply_block([rule1, rule2, rule3], curr_state)
+                    dist = env.dist_between(gold_state, cand_state)
+                    objective.SetCoefficient(v[c_var], dist)
+        
         # update state and continue
         curr_state = gold_state
 
