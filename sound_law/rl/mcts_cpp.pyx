@@ -197,7 +197,17 @@ cdef class PyEnv:
         del self.ptr
 
     def get_edit_dist(self, seq1, seq2):
+        """Get edit distance between two sequences of ids."""
         return self.ptr.get_edit_dist(seq1, seq2)
+
+    def get_state_edit_dist(self, PyTreeNode py_node1, PyTreeNode py_node2) -> float:
+        """Get edit distance between two vocab states."""
+        cdef size_t n = py_node1.ptr.size()
+        cdef size_t i
+        cdef float ret = 0.0
+        for i in range(n):
+            ret += self.get_edit_dist(py_node1.ptr.get_id_seq(i), py_node2.ptr.get_id_seq(i))
+        return ret
 
     def apply_action(self,
                      PyTreeNode py_node,

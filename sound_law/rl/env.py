@@ -72,3 +72,13 @@ class SoundChangeEnv(PyEnv):
             action = self.action_space.get_action(action_id)
             out.append(f'{action}, {reward:.3f}')
         return '(' + ', '.join(out) + ')'
+
+    def apply_action(self, state: VocabState, action: SoundChangeAction) -> VocabState:
+        return super().apply_action(state,
+                                    action.before_id,
+                                    action.after_id,
+                                    action.rtype,
+                                    action.pre_id,
+                                    action.d_pre_id,
+                                    action.post_id,
+                                    action.d_post_id)
