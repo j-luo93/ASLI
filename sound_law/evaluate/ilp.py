@@ -77,11 +77,11 @@ def match_rulesets(gold: List[List[Action]],
     curr_state = env.init_state
     objective = solver.Objective()
 
-    # as an optimization, we only create variables for the best k_matches that a given gold block has with collections of rules in candidate. We assume that matchings with higher cost would never be chosen anyway and won't affect the solution, so they can just be excluded from the linear program.
-    highest_cost = None
-    paired_costs = [] # entries are of form (varname, i, [j...k], cost) — ie the variable pairing i with rules [j...k] has cost coefficient cost. Costs are in increasing order.
-    
     for i in range(len(gold)):
+        # as an optimization, we only create variables for the best k_matches that a given gold block has with collections of rules in candidate. We assume that matchings with higher cost would never be chosen anyway and won't affect the solution, so they can just be excluded from the linear program.
+        highest_cost = None
+        paired_costs = [] # entries are of form (varname, i, [j...k], cost) — ie the variable pairing i with rules [j...k] has cost coefficient cost. Costs are in increasing order.
+
         block = gold[i]
         gold_state = env.apply_block(block, curr_state)
         for j in range(len(cand)):
@@ -169,8 +169,8 @@ def match_rulesets(gold: List[List[Action]],
 #     ['e', 'f']
 # ]
 # cand = ['alpha', 'beta', 'gamma', 'delta']
-gold = [[x,x] for x in range(50)]
-cand = [x for x in range(100)]
+gold = [[x,x] for x in range(10)]
+cand = [x for x in range(20)]
 env = ToyEnv('foo')
 
 match_rulesets(gold, cand, env)
