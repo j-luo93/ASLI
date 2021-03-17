@@ -2,27 +2,22 @@
 
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
-from libcpp.string cimport string
 from libcpp cimport bool
 
-cdef extern from "mcts_cpp/timer.cpp": pass
-cdef extern from "mcts_cpp/stats.cpp": pass
-cdef extern from "mcts_cpp/site.cpp": pass
 cdef extern from "mcts_cpp/word.cpp": pass
-cdef extern from "mcts_cpp/tree_node.cpp": pass
 cdef extern from "mcts_cpp/action.cpp": pass
 cdef extern from "mcts_cpp/env.cpp": pass
+cdef extern from "mcts_cpp/node.cpp": pass
 cdef extern from "mcts_cpp/mcts.cpp": pass
+cdef extern from "mcts_cpp/lru_cache.cpp": pass
+
+cdef extern from "mcts_cpp/ctpl.h": pass
 
 cdef extern from "mcts_cpp/parallel-hashmap/parallel_hashmap/phmap.h"  namespace "phmap" nogil:
     cdef cppclass flat_hash_map[T, U]:
-        U& at(const T&)
-
-    cdef cppclass flat_hash_set[T]:
         pass
 
-cdef extern from "mcts_cpp/ctpl.h" namespace "ctpl" nogil:
-    cdef cppclass threadpool:
+    cdef cppclass flat_hash_set[T]:
         pass
 
 cdef extern from "mcts_cpp/common.hpp":
@@ -31,199 +26,169 @@ cdef extern from "mcts_cpp/common.hpp":
     ctypedef vector[abc_t] IdSeq
     ctypedef vector[IdSeq] VocabIdSeq
 
-    ctypedef unsigned long uai_t
-    ctypedef unsigned long usi_t
-
-    cdef cppclass SpecialType:
-        pass
-
     cdef cppclass Stress:
         pass
 
-    ctypedef threadpool Pool
-
-cdef extern from "mcts_cpp/stats.hpp":
-    cdef cppclass Stats nogil:
-        void enable_timer()
-        void disable_timer()
-        void show_stats()
-
-    cdef Stats stats
-
-cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
-    cdef SpecialType CLL
-    cdef SpecialType CLR
-    cdef SpecialType VS
-    cdef SpecialType GBJ
-    cdef SpecialType GBW
+    cdef cppclass SpecialType:
+        pass
 
 cdef extern from "mcts_cpp/common.hpp" namespace "Stress":
     cdef Stress NOSTRESS
     cdef Stress STRESSED
     cdef Stress UNSTRESSED
 
-cdef extern from "mcts_cpp/common.hpp" namespace "action":
-    uai_t combine(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t)
-    uai_t combine_special(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType)
-    abc_t get_after_id(uai_t)
-    abc_t get_before_id(uai_t)
-    abc_t get_d_post_id(uai_t)
-    abc_t get_post_id(uai_t)
-    abc_t get_d_pre_id(uai_t)
-    abc_t get_pre_id(uai_t)
-    SpecialType get_special_type(uai_t)
+cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
+    cdef SpecialType NONE
+    cdef SpecialType CLL
+    cdef SpecialType CLR
+    cdef SpecialType VS
+    cdef SpecialType GBJ
+    cdef SpecialType GBW
 
-cdef extern from "mcts_cpp/site.hpp":
-    cdef cppclass SiteNode nogil:
-        usi_t site
+cdef extern from "mcts_cpp/word.hpp":
+    cdef cppclass Word nogil:
+        IdSeq id_seq
 
-    ctypedef SiteNode * SNptr
-    cdef cppclass SiteSpace nogil:
-        # unordered_map[usi_t, SNptr] nodes
-        flat_hash_map[usi_t, SNptr] nodes
+    cdef cppclass WordSpaceOpt nogil:
+        vector[vector[float]] dist_mat
+        float ins_cost
+        bool use_alignment
+        vector[bool] is_vowel
+        vector[Stress] unit_stress
+        vector[abc_t] unit2base
+        vector[abc_t] unit2stressed
+        vector[abc_t] unit2unstressed
+
+        WordSpaceOpt()
+
+    cdef cppclass WordSpace nogil:
+        WordSpaceOpt opt
+
+ctypedef Word * Wptr
+
+cdef extern from "mcts_cpp/action.hpp":
+    cdef cppclass ActionSpaceOpt nogil:
+        abc_t null_id
+        abc_t emp_id
         abc_t sot_id
         abc_t eot_id
         abc_t any_id
-        abc_t emp_id
-
-        SiteSpace(abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t)
-
-        size_t size()
-        void get_node(SiteNode *, usi_t)
-        void get_nodes(Pool *, vector[vector[SNptr]], vector[vector[usi_t]])
-
-    cdef cppclass GraphNode nogil:
-        SiteNode *base
-        int num_sites
-        # unordered_set[int] linked_words
-        flat_hash_set[int] linked_words
-
-    ctypedef GraphNode * GNptr
-    cdef cppclass SiteGraph nogil:
-        # unordered_map[usi_t, GNptr] nodes
-        flat_hash_map[usi_t, GNptr] nodes
-        void add_root(SiteNode *, int)
-
-cdef extern from "mcts_cpp/word.hpp":
-    ctypedef Word * Wptr
-    cdef cppclass Word nogil:
-        IdSeq id_seq
-        flat_hash_map[uai_t, Wptr] neighbors
-        # unordered_map[uai_t, Wptr] neighbors
-        vector[SNptr] site_roots
-        # unordered_map[int, float] dists
-        flat_hash_map[int, float] dists
-        string str()
-
-    cdef cppclass WordSpace nogil:
-        SiteSpace *site_space
-        vector[vector[float]] dist_mat
-        float ins_cost
-
-        WordSpace(SiteSpace *, vector[vector[float]], float)
-
-        void get_words(Pool *, vector[Wptr], vector[IdSeq])
-        size_t size()
-        void set_end_words(vector[Wptr])
-        float get_edit_dist(IdSeq, IdSeq)
-
-cdef extern from "mcts_cpp/tree_node.hpp":
-    cdef cppclass TreeNode nogil:
-        ctypedef TreeNode * TNptr
-
-        vector[Wptr] words
-        pair[int, uai_t] prev_action
-        TreeNode *parent_node
-        bool stopped
-        bool done
-        int depth
-        float dist
-        vector[uai_t] action_allowed
-        vector[float] prior
-        vector[visit_t] action_count
-        vector[float] total_value
-        visit_t visit_count
-        # unordered_map[uai_t, TNptr] neighbors
-        # unordered_map[uai_t, float] rewards
-        flat_hash_map[uai_t, TNptr] neighbors
-        flat_hash_map[uai_t, float] rewards
-        float max_value
-        int max_index
-        uai_t max_action_id
-
-        bool is_leaf()
-        vector[float] get_scores(float)
-        int get_best_i(float)
-        void expand(vector[float])
-        string str()
-        IdSeq get_id_seq(int)
-        size_t size()
-        size_t get_num_descendants()
-        void clear_stats(bool)
-        void add_noise(vector[float], float)
-
-    cdef cppclass DetachedTreeNode nogil:
-        VocabIdSeq vocab_i
-        vector[uai_t] action_allowed
-
-        DetachedTreeNode(TreeNode *)
-
-        IdSeq get_id_seq(int)
-        size_t size()
-
-ctypedef TreeNode * TNptr
-ctypedef DetachedTreeNode * DTNptr
-ctypedef fused anyTNptr:
-    TNptr
-    DTNptr
-
-cdef extern from "mcts_cpp/action.hpp":
-    cdef cppclass ActionSpace nogil:
-        SiteSpace *site_space
-        WordSpace *word_space
-        float dist_threshold
+        abc_t any_s_id
+        abc_t any_uns_id
+        abc_t glide_j
+        abc_t glide_w
         int site_threshold
+        float dist_threshold
 
-        ActionSpace(SiteSpace *, WordSpace *, float, int)
+        ActionSpaceOpt()
 
-        void register_edge(abc_t, abc_t)
-        void register_cl_map(abc_t, abc_t)
-        void register_gbj(abc_t, abc_t)
-        void register_gbw(abc_t, abc_t)
-        void set_vowel_info(vector[bool], vector[abc_t], vector[Stress], vector[abc_t], vector[abc_t])
-        void set_glide_info(abc_t, abc_t)
-        void set_action_allowed(Pool *, vector[TNptr])
-        void set_action_allowed(TreeNode *)
-        IdSeq apply_action(IdSeq, uai_t)
-        vector[uai_t] get_similar_actions(uai_t)
+    cdef cppclass ActionSpace nogil:
+        ActionSpaceOpt opt
 
 cdef extern from "mcts_cpp/env.hpp":
-    cdef cppclass Env nogil:
-        ActionSpace *action_space
-        WordSpace *word_space
-        TreeNode *start
-        TreeNode *end
+    cdef cppclass EnvOpt nogil:
+        VocabIdSeq start_ids
+        VocabIdSeq end_ids
         float final_reward
         float step_penalty
 
-        Env(ActionSpace *, WordSpace *, VocabIdSeq, VocabIdSeq, float, float)
+        EnvOpt()
 
-        TreeNode *apply_action(TreeNode *, int, uai_t)
+    cdef cppclass Env nogil:
+        Env(EnvOpt, ActionSpaceOpt, WordSpaceOpt)
+
+        EnvOpt opt
+        TreeNode *start
+        TreeNode *end
+
+        size_t evict(size_t)
+        void register_permissible_change(abc_t, abc_t)
+        void evaluate(TreeNode *, vector[vector[float]], vector[float])
+        void register_cl_map(abc_t, abc_t)
+        void register_gbj_map(abc_t, abc_t)
+        void register_gbw_map(abc_t, abc_t)
+        float get_edit_dist(IdSeq, IdSeq)
+        TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
+        void clear_stats(TreeNode *, bool)
+        void clear_priors(TreeNode *, bool)
+        size_t get_num_words()
+        void add_noise(TreeNode *, vector[vector[float]], vector[float], float)
+        size_t get_max_end_length()
+
+cdef extern from "mcts_cpp/node.hpp":
+
+    ctypedef vector[pair[int, size_t]] Affected
+    ctypedef pair[int, abc_t] ChosenChar
+
+    cdef cppclass BaseNode nogil:
+        vector[bool] get_pruned()
+        vector[abc_t] get_actions()
+        vector[visit_t] get_action_counts()
+        vector[float] get_total_values()
+        visit_t get_visit_count()
+        bool is_tree_node()
+        bool is_transitional()
+
+    cdef cppclass TransitionNode nogil:
+        vector[float] get_rewards()
+
+    cdef cppclass TreeNode nogil:
+        bool stopped
+
+        vector[Affected] affected
+
+        vector[float] priors
+        int max_index
+        float max_value
+
+        bool is_expanded()
+        bool is_evaluated()
+        vector[float] get_scores(float)
+
+        vector[Wptr] words
+
+        float get_dist()
+        bool is_done()
+        bool is_leaf()
+        IdSeq get_id_seq(int)
+        size_t size()
+        size_t get_num_actions()
+        pair[vector[vector[size_t]], vector[vector[size_t]]] get_alignments()
+
+ctypedef TreeNode * TNptr
+ctypedef BaseNode * BNptr
 
 cdef extern from "mcts_cpp/mcts.hpp":
-    cdef cppclass Mcts nogil:
-        Env *env
+    cdef cppclass MctsOpt nogil:
         float puct_c
         int game_count
         float virtual_loss
         int num_threads
+        float heur_c
+        bool add_noise
 
-        Mcts(Env *, float, int, float, int)
+        MctsOpt()
 
-        vector[TNptr] select(TreeNode *, int, int)
-        void backup(vector[TNptr], vector[float])
-        uai_t play(TreeNode *)
-        void set_logging_options(int, bool)
+    cdef cppclass Path nogil:
+        Path()
+        Path(Path)
+
+        int get_depth()
+        vector[BNptr] get_all_nodes()
+        vector[size_t] get_all_chosen_indices()
+        vector[abc_t] get_all_chosen_actions()
+        void merge(Path)
+        TreeNode *get_last_node()
+
+    cdef cppclass Mcts nogil:
+        MctsOpt opt
+
+        Mcts(Env *, MctsOpt)
+
+        vector[Path] select(TreeNode *, int, int, int)
+        vector[Path] select(TreeNode *, int, int, int, Path)
+        void backup(vector[Path], vector[float])
+        Path play(TreeNode *, int)
 
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:
@@ -232,6 +197,14 @@ ctypedef fused convertible:
     long
     abc_t
     bool
+
+cdef inline vector[convertible] np2vector(convertible[::1] arr):
+    cdef size_t n = arr.shape[0]
+    cdef size_t i
+    cdef vector[convertible] vec = vector[convertible](n)
+    for i in range(n):
+        vec[i] = arr[i]
+    return vec
 
 cdef inline vector[vector[convertible]] np2nested(convertible[:, ::1] arr,
                                                   long[::1] lengths):
@@ -246,11 +219,3 @@ cdef inline vector[vector[convertible]] np2nested(convertible[:, ::1] arr,
             item[j] = arr[i, j]
         ret[i] = item
     return ret
-
-cdef inline vector[convertible] np2vector(convertible[::1] arr):
-    cdef size_t n = arr.shape[0]
-    cdef size_t i
-    cdef vector[convertible] vec = vector[convertible](n)
-    for i in range(n):
-        vec[i] = arr[i]
-    return vec

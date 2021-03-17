@@ -1,51 +1,70 @@
 #pragma once
 
 #include "common.hpp"
-#include "site.hpp"
+
+class TreeNode;
+
+namespace alignment
+{
+    const int INSERTED = -1;
+};
+
+struct Alignment
+{
+    vec<size_t> pos_seq1;
+    vec<size_t> pos_seq2;
+    vec<int> aligned_pos;
+};
 
 class Word
 {
     friend class WordSpace;
 
-    Word(const IdSeq &, const IdSeq &, const vec<SiteNode *> &, const vec<SiteNode *> &, size_t);
+    Word(const IdSeq &, const IdSeq &, const vec<size_t> &);
+
+    paramap<int, float> dists;
+    paramap<int, Alignment> almts;
 
 public:
     const IdSeq id_seq;
     const IdSeq vowel_seq;
-    ParaMap<usi_t, vec<Word *>> neighbors;
-    ParaMap<usi_t, vec<Word *>> vowel_neighbors;
+    const vec<size_t> id2vowel;
 
-    vec<SiteNode *> site_roots;
-    vec<SiteNode *> vowel_site_roots;
-    std::string str();
-    DistTable dists;
+    // Get edit distance at a given `order`.
+    float get_edit_dist_at(int) const;
+    // Get alignment at a given `order`.
+    const Alignment &get_almt_at(int) const;
 };
 
-class ActionSpace;
-class Env;
+struct WordSpaceOpt
+{
+    vec<vec<float>> dist_mat;
+    float ins_cost;
+    bool use_alignment;
+    vec<bool> is_vowel;
+    vec<Stress> unit_stress;
+    vec<abc_t> unit2base;
+    vec<abc_t> unit2stressed;
+    vec<abc_t> unit2unstressed;
+};
 
 class WordSpace
 {
-    friend class ActionSpace;
-    friend class Env;
 
-    ParaMap<IdSeq, Word *> words;
-    vec<Word *> end_words;
-
-    float get_edit_dist(Word *, Word *);
-    vec<SiteNode *> get_site_roots(const IdSeq &);
+    paramap<IdSeq, Word *> words;
 
 public:
-    SiteSpace *site_space;
-    const vec<vec<float>> dist_mat;
-    const float ins_cost;
+    WordSpace(const WordSpaceOpt &, const VocabIdSeq &);
 
-    WordSpace(SiteSpace *, const vec<vec<float>> &, float);
+    const WordSpaceOpt opt;
+    const vec<Word *> end_words;
 
-    void get_words(Pool *, vec<Word *> &, const vec<IdSeq> &, bool = false, size_t = 0);
-    void get_word(Word *&, const IdSeq &, size_t = 0);
+    void set_edit_dist_at(Word *, int) const;
+    Word *get_word(const IdSeq &);
+    vec<Word *> get_words(const VocabIdSeq &);
+    float get_edit_dist(const IdSeq &, const IdSeq &) const;
+    float get_edit_dist(const IdSeq &, const IdSeq &, Alignment &) const;
     size_t size() const;
-    void set_end_words(const vec<Word *> &);
-    float safe_get_dist(Word *, int);
-    float get_edit_dist(const IdSeq &, const IdSeq &);
+    // Whether `word` is corrected aligned with the end state at `order` at `position`.
+    bool is_aligned(const Word *, int, size_t) const;
 };

@@ -1,9 +1,8 @@
 #include <chrono>
 
-#include "site.hpp"
 #include "word.hpp"
 #include "action.hpp"
-#include "tree_node.hpp"
+#include "node.hpp"
 #include "env.hpp"
 #include "mcts.hpp"
 #include "spdlog/sinks/stdout_color_sinks.h"
@@ -20,16 +19,17 @@ inline float randint(int high)
     return static_cast<int>(ret);
 }
 
-VocabIdSeq randv(int num_words, int max_len, int num_abc)
+VocabIdSeq randv(int num_words, int max_len, int num_abc, bool syncope)
 {
     VocabIdSeq vocab = VocabIdSeq(num_words);
+    int len = (syncope) ? (max_len - 1) : max_len;
     for (int i = 0; i < num_words; i++)
     {
-        vocab[i] = IdSeq(max_len);
-        vocab[i][0] = 0;
-        for (int j = 1; j < max_len - 1; j++)
-            vocab[i][j] = randint(num_abc - 4) + 4;
-        vocab[i][max_len - 1] = 1;
+        vocab[i] = IdSeq(len);
+        vocab[i][0] = 2;
+        for (int j = 1; j < len - 1; j++)
+            vocab[i][j] = randint(num_abc - 7) + 7;
+        vocab[i][len - 1] = 3;
     }
     return vocab;
 }
@@ -45,6 +45,16 @@ vec<float> randp(int num_actions)
     }
     for (int i = 0; i < num_actions; i++)
         p[i] = p[i] / sum;
+    return p;
+}
+
+vec<float> uniform(int num_actions)
+{
+    auto p = vec<float>(num_actions, 0.0);
+    float v = 1.0 / static_cast<float>(num_actions);
+    // p[0] = 1.0;
+    for (int i = 0; i < num_actions; ++i)
+        p[i] = v;
     return p;
 }
 
@@ -67,10 +77,16 @@ int main(int argc, char *argv[])
     add_argument<int>(parser, "max_len", "Max length", "10");
     add_argument<int>(parser, "num_abc", "Number of characters", "400");
     add_argument<int>(parser, "num_steps", "Number of steps", "20");
+    add_argument<int>(parser, "num_sims", "Number of simulations", "1000");
+    add_argument<int>(parser, "batch_size", "Batch size per evaluation", "40");
+    add_argument<int>(parser, "num_episodes", "Number of episodes", "1");
     add_argument<float>(parser, "puct_c", "puct constant", "5.0");
     add_argument<unsigned>(parser, "random_seed", "Random seed", "0");
+    add_argument<float>(parser, "dist_threshold", "Dist threshold", "0.0");
     add_flag(parser, "log_to_file", "Flag to log to file");
     add_flag(parser, "quiet", "Set log level to error to disable info logging.");
+    add_flag(parser, "syncope", "Use one syncopation.");
+    add_flag(parser, "use_alignment", "Use alignment.");
     auto args = parser.parse(argc, argv);
     const int num_threads = args["num_threads"].as<int>();
     const int num_words = args["num_words"].as<int>();
@@ -79,13 +95,19 @@ int main(int argc, char *argv[])
     const int num_steps = args["num_steps"].as<int>();
     const float puct_c = args["puct_c"].as<float>();
     const unsigned random_seed = args["random_seed"].as<unsigned>();
+    const float dist_threshold = args["dist_threshold"].as<float>();
     const bool log_to_file = args["log_to_file"].as<bool>();
     const bool quiet = args["quiet"].as<bool>();
+    const bool syncope = args["syncope"].as<bool>();
+    const bool use_alignment = args["use_alignment"].as<bool>();
+    const int num_sims = args["num_sims"].as<int>();
+    const int batch_size = args["batch_size"].as<int>();
+    const int num_episodes = args["num_episodes"].as<int>();
 
     srand(random_seed);
     std::cerr << "num threads " << num_threads << '\n';
 
-    spdlog::level::level_enum level;
+    spdlog::level::level_enum level = spdlog::level::info;
     if (SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE)
         level = spdlog::level::trace;
     else if (SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG)
@@ -100,13 +122,8 @@ int main(int argc, char *argv[])
         logger->flush_on(level);
     }
 
-    Pool *tp = nullptr;
-    if (num_threads > 1)
-        tp = new Pool(num_threads);
-
     vec<vec<float>> dist_mat = vec<vec<float>>();
     float ins_cost = static_cast<float>(num_abc);
-
     for (int i = 0; i < num_abc; i++)
     {
         dist_mat.push_back(vec<float>(num_abc));
@@ -114,56 +131,124 @@ int main(int argc, char *argv[])
             dist_mat[i][j] = std::abs(i - j);
     }
 
-    VocabIdSeq start_ids = randv(num_words, max_len, num_abc);
-    VocabIdSeq end_ids = randv(num_words, max_len, num_abc);
+    VocabIdSeq start_ids = randv(num_words, max_len, num_abc, false);
+    VocabIdSeq end_ids = randv(num_words, max_len, num_abc, syncope);
 
-    auto site_space = new SiteSpace(0, 1, 2, 3);
-    auto word_space = new WordSpace(site_space, dist_mat, ins_cost);
-    auto action_space = new ActionSpace(site_space, word_space, 0.0, 1);
-    auto env = new Env(action_space, word_space, start_ids, end_ids, 1.0, 0.02);
+    auto env_opt = EnvOpt();
+    env_opt.start_ids = start_ids;
+    env_opt.end_ids = end_ids;
+    env_opt.final_reward = 1.0;
+    env_opt.step_penalty = 0.001;
+    auto as_opt = ActionSpaceOpt();
+    as_opt.null_id = 0;
+    as_opt.emp_id = 1;
+    as_opt.sot_id = 2;
+    as_opt.eot_id = 3;
+    as_opt.any_id = 4;
+    as_opt.any_s_id = 5;
+    as_opt.any_uns_id = 6;
+    as_opt.site_threshold = 1;
+    as_opt.dist_threshold = dist_threshold;
+    auto ws_opt = WordSpaceOpt();
+    ws_opt.dist_mat = dist_mat;
+    ws_opt.ins_cost = ins_cost;
+    ws_opt.use_alignment = use_alignment;
+    ws_opt.is_vowel = vec<bool>(num_abc);
+    ws_opt.unit_stress = vec<Stress>(num_abc);
+    ws_opt.unit2base = vec<abc_t>(num_abc);
+    ws_opt.unit2stressed = vec<abc_t>(num_abc);
+    ws_opt.unit2unstressed = vec<abc_t>(num_abc);
+    for (abc_t i = 0; i < num_abc; ++i)
+    {
+        ws_opt.is_vowel[i] = false;
+        ws_opt.unit_stress[i] = Stress::NOSTRESS;
+        ws_opt.unit2base[i] = i;
+        ws_opt.unit2stressed[i] = i;
+        ws_opt.unit2unstressed[i] = i;
+    }
+    if ((num_abc - 3) > 6)
+    {
+        ws_opt.is_vowel[num_abc - 3] = true;
+        ws_opt.is_vowel[num_abc - 2] = true;
+        ws_opt.is_vowel[num_abc - 1] = true;
+        ws_opt.unit_stress[num_abc - 2] = Stress::STRESSED;
+        ws_opt.unit_stress[num_abc - 1] = Stress::UNSTRESSED;
+        ws_opt.unit2base[num_abc - 2] = num_abc - 3;
+        ws_opt.unit2base[num_abc - 1] = num_abc - 3;
+        ws_opt.unit2stressed[num_abc - 3] = num_abc - 2;
+        ws_opt.unit2unstressed[num_abc - 3] = num_abc - 1;
+    }
+    auto env = new Env(env_opt, as_opt, ws_opt);
     for (int i = 4; i < num_abc; i++)
+    {
         for (int j = std::max(0, i - 10); j < std::min(num_abc, i + 11); j++)
             if ((i != j) && (j > 3))
-                action_space->register_edge(i, j);
-    action_space->set_action_allowed(tp, vec<TreeNode *>{env->start});
-    env->start->expand(randp(env->start->action_allowed.size()));
-
-    show_size(*site_space, "site space");
-    show_size(*word_space, "word space");
-
-    auto mcts = new Mcts(env, puct_c, 3, 0.5, num_threads);
-    int num_sims = 1000;
-    int batch_size = 40;
-    TreeNode *root = env->start;
-    SPDLOG_INFO("Start:\n{}", env->start->str());
-    SPDLOG_INFO("End:\n{}", env->end->str());
-    action_space->timer.disable();
-    for (int i = 0; i < num_steps; i++)
-    {
-        if (i == num_steps / 2)
-            action_space->timer.enable();
-        if ((root->stopped) || (root->done))
-            break;
-        SPDLOG_INFO("Step: {}", i + 1);
-        SPDLOG_DEBUG("Current root:\n{}", root->str());
-        show_size(root->action_allowed, "#actions");
-        for (int j = 0; j < num_sims / batch_size; j++)
-        {
-            auto selected = mcts->select(root, batch_size, num_steps);
-            auto unique_nodes = vec<TreeNode *>();
-            find_unique(unique_nodes, selected,
-                        [](TreeNode *tnode) {
-                            return ((!tnode->done) && (!tnode->stopped));
-                        });
-            SPDLOG_DEBUG("#nodes to expand: {}", unique_nodes.size());
-            for (const auto node : unique_nodes)
-                node->expand(randp(node->action_allowed.size()));
-            mcts->backup(selected, vec<float>(selected.size(), 0.0));
-        }
-        auto action_to_play = mcts->play(root);
-        root = root->neighbors[action_to_play];
+                env->register_permissible_change(i, j);
+        env->register_permissible_change(i, as_opt.emp_id);
     }
-    action_space->timer.show_stats();
-    std::cerr << site_space->size() << " sites explored\n";
-    std::cerr << word_space->size() << " words explored\n";
+
+    auto mcts_opt = MctsOpt();
+    mcts_opt.puct_c = puct_c;
+    mcts_opt.game_count = 3;
+    mcts_opt.virtual_loss = 0.5;
+    mcts_opt.num_threads = num_threads;
+    mcts_opt.add_noise = false;
+    auto mcts = new Mcts(env, mcts_opt);
+    SPDLOG_INFO("Start node str:\n{}", str::from(env->start));
+    SPDLOG_INFO("End node str:\n{}", str::from(env->end));
+    for (int n = 0; n < num_episodes; ++n)
+    {
+        SPDLOG_INFO("=========Episode {}==========", (n + 1));
+        TreeNode *root = env->start;
+        env->evaluate(root,
+                      vec<vec<float>>{
+                          uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
+                      uniform(6));
+        SPDLOG_INFO("Start dist: {}", root->get_dist());
+        auto played_path = Path(root, 0);
+        for (int i = 0; i < num_steps; i++)
+        {
+            // if (i == num_steps / 2)
+            //     action_space->timer.enable();
+            if ((root->stopped) || (root->is_done()))
+                break;
+            SPDLOG_INFO("Step: {}", i + 1);
+            // SPDLOG_DEBUG("Current root:\n{}", root->str());
+            SPDLOG_INFO("#actions {}", root->get_num_actions());
+            for (int j = 0; j < num_sims / batch_size; j++)
+            {
+                auto paths = mcts->select(root, batch_size, i, num_steps, played_path);
+                auto selected = vec<TreeNode *>();
+                for (const auto &path : paths)
+                    selected.push_back(path.get_last_node());
+                auto unique_nodes = vec<TreeNode *>();
+                unique_nodes = find_unique(selected,
+                                           [](TreeNode *node) {
+                                               return ((!node->is_done()) && (!node->stopped));
+                                           });
+                SPDLOG_DEBUG("#nodes to evaluate: {}", unique_nodes.size());
+                for (const auto node : unique_nodes)
+                    env->evaluate(node,
+                                  vec<vec<float>>{
+                                      uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc), uniform(num_abc)},
+                                  uniform(6));
+                SPDLOG_DEBUG("Backing up values.");
+                mcts->backup(paths, vec<float>(paths.size(), 0.0));
+            }
+            // auto scores = root->get_scores(puct_c);
+            // for (size_t i = 0; i < root->permissible_chars.size(); ++i)
+            //     std::cerr << root->permissible_chars[i] << ":" << scores[i] << " ";
+            // std::cerr << "\n";
+            // std::cerr << "max index: " << root->max_index << " max_value: " << root->max_value << "\n";
+            auto extended_path = mcts->play(root, i);
+            root = extended_path.get_last_node();
+            std::cerr << str::from(root);
+            played_path.merge(extended_path);
+            SPDLOG_INFO("New dist: {}", root->get_dist());
+        }
+        env->clear_priors(env->start, true);
+        env->clear_stats(env->start, true);
+        SPDLOG_INFO("#trie nodes: {}", TreeNode::get_num_nodes());
+        env->evict(1);
+    }
 }

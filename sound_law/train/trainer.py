@@ -7,23 +7,22 @@ import numpy as np
 import torch
 
 from dev_misc import FT, add_argument, g, get_tensor, get_zeros
-from dev_misc.devlib.named_tensor import get_named_range
+from dev_misc.devlib.named_tensor import NoName, get_named_range
 from dev_misc.trainlib import (Metric, Metrics, clip_grad, get_optim_params,
                                init_params)
 from dev_misc.trainlib.base_trainer import BaseTrainer as BaseTrainerDev
 from dev_misc.utils import pad_for_log
-from sound_law.data.alphabet import Alphabet
+from sound_law.data.alphabet import SENTINEL_ID, Alphabet
 from sound_law.data.data_loader import (OnePairBatch, OnePairDataLoader,
                                         PaddedUnitSeqs, VSOnePairDataLoader)
 from sound_law.evaluate.edit_dist import edit_dist_batch
 from sound_law.rl.agent import AgentInputs, AgentOutputs, BasePG
-from sound_law.rl.env import SoundChangeEnv, TrajectoryCollector
+from sound_law.rl.env import SoundChangeEnv  # , TrajectoryCollector
 from sound_law.rl.mcts import Mcts
 # pylint: disable=no-name-in-module
-from sound_law.rl.mcts_cpp import parallel_stack_policies
 from sound_law.rl.reward import get_rtgs
 # pylint: enable=no-name-in-module
-from sound_law.rl.trajectory import ReplayTrajectory, Trajectory, TrEdge
+from sound_law.rl.trajectory import Trajectory, TrEdge
 from sound_law.s2s.decoder import get_beam_probs
 
 
@@ -182,193 +181,6 @@ class RLTrainer(BaseTrainer):
         return self.model
 
 
-class PolicyGradientTrainer(RLTrainer):
-
-    add_argument('value_steps', dtype=int, default=10, msg='How many inner loops to fit value net.')
-    add_argument('use_ppo', dtype=bool, default=False, msg='Flag to use PPO training.')
-    add_argument('policy_steps', dtype=int, default=10, msg='How many inner loops to train policy net. Used for PPO.')
-    add_argument('clip_ratio', dtype=float, default=0.2, msg='Clip ratio used for PPO.')
-    add_argument('target_kl', dtype=float, default=0.015, msg='Max kl to use.')
-    add_argument('entropy_as_reward', dtype=bool, default=False, msg='Flag to add policy entropy to reward.')
-
-    @property
-    def entropy_reg(self) -> float:
-        if g.init_entropy_reg > 0.0:
-            return self.tracker.entropy_reg
-        return 0.0
-
-    def add_trackables(self):
-        super().add_trackables()
-        if g.init_entropy_reg > 0.0:
-            multiplier = math.exp(math.log(g.end_entropy_reg / g.init_entropy_reg) / g.when_entropy_reg)
-            self.tracker.add_anneal_trackable('entropy_reg', g.init_entropy_reg, multiplier, g.end_entropy_reg)
-        if g.value_steps:
-            step = self.tracker['step']
-            policy_steps = g.policy_steps if g.use_ppo else 1
-            step.add_trackable('policy_step', total=policy_steps, endless=True)
-            step.add_trackable('value_step', total=g.value_steps, endless=True)
-
-    def __init__(self, *args, collector: TrajectoryCollector = None, env: SoundChangeEnv = None, **kwargs):
-        if collector is None:
-            raise TypeError(f'Must pass a trajectory collector to initialize this trainer.')
-        if env is None:
-            raise TypeError(f'Must pass an environment to initialize this trainer.')
-
-        self.collector = collector
-        self.env = env
-        super().__init__(*args, **kwargs)
-
-    def train_one_step(self, dl: VSOnePairDataLoader) -> Metrics:
-        init_state = dl.init_state
-        end_state = dl.end_state
-
-        # Collect episodes first.
-        agent_inputs = self.collector.collect(self.agent, self.env, init_state, end_state)
-        # TODO(j_luo) a bit ugly here.
-        self.add_callback('check', 'log_tr', lambda: log_trajectories(agent_inputs))
-        bs = agent_inputs.batch_size
-        n_tr = len(agent_inputs.trajectories)
-
-        # ---------------------------- main ---------------------------- #
-
-        def get_v_loss(agent_outputs: AgentOutputs, tgt_agent_outputs: AgentOutputs) -> Metric:
-            if g.critic_target == 'rtg':
-                tgt = tgt_agent_outputs.rew_outputs.rtgs
-            else:
-                tgt = tgt_agent_outputs.rew_outputs.expected
-                if g.entropy_as_reward:
-                    tgt = tgt + self.entropy_reg * tgt_agent_outputs.entropy
-            diff = (agent_outputs.rew_outputs.values - tgt) ** 2
-            loss = Metric('v_regress_loss', 0.5 * diff.sum(), len(tgt))
-            return loss
-
-        def get_pi_losses(agent_outputs: AgentOutputs, tgt_agent_outputs: Optional[AgentOutputs] = None) -> Metrics:
-            ret = Metrics()
-
-            log_probs = agent_outputs.log_probs
-            entropy = agent_outputs.entropy
-            if g.agent == 'vpg':
-                pg_losses = -log_probs * agent_outputs.rew_outputs.rtgs
-            else:
-                if g.use_ppo:
-                    tgt_log_probs = tgt_agent_outputs.log_probs
-                    ratio = (log_probs - tgt_log_probs).exp()
-                    tgt_advs = tgt_agent_outputs.rew_outputs.advantages
-                    if g.entropy_as_reward:
-                        tgt_advs = tgt_advs + self.entropy_reg * entropy
-                    low = 1 - g.clip_ratio
-                    high = 1 + g.clip_ratio
-                    clip_adv = ratio.clamp(low, high) * tgt_advs
-                    pg_losses = -torch.min(ratio * tgt_advs, clip_adv)
-
-                    # Extra useful info.
-                    with torch.no_grad():
-                        approx_kl = tgt_log_probs - log_probs
-                        clipped = (ratio > high) | (ratio < low)
-                        ret += Metric('clipped', clipped.sum(), bs)
-                        ret += Metric('approx_kl', approx_kl.sum(), bs)
-                else:
-                    pg_losses = -log_probs * agent_outputs.rew_outputs.advantages
-                advs = agent_outputs.rew_outputs.advantages
-                ret += Metric('abs_advantage', advs.abs().sum(), bs)
-                ret += Metric('advantage', advs.sum(), bs)
-
-            pg = Metric('pg', pg_losses.sum(), bs)
-            entropy_loss = Metric('entropy', entropy.sum(), bs)
-            if g.entropy_as_reward:
-                pi_loss = Metric('pi_loss', pg.total, bs)
-            else:
-                pi_loss = Metric('pi_loss', pg.total - self.entropy_reg * entropy_loss.total, bs)
-            ret += Metrics(pg, entropy_loss, pi_loss)
-            return ret
-
-        def update(name: str, tgt_agent_outputs: Optional[AgentOutputs] = None) -> Tuple[Metrics, AgentOutputs]:
-            self.model.train()
-            if name == 'all':
-                # Use the default optimizer that optimize the entire model.
-                optim = self.optimizer
-            else:
-                optim = self.optimizers[name]
-            optim.zero_grad()
-
-            ret_log_probs = ret_entropy = (name != 'value')
-            agent_outputs: AgentOutputs = self.model(agent_inputs,
-                                                     ret_log_probs=ret_log_probs,
-                                                     ret_entropy=ret_entropy)
-
-            # Some common metrics.
-            tr_rew = Metric('reward', agent_inputs.rewards.sum(), n_tr)
-            success = Metric('success', agent_inputs.done.sum(), n_tr)
-            step_metrics = Metrics(tr_rew, success)
-
-            # Compute losses depending on the name.
-            if name in ['value', 'all'] and g.agent == 'a2c':
-                step_metrics += get_v_loss(agent_outputs, tgt_agent_outputs)
-            if name in ['policy', 'all']:
-                step_metrics += get_pi_losses(agent_outputs, tgt_agent_outputs=tgt_agent_outputs)
-
-            # Backprop depending on the name.
-            if name == 'value':
-                step_metrics.v_regress_loss.mean.backward()
-            elif name == 'policy':
-                step_metrics.pi_loss.mean.backward()
-            else:
-                total_loss = step_metrics.pi_loss.total + step_metrics.v_regress_loss.total
-                total_loss = Metric('total_loss', total_loss, bs)
-                step_metrics += total_loss
-                step_metrics.total_loss.mean.backward()
-
-            # Clip gradient norm.
-            grad_norm = clip_grad(get_optim_params(optim), bs)
-            step_metrics += grad_norm
-
-            # Update.
-            optim.step()
-
-            return step_metrics, agent_outputs
-
-        # Gather metrics.
-        metrics = Metrics()
-
-        if g.agent == 'a2c':
-
-            # PPO training.
-            if g.use_ppo:
-                with self.model.policy_grad(False), self.model.value_grad(False):
-                    tgt_agent_outputs = self.model(agent_inputs, ret_entropy=True)
-
-                with self.model.policy_grad(True), self.model.value_grad(False):
-                    self.tracker.reset('policy_step')
-                    for i in range(g.policy_steps):
-                        step_metrics, _ = update('policy', tgt_agent_outputs=tgt_agent_outputs)
-                        metrics += step_metrics
-                        self.tracker.update('policy_step')
-                        # Early-stop.
-                        if step_metrics.approx_kl.mean.item() > g.target_kl:
-                            logging.debug(f'Early-stopped at step {i + 1}.')
-                            break
-            else:
-                with self.model.policy_grad(True), self.model.value_grad(False):
-                    step_metrics, tgt_agent_outputs = update('policy')
-                    metrics += step_metrics
-                    self.tracker.update('policy_step')
-
-            with self.model.policy_grad(False), self.model.value_grad(True):
-                for _ in range(g.value_steps):
-                    metrics += update('value', tgt_agent_outputs=tgt_agent_outputs)[0]
-                    self.tracker.update('value_step')
-
-        else:
-            name = 'all' if g.agent == 'a2c' else 'policy'
-            with self.model.policy_grad(True), self.model.value_grad(True):
-                metrics += update(name)[0]
-
-        metrics = metrics.with_prefix('check')
-        if g.init_entropy_reg > 0.0:
-            self.tracker.update('entropy_reg')
-        return metrics
-
-
 class MctsTrainer(RLTrainer):
 
     add_argument('num_mcts_sims', default=100, dtype=int, msg='Number of MCTS simulations to run.')
@@ -381,6 +193,7 @@ class MctsTrainer(RLTrainer):
     add_argument('regress_lambda', default=0.01, dtype=float, msg='Hyperparameter for regression loss.')
     add_argument('use_value_guidance', default=True, dtype=bool,
                  msg='Flag to use predicted values to guide the search.')
+    add_argument('tau', default=0.0, dtype=float, msg='Temperature for sampling episodes.')
 
     def __init__(self, *args, mcts: Mcts = None, **kwargs):
         if mcts is None:
@@ -391,6 +204,7 @@ class MctsTrainer(RLTrainer):
 
         self.mcts = mcts
         self.replay_buffer: Deque[TrEdge] = deque(maxlen=g.replay_buffer_size)
+        self.buffer_weight: Deque[float] = deque(maxlen=g.replay_buffer_size)
         super().__init__(*args, **kwargs)
 
     def add_trackables(self):
@@ -403,52 +217,78 @@ class MctsTrainer(RLTrainer):
 
     def train_one_step(self, dl: OnePairDataLoader):
         # Collect episodes with the latest agent first.
-        new_tr = self.mcts.collect_episodes(self.mcts.env.start, self.mcts.env.end, self.tracker)
+        new_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker)
         # new_tr = self.mcts.collect_episodes(dl.init_state, dl.end_state, self.tracker)
         tr_rew = Metric('reward', sum(tr.rewards.sum() for tr in new_tr), g.num_episodes)
         tr_len = Metric('trajectory_length', sum(map(len, new_tr)), g.num_episodes)
         success = Metric('success', sum(tr.done for tr in new_tr), g.num_episodes)
         metrics = Metrics(tr_rew, tr_len, success)
 
+        # eval_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker, num_episodes=1, is_eval=True)[0]
+        # metrics +=  Metric('eval_reward', eval_tr.total_reward, 1)
+
         # Add these new episodes to the replay buffer.
         for tr in new_tr:
-            replay_tr = ReplayTrajectory(tr)
-            rtgs = get_rtgs(tr.rewards, g.discount)
-            for rtg, tr_edge in zip(rtgs, replay_tr):
-                tr_edge.rtg = rtg
-                self.replay_buffer.append(tr_edge)
+            # NOTE(j_luo) Use temperature if it's positive.
+            if g.tau > 0.0:
+                weight = math.exp(tr.total_reward * 10.0)
+            else:
+                weight = 1.0
 
+            for tr_edge in tr:
+                self.replay_buffer.append(tr_edge)
+                self.buffer_weight.append(weight)
+
+        weights = np.asarray(self.buffer_weight)
+        weights = weights / weights.sum()
         # Main loop.
         with self.agent.policy_grad(True), self.agent.value_grad(True):
             for _ in range(g.num_inner_steps):
                 # Get a batch of training trajectories from the replay buffer.
-                edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
-                agent_inputs = AgentInputs.from_edges(edge_batch, self.mcts.env.action_space, sparse=True)
-                tgt_policies = list()
-                na = agent_inputs.action_masks.size('action')
-                tgt_policies = parallel_stack_policies(agent_inputs.edges, na, g.num_workers)
-                tgt_policies = get_tensor(tgt_policies)
+                edge_batch = np.random.choice(self.replay_buffer, p=weights, size=g.mcts_batch_size)
+                # edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
+                agent_inputs = AgentInputs.from_edges(edge_batch)  # , self.mcts.env)#, sparse=True)
 
                 self.agent.train()
                 self.optimizer.zero_grad()
 
-                policy = self.agent.get_policy(agent_inputs.id_seqs, agent_inputs.action_masks,
-                                               indices=agent_inputs.indices, sparse=True)
-                values = self.agent.get_values(agent_inputs.id_seqs, steps=agent_inputs.steps)
-                pi_ce_losses = -tgt_policies * policy.logits
+                policies = self.agent.get_policy(agent_inputs.id_seqs, almts=(agent_inputs.almts1, agent_inputs.almts2))
+                # values = self.agent.get_values(agent_inputs.id_seqs, steps=agent_inputs.steps)
+                with NoName(policies, agent_inputs.permissible_actions):
+                    mask = agent_inputs.permissible_actions == SENTINEL_ID
+                    pa = agent_inputs.permissible_actions
+                    pa = torch.where(mask, torch.zeros_like(pa), pa)
+                    logits = policies.gather(2, pa)
+                    logits = torch.where(mask, torch.full_like(logits, -9999.9), logits)
+                    logits = logits.log_softmax(dim=-1)
+                # r_max = agent_inputs.rewards.max()
+                # r_min = agent_inputs.rewards.min()
+                # weights = (agent_inputs.rewards - r_min) / (r_max - r_min + 1e-8)
 
-                v_regress_losses = 0.5 * (values - agent_inputs.rtgs) ** 2
+                # weights = weights.align_as(pi_ce_losses)
+                entropies = (-agent_inputs.mcts_pis * (1e-8 + agent_inputs.mcts_pis).log()).sum(dim=-1)
+                pi_ce_losses = (-agent_inputs.mcts_pis * logits).sum(dim=-1) - entropies
+                for i in range(6):
+                    metrics += Metric(f'entropy_{i}', entropies[:, i].sum(), g.mcts_batch_size)
+                    metrics += Metric(f'pi_ce_los_{i}', pi_ce_losses[:, i].sum(), g.mcts_batch_size)
 
-                pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), g.mcts_batch_size)
-                v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), g.mcts_batch_size)
-                total_loss = pi_ce_loss.total + g.regress_lambda * v_regress_loss.total
+                # v_regress_losses = 0.5 * (values - agent_inputs.qs) ** 2
+
+                # pi_ce_loss = Metric('pi_ce_loss', (weights * pi_ce_losses).sum(), g.mcts_batch_size * 7)
+                # mini_weights = get_tensor([1.0, 0.1, 1.0, 0.1, 0.1, 0.1, 0.1]).rename('mini').align_as(pi_ce_losses)
+                # pi_ce_loss = Metric('pi_ce_loss', (mini_weights * pi_ce_losses).sum(), g.mcts_batch_size * 7)
+                pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses.sum(), g.mcts_batch_size * 7)
+                # pi_ce_loss = Metric('pi_ce_loss', pi_ce_losses[:, 0].sum(), g.mcts_batch_size)
+                # v_regress_loss = Metric('v_regress_loss', v_regress_losses.sum(), g.mcts_batch_size)
+                total_loss = pi_ce_loss.total  # + g.regress_lambda * v_regress_loss.total
                 total_loss = Metric('total_loss', total_loss, g.mcts_batch_size)
 
                 total_loss.mean.backward()
 
                 # Clip gradient norm.
                 grad_norm = clip_grad(self.agent.parameters(), g.mcts_batch_size)
-                metrics += Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm)
+                # metrics += Metrics(total_loss, pi_ce_loss, v_regress_loss, grad_norm)
+                metrics += Metrics(total_loss, pi_ce_loss, grad_norm)
                 self.optimizer.step()
                 self.tracker.update('inner_step')
 

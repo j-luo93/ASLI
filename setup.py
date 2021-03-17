@@ -10,7 +10,7 @@ def get_ext(*args, **kwargs):
     return Extension(*args,
                      extra_link_args=extra_args,
                      extra_compile_args=extra_args,
-                     #  undef_macros=['NDEBUG'],
+                     undef_macros=['NDEBUG'],
                      **kwargs)
 
 

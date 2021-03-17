@@ -11,18 +11,22 @@ import torch.nn as nn
 from torch.distributions.distribution import Distribution
 
 from dev_misc import BT, FT, LT, NDA, add_argument, g, get_tensor, get_zeros
+# from dev_misc.devlib.helper import pad_to_dense
 from dev_misc.devlib.named_tensor import NoName
 from dev_misc.trainlib import Metric, Metrics, init_params
 from dev_misc.utils import ScopedCache, cacheable
+from sound_law.data.alphabet import SENTINEL_ID, PAD_ID
 from sound_law.s2s.base_model import get_emb_params
 from sound_law.s2s.module import (CharEmbedding, EmbParams, PhonoEmbedding,
                                   get_embedding)
 
-from .action import SoundChangeAction, SoundChangeActionSpace
-from .mcts_cpp import (  # pylint: disable=no-name-in-module
-    parallel_get_sparse_action_masks, parallel_stack_ids)
+from .action import SoundChangeAction
+from .env import SoundChangeEnv
+# from .mcts_cpp import (  # pylint: disable=no-name-in-module
+#     parallel_get_sparse_action_masks, parallel_stack_ids)
 from .module import Cnn1dParams, PolicyNetwork, ValueNetwork
-from .reward import get_rtgs_dense, get_rtgs_list  # pylint: disable=no-name-in-module
+from .reward import get_rtgs_dense  # pylint: disable=no-name-in-module
+from .reward import get_rtgs_list
 from .trajectory import Trajectory, TrEdge, VocabState
 
 
@@ -30,19 +34,25 @@ from .trajectory import Trajectory, TrEdge, VocabState
 class AgentInputs:
     edges: List[TrEdge]
     id_seqs: LT
+    permissible_actions: LT
     rewards: FT
-    action_masks: BT
-    next_id_seqs: Optional[LT] = None
-    action_ids: Optional[LT] = None
-    done: Optional[BT] = None
-    indices: Optional[NDA] = None
+    mcts_pis: FT
+    qs: FT
+    # rewards: FT
+    # action_masks: BT
+    # next_id_seqs: Optional[LT] = None
+    # action_ids: Optional[LT] = None
+    # done: Optional[BT] = None
+    # indices: Optional[NDA] = None
     steps: Optional[LT] = None
-    trajectories: Optional[List[Trajectory]] = None
-    rtgs: Optional[FT] = None
+    almts1: Optional[LT] = None
+    almts2: Optional[LT] = None
+    # trajectories: Optional[List[Trajectory]] = None
+    # rtgs: Optional[FT] = None
 
-    def __post_init__(self):
-        if self.trajectories is None and self.edges is None:
-            raise TypeError(f'You must have either trajectories or edges.')
+    # def __post_init__(self):
+    #     if self.trajectories is None and self.edges is None:
+    #         raise TypeError(f'You must have either trajectories or edges.')
 
     @property
     def batch_size(self) -> int:
@@ -54,54 +64,77 @@ class AgentInputs:
 
     @classmethod
     def from_edges(cls,
-                   edges: List[TrEdge],
-                   action_space: SoundChangeActionSpace,
-                   sparse: bool = False) -> AgentInputs:
+                   edges: List[TrEdge]) -> AgentInputs:
+                #    sparse: bool = False) -> AgentInputs:
 
         def gather(attr: str):
             """Gather information from trajectory edges. See definition for `TrEdge`."""
             return [getattr(edge, attr) for edge in edges]
 
-        states = gather('s0')
-        id_seqs = get_tensor(parallel_stack_ids(states, g.num_workers)).rename('batch', 'pos', 'word')
-        rewards = get_tensor(gather('r')).rename('batch')
-        if sparse:
-            indices, action_masks, _ = parallel_get_sparse_action_masks(states, g.num_workers)
-            # indices = get_tensor(indices).rename('batch', 'action')
-        else:
-            action_masks = parallel_get_action_masks(states, action_space, g.num_workers)
-            indices = None
-        action_masks = get_tensor(action_masks).rename('batch', 'action')
-        rtgs = steps = next_id_seqs = action_ids = done = None
-        if not g.use_mcts:
-            next_id_seqs = parallel_stack_ids(gather('s1'), num_threads=g.num_workers)
-            next_id_seqs = get_tensor(next_id_seqs).rename('batch', 'pos', 'word')
-            action_ids = get_tensor([a.action_id for a in gather('a')]).rename('batch')
-            done = get_tensor(gather('done')).rename('batch')
+        def pad(arrays: List[NDA], pad_value, dtype):
+            m = max(array.shape[-1] for array in arrays)
+            new_shape = [len(arrays)] + list(arrays[0].shape)
+            new_shape[-1] = m
+            arr = np.full(new_shape, pad_value, dtype=dtype)
+            for i, array in enumerate(arrays):
+                array = arrays[i]
+                arr[i, ..., :array.shape[-1]] = array
+            return arr
+
+        id_seqs = get_tensor(pad(gather('s0'), PAD_ID, 'long')).rename('batch', 'word', 'pos')
+        # id_seqs = get_tensor(parallel_stack_ids(states, g.num_workers)).rename('batch', 'pos', 'word')
+        # rewards = get_tensor(gather('r')).rename('batch')
+        permissible_actions = get_tensor(pad(gather('pa'), SENTINEL_ID, 'long')).rename('batch', 'mini', 'actions')
+        mcts_pis = get_tensor(pad(gather('mcts_pi'), 0.0, 'float32'))
+        mcts_pis = mcts_pis.view(id_seqs.size('batch'), 7, -1).rename('batch', 'mini', 'action')
+        qs = get_tensor(np.concatenate(gather('qs')).astype('float32'))
+        qs = qs.view(-1, 7).rename('batch', 'mini')
+        rewards = get_tensor(gather('r')).float().rename("batch")
+        steps = None
         if g.use_finite_horizon:
             steps = get_tensor(gather('step'))
-        if edges[0].rtg is not None:
-            rtgs = get_tensor(gather('rtg')).rename('batch')
-        return cls(edges, id_seqs, rewards, action_masks,
-                   next_id_seqs=next_id_seqs,
-                   action_ids=action_ids,
-                   done=done,
-                   indices=indices,
-                   steps=steps,
-                   rtgs=rtgs)
+        almts1 = almts2 = None
+        if g.use_alignment:
+            almts1 = get_tensor(pad(gather('almt1'), PAD_ID, 'long')).rename('batch', 'word', 'pos')
+            almts2 = get_tensor(pad(gather('almt2'), PAD_ID, 'long')).rename('batch', 'word', 'pos')
+        return cls(edges, id_seqs, permissible_actions, rewards, mcts_pis, qs, steps=steps, almts1=almts1, almts2=almts2)
+        # if sparse:
+        #     indices, action_masks, _ = parallel_get_sparse_action_masks(states, g.num_workers)
+        #     # indices = get_tensor(indices).rename('batch', 'action')
+        # else:
+        #     action_masks = parallel_get_action_masks(states, action_space, g.num_workers)
+        #     indices = None
+        # action_masks = get_tensor(action_masks).rename('batch', 'action')
+        # rtgs = steps = next_id_seqs = action_ids = done = None
+        # if not g.use_mcts:
+        #     next_id_seqs = parallel_stack_ids(gather('s1'), num_threads=g.num_workers)
+        #     next_id_seqs = get_tensor(next_id_seqs).rename('batch', 'pos', 'word')
+        #     action_ids = get_tensor([a.action_id for a in gather('a')]).rename('batch')
+        #     done = get_tensor(gather('done')).rename('batch')
+        # if g.use_finite_horizon:
+        #     steps = get_tensor(gather('step'))
+        # if edges[0].rtg is not None:
+        #     rtgs = get_tensor(gather('rtg')).rename('batch')
+        # return cls(edges, id_seqs, rewards, action_masks,
+        #            next_id_seqs=next_id_seqs,
+        #            action_ids=action_ids,
+        #            done=done,
+        #            indices=indices,
+        #            steps=steps,
+        #            rtgs=rtgs)
 
-    @classmethod
-    def from_trajectories(cls,
-                          trs: List[Trajectory],
-                          action_space: SoundChangeActionSpace,
-                          sparse: bool = False) -> AgentInputs:
-        edges: List[TrEdge] = list()
-        for tr in trs:
-            edges.extend(list(tr))
+    # @classmethod
+    # def from_trajectories(cls,
+    #                       trs: List[Trajectory],
+    #                       action_space: SoundChangeActionSpace,
+    #                       sparse: bool = False) -> AgentInputs:
+    #     edges: List[TrEdge] = list()
+    #     for tr in trs:
+    #         edges.extend(list(tr))
 
-        ret = cls.from_edges(edges, action_space, sparse=sparse)
-        ret.trajectories = trs
-        return ret
+    #     ret = cls.from_edges(edges, action_space, sparse=sparse)
+    #     ret.trajectories = trs
+    #     return ret
 
 
 @dataclass
@@ -144,14 +177,14 @@ class BasePG(nn.Module, metaclass=ABCMeta):
     add_argument('use_finite_horizon', dtype=bool, default=False, msg='Flag to use finite horizon.')
 
     def __init__(self, num_chars: int,
-                 action_space: SoundChangeActionSpace,
+                 env: SoundChangeEnv,
                  end_state: VocabState,
                  phono_feat_mat: Optional[LT] = None,
                  special_ids: Optional[Sequence[int]] = None):
         super().__init__()
         emb_params = get_emb_params(num_chars, phono_feat_mat, special_ids)
         cnn1d_params = Cnn1dParams(g.char_emb_size, g.hidden_size, 3, g.num_layers, g.dropout)
-        self.policy_net = PolicyNetwork.from_params(emb_params, cnn1d_params, action_space)
+        self.policy_net = PolicyNetwork.from_params(emb_params, cnn1d_params, env)
         self.value_net = self._get_value_net(emb_params, cnn1d_params)
         self.end_state = end_state
         self._policy_grad = True
@@ -184,9 +217,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
 
     def get_policy(self,
                    state_or_ids: Union[VocabState, LT],
-                   action_masks: BT,
-                   sparse: bool = False,
-                   indices: Optional[NDA] = None) -> Distribution:
+                   almts: Optional[Tuple[LT, LT]] = None):
         """Get policy distribution based on current state (and end state)."""
         if isinstance(state_or_ids, VocabState):
             curr_ids = state_or_ids.tensor
@@ -194,10 +225,7 @@ class BasePG(nn.Module, metaclass=ABCMeta):
             curr_ids = state_or_ids
         end_ids = self.end_state.tensor
         with torch.set_grad_enabled(self._policy_grad):
-            return self.policy_net(curr_ids, end_ids,
-                                   action_masks,
-                                   sparse=sparse,
-                                   indices=indices)
+            return self.policy_net(curr_ids, end_ids, almts=almts)
 
     def sample_action(self, policy: Distribution) -> SoundChangeAction:
         with torch.set_grad_enabled(self._policy_grad):

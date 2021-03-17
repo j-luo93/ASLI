@@ -1,48 +1,76 @@
 #pragma once
 
-#include "common.hpp"
-#include "site.hpp"
 #include "word.hpp"
-#include "tree_node.hpp"
+#include "node.hpp"
 
-using ParaAction = vec<uai_t>;
-using ParaOrder = vec<vec<int>>;
-using UnseenAction = vec<vec<uai_t>>;
-using GraphOutput = tup<ParaAction, ParaOrder, UnseenAction>;
+struct ActionSpaceOpt
+{
+    abc_t null_id;
+    abc_t emp_id;
+    abc_t sot_id;
+    abc_t eot_id;
+    abc_t any_id;
+    abc_t any_s_id;
+    abc_t any_uns_id;
+    abc_t glide_j;
+    abc_t glide_w;
+    int site_threshold;
+    float dist_threshold;
+};
+
+class Env;
+class Mcts;
 
 class ActionSpace
 {
-    UMap<abc_t, vec<pair<SpecialType, abc_t>>> edges;
-    vec<bool> vowel_mask;
-    vec<abc_t> vowel_base;
-    vec<Stress> vowel_stress;
-    vec<abc_t> stressed_vowel;
-    vec<abc_t> unstressed_vowel;
-    abc_t glide_j;
-    abc_t glide_w;
+    friend Env;
+    friend Mcts;
 
-    bool match(abc_t, abc_t);
-    void apply_actions(vec<Word *> &, Word *, usi_t, const vec<uai_t> &, bool);
-    void add_actions_from_graph(TreeNode *, const SiteGraph &, vec<uai_t> &, bool);
+    WordSpace *word_space;
+
+    Subpath get_best_subpath(TreeNode *, float, int, float, float, bool) const;
+    MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool) const;
+    IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t, SpecialType);
+    void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, bool) const;
+    // void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
+
+    // Methods for expanding nodes.
+    void expand(TreeNode *) const;
+    void expand(MiniNode *, const Subpath &, bool, bool) const;
+    void expand_before(MiniNode *, int) const;
+    void expand_special_type(MiniNode *, BaseNode *, int, abc_t, bool) const;
+    void expand_after(MiniNode *, BaseNode *, int, bool, bool, bool) const;
+    void expand_pre(MiniNode *, BaseNode *, int, bool, bool) const;
+    void expand_d_pre(MiniNode *, BaseNode *, int, bool, bool, bool) const;
+    void expand_post(MiniNode *, BaseNode *, int, bool, bool) const;
+    void expand_normal(MiniNode *, BaseNode *, int, int, bool, bool, bool) const;
+    void expand_null(MiniNode *, BaseNode *, int) const;
+    bool expand_null_only(MiniNode *, BaseNode *, int) const;
+
+    void evaluate(MiniNode *) const;
+    // This will create a new tree node without checking first if the child exists. Use `apply_action` in `Env` if checking is needed.
+    TreeNode *apply_new_action(TreeNode *, const Subpath &);
+    TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType);
+    void register_permissible_change(abc_t, abc_t);
+    void register_cl_map(abc_t, abc_t);
+    void register_gbj_map(abc_t, abc_t);
+    void register_gbw_map(abc_t, abc_t);
+    void evaluate(TreeNode *, const vec<vec<float>> &, const vec<float> &);
+
+    void connect(BaseNode *, const Subpath &) const;
+
+    ActionSpace(WordSpace *, const ActionSpaceOpt &);
+    map<abc_t, vec<abc_t>> permissible_changes;
+    map<abc_t, abc_t> cl_map;
+    map<abc_t, abc_t> gbj_map;
+    map<abc_t, abc_t> gbw_map;
+
+    void expand_stats(BaseNode *) const;
+    void clear_stats(BaseNode *, bool) const;
+    void clear_priors(BaseNode *, bool) const;
+    // void prune(BaseNode *, bool);
+    void add_noise(TreeNode *, const vec<vec<float>> &, const vec<float> &, float) const;
 
 public:
-    SiteSpace *site_space;
-    WordSpace *word_space;
-    const float dist_threshold;
-    const int site_threshold;
-
-    ActionSpace(SiteSpace *, WordSpace *, float, int);
-
-    void register_edge(abc_t, abc_t);
-    void register_cl_map(abc_t, abc_t); // compensatory length edge.
-    void register_gbj(abc_t, abc_t);
-    void register_gbw(abc_t, abc_t);
-    void set_vowel_info(const vec<bool> &, const vec<abc_t> &, const vec<Stress> &, const vec<abc_t> &, const vec<abc_t> &);
-    void set_glide_info(abc_t, abc_t);
-    void set_action_allowed(Pool *, const vec<TreeNode *> &);
-    void set_action_allowed(TreeNode *);
-    // void apply_action(Word *&, Word *, uai_t);
-    IdSeq apply_action(const IdSeq &, uai_t);
-    vec<uai_t> get_similar_actions(uai_t);
-    int locate_edge_index(abc_t, SpecialType, abc_t, bool);
+    const ActionSpaceOpt opt;
 };

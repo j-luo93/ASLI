@@ -1,355 +1,660 @@
 #include "action.hpp"
-#include "timer.hpp"
-#include "stats.hpp"
 
-ActionSpace::ActionSpace(
-    SiteSpace *site_space,
-    WordSpace *word_space,
-    float dist_threshold,
-    int site_threshold) : site_space(site_space),
-                          word_space(word_space),
-                          dist_threshold(dist_threshold),
-                          site_threshold(site_threshold) {}
+ActionSpace::ActionSpace(WordSpace *word_space, const ActionSpaceOpt &as_opt) : word_space(word_space), opt(as_opt) {}
 
-void ActionSpace::register_edge(abc_t before_id, abc_t after_id)
+TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
 {
-    edges[before_id].push_back(std::make_pair(SpecialType::NONE, after_id));
-}
-
-void ActionSpace::register_cl_map(abc_t before_id, abc_t after_id)
-{
-    edges[before_id].push_back(std::make_pair(SpecialType::CLL, after_id));
-    edges[before_id].push_back(std::make_pair(SpecialType::CLR, after_id));
-}
-
-void ActionSpace::register_gbj(abc_t before_id, abc_t after_id) { edges[before_id].push_back(std::make_pair(SpecialType::GBJ, after_id)); }
-void ActionSpace::register_gbw(abc_t before_id, abc_t after_id) { edges[before_id].push_back(std::make_pair(SpecialType::GBW, after_id)); }
-
-void ActionSpace::set_vowel_info(const vec<bool> &vowel_mask,
-                                 const vec<abc_t> &vowel_base,
-                                 const vec<Stress> &vowel_stress,
-                                 const vec<abc_t> &stressed_vowel,
-                                 const vec<abc_t> &unstressed_vowel)
-{
-    this->vowel_mask = vowel_mask;
-    this->vowel_base = vowel_base;
-    this->vowel_stress = vowel_stress;
-    this->stressed_vowel = stressed_vowel;
-    this->unstressed_vowel = unstressed_vowel;
-    site_space->set_vowel_info(vowel_mask, vowel_base, vowel_stress);
-}
-
-void ActionSpace::set_glide_info(abc_t glide_j, abc_t glide_w)
-{
-    this->glide_j = glide_j;
-    this->glide_w = glide_w;
-}
-
-void ActionSpace::set_action_allowed(Pool *tp, const vec<TreeNode *> &tnodes)
-{
-    // Find unique tree nodes first.
-    SPDLOG_DEBUG("Finding unique tree nodes.");
-    auto unique_tnodes = vec<TreeNode *>();
-    find_unique(unique_tnodes, tnodes, [](auto &&input) { return true; });
-
-    parallel_apply<1>(
-        tp,
-        [this](TreeNode *tnode) { set_action_allowed(tnode); },
-        unique_tnodes);
-}
-
-void ActionSpace::add_actions_from_graph(TreeNode *tnode, const SiteGraph &graph, vec<uai_t> &actions, bool use_vowel_seq)
-{
-    for (const auto &item : graph.nodes)
+    // FIXME(j_luo) a bit repetive with env apply_action.
+    MiniNode *last = subpath.mini_node_seq[5];
+    abc_t after_id = subpath.chosen_seq[2].second;
+    auto last_child_index = subpath.chosen_seq[6].first;
+    SpecialType st = static_cast<SpecialType>(subpath.chosen_seq[1].second);
+    TreeNode *new_node;
+    if (subpath.stopped)
+    // A new node should always be created for STOP.
     {
-        GraphNode *gnode = item.second;
-        if (gnode->num_sites < site_threshold)
-            continue;
-
-        // Do not include unconditional changes if we are using vowel sequence -- they would have been covered by normal sequences anyway.
-        if (use_vowel_seq && (gnode->children.size() == 0))
-            continue;
-
-        bool can_be_simpler = false;
-        for (auto child : gnode->children)
-            if (child->num_sites == gnode->num_sites)
-            {
-                can_be_simpler = true;
-                break;
-            }
-        if (can_be_simpler)
-            continue;
-
-        usi_t site = gnode->base->site;
-        abc_t before_id = site::get_before_id(site);
-        auto &st_and_after_ids = edges[before_id];
-        size_t orig_n = st_and_after_ids.size();
-        auto action_ids = vec<uai_t>();
-        action_ids.reserve(orig_n);
-        for (auto &st_and_after : st_and_after_ids)
-        {
-            SpecialType st = st_and_after.first;
-            if (use_vowel_seq && (st != SpecialType::NONE))
-                break;
-            uai_t action_id;
-            if (use_vowel_seq)
-                action_id = action::combine_after_id_special(site, st_and_after.second, SpecialType::VS);
-            else
-                action_id = action::combine_after_id_special(site, st_and_after.second, st);
-            action_ids.push_back(action_id);
-        }
-        size_t n = action_ids.size();
-        auto deltas = vec<float>(n);
-        for (auto order : gnode->linked_words)
-        {
-            auto word = tnode->words[order];
-            bool is_short = (word->id_seq.size() == 3);
-            auto new_words = vec<Word *>();
-            apply_actions(new_words, word, site, action_ids, use_vowel_seq);
-            for (size_t i = 0; i < n; i++)
-            {
-                abc_t after_id = st_and_after_ids[i].second;
-                if ((after_id == site_space->emp_id) && is_short)
-                {
-                    deltas[i] += 999999999.9;
-                    continue;
-                }
-                auto new_word = new_words[i];
-                SPDLOG_TRACE("  new word {0} old word {1} order {2}", new_word->str(), word->str(), order);
-                deltas[i] += word_space->safe_get_dist(new_word, order) - word_space->safe_get_dist(word, order);
-            }
-        }
-        for (size_t i = 0; i < n; i++)
-            if (deltas[i] < dist_threshold)
-                actions.push_back(action_ids[i]);
-    }
-}
-
-void ActionSpace::set_action_allowed(TreeNode *tnode)
-{
-    if (!tnode->action_allowed.empty() || (tnode->done) || (tnode->stopped))
-        return;
-
-    // Build the graph first.
-    SiteGraph graph = SiteGraph();
-    SiteGraph vgraph = SiteGraph();
-    SPDLOG_TRACE("Getting graph outputs.");
-    for (size_t order = 0; order < tnode->words.size(); order++)
-    {
-        Word *word = tnode->words[order];
-        for (SiteNode *root : word->site_roots)
-            graph.add_root(root, order);
-        for (SiteNode *vroot : word->vowel_site_roots)
-            vgraph.add_root(vroot, order);
-    }
-
-    auto &aa = tnode->action_allowed;
-    aa.reserve(1000);
-    // Stop is always available.
-    aa.push_back(action::STOP);
-    add_actions_from_graph(tnode, graph, aa, false);
-    add_actions_from_graph(tnode, vgraph, aa, true);
-}
-
-int ActionSpace::locate_edge_index(abc_t before_id, SpecialType st, abc_t after_id, bool use_vowel_seq)
-{
-    auto &st_and_after_ids = edges[before_id];
-    for (size_t i = 0; i < st_and_after_ids.size(); i++)
-    {
-        auto &edge = st_and_after_ids[i];
-        if ((use_vowel_seq || (edge.first == st)) && (edge.second == after_id))
-            return i;
-    }
-    return -1;
-}
-
-inline bool ActionSpace::match(abc_t idx, abc_t target)
-{
-    Stress tgt_stress = vowel_stress[target];
-    if ((tgt_stress == Stress::STRESSED) || (tgt_stress == Stress::UNSTRESSED))
-    {
-        if (tgt_stress != vowel_stress[idx])
-            return false;
-    }
-
-    if ((target == site_space->any_id) || (target == site_space->any_s_id) || (target == site_space->any_uns_id))
-        return ((idx != site_space->sot_id) && (idx != site_space->eot_id) && (idx != site_space->syl_eot_id));
-
-    return (vowel_base[target] == vowel_base[idx]);
-}
-
-inline IdSeq ActionSpace::apply_action(const IdSeq &id_seq, uai_t action_id)
-{
-    IdSeq new_id_seq = vec<abc_t>();
-    abc_t before_id = action::get_before_id(action_id);
-    abc_t after_id = action::get_after_id(action_id);
-    abc_t pre_id = action::get_pre_id(action_id);
-    abc_t d_pre_id = action::get_d_pre_id(action_id);
-    abc_t post_id = action::get_post_id(action_id);
-    abc_t d_post_id = action::get_d_post_id(action_id);
-
-    switch (vowel_stress[before_id])
-    {
-    case Stress::STRESSED:
-        after_id = stressed_vowel[after_id];
-        break;
-    case Stress::UNSTRESSED:
-        after_id = unstressed_vowel[after_id];
-        break;
-    default:
-        break;
-    }
-
-    bool syncope = (after_id == site_space->emp_id);
-    SpecialType st = action::get_special_type(action_id);
-    int n = id_seq.size();
-    auto vowel_seq = IdSeq();
-    auto orig_idx = vec<int>();
-    bool use_vowel_seq = (st == SpecialType::VS);
-    new_id_seq.push_back(site_space->sot_id);
-    if (use_vowel_seq)
-    {
-        vowel_seq.reserve(id_seq.size());
-        orig_idx.reserve(id_seq.size());
-        vowel_seq.push_back(site_space->sot_id);
-        for (int i = 1; i < n - 1; i++)
-            if (vowel_mask[id_seq[i]])
-            {
-                vowel_seq.push_back(id_seq[i]);
-                orig_idx.push_back(i);
-            }
-        vowel_seq.push_back((vowel_mask[id_seq[n - 2]]) ? site_space->syl_eot_id : site_space->eot_id);
-        int m = vowel_seq.size();
-        int j = 1;
-        for (int i = 1; i < m - 1; i++)
-        {
-            bool applied = match(vowel_seq[i], before_id);
-            if (applied && (pre_id != NULL_ABC))
-            {
-                if ((i < 1) || (!match(vowel_seq[i - 1], pre_id)))
-                    applied = false;
-                if (applied && (d_pre_id != NULL_ABC))
-                    if ((i < 2) || (!match(vowel_seq[i - 2], d_pre_id)))
-                        applied = false;
-            }
-            if (applied && (post_id != NULL_ABC))
-            {
-                if ((i > n - 2) || (!match(vowel_seq[i + 1], post_id)))
-                    applied = false;
-                if (applied && (d_post_id != NULL_ABC))
-                    if ((i > n - 3) || (!match(vowel_seq[i + 2], d_post_id)))
-                        applied = false;
-            }
-
-            int upper = orig_idx[i - 1];
-            while (j < upper)
-            {
-                new_id_seq.push_back(id_seq[j]);
-                j++;
-            }
-            if (applied)
-                if (syncope)
-                    continue;
-                else
-                    new_id_seq.push_back(after_id);
-            else
-                new_id_seq.push_back(vowel_seq[i]);
-            j++;
-        }
-        while (j < n - 1)
-        {
-            new_id_seq.push_back(id_seq[j]);
-            j++;
-        }
+        new_node = NodeFactory::get_stopped_node(node);
+        EdgeBuilder::connect(last, last_child_index, new_node);
     }
     else
     {
-        for (int i = 1; i < n - 1; i++)
+        auto new_words = vec<Word *>(node->words);
+        const auto &aff = last->get_affected_at(last_child_index);
+        // FIXME(j_luo) If everything is ordered, then perhaps we don't need hashing.
+        auto order2pos = map<int, vec<size_t>>();
+        // for (const auto &item : aff)
+        for (size_t i = 0; i < aff.size(); ++i)
+            order2pos[aff.get_order_at(i)].push_back(aff.get_position_at(i));
+        for (const auto &item : order2pos)
         {
-            bool applied = match(id_seq[i], before_id);
-            if (applied && (pre_id != NULL_ABC))
-            {
-                if ((i < 1) || (!match(id_seq[i - 1], pre_id)))
-                    applied = false;
-                if (applied && (d_pre_id != NULL_ABC))
-                    if ((i < 2) || (!match(id_seq[i - 2], d_pre_id)))
-                        applied = false;
-            }
-            if (applied && (post_id != NULL_ABC))
-            {
-                if ((i > n - 2) || (!match(id_seq[i + 1], post_id)))
-                    applied = false;
-                if (applied && (d_post_id != NULL_ABC))
-                    if ((i > n - 3) || (!match(id_seq[i + 2], d_post_id)))
-                        applied = false;
-            }
-            if (applied)
-                if (syncope)
-                    continue;
-                else
-                {
-                    switch (st)
-                    {
-                    case SpecialType::NONE:
-                        new_id_seq.push_back(after_id);
-                        break;
-                    case SpecialType::CLL:
-                        new_id_seq.pop_back();
-                        new_id_seq.push_back(after_id);
-                        break;
-                    case SpecialType::CLR:
-                        new_id_seq.push_back(after_id);
-                        i++;
-                        break;
-                    case SpecialType::GBJ:
-                        new_id_seq.push_back(glide_j);
-                        new_id_seq.push_back(after_id);
-                        break;
-                    case SpecialType::GBW:
-                        new_id_seq.push_back(glide_w);
-                        new_id_seq.push_back(after_id);
-                        break;
-                    }
-                }
-            else
-                new_id_seq.push_back(id_seq[i]);
+            auto order = item.first;
+            auto new_id_seq = change_id_seq(node->words[order]->id_seq, item.second, after_id, st);
+            auto new_word = word_space->get_word(new_id_seq);
+            new_words[order] = new_word;
+            word_space->set_edit_dist_at(new_word, order);
+        }
+        new_node = NodeFactory::get_tree_node(new_words, false);
+        EdgeBuilder::connect(last, last_child_index, new_node);
+        expand(new_node);
+        if ((node->get_dist() - new_node->get_dist()) < opt.dist_threshold)
+            PruningManager::prune(last, last_child_index);
+        // new_node->prune();
+    }
+    return new_node;
+}
+
+TreeNode *ActionSpace::apply_action(TreeNode *node,
+                                    abc_t before_id,
+                                    abc_t after_id,
+                                    abc_t pre_id,
+                                    abc_t d_pre_id,
+                                    abc_t post_id,
+                                    abc_t d_post_id,
+                                    SpecialType st)
+{
+    Subpath subpath = Subpath();
+
+    // std::cerr << "before\n";
+    auto before = ChosenChar({node->get_action_index(before_id), before_id});
+    bool stopped = (before.first == 0);
+    auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
+    subpath.chosen_seq[0] = before;
+    subpath.mini_node_seq[0] = before_mn;
+    subpath.stopped = stopped;
+    expand(before_mn, subpath, false, false);
+    ActionManager::dummy_evaluate(before_mn);
+
+    // std::cerr << "special_type\n";
+    abc_t st_abc = static_cast<abc_t>(st);
+    auto special_type = ChosenChar({before_mn->get_action_index(st_abc), st_abc});
+    auto st_mn = get_mini_node(node, before_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
+    subpath.chosen_seq[1] = special_type;
+    subpath.mini_node_seq[1] = st_mn;
+    expand(st_mn, subpath, false, true);
+    ActionManager::dummy_evaluate(st_mn);
+
+    // std::cerr << "after\n";
+    // std::cerr << after_id << "\n";
+    // for (const auto x : st_mn->permissible_chars)
+    //     std::cerr << x << " ";
+    // std::cerr << "\n";
+    auto after = ChosenChar({st_mn->get_action_index(after_id), after_id});
+    auto after_mn = get_mini_node(node, st_mn, after, ActionPhase::AFTER, stopped);
+    bool use_vowel_seq = (st == SpecialType::VS);
+    subpath.chosen_seq[2] = after;
+    subpath.mini_node_seq[2] = after_mn;
+    expand(after_mn, subpath, use_vowel_seq, false);
+    ActionManager::dummy_evaluate(after_mn);
+
+    // std::cerr << "pre\n";
+    auto pre = ChosenChar({after_mn->get_action_index(pre_id), pre_id});
+    auto pre_mn = get_mini_node(node, after_mn, pre, ActionPhase::PRE, stopped);
+    subpath.chosen_seq[3] = pre;
+    subpath.mini_node_seq[3] = pre_mn;
+    expand(pre_mn, subpath, use_vowel_seq, false);
+    ActionManager::dummy_evaluate(pre_mn);
+
+    auto d_pre = ChosenChar({pre_mn->get_action_index(d_pre_id), d_pre_id});
+    // std::cerr << "d_pre\n";
+    auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
+    subpath.chosen_seq[4] = d_pre;
+    subpath.mini_node_seq[4] = d_pre_mn;
+    expand(d_pre_mn, subpath, use_vowel_seq, false);
+    ActionManager::dummy_evaluate(d_pre_mn);
+
+    // std::cerr << "post\n";
+    auto post = ChosenChar({d_pre_mn->get_action_index(post_id), post_id});
+    auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
+    subpath.chosen_seq[5] = post;
+    subpath.mini_node_seq[5] = post_mn;
+    expand(post_mn, subpath, use_vowel_seq, false);
+    ActionManager::dummy_evaluate(post_mn);
+
+    // std::cerr << "d_post\n";
+    auto d_post = ChosenChar({post_mn->get_action_index(d_post_id), d_post_id});
+    subpath.chosen_seq[6] = d_post;
+
+    // FIXME(j_luo) This shouldn't create a new node.
+    return apply_new_action(node, subpath);
+}
+
+inline IdSeq ActionSpace::change_id_seq(const IdSeq &id_seq, const vec<size_t> &positions, abc_t after_id, SpecialType st)
+{
+    auto new_id_seq = IdSeq(id_seq);
+    auto stressed_after_id = word_space->opt.unit2stressed[after_id];
+    auto unstressed_after_id = word_space->opt.unit2unstressed[after_id];
+    for (const auto pos : positions)
+    {
+        auto stress = word_space->opt.unit_stress[new_id_seq[pos]];
+        switch (stress)
+        {
+        case Stress::NOSTRESS:
+            new_id_seq[pos] = after_id;
+            break;
+        case Stress::STRESSED:
+            new_id_seq[pos] = stressed_after_id;
+            break;
+        case Stress::UNSTRESSED:
+            new_id_seq[pos] = unstressed_after_id;
+            break;
         }
     }
-    new_id_seq.push_back(site_space->eot_id);
+    if (st == SpecialType::CLL)
+    {
+        for (const auto pos : positions)
+        {
+            assert(pos > 0);
+            new_id_seq[pos - 1] = opt.emp_id;
+        }
+    }
+    else if (st == SpecialType::CLR)
+    {
+        for (const auto pos : positions)
+        {
+            assert(pos < (id_seq.size() - 1));
+            new_id_seq[pos + 1] = opt.emp_id;
+        }
+    }
+
+    if ((after_id == opt.emp_id) || (st == SpecialType::CLL) || (st == SpecialType::CLR))
+    {
+        auto cleaned = IdSeq();
+        cleaned.reserve(new_id_seq.size());
+        for (const auto unit : new_id_seq)
+            if (unit != opt.emp_id)
+                cleaned.push_back(unit);
+        return cleaned;
+    }
+
+    if ((st == SpecialType::GBJ) || (st == SpecialType::GBW))
+    {
+        abc_t glide = ((st == SpecialType::GBJ) ? opt.glide_j : opt.glide_w);
+        auto to_insert = vec<bool>(new_id_seq.size(), false);
+        for (const auto pos : positions)
+            to_insert[pos] = true;
+        auto inserted = IdSeq();
+        inserted.reserve(new_id_seq.size() * 10);
+        for (size_t i = 0; i < new_id_seq.size(); ++i)
+        {
+            if (to_insert[i])
+                inserted.push_back(glide);
+            inserted.push_back(new_id_seq[i]);
+        }
+        return inserted;
+    }
+
     return new_id_seq;
 }
 
-void ActionSpace::apply_actions(vec<Word *> &outputs, Word *word, usi_t site, const vec<uai_t> &action_ids, bool use_vowel_seq)
-{
-    auto &neighbors = (use_vowel_seq) ? word->vowel_neighbors : word->neighbors;
-    if (neighbors.if_contains(site, [&outputs](vec<Word *> const &values) { outputs = values; }))
-        return;
+void ActionSpace::register_permissible_change(abc_t before, abc_t after) { permissible_changes[before].push_back(after); }
+void ActionSpace::register_cl_map(abc_t before, abc_t after) { cl_map[before] = after; }
+void ActionSpace::register_gbj_map(abc_t before, abc_t after) { gbj_map[before] = after; }
+void ActionSpace::register_gbw_map(abc_t before, abc_t after) { gbw_map[before] = after; }
 
-    outputs.reserve(action_ids.size());
-    for (uai_t action_id : action_ids)
-    {
-        auto new_id_seq = apply_action(word->id_seq, action_id);
-        outputs.push_back(nullptr);
-        word_space->get_word(outputs.back(), new_id_seq);
-    }
-    // NOTE(j_luo) No need to do anything if the key exists -- `get_word` ensures the right Word object is returned.
-    neighbors.try_emplace_l(
-        site, [](vec<Word *> &values) {}, outputs);
+Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss, float heur_c, bool add_noise) const
+{
+    Subpath subpath = Subpath();
+
+    // std::cerr << "before\n";
+    SPDLOG_DEBUG("ActionSpace:: getting best subpath...");
+    auto before = node->get_best_action(puct_c, heur_c, add_noise);
+    bool stopped = (before.first == 0);
+    auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
+    subpath.chosen_seq[0] = before;
+    subpath.mini_node_seq[0] = before_mn;
+    subpath.stopped = stopped;
+    expand(before_mn, subpath, false, false);
+    evaluate(before_mn);
+    SPDLOG_DEBUG("ActionSpace:: before done.");
+
+    // std::cerr << "special_type\n";
+    auto special_type = before_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto st_mn = get_mini_node(node, before_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
+    subpath.chosen_seq[1] = special_type;
+    subpath.mini_node_seq[1] = st_mn;
+    expand(st_mn, subpath, false, false);
+    evaluate(st_mn);
+    SPDLOG_DEBUG("ActionSpace:: special_type done.");
+
+    // std::cerr << "after\n";
+    auto after = st_mn->get_best_action(puct_c, heur_c, add_noise);
+    bool use_vowel_seq = (static_cast<SpecialType>(special_type.second) == SpecialType::VS);
+    auto after_mn = get_mini_node(node, st_mn, after, ActionPhase::AFTER, stopped);
+    subpath.chosen_seq[2] = after;
+    subpath.mini_node_seq[2] = after_mn;
+    expand(after_mn, subpath, use_vowel_seq, false);
+    evaluate(after_mn);
+    SPDLOG_DEBUG("ActionSpace:: after done.");
+
+    // std::cerr << "pre\n";
+    auto pre = after_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto pre_mn = get_mini_node(node, after_mn, pre, ActionPhase::PRE, stopped);
+    subpath.chosen_seq[3] = pre;
+    subpath.mini_node_seq[3] = pre_mn;
+    expand(pre_mn, subpath, use_vowel_seq, false);
+    evaluate(pre_mn);
+    SPDLOG_DEBUG("ActionSpace:: pre done.");
+
+    // std::cerr << "d_pre\n";
+    auto d_pre = pre_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
+    subpath.chosen_seq[4] = d_pre;
+    subpath.mini_node_seq[4] = d_pre_mn;
+    expand(d_pre_mn, subpath, use_vowel_seq, false);
+    evaluate(d_pre_mn);
+    SPDLOG_DEBUG("ActionSpace:: d_pre done.");
+
+    // std::cerr << "post\n";
+    auto post = d_pre_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
+    subpath.chosen_seq[5] = post;
+    subpath.mini_node_seq[5] = post_mn;
+    expand(post_mn, subpath, use_vowel_seq, false);
+    evaluate(post_mn);
+    SPDLOG_DEBUG("ActionSpace:: post done.");
+
+    // std::cerr << "d_post\n";
+    auto d_post = post_mn->get_best_action(puct_c, heur_c, add_noise);
+    subpath.chosen_seq[6] = d_post;
+    SPDLOG_DEBUG("ActionSpace:: d_post done.");
+
+    connect(node, subpath);
+    return subpath;
 }
 
-vec<uai_t> ActionSpace::get_similar_actions(uai_t action)
+MiniNode *ActionSpace::get_mini_node(TreeNode *base, BaseNode *parent, const ChosenChar &chosen, ActionPhase ap, bool stopped) const
 {
-    auto site = action::get_site(action);
-    auto after_id = action::get_after_id(action);
+    // BaseNode *&child = parent->children[chosen.first];
+    bool is_transition = (ap == ActionPhase::POST);
+    BaseNode *child;
+    if (!parent->has_child(chosen.first))
+    {
+        if (is_transition)
+            child = NodeFactory::get_transition_node(base, stopped);
+        else
+            child = NodeFactory::get_mini_node(base, ap, stopped);
+        EdgeBuilder::connect(parent, chosen.first, child);
+    }
+    else
+        child = parent->get_child(chosen.first);
+    if (is_transition)
+        return static_cast<TransitionNode *>(child);
+    else
+        return static_cast<MiniNode *>(child);
+}
 
-    SiteNode *site_node;
-    site_space->get_node(site_node, site);
-    auto graph = SiteGraph();
-    auto root = graph.add_root(site_node, -1); // `order` doesn't matter here.
-    auto desc = graph.get_descendants(root);
+inline bool in_bound(int pos, size_t max) { return ((pos >= 0) && (pos < max)); }
 
-    auto ret = vec<uai_t>();
-    for (const auto node : desc)
-        ret.push_back(action::combine_after_id(node->base->site, after_id));
-    return ret;
+void ActionSpace::expand(TreeNode *node) const
+{
+    SPDLOG_DEBUG("ActionSpace:: expanding node...");
+
+    if (node->is_expanded())
+    {
+        assert(node->get_pruned().size() > 0);
+        SPDLOG_DEBUG("ActionSpace:: node already expanded.");
+        return;
+    }
+
+    // Null/Stop option.
+    ActionManager::add_action(node, opt.null_id, Affected());
+
+    auto char_map = map<abc_t, size_t>();
+    for (int order = 0; order < node->words.size(); ++order)
+    {
+        auto &id_seq = node->words[order]->id_seq;
+        size_t n = id_seq.size();
+        // Skip the boundaries.
+        for (int pos = 1; pos < n - 1; ++pos)
+            if (in_bound(pos, n))
+                update_affected(node, id_seq[pos], order, pos, char_map, false);
+    }
+
+    expand_stats(node);
+    SPDLOG_DEBUG("ActionSpace:: node expanded with #actions {}.", node->get_num_actions());
+
+    // Skip STOP.
+    for (size_t i = 1; i < node->get_num_actions(); ++i)
+        if (node->get_num_affected_at(i) < opt.site_threshold)
+            PruningManager::prune(node, i);
+
+    // std::cerr << "-----------------\n";
+    // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
+    // {
+    //     std::cerr << "unit: " << node->permissible_chars[i] << "\n";
+    //     std::cerr << "affected " << node->affected[i].size() << "\n";
+    //     for (const auto &item : node->affected[i])
+    //     {
+    //         std::cerr << item.first << ":" << item.second << " ";
+    //     }
+    //     std::cerr << "\n";
+    // }
+}
+
+void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chosen_index, abc_t before, bool force_apply) const
+{
+    auto st = static_cast<SpecialType>(parent->get_action_at(chosen_index));
+    const auto &aff = parent->get_affected_at(chosen_index);
+    if ((st == SpecialType::CLL) || (st == SpecialType::CLR))
+    {
+        auto offset = (st == SpecialType::CLL) ? -1 : 1;
+        auto char_map = map<abc_t, size_t>();
+        // for (const auto &item : aff)
+        for (size_t i = 0; i < aff.size(); ++i)
+        {
+            auto order = aff.get_order_at(i);  //item.first;
+            auto pos = aff.get_position_at(i); // item.second;
+            auto unit = node->base->words[order]->id_seq[pos + offset];
+            auto base_unit = word_space->opt.unit2base[unit];
+            // FIXME(j_luo) we really don't need to pass order and pos (and create item) separately -- we just need to decide whether to keep it or not.
+            assert(cl_map.contains(base_unit));
+            update_affected(node, cl_map.at(base_unit), order, pos, char_map, false);
+        }
+        // std::cerr << "CLLR\n";
+
+        // std::cerr << "-----------------\n";
+        // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
+        // {
+        //     std::cerr << "unit: " << node->permissible_chars[i] << "\n";
+        //     std::cerr << "affected " << node->affected[i].size() << "\n";
+        //     for (const auto &item : node->affected[i])
+        //     {
+        //         std::cerr << item.first << ":" << item.second << " ";
+        //     }
+        //     std::cerr << "\n";
+        // }
+    }
+    else
+    {
+        // Must use `unit2base` since stress is included for before.
+        if (st == SpecialType::GBJ)
+            ActionManager::add_action(node, gbj_map.at(before), aff);
+        else if (st == SpecialType::GBW)
+            ActionManager::add_action(node, gbw_map.at(before), aff);
+        else if (force_apply)
+            // HACK(j_luo) this is hacky.
+            for (abc_t after_id = 0; after_id < 1000; ++after_id)
+                ActionManager::add_action(node, after_id, aff);
+        else
+            for (abc_t after_id : permissible_changes.at(before))
+                ActionManager::add_action(node, after_id, aff);
+    }
+}
+
+void ActionSpace::expand_before(MiniNode *node, int chosen_index) const
+{
+    auto unit = node->base->get_action_at(chosen_index);
+    const auto &aff = node->base->get_affected_at(chosen_index);
+    ActionManager::add_action(node, static_cast<abc_t>(SpecialType::NONE), aff);
+    if (word_space->opt.is_vowel[unit])
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::VS), aff);
+
+    // CLL and CLR
+    // std::cerr << "cllr\n";
+    auto full_aff = node->get_affected_at(0);
+    auto cll_aff = Affected();
+    auto clr_aff = Affected();
+    // for (const auto &item : full_aff)
+    for (size_t i = 0; i < full_aff.size(); ++i)
+    {
+        auto order = full_aff.get_order_at(i);  //item.first;
+        auto pos = full_aff.get_position_at(i); //item.second;
+        auto word = node->base->words[order];
+        auto &id_seq = word->id_seq;
+        if (pos > 0)
+        {
+            auto base_unit = word_space->opt.unit2base[id_seq[pos - 1]];
+            if (cl_map.contains(base_unit))
+                cll_aff.push_back(order, pos, word_space->is_aligned(word, order, pos));
+        }
+        if (pos < (id_seq.size() - 1))
+        {
+            auto base_unit = word_space->opt.unit2base[id_seq[pos + 1]];
+            if (cl_map.contains(base_unit))
+                clr_aff.push_back(order, pos, word_space->is_aligned(word, order, pos));
+        }
+    }
+    if (cll_aff.size() > 0)
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::CLL), cll_aff);
+    if (clr_aff.size() > 0)
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::CLR), clr_aff);
+    // GBJ
+    // std::cerr << "gbj\n";
+    auto base_unit = word_space->opt.unit2base[unit];
+    if (gbj_map.contains(base_unit))
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::GBJ), full_aff);
+    // GBW
+    // std::cerr << "gbw\n";
+    if (gbw_map.contains(base_unit))
+        ActionManager::add_action(node, static_cast<abc_t>(SpecialType::GBW), full_aff);
+}
+
+void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_index, int offset, bool use_vowel_seq, bool can_have_null, bool can_have_any) const
+{
+    if (can_have_null)
+        expand_null(node, parent, chosen_index);
+
+    const auto &words = node->base->words;
+    const auto &affected = parent->get_affected_at(chosen_index);
+    auto char_map = map<abc_t, size_t>();
+    // for (const auto &aff : affected)
+    for (size_t i = 0; i < affected.size(); ++i)
+    {
+        int order = affected.get_order_at(i); // aff.first;
+        auto old_pos = affected.get_position_at(i);
+        auto word = words[order];
+        if (use_vowel_seq)
+        {
+            // Get the position/index in the vowel seq.
+            auto vowel_pos = word->id2vowel[old_pos] + offset;
+            auto &vowel_seq = words[order]->vowel_seq;
+            if (in_bound(vowel_pos, vowel_seq.size()))
+                update_affected(node, vowel_seq[vowel_pos], order, old_pos, char_map, can_have_any);
+        }
+        else
+        {
+            auto pos = old_pos + offset;
+            auto &id_seq = words[order]->id_seq;
+            if (in_bound(pos, id_seq.size()))
+                update_affected(node, id_seq[pos], order, old_pos, char_map, can_have_any);
+        }
+    }
+}
+
+bool ActionSpace::expand_null_only(MiniNode *node, BaseNode *parent, int chosen_index) const
+{
+    abc_t last_unit = parent->get_action_at(chosen_index);
+    if ((last_unit == opt.null_id) || (last_unit == opt.any_id) || (last_unit == opt.any_s_id) || (last_unit == opt.any_uns_id))
+    {
+        SPDLOG_TRACE("Phase {}, keeping only Null action.", str::from(node->ap));
+        expand_null(node, parent, chosen_index);
+        return true;
+    }
+    return false;
+}
+
+void ActionSpace::expand_after(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) const { expand_normal(node, parent, chosen_index, -1, use_vowel_seq, can_have_null, can_have_any); }
+
+void ActionSpace::expand_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any) const
+{
+    if (!expand_null_only(node, parent, chosen_index))
+        expand_normal(node, parent, chosen_index, -2, use_vowel_seq, true, can_have_any);
+}
+
+void ActionSpace::expand_d_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) const { expand_normal(node, parent, chosen_index, 1, use_vowel_seq, can_have_null, can_have_any); }
+
+void ActionSpace::expand_post(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any) const
+{
+    if (!expand_null_only(node, parent, chosen_index))
+        expand_normal(node, parent, chosen_index, 2, use_vowel_seq, true, can_have_any);
+}
+
+void ActionSpace::expand_null(MiniNode *node, BaseNode *parent, int chosen_index) const
+{
+    // Affected positions will not be further narrowed down.
+    ActionManager::add_action(node, opt.null_id, parent->get_affected_at(chosen_index));
+}
+
+void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_seq, bool force_apply) const
+{
+    if (node->is_expanded())
+    {
+        assert(node->get_pruned().size() > 0);
+        SPDLOG_TRACE("MiniNode expanded already.");
+        return;
+    }
+
+    if (node->stopped)
+    {
+        ActionManager::add_action(node, opt.null_id, Affected());
+        SPDLOG_TRACE("Phase {}, keeping only Null action due to stopped status.", str::from(node->ap));
+    }
+    else
+    {
+        switch (node->ap)
+        {
+        case ActionPhase::BEFORE:
+            expand_before(node, subpath.chosen_seq[0].first);
+            break;
+        case ActionPhase::SPECIAL_TYPE:
+        {
+            abc_t before = word_space->opt.unit2base[subpath.chosen_seq[0].second];
+            expand_special_type(node, subpath.mini_node_seq[0], subpath.chosen_seq[1].first, before, force_apply);
+            break;
+        }
+        case ActionPhase::AFTER:
+        {
+            bool can_have_null = (static_cast<SpecialType>(subpath.chosen_seq[1].second) != SpecialType::CLL);
+            expand_after(node, subpath.mini_node_seq[1], subpath.chosen_seq[2].first, use_vowel_seq, can_have_null, can_have_null);
+            break;
+        }
+        case ActionPhase::PRE:
+            expand_pre(node, subpath.mini_node_seq[2], subpath.chosen_seq[3].first, use_vowel_seq, true);
+            break;
+        case ActionPhase::D_PRE:
+        {
+            bool can_have_null = (static_cast<SpecialType>(subpath.chosen_seq[1].second) != SpecialType::CLR);
+            expand_d_pre(node, subpath.mini_node_seq[3], subpath.chosen_seq[4].first, use_vowel_seq, can_have_null, can_have_null);
+            break;
+        }
+        case ActionPhase::POST:
+            expand_post(node, subpath.mini_node_seq[4], subpath.chosen_seq[5].first, use_vowel_seq, true);
+            break;
+        }
+    }
+
+    expand_stats(node);
+    SPDLOG_DEBUG("ActionSpace:: mini node expanded with #actions {}.", node->get_num_actions());
+
+    if (!node->stopped)
+        for (size_t i = 0; i < node->get_num_actions(); ++i)
+            if (node->get_num_affected_at(i) < opt.site_threshold)
+                PruningManager::prune(node, i);
+
+    // std::cerr << "-----------------\n";
+    // std::cerr << str::from(node->ap) << " " << node->permissible_chars.size() << "\n";
+
+    // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
+    // {
+    //     std::cerr << "unit: " << node->permissible_chars[i] << "\n";
+    //     std::cerr << "affected " << node->affected[i].size() << "\n";
+    //     for (const auto &item : node->affected[i])
+    //     {
+    //         std::cerr << item.first << ":" << item.second << " ";
+    //     }
+    //     std::cerr << "\n";
+    // }
+    return;
+}
+
+void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map, bool can_have_any) const
+{
+    // FIXME(j_luo) clearer logic here -- e.g., <any> is not aviable for after_id.
+    if (((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id)) && !can_have_any)
+        return;
+
+    Word *word;
+    if (node->is_tree_node())
+        word = static_cast<TreeNode *>(node)->words[order];
+    else
+        word = static_cast<MiniNode *>(node)->base->words[order];
+    auto aligned = word_space->is_aligned(word, order, pos);
+
+    if (!char_map.contains(unit))
+    {
+        // Add one more permission char.
+        char_map[unit] = node->get_num_actions();
+        auto aff = Affected();
+        aff.push_back(order, pos, aligned);
+        ActionManager::add_action(node, unit, aff);
+    }
+    else
+    {
+        // Add one more position.
+        ActionManager::update_affected_at(node, char_map[unit], order, pos, aligned);
+    }
+
+    Stress stress = word_space->opt.unit_stress[unit];
+    if (stress != Stress::NOSTRESS)
+    {
+        update_affected(node, word_space->opt.unit2base[unit], order, pos, char_map, can_have_any);
+        if (stress == Stress::STRESSED)
+        {
+            if (unit != opt.any_s_id)
+                update_affected(node, opt.any_s_id, order, pos, char_map, can_have_any);
+        }
+        else if (unit != opt.any_uns_id)
+            update_affected(node, opt.any_uns_id, order, pos, char_map, can_have_any);
+    }
+    else if ((unit != opt.any_id) && (!word_space->opt.is_vowel[unit]))
+        update_affected(node, opt.any_id, order, pos, char_map, can_have_any);
+}
+
+void ActionSpace::evaluate(MiniNode *node) const
+{
+    ActionManager::evaluate(node);
+}
+
+void ActionSpace::expand_stats(BaseNode *node) const
+{
+    size_t n = node->get_num_actions();
+    clear_stats(node, false);
+    clear_priors(node, false);
+    EdgeBuilder::init_edges(node);
+    ActionManager::init_pruned(node);
+    if (node->is_transitional())
+        ActionManager::init_rewards(static_cast<TransitionNode *>(node));
+}
+
+void ActionSpace::clear_stats(BaseNode *root, bool recursive) const
+{
+    auto queue = recursive ? Traverser::bfs(root) : vec<BaseNode *>{root};
+    for (const auto node : queue)
+        ActionManager::init_stats(node);
+}
+
+void ActionSpace::clear_priors(BaseNode *root, bool recursive) const
+{
+    auto queue = recursive ? Traverser::bfs(root) : vec<BaseNode *>{root};
+    for (const auto node : queue)
+        ActionManager::clear_priors(node);
+}
+
+void ActionSpace::evaluate(TreeNode *node, const vec<vec<float>> &meta_priors, const vec<float> &special_priors) { ActionManager::evaluate(node, meta_priors, special_priors); }
+
+void ActionSpace::add_noise(TreeNode *node, const vec<vec<float>> &meta_noise, const vec<float> &special_noise, float noise_ratio) const
+{
+    ActionManager::add_noise(node, meta_noise, special_noise, noise_ratio);
+}
+
+void ActionSpace::connect(BaseNode *base, const Subpath &subpath) const
+{
+    BaseNode *parent = base;
+    for (size_t i = 0; i < 6; ++i)
+    {
+        auto child = subpath.mini_node_seq[i];
+        auto index = subpath.chosen_seq[i].first;
+        EdgeBuilder::connect(parent, index, child);
+        parent = child;
+    }
 }
