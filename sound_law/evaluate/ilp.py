@@ -7,6 +7,7 @@ from typing import ClassVar, List, Set, Dict, Optional, Union
 
 from ortools.linear_solver import pywraplp
 import random
+import bisect
 
 # from dev_misc import add_argument, g
 # from sound_law.data.alphabet import Alphabet
@@ -48,7 +49,8 @@ class ToyEnv():
 def match_rulesets(gold: List[List[Action]],
                    cand: List[Action], 
                    env: SoundChangeEnv,
-                   match_proportion: float = .7) -> List[Tuple[Int, Tuple[Int]]]:
+                   match_proportion: float = .7,
+                   k_matches: int = 10) -> List[Tuple[Int, Tuple[Int]]]:
     '''Finds the optimal matching of rule blocks in the gold ruleset to 0, 1, or 2 rules in the candidate ruleset. Frames the problem as an integer linear program. Returns a list of tuples with the matching.'''
 
     solver = pywraplp.Solver.CreateSolver('SCIP') # TODO investigate other solvers
@@ -75,34 +77,69 @@ def match_rulesets(gold: List[List[Action]],
     curr_state = env.init_state
     objective = solver.Objective()
 
-    # create variables
-    for i, block in enumerate(gold):
+    for i in range(len(gold)):
+        # as an optimization, we only create variables for the best k_matches that a given gold block has with collections of rules in candidate. We assume that matchings with higher cost would never be chosen anyway and won't affect the solution, so they can just be excluded from the linear program.
+        highest_cost = None
+        paired_costs = [] # entries are of form (varname, i, [j...k], cost) — ie the variable pairing i with rules [j...k] has cost coefficient cost. Costs are in increasing order.
+
+        block = gold[i]
         gold_state = env.apply_block(block, curr_state)
-        for j, rule in enumerate(cand):
-            a_var = 'a_' + str(i) + ',' + str(j)
-            v[a_var] = solver.IntVar(0, 1, a_var)
-            c['gold_' + str(i)].SetCoefficient(v[a_var], 1)
-            c['cand_' + str(j)].SetCoefficient(v[a_var], 1)
-            c['min_match'].SetCoefficient(v[a_var], 1)
-
-            # calculate edit distance and add to Objective function
+        for j in range(len(cand)):
+            rule = cand[j]
+            a_var_name = 'a_' + str(i) + ',' + str(j)
             cand_state = env.apply_action(rule, curr_state)
-            dist = env.dist_between(gold_state, cand_state)
-            objective.SetCoefficient(v[a_var], dist)
+            cost = env.dist_between(gold_state, cand_state)
+            new_tuple = (a_var_name, i, [j], cost)
 
-        for j, rule1 in enumerate(cand):
-            for k, rule2 in enumerate(cand[j+1:], start=j+1):
-                b_var = 'b_' + str(i) + '(' + str(j) + ',' + str(k) + ')'
-                v[b_var] = solver.IntVar(0, 1, b_var)
-                c['gold_' + str(i)].SetCoefficient(v[b_var], 1)
-                c['cand_' + str(j)].SetCoefficient(v[b_var], 1)
-                c['cand_' + str(k)].SetCoefficient(v[b_var], 1)
-                c['min_match'].SetCoefficient(v[b_var], 1)
-
+            # add this cost to the list if it's better than what we currently have
+            if len(paired_costs) < k_matches or cost < highest_cost:
+                if len(paired_costs) == k_matches:
+                    del paired_costs[-1]
+                bisect.insort_left(paired_costs, new_tuple) # insert in sorted order
+                highest_cost = paired_costs[-1][3] # update costs
+        
+        for j in range(len(cand)):
+            rule1 = cand[j]
+            for k in range(j+1, len(cand)):
+                rule2 = cand[k]
+                b_var_name = 'b_' + str(i) + ',(' + str(j) + ',' + str(k) + ')'
                 cand_state = env.apply_block([rule1, rule2], curr_state)
-                dist = env.dist_between(gold_state, cand_state)
-                objective.SetCoefficient(v[b_var], dist)
-        # update state and continue
+                cost = env.dist_between(gold_state, cand_state)
+                new_tuple = (b_var_name, i, [j,k], cost)
+
+                if len(paired_costs) < k_matches or cost < highest_cost:
+                    if len(paired_costs) == k_matches:
+                        del paired_costs[-1]
+                    bisect.insort_left(paired_costs, new_tuple)
+                    highest_cost = paired_costs[-1][3]
+        
+        for j in range(len(cand)):
+            rule1 = cand[j]
+            for k in range(j+1, len(cand)):
+                rule2 = cand[k]
+                for l in range(k+1, len(cand)):
+                    rule3 = cand[l]
+                    c_var_name = 'c_' + str(i) + ',(' + str(j) + ',' + str(k) + ',' + str(l) + ')'
+                    cand_state = env.apply_block([rule1, rule2, rule3], curr_state)
+                    cost = env.dist_between(gold_state, cand_state)
+                    new_tuple = (c_var_name, i, [j,k,l], cost)
+
+                    if len(paired_costs) < k_matches or cost < highest_cost:
+                        if len(paired_costs) == k_matches:
+                            del paired_costs[-1]
+                        bisect.insort_left(paired_costs, new_tuple)
+                        highest_cost = paired_costs[-1][3]
+        
+        # now that we have the k matchings with the lowest edit distance with this particular gold block, we can add the variables corresponding to these matchings to each of the relevant constraints:
+        for var_name, i, cand_rules, cost in paired_costs:
+            v[var_name] = solver.IntVar(0, 1, var_name)
+            c['gold_' + str(i)].SetCoefficient(v[var_name], 1)
+            for rule_index in cand_rules:
+                c['cand_' + str(rule_index)].SetCoefficient(v[var_name], 1)
+            c['min_match'].SetCoefficient(v[var_name], 1)
+            objective.SetCoefficient(v[var_name], cost)
+
+        # update the state and continue onto the next block in gold
         curr_state = gold_state
 
     # solve the ILP
@@ -117,8 +154,8 @@ def match_rulesets(gold: List[List[Action]],
     #     print('%s = %d' % (variable.name(), variable.solution_value()))
     # # [END print_solution]
 
-    # interpret solution as a matching:
-    # TODO implement, for now just print out
+    # interpret solution as a matching, returning a list pairing indices of blocks in gold to a list of indices of matched rules in cand
+    # TODO(djwyen) implement this, for now just print out the soln
     for name, var in v.items():
         if var.solution_value():
             print('%s = %d' % (var.name(), var.solution_value()))
@@ -132,8 +169,8 @@ def match_rulesets(gold: List[List[Action]],
 #     ['e', 'f']
 # ]
 # cand = ['alpha', 'beta', 'gamma', 'delta']
-gold = [[x,x] for x in range(50)]
-cand = [x for x in range(100)]
+gold = [[x,x] for x in range(10)]
+cand = [x for x in range(20)]
 env = ToyEnv('foo')
 
 match_rulesets(gold, cand, env)
