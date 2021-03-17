@@ -82,6 +82,12 @@ class SoundChangeEnv(PyEnv):
                                     action.d_pre_id,
                                     action.post_id,
                                     action.d_post_id)
+
+    def apply_block(self, state: VocabState, block: List[SoundChangeAction]) -> VocabState:
+        curr_state = state
+        for action in block:
+            curr_state = self.apply_action(curr_state, action)
+        return curr_state
     
     def get_state_edit_dist(self, state1: VocabState, state2: VocabState) -> float:
         return super().get_state_edit_dist(state1, state2)
