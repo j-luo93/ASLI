@@ -86,7 +86,7 @@ rtype_pat = ''.join([
     '|',
     'VS',
     '|',
-    'GB',
+    'OGF',
     '|',
     'CLL',
     '|',
@@ -240,7 +240,7 @@ class HandwrittenRule:
             return HandwrittenSegment.from_str(result.group(name))
 
         result = pat.match(raw)
-        rtype = result.group('rtype')
+        rtype = result.group('rtype').replace('GB', 'OGF')
         d_pre = get_segment('d_pre')
         pre = get_segment('pre')
         before = get_segment('before')
