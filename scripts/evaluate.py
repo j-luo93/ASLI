@@ -86,7 +86,7 @@ rtype_pat = ''.join([
     '|',
     'VS',
     '|',
-    'GB',
+    'OGF',
     '|',
     'CLL',
     '|',
@@ -98,7 +98,7 @@ pat = re.compile(
     # fr'^{pre_cond_pat}{named_ph("before")}{post_cond_pat} *> *{named_ph("after")} *$')
     fr'^{rtype_pat}: *{named_ph("before")} *> *{named_ph("after")} *(/ *{pre_cond_pat} *_ *{post_cond_pat} *)*$')
 
-error_codes = {'OOS', 'IRG', 'EPTh', 'MTTh', 'DUP'}
+error_codes = {'UR', 'NP', 'IRG', 'MS', 'MISC', 'DUP'}
 # A: NW, B: Gothic, C: W, D.1: Ingvaeonic, D.2: AF, E: ON, F: OHG, G: OE
 # Gothic: B, ON: A-E, OHG: A-C-F, OE: A-D.1-D.2-G
 ref_no = {
@@ -240,7 +240,7 @@ class HandwrittenRule:
             return HandwrittenSegment.from_str(result.group(name))
 
         result = pat.match(raw)
-        rtype = result.group('rtype')
+        rtype = result.group('rtype').replace('GB', 'OGF')
         d_pre = get_segment('d_pre')
         pre = get_segment('pre')
         before = get_segment('before')
@@ -393,8 +393,7 @@ class PlainState:
         cls = type(self)
         assert cls.env is not None
         try:
-            new_node = cls.env.apply_action(self._node, action.before_id, action.after_id, action.rtype,
-                                            action.pre_id, action.d_pre_id, action.post_id, action.d_post_id)
+            new_node = cls.env.apply_action(self._node, action)
             return cls(new_node)
 
         except RuntimeError:
@@ -613,7 +612,7 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
 
 if __name__ == "__main__":
 
-    manager, gold, states = simulate()
+    manager, gold, states, refs = simulate()
     initial_state = states[0]
 
     if g.calc_metric:
