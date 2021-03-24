@@ -22,32 +22,32 @@ import bisect
 
 class ToyEnv():
 
-    def __init__(self, init_state):
-        self.init_state = init_state
+    def __init__(self, start_state):
+        self.start = start_state
 
-    def apply_action(self, act, state):
+    def apply_action(self, state, act):
         # somehow apply action to state
         new_state = state
         return new_state
     
-    def apply_block(self, block, state):
+    def apply_block(self, state, block):
         '''Applies a block of actions in order'''
         for act in block:
-            state = self.apply_action(act, state)
+            state = self.apply_action(state, act)
         return state
 
-    def dist_between(self, state1, state2):
+    def get_state_edit_dist(self, state1, state2):
         # somehow compute the edit distance between these two states
         return (random.random() + 1) * random.randint(1, 20)
 
-    def compare_effects(self, act1, act2, state):
-        state1 = self.apply_action(act1, state)
-        state2 = self.apply_action(act2, state)
-        return self.dist_between(state1, state2)
+    # def compare_effects(self, act1, act2, state):
+    #     state1 = self.apply_action(state, act1)
+    #     state2 = self.apply_action(state, act2)
+    #     return self.get_state_edit_dist(state1, state2)
 
 
-def match_rulesets(gold: List[List[Action]],
-                   cand: List[Action], 
+def match_rulesets(gold: List[List[SoundChangeAction]],
+                   cand: List[SoundChangeAction], 
                    env: SoundChangeEnv,
                    match_proportion: float = .7,
                    k_matches: int = 10) -> List[Tuple[Int, Tuple[Int]]]:
@@ -74,7 +74,7 @@ def match_rulesets(gold: List[List[Action]],
     c['min_match'] = solver.Constraint(min_match_number, len(gold))
 
     # TODO implement real SoundChangeEnv; currently using toy data "ToyEnv"
-    curr_state = env.init_state
+    curr_state = env.start
     objective = solver.Objective()
 
     for i in range(len(gold)):
@@ -83,12 +83,12 @@ def match_rulesets(gold: List[List[Action]],
         paired_costs = [] # entries are of form (varname, i, [j...k], cost) — ie the variable pairing i with rules [j...k] has cost coefficient cost. Costs are in increasing order.
 
         block = gold[i]
-        gold_state = env.apply_block(block, curr_state)
+        gold_state = env.apply_block(curr_state, block)
         for j in range(len(cand)):
             rule = cand[j]
             a_var_name = 'a_' + str(i) + ',' + str(j)
-            cand_state = env.apply_action(rule, curr_state)
-            cost = env.dist_between(gold_state, cand_state)
+            cand_state = env.apply_action(curr_state, rule)
+            cost = env.get_state_edit_dist(gold_state, cand_state)
             new_tuple = (a_var_name, i, [j], cost)
 
             # add this cost to the list if it's better than what we currently have
@@ -103,8 +103,8 @@ def match_rulesets(gold: List[List[Action]],
             for k in range(j+1, len(cand)):
                 rule2 = cand[k]
                 b_var_name = 'b_' + str(i) + ',(' + str(j) + ',' + str(k) + ')'
-                cand_state = env.apply_block([rule1, rule2], curr_state)
-                cost = env.dist_between(gold_state, cand_state)
+                cand_state = env.apply_block(curr_state, [rule1, rule2])
+                cost = env.get_state_edit_dist(gold_state, cand_state)
                 new_tuple = (b_var_name, i, [j,k], cost)
 
                 if len(paired_costs) < k_matches or cost < highest_cost:
@@ -120,8 +120,8 @@ def match_rulesets(gold: List[List[Action]],
                 for l in range(k+1, len(cand)):
                     rule3 = cand[l]
                     c_var_name = 'c_' + str(i) + ',(' + str(j) + ',' + str(k) + ',' + str(l) + ')'
-                    cand_state = env.apply_block([rule1, rule2, rule3], curr_state)
-                    cost = env.dist_between(gold_state, cand_state)
+                    cand_state = env.apply_block(curr_state, [rule1, rule2, rule3])
+                    cost = env.get_state_edit_dist(gold_state, cand_state)
                     new_tuple = (c_var_name, i, [j,k,l], cost)
 
                     if len(paired_costs) < k_matches or cost < highest_cost:
