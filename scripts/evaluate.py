@@ -612,7 +612,7 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
 
 if __name__ == "__main__":
 
-    manager, gold, states = simulate()
+    manager, gold, states, refs = simulate()
     initial_state = states[0]
 
     if g.calc_metric:
