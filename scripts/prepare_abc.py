@@ -5,7 +5,6 @@ from collections import Counter
 from dataclasses import asdict
 from functools import lru_cache, wraps
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
-from dev_misc import NDA
 
 import networkx as nx
 import numpy as np
@@ -17,47 +16,18 @@ from networkx.algorithms.components import connected_components
 from networkx.algorithms.shortest_paths import shortest_path
 from tqdm import tqdm
 
+from dev_misc import NDA
 from dev_misc.utils import ErrorRecord, recorded_try
 from pypheature.nphthong import InvalidNphthong, Nphthong
 from pypheature.process import (FeatureProcessor, InvalidBaseSegment,
                                 NoMappingFound, NonUniqueMapping, Segment)
 from pypheature.segment import ExclusivityFailure, InvalidSegment, Segment
-
-PDF = pd.DataFrame
-
-
-def run_section(before_msg: str, after_msg: str, **kwargs):
-
-    def decorator(func):
-
-        cached_func = st.cache(hash_funcs={PDF: id, Segment: id, Nphthong: id, FeatureProcessor: id}, **kwargs)(func)
-
-        @wraps(cached_func)
-        def wrapped(*args, **kwargs):
-            status_text = st.subheader(before_msg)
-            ret = cached_func(*args, **kwargs)
-            status_text.subheader(before_msg + '\t' + after_msg)
-            return ret
-
-        return wrapped
-
-    return decorator
+from sound_law.utils import PDF, run_section, run_with_argument
 
 
 @run_section('Loading data...', 'Loading done.')
 def load_data(path: str) -> PDF:
     return pd.read_csv(path, sep='\t', error_bad_lines=False)
-
-
-def run_with_argument(name: str, *, parser: Optional[ArgumentParser] = None, default: Optional[Any] = None, msg: Optional[str] = None):
-    if st._is_running_with_streamlit:
-        argument = st.text_input(f'{name}:', default, help=msg)
-        return argument
-    else:
-        assert parser is not None, 'Must pass parser for script mode.'
-        parser.add_argument(f'--{name}', default=default, help=msg)
-        args = parser.parse_known_args()[0]
-        return getattr(args, name)
 
 
 class I2tException(Exception):
@@ -299,8 +269,10 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     st.title('Prepare alphabet.')
     st.header('Specify the arguments first:')
-    data_path = run_with_argument('data_path', parser=parser,
-                                  default='data/northeuralex-0.9-forms.tsv', msg="Path to the NorthEuraLex dataset.")
+    data_path = run_with_argument('data_path',
+                                  parser=parser,
+                                  default='data/northeuralex-0.9-forms.tsv',
+                                  msg="Path to the NorthEuraLex dataset.")
     raw_words_df = load_data(data_path)
 
     # Add some phones to the dataset -- they might not be present in the original data.
