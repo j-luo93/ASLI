@@ -49,7 +49,8 @@ def recorded_assign(df: PDF, new_name: str, old_name: str, func, error_cls=Asser
     return df, error_df
 
 
-def standardize(ph: str) -> str:
+def standardize(ph: str, ignore: bool = False) -> str:
+    ph = str(IPAString(unicode_string=ph, ignore=ignore))
     return unicodedata.normalize('NFD', ph)
 
 
@@ -176,9 +177,13 @@ def tokenize(df: PDF) -> Tuple[PDF, PDF, str]:
 
 
 @run_section('Standardizing phones...', 'Standardization done.')
-def standardize_phones(df: PDF) -> PDF:
+def standardize_phones(df: PDF) -> Tuple[PDF, PDF, str]:
     raw_ph_df = PDF(set(df.explode('raw_toks')['raw_toks']), columns=['raw_ph'])
-    return raw_ph_df.assign(std_ph=raw_ph_df['raw_ph'].apply(standardize))
+    old_name = 'raw_ph'
+    # Use `recorded_assign` to record the errors, but use normal `assign` with `ignore=True` to get the output df.
+    raw_ph_df = raw_ph_df.assign(std_ph=raw_ph_df[old_name].apply(standardize, ignore=True))
+    _, error_df = recorded_assign(raw_ph_df, 'std_ph_with_error', old_name, standardize, ValueError)
+    return raw_ph_df, error_df, old_name
 
 
 @run_section('Obtain feature vectors using `pypheature`...', 'Feature vectors obtained.')
@@ -203,7 +208,7 @@ def get_proto_phones(std_ph_df: PDF, raw_ph_df: PDF, words_df: PDF) -> PDF:
 
     def get_proto_ph(lst: List[str]) -> str:
         # You want the segment with the highest count, and then shortest length.
-        stats = [(std2cnt[seg], -len(standardize(seg))) for seg in lst]
+        stats = [(std2cnt[seg], -len(standardize(seg, ignore=True))) for seg in lst]
         max_stat = max(stats)
         return lst[stats.index(max_stat)]
 
@@ -287,120 +292,124 @@ if __name__ == "__main__":
     show_errors(error_df, old_name)
 
     if should_proceed('tokenized'):
-        raw_ph_df = standardize_phones(words_df)
-        processor = load_processor()
-        std_ph_df, error_df, old_name = get_feature_vectors(raw_ph_df, processor)
+        raw_ph_df, error_df, old_name = standardize_phones(words_df)
         show_errors(error_df, old_name)
 
         if should_proceed('standardized'):
-            merged_cnt = get_proto_phones(std_ph_df, raw_ph_df, words_df)
-            proto2cnt, i2pp, pp2i, kept_ids, segments = get_kept_phones(merged_cnt, processor)
-            st.write(f'{len(kept_ids)} sounds are kept.')
-            insert_cost = 0.5
-            dist_mat = get_edit_dist(i2pp, segments, insert_cost)
 
-            kept_dist_mat = dist_mat[np.asarray(kept_ids).reshape(-1, 1), kept_ids]
-            kept_i2pp = [i2pp[i] for i in kept_ids]
-            kept_pp2i = {pp: i for i, pp in enumerate(kept_i2pp)}
+            processor = load_processor()
+            std_ph_df, error_df, old_name = get_feature_vectors(raw_ph_df, processor)
+            show_errors(error_df, old_name)
 
-            # Building graphs of connection.
-            top_k = 10
-            g = nx.Graph()
-            for i, pp in enumerate(kept_i2pp):
-                g.add_node(i)
-                # There are two ways of adding an edge. First, the distance is <= insert_cost and it falls within the top k neighbors.
-                sort_i = kept_dist_mat[i, :].copy().argsort()
-                dists = kept_dist_mat[i, sort_i]
-                # Since the closest sound is always itself, we need to use index top_k, instead of top_k - 1.
-                max_dist = max(dists[top_k], insert_cost)
-                for j, d in zip(sort_i, dists):
-                    if d > max_dist:
-                        break
-                    if i != j:
-                        g.add_edge(i, j)
-                # Second, you might add a new vowel for nphthongs.
-                seg = segments[pp2i[pp]]
-                if isinstance(seg, Segment) and seg.is_vowel():
-                    for j, pp in enumerate(kept_i2pp):
-                        seg_j = segments[pp2i[pp]]
-                        if isinstance(seg_j, Nphthong) and len(seg_j) == 2 and kept_dist_mat[i, j] == insert_cost:
+            if should_proceed('prototype'):
+                merged_cnt = get_proto_phones(std_ph_df, raw_ph_df, words_df)
+                proto2cnt, i2pp, pp2i, kept_ids, segments = get_kept_phones(merged_cnt, processor)
+                st.write(f'{len(kept_ids)} sounds are kept.')
+                insert_cost = 0.5
+                dist_mat = get_edit_dist(i2pp, segments, insert_cost)
+
+                kept_dist_mat = dist_mat[np.asarray(kept_ids).reshape(-1, 1), kept_ids]
+                kept_i2pp = [i2pp[i] for i in kept_ids]
+                kept_pp2i = {pp: i for i, pp in enumerate(kept_i2pp)}
+
+                # Building graphs of connection.
+                top_k = 10
+                g = nx.Graph()
+                for i, pp in enumerate(kept_i2pp):
+                    g.add_node(i)
+                    # There are two ways of adding an edge. First, the distance is <= insert_cost and it falls within the top k neighbors.
+                    sort_i = kept_dist_mat[i, :].copy().argsort()
+                    dists = kept_dist_mat[i, sort_i]
+                    # Since the closest sound is always itself, we need to use index top_k, instead of top_k - 1.
+                    max_dist = max(dists[top_k], insert_cost)
+                    for j, d in zip(sort_i, dists):
+                        if d > max_dist:
+                            break
+                        if i != j:
                             g.add_edge(i, j)
-                elif isinstance(seg, Nphthong):
-                    for j, pp in enumerate(kept_i2pp):
-                        seg_j = segments[pp2i[pp]]
-                        if isinstance(seg_j, Segment) and seg_j.is_vowel() and kept_dist_mat[i, j] == insert_cost:
-                            g.add_edge(i, j)
-                        elif isinstance(seg_j, Nphthong) and abs(len(seg) - len(seg_j)) == 1 and kept_dist_mat[i, j] == insert_cost:
-                            g.add_edge(i, j)
+                    # Second, you might add a new vowel for nphthongs.
+                    seg = segments[pp2i[pp]]
+                    if isinstance(seg, Segment) and seg.is_vowel():
+                        for j, pp in enumerate(kept_i2pp):
+                            seg_j = segments[pp2i[pp]]
+                            if isinstance(seg_j, Nphthong) and len(seg_j) == 2 and kept_dist_mat[i, j] == insert_cost:
+                                g.add_edge(i, j)
+                    elif isinstance(seg, Nphthong):
+                        for j, pp in enumerate(kept_i2pp):
+                            seg_j = segments[pp2i[pp]]
+                            if isinstance(seg_j, Segment) and seg_j.is_vowel() and kept_dist_mat[i, j] == insert_cost:
+                                g.add_edge(i, j)
+                            elif isinstance(seg_j, Nphthong) and abs(len(seg) - len(seg_j)) == 1 and kept_dist_mat[i, j] == insert_cost:
+                                g.add_edge(i, j)
 
-            query_sound = st.selectbox('Query sound', sorted(kept_i2pp))
-            st.write(get_connected_sounds(query_sound, g, kept_dist_mat, kept_i2pp, kept_pp2i))
+                query_sound = st.selectbox('Query sound', sorted(kept_i2pp))
+                st.write(get_connected_sounds(query_sound, g, kept_dist_mat, kept_i2pp, kept_pp2i))
 
-            cc = list(connected_components(g))
-            assert len(cc) == 1
+                cc = list(connected_components(g))
+                assert len(cc) == 1
 
-            # Compute average number of connected sounds.
-            cnt = dict()
-            for i in kept_ids:
-                cnt[i2pp[i]] = len(g.edges(i))
-            st.write(f'Average number of connected sounds: {(sum(cnt.values()) / len(kept_ids)):.3f}')
-
-            if should_proceed('about_to_save'):
-                proto_ph_map = dict()
+                # Compute average number of connected sounds.
+                cnt = dict()
                 for i in kept_ids:
-                    ph = i2pp[i]
-                    proto_ph_map[ph] = ph
+                    cnt[i2pp[i]] = len(g.edges(i))
+                st.write(f'Average number of connected sounds: {(sum(cnt.values()) / len(kept_ids)):.3f}')
 
-                lengths = [len(pp) for pp in kept_i2pp]
-                neg_counts = [-proto2cnt.loc[pp]['cnt'] for pp in kept_i2pp]
-                for i, pp in tqdm(enumerate(i2pp)):
-                    if i not in kept_ids:
-                        dists = dist_mat[i, kept_ids].copy()
-                        stats = list(zip(dists, neg_counts, lengths))
-                        j = stats.index(min(stats))
-                        proto_ph_map[pp] = kept_i2pp[j]
+                if should_proceed('about_to_save'):
+                    proto_ph_map = dict()
+                    for i in kept_ids:
+                        ph = i2pp[i]
+                        proto_ph_map[ph] = ph
 
-                g_edges = set(g.edges)
-                edges = set(g_edges)
-                for i, j in g_edges:
-                    edges.add((j, i))
+                    lengths = [len(pp) for pp in kept_i2pp]
+                    neg_counts = [-proto2cnt.loc[pp]['cnt'] for pp in kept_i2pp]
+                    for i, pp in tqdm(enumerate(i2pp)):
+                        if i not in kept_ids:
+                            dists = dist_mat[i, kept_ids].copy()
+                            stats = list(zip(dists, neg_counts, lengths))
+                            j = stats.index(min(stats))
+                            proto_ph_map[pp] = kept_i2pp[j]
 
-                for i in range(len(i2pp)):
-                    assert (i, i) not in edges
+                    g_edges = set(g.edges)
+                    edges = set(g_edges)
+                    for i, j in g_edges:
+                        edges.add((j, i))
 
-                processor.load_repository(kept_i2pp)
+                    for i in range(len(i2pp)):
+                        assert (i, i) not in edges
 
-                cl_map = dict()
-                gb_map = dict()
-                for ph in kept_i2pp:
-                    segment = processor.process(ph)
-                    if isinstance(segment, Segment) and segment.is_short():
-                        try:
-                            after = processor.change_features(segment, ['+long'])
-                        except NonUniqueMapping:
-                            print(f"non-unique mapping for {ph}")
-                        except NoMappingFound:
-                            print(f"no mapping for {ph}")
+                    processor.load_repository(kept_i2pp)
 
-                        after_id = kept_pp2i[str(after)]
-                        before_id = kept_pp2i[ph]
-                        if (before_id, after_id) in edges:
-                            print(ph, after)
-                            cl_map[ph] = str(after)
-                    if isinstance(segment, Nphthong) and len(segment.vowels) == 2:
-                        first = str(segment.vowels[0])
-                        second = str(segment.vowels[1])
-                        if first in ['i', 'u'] and second in kept_pp2i:
-                            gb_map[ph] = second
+                    cl_map = dict()
+                    gb_map = dict()
+                    for ph in kept_i2pp:
+                        segment = processor.process(ph)
+                        if isinstance(segment, Segment) and segment.is_short():
+                            try:
+                                after = processor.change_features(segment, ['+long'])
+                            except NonUniqueMapping:
+                                print(f"non-unique mapping for {ph}")
+                            except NoMappingFound:
+                                print(f"no mapping for {ph}")
 
-                out_path = 'data/nel_segs.pkl'
-                with open(out_path, 'wb') as fout:
-                    pickle.dump({
-                        'proto_ph_map': proto_ph_map,
-                        'proto_ph_lst': kept_i2pp,
-                        'dist_mat': kept_dist_mat,
-                        'edges': [(kept_i2pp[i], kept_i2pp[j]) for i, j in edges],
-                        'cl_map': cl_map,
-                        'gb_map': gb_map},
-                        fout)
-                st.write(f'Saved to {out_path}.')
+                            after_id = kept_pp2i[str(after)]
+                            before_id = kept_pp2i[ph]
+                            if (before_id, after_id) in edges:
+                                print(ph, after)
+                                cl_map[ph] = str(after)
+                        if isinstance(segment, Nphthong) and len(segment.vowels) == 2:
+                            first = str(segment.vowels[0])
+                            second = str(segment.vowels[1])
+                            if first in ['i', 'u'] and second in kept_pp2i:
+                                gb_map[ph] = second
+
+                    out_path = 'data/nel_segs.pkl'
+                    with open(out_path, 'wb') as fout:
+                        pickle.dump({
+                            'proto_ph_map': proto_ph_map,
+                            'proto_ph_lst': kept_i2pp,
+                            'dist_mat': kept_dist_mat,
+                            'edges': [(kept_i2pp[i], kept_i2pp[j]) for i, j in edges],
+                            'cl_map': cl_map,
+                            'gb_map': gb_map},
+                            fout)
+                    st.write(f'Saved to {out_path}.')

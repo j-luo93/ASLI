@@ -24,10 +24,10 @@ from .mcts_cpp import (PyPath, PyST_CLL,  # pylint: disable=no-name-in-module
 int2st = {
     PyST_CLL: 'CLL',
     PyST_CLR: 'CLR',
-    PyST_NONE: None,
+    PyST_NONE: 'basic',
     PyST_VS: 'VS',
-    PyST_GBJ: 'GBJ',
-    PyST_GBW: 'GBW',
+    PyST_GBJ: 'GB',
+    PyST_GBW: 'GB',
     NULL_ID: None  # This is used in STOP action.
 }
 
@@ -109,8 +109,9 @@ class Trajectory:
             start = 7 * i
             end = start + 7
             r = self.rewards[i]
-            action = a.SoundChangeAction(self.actions[start], self.actions[start + 2], self.actions[start + 3], self.actions[start + 4],
-                                         self.actions[start + 5], self.actions[start + 6], special_type=int2st[self.actions[start + 1]])
+            action = a.SoundChangeAction(self.actions[start], self.actions[start + 2],
+                                         int2st[self.actions[start + 1]], self.actions[start + 3],
+                                         self.actions[start + 4], self.actions[start + 5], self.actions[start + 6])
             qs = self.qs[start:end]
             pa = self.permissible_actions[start: end]
             mcts_pi = self.mcts_pis[start: end]
