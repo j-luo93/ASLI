@@ -183,6 +183,8 @@ class Ppo:
 
 @reg
 class OPRLFake(OPLatSpaPhono):
+    char_emb_size: int = 128
+    hidden_size: int = 128
     use_rl: bool = True
     agent: str = 'a2c'
     num_layers: int = 1
@@ -282,6 +284,7 @@ class OPRLPgmcGot(OPRLFake):
     src_lang: str = 'pgmc'
     tgt_lang: str = 'got'
     max_rollout_length: int = 20
+    replay_buffer_size: int = 1000
 
 
 @reg
@@ -289,13 +292,15 @@ class OPRLPgmcNon(OPRLFake):
     src_lang: str = 'pgmc'
     tgt_lang: str = 'non'
     max_rollout_length: int = 40
+    replay_buffer_size: int = 2000
 
 
 @reg
 class OPRLPgmcAng(OPRLFake):
     src_lang: str = 'pgmc'
     tgt_lang: str = 'ang'
-    max_rollout_length: int = 50
+    max_rollout_length: int = 60
+    replay_buffer_size: int = 3000
 
 
 @mcts_reg
@@ -327,11 +332,21 @@ class BasicMcts:
 @mcts_reg
 class SmallSims(BasicMcts):
     # This does not work for R10C.
-    expansion_batch_size: int = 40
+    expansion_batch_size: int = 100
     episode_check_interval: int = 10
-    num_mcts_sims: int = 1000
+    num_inner_steps: int = 50
+    use_alignment: bool = True
+    heur_c: float = 1.0
+    dirichlet_alpha: float = 0.03
+    noise_ratio: float = 0.3
+    site_threshold: int = 2
+    dist_threshold: float = 0.0
+    episode_check_interval: int = 1
+    num_mcts_sims: int = 2000
     num_episodes: int = 10
     virtual_loss: float = 0.2
+    num_workers: int = 1
+    puct_c: float = 1.0
 
 
 @mcts_reg

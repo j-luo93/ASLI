@@ -245,7 +245,7 @@ class OnePairManager:
                 # tr.save(g.log_dir)
                 return
             else:
-                trainer = get_trainer(model, 'rl', None, None, mcts=mcts)
+                trainer = get_trainer(model, 'rl', None, metric_writer, mcts=mcts)
             # else:
             #     collector = TrajectoryCollector(g.batch_size,
             #                                     max_rollout_length=g.max_rollout_length,
