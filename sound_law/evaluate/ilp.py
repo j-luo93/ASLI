@@ -162,15 +162,13 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
     
     return
 
-# toy data
-# gold = [
-#     ['a', 'b'],
-#     ['c', 'd'],
-#     ['e', 'f']
-# ]
-# cand = ['alpha', 'beta', 'gamma', 'delta']
-gold = [[x,x] for x in range(10)]
-cand = [x for x in range(20)]
-env = ToyEnv('foo')
+if __name__ == "__main__":
 
-match_rulesets(gold, cand, env)
+    # manager, gold, states, refs = simulate()
+    # initial_state = states[0]
+
+    gold = [[x,x] for x in range(10)]
+    cand = [x for x in range(20)]
+    env = ToyEnv('foo')
+
+    match_rulesets(gold, cand, env)
