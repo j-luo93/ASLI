@@ -310,7 +310,7 @@ class BasicMcts:
     expansion_batch_size: int = 10
     num_mcts_sims: int = 40
     num_inner_steps: int = 50
-    step_penalty: float = 0.001
+    step_penalty: float = 0.0
     learning_rate: float = 1e-3
     virtual_loss: float = 0.5
     game_count: int = 3

@@ -228,7 +228,9 @@ class MctsTrainer(RLTrainer):
         # metrics +=  Metric('eval_reward', eval_tr.total_reward, 1)
 
         # Add these new episodes to the replay buffer.
-        for tr in new_tr:
+        for i, tr in enumerate(new_tr, 1):
+            self.metric_writer.add_scalar('episode_reward', tr.rewards.sum(),
+                                          global_step=i + self.tracker['step'].value * g.num_episodes)
             # NOTE(j_luo) Use temperature if it's positive.
             if g.tau > 0.0:
                 weight = math.exp(tr.total_reward * 10.0)
