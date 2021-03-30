@@ -5,6 +5,7 @@ import threading
 import time
 from datetime import date, datetime
 from pathlib import Path
+from typing import List, Tuple, Union
 
 import pandas as pd
 import streamlit as st
@@ -12,8 +13,10 @@ import streamlit as st
 
 class TensorboardLaunchar:
 
-    def __init__(self, selected_run: str, port: int):
-        self.selected_run = selected_run
+    def __init__(self, selected_runs: Union[str, List[str]], port: int):
+        if isinstance(selected_runs, str):
+            selected_runs = [selected_runs]
+        self.selected_runs = selected_runs
         self.port = port
         self.output = None
         self._thread = None
@@ -21,7 +24,8 @@ class TensorboardLaunchar:
     def launch(self):
 
         def run_cmd():
-            cmd = f'tensorboard --logdir {self.selected_run} --host localhost --port {self.port} &'
+            logdir_spec = ','.join([f'@{run}:{run}' for run in self.selected_runs])
+            cmd = f'tensorboard --logdir_spec {logdir_spec} --host localhost --port {self.port} &'
             self.output = subprocess.run(cmd, capture_output=True, check=True, shell=True, text=True)
 
         self._thread = threading.Thread(target=run_cmd)
@@ -49,7 +53,36 @@ if __name__ == "__main__":
                 gpu_mem_total = gpu_info['memory.total']
                 gpu_df_records.append({'id': gpu_idx, 'mem_used': gpu_mem_used, 'mem_total': gpu_mem_total})
             gpu_df = pd.DataFrame(gpu_df_records)
-            st.write(gpu_df)
+            st.table(gpu_df)
+
+    # Tensorboard stats.
+    with st.beta_expander("Tensorboard"):
+        output = subprocess.run('pgrep -u $(whoami) tensorboard', shell=True,
+                                text=True, capture_output=True)
+
+        ports_to_use = list(range(8701, 8710))  # Use these ten ports.
+
+        def get_pid_info(pid: int) -> Tuple[int, str]:
+            port = subprocess.run(
+                f"ss -lp | grep pid={pid} | awk '{{print $5}}' | awk -F ':' '{{print $2}}'", shell=True, capture_output=True, text=True).stdout
+            cmd = subprocess.run(f'ps -p {pid} -o args | tail -n 1', capture_output=True, text=True, shell=True).stdout
+            return int(port), cmd
+
+        tb_records = list()
+        for pid in output.stdout.split():
+            port, cmd = get_pid_info(pid)
+            tb_records.append({'pid': pid, 'port': port, 'command': cmd})
+            try:
+                ports_to_use.remove(port)
+            except ValueError:
+                pass
+        tb_info_df = pd.DataFrame(tb_records)
+        st.table(tb_info_df)
+        # if output
+        # if output.stdout and col2.button('Kill', help='Kill the tensorboard processes.'):
+        #     for pid in output.stdout.split():
+        #         subprocess.run(f'kill -9 {pid}', shell=True)
+        #     st.write('tensorboard processes killed.')
 
     earliest_date = st.sidebar.date_input('Earliest date',
                                           value=date.fromisoformat('2021-03-28'),
@@ -81,8 +114,18 @@ if __name__ == "__main__":
             saved_runs.append(saved_folder)
     saved_runs = sorted(saved_runs, reverse=True)
 
-    selected_run = st.selectbox('Saved run', saved_runs, help='Select a saved run to inspect.')
-    if selected_run:
+    selected_runs = st.multiselect('Saved run', saved_runs, help='Select saved runs to inspect.')
+    if selected_runs:
+        # Op to launch tensorboard.
+        if not ports_to_use:
+            st.info('No usable ports left. Please kill more tensorboard processes.')
+        if st.button('Launch', key='launch_tensorboard'):
+            port = ports_to_use[0]
+            with st.spinner(f'Launching Tensorboard at port {port}...'):
+                launcher = TensorboardLaunchar(selected_runs, port)
+                launcher.launch()
+                if not launcher.is_successful():
+                    st.error(launcher.output.stderr)
         # Op to mark an important run.
         if directory_choice == 'log':
             with st.beta_expander("Mark as important"):
@@ -96,27 +139,10 @@ if __name__ == "__main__":
                         if overwrite == 'Y':
                             link.unlink()
                         try:
-                            link.symlink_to(selected_run.resolve(), target_is_directory=True)
+                            link.symlink_to(selected_runs.resolve(), target_is_directory=True)
                             col3.write('Marked.')
                         except FileExistsError:
                             col3.write('File already exists. Choose a different name.')
-
-        # Tensorboard related ops.
-        with st.beta_expander("Tensorboard"):
-            port = st.number_input('Port', value=8701)
-            col1, col2, _ = st.beta_columns([1, 1, 5])
-            if col1.button('Launch', key='launch_tensorboard'):
-                with st.spinner(f'Launching Tensorboard at port {port}...'):
-                    launcher = TensorboardLaunchar(selected_run, port)
-                    launcher.launch()
-                    if not launcher.is_successful():
-                        st.error(launcher.output.stderr)
-            output = subprocess.run('pgrep -u $(whoami) tensorboard', shell=True,
-                                    text=True, capture_output=True)
-            if output.stdout and col2.button('Kill', help='Kill the tensorboard processes.'):
-                for pid in output.stdout.split():
-                    subprocess.run(f'kill -9 {pid}', shell=True)
-                st.write('tensorboard processes killed.')
 
     # Job creation.
     with st.beta_expander('Job creation'):
@@ -149,7 +175,12 @@ if __name__ == "__main__":
         if st.checkbox('add_noise'):
             cmd += ' --add_noise'
 
-        msg = st.text_input('message', help='The message to append to the run name.')
+        col1, _, col3 = st.beta_columns([2, 1, 3])
+        weight_decay = col1.select_slider('weight_decay', [0.0, 1e-4, 1e-3], value=0.0)
+        if weight_decay != 0.0:
+            cmd += f' --weight_decay {weight_decay}'
+
+        msg = col3.text_input('message', help='The message to append to the run name.')
         if msg:
             cmd += f' --message {msg}'
 
