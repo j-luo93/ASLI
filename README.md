@@ -17,3 +17,5 @@ python scripts/process_data_wikt.py --data_path data/Germanic.tsv --source gem-p
 ```
 # Dependencies
 * various packages in `requirements.txt`. Run `pip install -r requirements.txt`.
+* `boost` packages are needed. On Ubuntu, run `sudo apt-get install libboost-all-dev`.
+* Install [`spdlog`](https://github.com/gabime/spdlog#static-lib-version-recommended---much-faster-compile-times) with the static lib version.
