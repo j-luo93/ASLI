@@ -13,6 +13,7 @@ struct MctsOpt
     float heur_c;
     bool add_noise;
     bool use_num_misaligned;
+    bool use_max_value;
 };
 
 struct Edge

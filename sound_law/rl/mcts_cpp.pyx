@@ -175,7 +175,8 @@ cdef class PyMctsOpt:
                   int num_threads,
                   float heur_c,
                   bool add_noise,
-                  bool use_num_misaligned):
+                  bool use_num_misaligned,
+                  bool use_max_value):
         self.c_obj = MctsOpt()
         self.c_obj.puct_c = puct_c
         self.c_obj.game_count = game_count
@@ -184,6 +185,7 @@ cdef class PyMctsOpt:
         self.c_obj.heur_c = heur_c
         self.c_obj.add_noise = add_noise
         self.c_obj.use_num_misaligned = use_num_misaligned
+        self.c_obj.use_max_value = use_max_value
 
 cdef class PyEnv:
     cdef Env *ptr

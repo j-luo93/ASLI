@@ -144,9 +144,9 @@ public:
     abc_t get_action_at(size_t) const;
     const Affected &get_affected_at(size_t) const;
     size_t get_num_affected_at(size_t) const;
-    vec<float> get_scores(float, float, bool, bool) const;
+    vec<float> get_scores(float, float, bool, bool, bool) const;
     // Given the current action phase, get the best action.
-    ChosenChar get_best_action(float, float, bool, bool) const;
+    ChosenChar get_best_action(float, float, bool, bool, bool) const;
     bool is_expanded() const;
     bool is_evaluated() const;
     // Play one mini-step.

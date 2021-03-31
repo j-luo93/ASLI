@@ -174,6 +174,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         float heur_c
         bool add_noise
         bool use_num_misaligned
+        bool use_max_value
 
         MctsOpt()
 

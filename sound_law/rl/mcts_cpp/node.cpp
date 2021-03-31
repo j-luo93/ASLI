@@ -26,10 +26,10 @@ TreeNode::TreeNode(const vec<Word *> &words,
 bool BaseNode::is_expanded() const { return (permissible_chars.size() > 0); }
 bool BaseNode::is_evaluated() const { return (priors.size() > 0); }
 
-ChosenChar BaseNode::get_best_action(float puct_c, float heur_c, bool add_noise, bool use_num_misaligned) const
+ChosenChar BaseNode::get_best_action(float puct_c, float heur_c, bool add_noise, bool use_num_misaligned, bool use_max_value) const
 {
     assert(is_expanded() && is_evaluated());
-    auto scores = get_scores(puct_c, heur_c, add_noise, use_num_misaligned);
+    auto scores = get_scores(puct_c, heur_c, add_noise, use_num_misaligned, use_max_value);
     auto it = std::max_element(scores.begin(), scores.end());
     int index = std::distance(scores.begin(), it);
     auto ret = ChosenChar(index, permissible_chars[index]);
@@ -42,7 +42,7 @@ inline float randf(float high)
     return high * static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 }
 
-vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool use_num_misaligned) const
+vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool use_num_misaligned, bool use_max_value) const
 {
     assert(!stopped || !is_tree_node());
     float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
@@ -51,8 +51,11 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool
     for (size_t i = 0; i < priors.size(); ++i)
     {
         float nsa = static_cast<float>(action_counts[i]);
-        float q = total_values[i] / (nsa + 1e-8);
-        float mv = nsa > 0 ? max_values[i] : 0.0;
+        float q;
+        if (use_max_value)
+            q = nsa > 0 ? max_values[i] : 0.0;
+        else
+            q = total_values[i] / (nsa + 1e-8);
         float p = priors[i];
         float u = puct_c * p * sqrt_ns / (1 + nsa);
         // float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);

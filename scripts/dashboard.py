@@ -269,6 +269,9 @@ if __name__ == "__main__":
         ht.add_checkbox(lambda x: ' --use_num_misaligned',
                         lambda x: 'unm',
                         'use_num_misaligned')
+        ht.add_checkbox(lambda x: ' --use_max_value',
+                        lambda x: 'umv',
+                        'use_max_value')
 
         ht.add_select_slider(lambda x: x == 50,
                              lambda x: f' --num_inner_steps {x}',

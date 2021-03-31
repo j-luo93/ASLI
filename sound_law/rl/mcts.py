@@ -52,7 +52,7 @@ class Mcts(PyMcts):
         # Clear priors first and then stats -- stats are needed to speed up clearing.
         self.env.clear_priors(self.env.start, True)
         self.env.clear_stats(self.env.start, True)
-        logging.info(f'#trie nodes {self.env.evict(500000)}')
+        logging.debug(f'#trie nodes {self.env.evict(500000)}')
 
     def evaluate(self, states, steps: Optional[Union[int, LT]] = None) -> List[float]:
         """Expand and evaluate the leaf node."""

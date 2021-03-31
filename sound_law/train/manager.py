@@ -52,7 +52,6 @@ add_argument('separate_value', dtype=bool, default=True,
              msg='Flag to use a separate model for value network. Used in RL.')
 add_argument('max_rollout_length', default=10, dtype=int, msg='Maximum length of rollout')
 add_argument('segments_dump_path', dtype='path', msg='Path to the processed Phoible pickle file.')
-add_argument('use_max_value', dtype=bool, default=False, msg='Flag to use max mode in MCTS.')
 add_argument('use_conditional', dtype=bool, default=True, msg='Flag to use conditional rules.')
 add_argument('use_pruning', dtype=bool, default=True, msg='Flag to use pruning.')
 add_argument('dist_threshold', dtype=float, default=0.0, msg='Distance threshold for pruning.')
@@ -62,6 +61,7 @@ add_argument('mcts_log_to_file', dtype=bool, default=False, msg="Flag to log to 
 add_argument('add_noise', dtype=bool, default=False, msg="Flag to add noise to rewards.")
 add_argument('use_num_misaligned', dtype=bool, default=False,
              msg="Flag to use number of misaligned characters instead of edit distance as heuristic.")
+add_argument('use_max_value', dtype=bool, default=False, msg="Flag to use max_value as q during exploration.")
 add_argument('use_alignment', dtype=bool, default=False, msg="Flag to use alignment to compute heuristics.")
 add_argument('use_aligned_repr', dtype=bool, default=False,
              msg="Flag to use alignment to learned aligned representations.")
@@ -244,7 +244,7 @@ class OnePairManager:
             model = get_model(dl=dl)
             # if g.use_mcts:
             mcts_opt = PyMctsOpt(g.puct_c, g.game_count, g.virtual_loss, g.num_workers,
-                                 g.heur_c, g.add_noise, g.use_num_misaligned)
+                                 g.heur_c, g.add_noise, g.use_num_misaligned, g.use_max_value)
             mcts = Mcts(self.env, mcts_opt, agent=model)
             # mcts.set_logging_options(g.mcts_verbose_level, g.mcts_log_to_file)
             if g.evaluate_only:

@@ -225,7 +225,7 @@ class MctsTrainer(RLTrainer):
         metrics = Metrics(tr_rew, tr_len, success)
 
         eval_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker, num_episodes=1, is_eval=True)[0]
-        metrics +=  Metric('eval_reward', eval_tr.total_reward, 1)
+        metrics += Metric('eval_reward', eval_tr.total_reward, 1)
 
         # Add these new episodes to the replay buffer.
         for i, tr in enumerate(new_tr, 1):
@@ -244,6 +244,12 @@ class MctsTrainer(RLTrainer):
         weights = np.asarray(self.buffer_weight)
         weights = weights / weights.sum()
         # Main loop.
+        from torch.optim import SGD, Adam
+        optim_cls = Adam if g.optim_cls == 'adam' else SGD
+        optim_kwargs = dict()
+        if optim_cls == SGD:
+            optim_kwargs['momentum'] = 0.9
+        self.set_optimizer(optim_cls, lr=g.learning_rate, weight_decay=g.weight_decay, **optim_kwargs)
         with self.agent.policy_grad(True), self.agent.value_grad(True):
             for _ in range(g.num_inner_steps):
                 # Get a batch of training trajectories from the replay buffer.
