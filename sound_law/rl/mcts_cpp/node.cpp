@@ -58,7 +58,7 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise) cons
         // float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
         // float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
         // float h = heur_c * sqrt(static_cast<float>(affected[i].num_misaligned())) / (1 + nsa);
-        float h = heur_c * static_cast<float>(affected[i].get_num_misaligned()) / (1 + nsa);
+        float h = heur_c > 0.0 ? heur_c * static_cast<float>(affected[i].get_numBUT 4-5pm (EDBUT 4-5pm (ED_misaligned()) / (1 + nsa) : 0.0;
 
         // std::cerr << "--------------\n";
         // std::cerr << affected[i].num_misaligned() << " ";

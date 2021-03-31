@@ -60,8 +60,9 @@ add_argument('site_threshold', dtype=int, default=1, msg='Site threshold for pru
 add_argument('mcts_verbose_level', dtype=int, default=0, msg="Verbose level for debugging MCTS.")
 add_argument('mcts_log_to_file', dtype=bool, default=False, msg="Flag to log to file for debugging MCTS.")
 add_argument('add_noise', dtype=bool, default=False, msg="Flag to add noise to rewards.")
-add_argument('use_alignment', dtype=bool, default=False,
-             msg="Flag to use alignment to learn representations and compute heuristics.")
+add_argument('use_alignment', dtype=bool, default=False, msg="Flag to use alignment to compute heuristics.")
+add_argument('use_aligned_repr', dtype=bool, default=False,
+             msg="Flag to use alignment to learned aligned representations.")
 
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)
@@ -205,14 +206,17 @@ class OnePairManager:
                 # trainer.init_params('uniform', -0.1, 0.1)
                 trainer.init_params('xavier_uniform')
             optim_cls = Adam if g.optim_cls == 'adam' else SGD
+            optim_kwargs = dict()
+            if optim_cls == SGD:
+                optim_kwargs['momentum'] = 0.9
             if not g.use_rl or g.use_mcts or (g.agent == 'a2c' and g.value_steps == 0):
-                trainer.set_optimizer(optim_cls, lr=g.learning_rate, weight_decay=g.weight_decay)
+                trainer.set_optimizer(optim_cls, lr=g.learning_rate, weight_decay=g.weight_decay, **optim_kwargs)
             else:
                 trainer.set_optimizer(optim_cls, name='policy', mod=model.policy_net,
-                                      lr=g.learning_rate)  # , weight_decay=1e-4)
+                                      lr=g.learning_rate, **optim_kwargs)  # , weight_decay=1e-4)
                 if g.agent == 'a2c':
                     trainer.set_optimizer(optim_cls, name='value', mod=model.value_net,
-                                          lr=g.value_learning_rate)  # , weight_decay=1e-4)
+                                          lr=g.value_learning_rate, **optim_kwargs)  # , weight_decay=1e-4)
             return trainer
 
         def run_once(train_name, dev_name, test_name):

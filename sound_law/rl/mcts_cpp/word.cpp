@@ -206,6 +206,9 @@ const Alignment &Word::get_almt_at(int order) const { return almts.at(order); }
 
 bool WordSpace::is_aligned(const Word *word, int order, size_t position) const
 {
+    if (!opt.use_alignment)
+        return true;
+
     assert(opt.use_alignment);
     const auto &almt = word->get_almt_at(order);
     const auto c1 = word->id_seq[position];

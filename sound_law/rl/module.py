@@ -132,10 +132,10 @@ class StateEncoder(nn.Module):
     # FIXME(j_luo) this might not be instance-specific.
     @cacheable(switch='state_repr')
     def forward(self, curr_ids: LT, end_ids: LT, almts: Optional[Tuple[LT, LT]] = None):
-        if g.use_alignment and almts is None:
-            raise RuntimeError(f'Must pass `almts` if `use_alignment` is True.')
+        if g.use_aligned_repr and almts is None:
+            raise RuntimeError(f'Must pass `almts` if `use_aligned_repr` is True.')
 
-        if g.use_alignment:
+        if g.use_aligned_repr:
             curr_almts, end_almts = almts
             assert curr_almts.shape == curr_ids.shape
             assert end_almts.shape[1:] == end_ids.shape
