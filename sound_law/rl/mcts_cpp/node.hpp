@@ -17,22 +17,25 @@ enum class ActionPhase : int
 class Affected
 {
 private:
+    float total_misalign_score = 0.0;
     size_t num_misaligned = 0;
 
     vec<int> orders;
     vec<size_t> positions;
-    vec<bool> aligned;
+    vec<float> misalign_scores;
 
 public:
     inline size_t size() const { return orders.size(); };
-    inline void push_back(int order, size_t position, bool aligned)
+    inline void push_back(int order, size_t position, float misalign_score)
     {
         orders.push_back(order);
         positions.push_back(position);
-        this->aligned.push_back(aligned);
-        if (!aligned)
+        this->misalign_scores.push_back(misalign_score);
+        total_misalign_score += misalign_score;
+        if (misalign_score > 0.0)
             ++num_misaligned;
     }
+    inline float get_misalignment_score() const { return total_misalign_score; }
     inline size_t get_num_misaligned() const { return num_misaligned; }
     inline int get_order_at(size_t index) const { return orders[index]; };
     inline int get_position_at(size_t index) const { return positions[index]; };
@@ -141,13 +144,13 @@ public:
     abc_t get_action_at(size_t) const;
     const Affected &get_affected_at(size_t) const;
     size_t get_num_affected_at(size_t) const;
-    vec<float> get_scores(float, float, bool) const;
+    vec<float> get_scores(float, float, bool, bool) const;
     // Given the current action phase, get the best action.
-    ChosenChar get_best_action(float, float, bool) const;
+    ChosenChar get_best_action(float, float, bool, bool) const;
     bool is_expanded() const;
     bool is_evaluated() const;
     // Play one mini-step.
-    pair<BaseNode *, ChosenChar> play_mini() const;
+    pair<BaseNode *, ChosenChar> play_mini(PlayStrategy) const;
 
     /* --------------------- Pruning-related --------------------- */
 
@@ -283,7 +286,7 @@ public:
     float get_dist() const;
     bool is_done() const;
     bool is_leaf() const;
-    pair<TreeNode *, Subpath> play() const;
+    pair<TreeNode *, Subpath> play(PlayStrategy) const;
     const IdSeq &get_id_seq(int) const;
     size_t size() const;
     bool is_transitional() const override;
@@ -347,7 +350,7 @@ class Traverser
     // Visit one node and append it to the queue if it hasn't been visited.
     static void visit(BaseNode *node, vec<BaseNode *> &queue)
     {
-        if (!node->visited)
+        if (!node->visited && (node->visit_count > 0))
         {
             node->visited = true;
             queue.push_back(node);

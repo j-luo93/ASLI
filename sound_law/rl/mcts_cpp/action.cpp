@@ -191,13 +191,13 @@ void ActionSpace::register_cl_map(abc_t before, abc_t after) { cl_map[before] = 
 void ActionSpace::register_gbj_map(abc_t before, abc_t after) { gbj_map[before] = after; }
 void ActionSpace::register_gbw_map(abc_t before, abc_t after) { gbw_map[before] = after; }
 
-Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss, float heur_c, bool add_noise) const
+Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_count, float virtual_loss, float heur_c, bool add_noise, bool use_num_misaligned) const
 {
     Subpath subpath = Subpath();
 
     // std::cerr << "before\n";
     SPDLOG_DEBUG("ActionSpace:: getting best subpath...");
-    auto before = node->get_best_action(puct_c, heur_c, add_noise);
+    auto before = node->get_best_action(puct_c, heur_c, add_noise, use_num_misaligned);
     bool stopped = (before.first == 0);
     auto before_mn = get_mini_node(node, node, before, ActionPhase::BEFORE, stopped);
     subpath.chosen_seq[0] = before;
@@ -208,7 +208,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: before done.");
 
     // std::cerr << "special_type\n";
-    auto special_type = before_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto special_type = before_mn->get_best_action(puct_c, heur_c, add_noise, use_num_misaligned);
     auto st_mn = get_mini_node(node, before_mn, special_type, ActionPhase::SPECIAL_TYPE, stopped);
     subpath.chosen_seq[1] = special_type;
     subpath.mini_node_seq[1] = st_mn;
@@ -217,7 +217,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: special_type done.");
 
     // std::cerr << "after\n";
-    auto after = st_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto after = st_mn->get_best_action(puct_c, heur_c, add_noise, use_num_misaligned);
     bool use_vowel_seq = (static_cast<SpecialType>(special_type.second) == SpecialType::VS);
     auto after_mn = get_mini_node(node, st_mn, after, ActionPhase::AFTER, stopped);
     subpath.chosen_seq[2] = after;
@@ -227,7 +227,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: after done.");
 
     // std::cerr << "pre\n";
-    auto pre = after_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto pre = after_mn->get_best_action(puct_c, heur_c, add_noise, use_num_misaligned);
     auto pre_mn = get_mini_node(node, after_mn, pre, ActionPhase::PRE, stopped);
     subpath.chosen_seq[3] = pre;
     subpath.mini_node_seq[3] = pre_mn;
@@ -236,7 +236,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: pre done.");
 
     // std::cerr << "d_pre\n";
-    auto d_pre = pre_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto d_pre = pre_mn->get_best_action(puct_c, heur_c, add_noise, use_num_misaligned);
     auto d_pre_mn = get_mini_node(node, pre_mn, d_pre, ActionPhase::D_PRE, stopped);
     subpath.chosen_seq[4] = d_pre;
     subpath.mini_node_seq[4] = d_pre_mn;
@@ -245,7 +245,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: d_pre done.");
 
     // std::cerr << "post\n";
-    auto post = d_pre_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto post = d_pre_mn->get_best_action(puct_c, heur_c, add_noise, use_num_misaligned);
     auto post_mn = get_mini_node(node, d_pre_mn, post, ActionPhase::POST, stopped);
     subpath.chosen_seq[5] = post;
     subpath.mini_node_seq[5] = post_mn;
@@ -254,7 +254,7 @@ Subpath ActionSpace::get_best_subpath(TreeNode *node, float puct_c, int game_cou
     SPDLOG_DEBUG("ActionSpace:: post done.");
 
     // std::cerr << "d_post\n";
-    auto d_post = post_mn->get_best_action(puct_c, heur_c, add_noise);
+    auto d_post = post_mn->get_best_action(puct_c, heur_c, add_noise, use_num_misaligned);
     subpath.chosen_seq[6] = d_post;
     SPDLOG_DEBUG("ActionSpace:: d_post done.");
 
@@ -405,13 +405,13 @@ void ActionSpace::expand_before(MiniNode *node, int chosen_index) const
         {
             auto base_unit = word_space->opt.unit2base[id_seq[pos - 1]];
             if (cl_map.contains(base_unit))
-                cll_aff.push_back(order, pos, word_space->is_aligned(word, order, pos));
+                cll_aff.push_back(order, pos, word_space->get_misalignment_score(word, order, pos));
         }
         if (pos < (id_seq.size() - 1))
         {
             auto base_unit = word_space->opt.unit2base[id_seq[pos + 1]];
             if (cl_map.contains(base_unit))
-                clr_aff.push_back(order, pos, word_space->is_aligned(word, order, pos));
+                clr_aff.push_back(order, pos, word_space->get_misalignment_score(word, order, pos));
         }
     }
     if (cll_aff.size() > 0)
@@ -578,20 +578,20 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         word = static_cast<TreeNode *>(node)->words[order];
     else
         word = static_cast<MiniNode *>(node)->base->words[order];
-    auto aligned = word_space->is_aligned(word, order, pos);
+    auto misalign_score = word_space->get_misalignment_score(word, order, pos);
 
     if (!char_map.contains(unit))
     {
         // Add one more permission char.
         char_map[unit] = node->get_num_actions();
         auto aff = Affected();
-        aff.push_back(order, pos, aligned);
+        aff.push_back(order, pos, misalign_score);
         ActionManager::add_action(node, unit, aff);
     }
     else
     {
         // Add one more position.
-        ActionManager::update_affected_at(node, char_map[unit], order, pos, aligned);
+        ActionManager::update_affected_at(node, char_map[unit], order, pos, misalign_score);
     }
 
     Stress stress = word_space->opt.unit_stress[unit];

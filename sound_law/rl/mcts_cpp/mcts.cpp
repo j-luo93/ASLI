@@ -69,7 +69,7 @@ Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int
     {
         // Complete sampling one action.
         SPDLOG_DEBUG("Mcts: node str\n{}", str::from(node));
-        auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c, opt.add_noise);
+        auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c, opt.add_noise, opt.use_num_misaligned);
         SPDLOG_DEBUG("Mcts: node subpath found.");
 
         // Add virtual loss.

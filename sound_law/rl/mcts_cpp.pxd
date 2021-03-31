@@ -32,6 +32,9 @@ cdef extern from "mcts_cpp/common.hpp":
     cdef cppclass SpecialType:
         pass
 
+    cdef cppclass PlayStrategy:
+        pass
+
 cdef extern from "mcts_cpp/common.hpp" namespace "Stress":
     cdef Stress NOSTRESS
     cdef Stress STRESSED
@@ -44,6 +47,10 @@ cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
     cdef SpecialType VS
     cdef SpecialType GBJ
     cdef SpecialType GBW
+
+cdef extern from "mcts_cpp/common.hpp" namespace "PlayStrategy":
+    cdef PlayStrategy MAX
+    cdef PlayStrategy SAMPLE_AC
 
 cdef extern from "mcts_cpp/word.hpp":
     cdef cppclass Word nogil:
@@ -166,6 +173,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         int num_threads
         float heur_c
         bool add_noise
+        bool use_num_misaligned
 
         MctsOpt()
 
@@ -188,7 +196,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         vector[Path] select(TreeNode *, int, int, int)
         vector[Path] select(TreeNode *, int, int, int, Path)
         void backup(vector[Path], vector[float])
-        Path play(TreeNode *, int)
+        Path play(TreeNode *, int, PlayStrategy)
 
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:

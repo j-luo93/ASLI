@@ -115,6 +115,12 @@ enum class SpecialType : abc_t // Treat it as a special char to compatibility wi
     GBW
 };
 
+enum class PlayStrategy : int
+{
+    MAX,
+    SAMPLE_AC
+};
+
 template <class K, class V>
 class Trie;
 

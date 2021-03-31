@@ -19,7 +19,7 @@ from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.trajectory import Trajectory, VocabState
 
 # pylint: disable=no-name-in-module
-from .mcts_cpp import PyMcts, parallel_stack_ids
+from .mcts_cpp import PyMcts, PyPS_MAX, PyPS_SAMPLE_AC, parallel_stack_ids
 
 # pylint: enable=no-name-in-module
 
@@ -39,11 +39,17 @@ class Mcts(PyMcts):
     add_argument('num_workers', default=4, dtype=int, msg='Number of workers for parallelizing MCTS.')
     add_argument('dirichlet_alpha', default=0.03, dtype=float, msg='Alpha value for the Dirichlet noise.')
     add_argument('noise_ratio', default=0.25, dtype=float, msg='Mixing ratio for the Dirichlet noise.')
+    add_argument('play_strategy', default='max', dtype=str, choices=['max', 'sample_ac'], msg='Play strategy.')
 
     def __init__(self, *args, agent: BasePG = None, **kwargs):
         self.agent = agent
+        if g.play_strategy == 'max':
+            self.play_strategy = PyPS_MAX
+        else:
+            self.play_strategy = PyPS_SAMPLE_AC
 
     def reset(self):
+        # Clear priors first and then stats -- stats are needed to speed up clearing.
         self.env.clear_priors(self.env.start, True)
         self.env.clear_stats(self.env.start, True)
         logging.info(f'#trie nodes {self.env.evict(500000)}')
@@ -138,7 +144,8 @@ class Mcts(PyMcts):
                         k = min(20, root.num_actions)
                         logging.debug(pad_for_log(str(get_tensor(root.action_counts).topk(k))))
                         logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
-                    new_path = self.play(root, ri)
+                    ps = PyPS_MAX if is_eval else self.play_strategy
+                    new_path = self.play(root, ri, ps)
                     if played_path is None:
                         played_path = new_path
                     else:

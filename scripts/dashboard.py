@@ -5,7 +5,7 @@ import threading
 import time
 from datetime import date, datetime
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import pandas as pd
 import streamlit as st
@@ -13,7 +13,8 @@ import streamlit as st
 
 class TensorboardLaunchar:
 
-    def __init__(self, selected_runs: Union[str, List[str]], port: int):
+    def __init__(self, port: int, *, selected_runs: Optional[Union[str, List[str]]] = None, saved_dir: Optional[str] = None):
+        self.saved_dir = saved_dir
         if isinstance(selected_runs, str):
             selected_runs = [selected_runs]
         self.selected_runs = selected_runs
@@ -24,7 +25,10 @@ class TensorboardLaunchar:
     def launch(self):
 
         def run_cmd():
-            logdir_spec = ','.join([f'@{run}:{run}' for run in self.selected_runs])
+            if self.saved_dir:
+                logdir_spec = self.saved_dir
+            else:
+                logdir_spec = ','.join([f'@{run}:{run}' for run in self.selected_runs])
             cmd = f'tensorboard --logdir_spec {logdir_spec} --host localhost --port {self.port} &'
             self.output = subprocess.run(cmd, capture_output=True, check=True, shell=True, text=True)
 
@@ -93,8 +97,8 @@ class HyperparameterTuner:
 
         # Render checkbox.
         cols = list()
-        for _ in range(0, len(self._checkboxes), 4):
-            cols.extend(st.beta_columns(4))
+        for _ in range(0, len(self._checkboxes), 3):
+            cols.extend(st.beta_columns(3))
         for col, (cmd_func, msg_func, args, kwargs) in zip(cols, self._checkboxes):
             value = render_col(col, 'checkbox', args, kwargs)
             update_core(value, lambda x: x if kwargs.get('value', False) else not x, cmd_func, msg_func)
@@ -178,6 +182,7 @@ if __name__ == "__main__":
     log_dir = Path(log_dir)
     imp_dir = Path(imp_dir)
     saved_runs = list()
+    all_runs = False
     if directory_choice == 'log':
         for folder_with_date in log_dir.glob('*/'):
             folder_date = date.fromisoformat(folder_with_date.name)
@@ -188,17 +193,21 @@ if __name__ == "__main__":
     else:
         for saved_folder in imp_dir.glob('*/'):
             saved_runs.append(saved_folder)
+        all_runs = st.checkbox('all_runs')
     saved_runs = sorted(saved_runs, reverse=True)
 
     selected_runs = st.multiselect('Saved run', saved_runs, help='Select saved runs to inspect.')
-    if selected_runs:
+    if selected_runs or all_runs:
         # Op to launch tensorboard.
         if not ports_to_use:
             st.info('No usable ports left. Please kill more tensorboard processes.')
         if st.button('Launch tensorboard', key='launch_tensorboard'):
             port = ports_to_use[0]
             with st.spinner(f'Launching Tensorboard at port {port}...'):
-                launcher = TensorboardLaunchar(selected_runs, port)
+                if all_runs:
+                    launcher = TensorboardLaunchar(port, saved_dir=imp_dir)
+                else:
+                    launcher = TensorboardLaunchar(port, selected_runs=selected_runs)
                 launcher.launch()
                 if not launcher.is_successful():
                     st.error(launcher.output.stderr)
@@ -254,9 +263,12 @@ if __name__ == "__main__":
         ht.add_checkbox(lambda x: ' --add_noise',
                         lambda x: 'noise',
                         'add_noise')
-        ht.add_checkbox(lambda x: ' --no_use_alignment',
-                        lambda x: 'no_almt',
-                        'use_alignment', value=True)
+        ht.add_checkbox(lambda x: ' --use_aligned_repr',
+                        lambda x: 'uar',
+                        'used_aligned_repr')
+        ht.add_checkbox(lambda x: ' --use_num_misaligned',
+                        lambda x: 'unm',
+                        'use_num_misaligned')
 
         ht.add_select_slider(lambda x: x == 50,
                              lambda x: f' --num_inner_steps {x}',
@@ -279,6 +291,11 @@ if __name__ == "__main__":
                              lambda x: f' --weight_decay {x}',
                              lambda x: f'wd_m{3 if x == 1e-3 else 4}',
                              'weight_decay', [0.0, 1e-4, 1e-3], value=0.0)
+
+        ht.add_select_slider(lambda x: x == 1.0,
+                             lambda x: f' --heur_c {x}',
+                             lambda x: f'heur{x}',
+                             'heur_c', [1.0, 5.0], value=1.0)
 
         ht.render()
 

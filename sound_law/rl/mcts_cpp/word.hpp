@@ -65,6 +65,6 @@ public:
     float get_edit_dist(const IdSeq &, const IdSeq &) const;
     float get_edit_dist(const IdSeq &, const IdSeq &, Alignment &) const;
     size_t size() const;
-    // Whether `word` is corrected aligned with the end state at `order` at `position`.
-    bool is_aligned(const Word *, int, size_t) const;
+    // Get misalignment score for `word` with the end state at `order` at `position`.
+    float get_misalignment_score(const Word *, int, size_t) const;
 };

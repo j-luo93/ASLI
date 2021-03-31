@@ -12,6 +12,7 @@ struct MctsOpt
     int num_threads;
     float heur_c;
     bool add_noise;
+    bool use_num_misaligned;
 };
 
 struct Edge
@@ -64,10 +65,10 @@ public:
     vec<Path> select(TreeNode *, const int, const int, const int) const;
     vec<Path> select(TreeNode *, const int, const int, const int, const Path &) const;
     void backup(const vec<Path> &, const vec<float> &) const;
-    inline Path play(TreeNode *node, int start_depth)
+    inline Path play(TreeNode *node, int start_depth, PlayStrategy ps)
     {
         auto ret = Path(node, start_depth);
-        auto play_ret = node->play();
+        auto play_ret = node->play(ps);
         ret.append(play_ret.second, play_ret.first);
         for (const auto node : ret.get_all_nodes())
             env->cache.put_persistent(node);

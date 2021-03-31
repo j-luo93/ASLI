@@ -26,10 +26,10 @@ TreeNode::TreeNode(const vec<Word *> &words,
 bool BaseNode::is_expanded() const { return (permissible_chars.size() > 0); }
 bool BaseNode::is_evaluated() const { return (priors.size() > 0); }
 
-ChosenChar BaseNode::get_best_action(float puct_c, float heur_c, bool add_noise) const
+ChosenChar BaseNode::get_best_action(float puct_c, float heur_c, bool add_noise, bool use_num_misaligned) const
 {
     assert(is_expanded() && is_evaluated());
-    auto scores = get_scores(puct_c, heur_c, add_noise);
+    auto scores = get_scores(puct_c, heur_c, add_noise, use_num_misaligned);
     auto it = std::max_element(scores.begin(), scores.end());
     int index = std::distance(scores.begin(), it);
     auto ret = ChosenChar(index, permissible_chars[index]);
@@ -42,7 +42,7 @@ inline float randf(float high)
     return high * static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 }
 
-vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise) const
+vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool use_num_misaligned) const
 {
     assert(!stopped || !is_tree_node());
     float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
@@ -52,13 +52,16 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise) cons
     {
         float nsa = static_cast<float>(action_counts[i]);
         float q = total_values[i] / (nsa + 1e-8);
-        float mv = max_values[i];
+        float mv = nsa > 0 ? max_values[i] : 0.0;
         float p = priors[i];
         float u = puct_c * p * sqrt_ns / (1 + nsa);
         // float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
         // float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
-        // float h = heur_c * sqrt(static_cast<float>(affected[i].num_misaligned())) / (1 + nsa);
-        float h = heur_c > 0.0 ? heur_c * static_cast<float>(affected[i].get_numBUT 4-5pm (EDBUT 4-5pm (ED_misaligned()) / (1 + nsa) : 0.0;
+        float h;
+        if (use_num_misaligned)
+            h = heur_c > 0.0 ? heur_c * static_cast<float>(affected[i].get_num_misaligned()) / (1 + nsa) : 0.0;
+        else
+            h = heur_c > 0.0 ? heur_c * affected[i].get_misalignment_score() / (1 + nsa) : 0.0;
 
         // std::cerr << "--------------\n";
         // std::cerr << affected[i].num_misaligned() << " ";
@@ -72,6 +75,7 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise) cons
         // scores[i] = pruned[i] ? -9999.9 : (q + u + h + randf(0.01));
         float noise = add_noise ? randf(1e-8) : 0.0;
         scores[i] = pruned[i] ? -9999.9 : (q + u + h + noise);
+        // scores[i] = pruned[i] ? -9999.9 : (mv + u + h + noise);
         // scores[i] = q + u; //+ h + randf(0.01);
     }
     return scores;
@@ -102,17 +106,17 @@ bool BaseNode::is_pruned() const { return num_unpruned_actions == 0; }
 
 bool TreeNode::is_leaf() const { return priors.size() == 0; }
 
-pair<TreeNode *, Subpath> TreeNode::play() const
+pair<TreeNode *, Subpath> TreeNode::play(PlayStrategy ps) const
 {
     SPDLOG_TRACE("Playing one step.");
     auto subpath = Subpath();
-    auto mini_ret = play_mini();
+    auto mini_ret = play_mini(ps);
     BaseNode *node = mini_ret.first;
     subpath.mini_node_seq[0] = static_cast<MiniNode *>(node);
     subpath.chosen_seq[0] = mini_ret.second;
     for (int i = 1; i < 7; ++i)
     {
-        auto mini_ret = node->play_mini();
+        auto mini_ret = node->play_mini(ps);
         if (i < 6)
             subpath.mini_node_seq[i] = static_cast<MiniNode *>(mini_ret.first);
         subpath.chosen_seq[i] = mini_ret.second;
@@ -122,7 +126,7 @@ pair<TreeNode *, Subpath> TreeNode::play() const
     return std::make_pair(static_cast<TreeNode *>(node), subpath);
 }
 
-pair<BaseNode *, ChosenChar> BaseNode::play_mini() const
+pair<BaseNode *, ChosenChar> BaseNode::play_mini(PlayStrategy ps) const
 {
     // int index = 0;
     // for (size_t i = 1; i < permissible_chars.size(); ++i)
@@ -147,9 +151,40 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini() const
     // size_t index = std::distance(action_counts.begin(), it);
 
     // Select the node with the max return;
-    assert(max_index != -1);
-    size_t index = max_index;
+    size_t index;
+    if (ps == PlayStrategy::MAX)
+    {
+        assert(max_index != -1);
+        index = max_index;
+    }
+    else
+    {
+        auto probs = vec<float>();
+        probs.reserve(action_counts.size());
+        float sum = 0.0;
+        for (const auto ac : action_counts)
+        {
+            probs.push_back(pow(static_cast<float>(ac), 1.0));
+            sum += probs.back();
+        }
+        for (auto &prob : probs)
+            prob /= sum;
 
+        float r = randf(1.0);
+        float low = 0.0;
+        float high = 0.0;
+        index = 0;
+        for (size_t i = 0; i < probs.size(); ++i)
+        {
+            high += probs[i];
+            if ((r >= low) && (r < high))
+            {
+                index = i;
+                break;
+            }
+            low = high;
+        }
+    }
     // // Select the node with the max average return, i.e., both puct_c and heur_c are set to 0.
     // auto scores = get_scores(0.0, 0.0);
     // auto it = std::max_element(scores.begin(), scores.end());
@@ -158,9 +193,6 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini() const
     // assert(!played);
     // played = true;
 
-    // auto probs = vec<float>();
-    // probs.reserve(action_counts.size());
-    // float sum = 0.0;
     // for (size_t i = 0; i < max_values.size(); ++i)
     // {
     //     auto mv = max_values[i];
@@ -175,14 +207,6 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini() const
     //     // std::cerr << i << " " << probs.back() << " " << mv << " " << pruned[i] << "\n";
     //     sum += probs.back();
     // }
-
-    // // for (const auto ac : action_counts)
-    // // {
-    // //     probs.push_back(pow(static_cast<float>(ac), 1.0));
-    // //     sum += probs.back();
-    // // }
-    // for (auto &prob : probs)
-    //     prob /= sum;
 
     // // auto scores = get_scores(1.0, 1.0);
     // // std::cerr << "-------------------------\nPLAY:\n";
@@ -202,20 +226,6 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini() const
     // // std::cerr << "\n";
     // // std::cerr << "max index: " << max_index << " char: " << permissible_chars[max_index] << " max_value: " << max_value << "\n";
 
-    // float r = randf(1.0);
-    // float low = 0.0;
-    // float high = 0.0;
-    // size_t index = 0;
-    // for (size_t i = 0; i < probs.size(); ++i)
-    // {
-    //     high += probs[i];
-    //     if ((r >= low) && (r < high))
-    //     {
-    //         index = i;
-    //         break;
-    //     }
-    //     low = high;
-    // }
     // assert(!played);
     // // assert(!pruned[index]);
     // assert(children[index] != nullptr);
