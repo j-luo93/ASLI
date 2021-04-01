@@ -4,6 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <algorithm>
+#include <limits>
 #include <boost/functional/hash.hpp>
 
 #include "ctpl.h"
@@ -52,10 +53,10 @@ using VocabIdSeq = vec<IdSeq>;
 
 constexpr uint64_t last_10 = (static_cast<uint64_t>(1) << 10) - 1;
 
-// namespace abc
-// {
-//     constexpr abc_t NONE = 0;
-// };
+namespace abc
+{
+    constexpr abc_t NONE = std::numeric_limits<abc_t>::max();
+};
 
 // Define a hasher for IdSeq in std namespace by borrowing from boost.
 namespace std

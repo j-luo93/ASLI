@@ -307,7 +307,7 @@ void ActionSpace::expand(TreeNode *node) const
         // Skip the boundaries.
         for (int pos = 1; pos < n - 1; ++pos)
             if (in_bound(pos, n))
-                update_affected(node, id_seq[pos], order, pos, char_map, false);
+                update_affected(node, id_seq[pos], order, pos, char_map, false, abc::NONE);
     }
 
     expand_stats(node);
@@ -348,7 +348,8 @@ void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chos
             auto base_unit = word_space->opt.unit2base[unit];
             // FIXME(j_luo) we really don't need to pass order and pos (and create item) separately -- we just need to decide whether to keep it or not.
             assert(cl_map.contains(base_unit));
-            update_affected(node, cl_map.at(base_unit), order, pos, char_map, false);
+            abc_t after_id = cl_map.at(base_unit);
+            update_affected(node, after_id, order, pos, char_map, false, after_id);
         }
         // std::cerr << "CLLR\n";
 
@@ -368,17 +369,30 @@ void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chos
     {
         // Must use `unit2base` since stress is included for before.
         if (st == SpecialType::GBJ)
-            ActionManager::add_action(node, gbj_map.at(before), aff);
+            update_affected_with_after_id(node, aff, gbj_map.at(before));
         else if (st == SpecialType::GBW)
-            ActionManager::add_action(node, gbw_map.at(before), aff);
+            update_affected_with_after_id(node, aff, gbw_map.at(before));
         else if (force_apply)
             // HACK(j_luo) this is hacky.
             for (abc_t after_id = 0; after_id < 1000; ++after_id)
-                ActionManager::add_action(node, after_id, aff);
+                update_affected_with_after_id(node, aff, after_id);
         else
             for (abc_t after_id : permissible_changes.at(before))
-                ActionManager::add_action(node, after_id, aff);
+                update_affected_with_after_id(node, aff, after_id);
     }
+}
+
+void ActionSpace::update_affected_with_after_id(MiniNode *node, const Affected &affected, abc_t after_id) const
+{
+    auto new_affected = Affected();
+    for (size_t index = 0; index < affected.size(); ++index)
+    {
+        const auto order = affected.get_order_at(index);
+        const auto position = affected.get_position_at(index);
+        float misalign_score = word_space->get_misalignment_score(node->base->words[order], order, position, after_id);
+        new_affected.push_back(order, position, misalign_score);
+    }
+    ActionManager::add_action(node, after_id, new_affected);
 }
 
 void ActionSpace::expand_before(MiniNode *node, int chosen_index) const
@@ -405,13 +419,13 @@ void ActionSpace::expand_before(MiniNode *node, int chosen_index) const
         {
             auto base_unit = word_space->opt.unit2base[id_seq[pos - 1]];
             if (cl_map.contains(base_unit))
-                cll_aff.push_back(order, pos, word_space->get_misalignment_score(word, order, pos));
+                cll_aff.push_back(order, pos, word_space->get_misalignment_score(word, order, pos, abc::NONE));
         }
         if (pos < (id_seq.size() - 1))
         {
             auto base_unit = word_space->opt.unit2base[id_seq[pos + 1]];
             if (cl_map.contains(base_unit))
-                clr_aff.push_back(order, pos, word_space->get_misalignment_score(word, order, pos));
+                clr_aff.push_back(order, pos, word_space->get_misalignment_score(word, order, pos, abc::NONE));
         }
     }
     if (cll_aff.size() > 0)
@@ -429,7 +443,7 @@ void ActionSpace::expand_before(MiniNode *node, int chosen_index) const
         ActionManager::add_action(node, static_cast<abc_t>(SpecialType::GBW), full_aff);
 }
 
-void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_index, int offset, bool use_vowel_seq, bool can_have_null, bool can_have_any) const
+void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_index, int offset, bool use_vowel_seq, bool can_have_null, bool can_have_any, abc_t after_id) const
 {
     if (can_have_null)
         expand_null(node, parent, chosen_index);
@@ -449,14 +463,14 @@ void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_ind
             auto vowel_pos = word->id2vowel[old_pos] + offset;
             auto &vowel_seq = words[order]->vowel_seq;
             if (in_bound(vowel_pos, vowel_seq.size()))
-                update_affected(node, vowel_seq[vowel_pos], order, old_pos, char_map, can_have_any);
+                update_affected(node, vowel_seq[vowel_pos], order, old_pos, char_map, can_have_any, after_id);
         }
         else
         {
             auto pos = old_pos + offset;
             auto &id_seq = words[order]->id_seq;
             if (in_bound(pos, id_seq.size()))
-                update_affected(node, id_seq[pos], order, old_pos, char_map, can_have_any);
+                update_affected(node, id_seq[pos], order, old_pos, char_map, can_have_any, after_id);
         }
     }
 }
@@ -473,20 +487,20 @@ bool ActionSpace::expand_null_only(MiniNode *node, BaseNode *parent, int chosen_
     return false;
 }
 
-void ActionSpace::expand_after(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) const { expand_normal(node, parent, chosen_index, -1, use_vowel_seq, can_have_null, can_have_any); }
+void ActionSpace::expand_after(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any, abc_t after_id) const { expand_normal(node, parent, chosen_index, -1, use_vowel_seq, can_have_null, can_have_any, after_id); }
 
-void ActionSpace::expand_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any) const
+void ActionSpace::expand_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any, abc_t after_id) const
 {
     if (!expand_null_only(node, parent, chosen_index))
-        expand_normal(node, parent, chosen_index, -2, use_vowel_seq, true, can_have_any);
+        expand_normal(node, parent, chosen_index, -2, use_vowel_seq, true, can_have_any, after_id);
 }
 
-void ActionSpace::expand_d_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any) const { expand_normal(node, parent, chosen_index, 1, use_vowel_seq, can_have_null, can_have_any); }
+void ActionSpace::expand_d_pre(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_null, bool can_have_any, abc_t after_id) const { expand_normal(node, parent, chosen_index, 1, use_vowel_seq, can_have_null, can_have_any, after_id); }
 
-void ActionSpace::expand_post(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any) const
+void ActionSpace::expand_post(MiniNode *node, BaseNode *parent, int chosen_index, bool use_vowel_seq, bool can_have_any, abc_t after_id) const
 {
     if (!expand_null_only(node, parent, chosen_index))
-        expand_normal(node, parent, chosen_index, 2, use_vowel_seq, true, can_have_any);
+        expand_normal(node, parent, chosen_index, 2, use_vowel_seq, true, can_have_any, after_id);
 }
 
 void ActionSpace::expand_null(MiniNode *node, BaseNode *parent, int chosen_index) const
@@ -525,21 +539,29 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
         case ActionPhase::AFTER:
         {
             bool can_have_null = (static_cast<SpecialType>(subpath.chosen_seq[1].second) != SpecialType::CLL);
-            expand_after(node, subpath.mini_node_seq[1], subpath.chosen_seq[2].first, use_vowel_seq, can_have_null, can_have_null);
+            abc_t after_id = subpath.chosen_seq[2].second;
+            expand_after(node, subpath.mini_node_seq[1], subpath.chosen_seq[2].first, use_vowel_seq, can_have_null, can_have_null, after_id);
             break;
         }
         case ActionPhase::PRE:
-            expand_pre(node, subpath.mini_node_seq[2], subpath.chosen_seq[3].first, use_vowel_seq, true);
+        {
+            abc_t after_id = subpath.chosen_seq[2].second;
+            expand_pre(node, subpath.mini_node_seq[2], subpath.chosen_seq[3].first, use_vowel_seq, true, after_id);
             break;
+        }
         case ActionPhase::D_PRE:
         {
             bool can_have_null = (static_cast<SpecialType>(subpath.chosen_seq[1].second) != SpecialType::CLR);
-            expand_d_pre(node, subpath.mini_node_seq[3], subpath.chosen_seq[4].first, use_vowel_seq, can_have_null, can_have_null);
+            abc_t after_id = subpath.chosen_seq[2].second;
+            expand_d_pre(node, subpath.mini_node_seq[3], subpath.chosen_seq[4].first, use_vowel_seq, can_have_null, can_have_null, after_id);
             break;
         }
         case ActionPhase::POST:
-            expand_post(node, subpath.mini_node_seq[4], subpath.chosen_seq[5].first, use_vowel_seq, true);
+        {
+            abc_t after_id = subpath.chosen_seq[2].second;
+            expand_post(node, subpath.mini_node_seq[4], subpath.chosen_seq[5].first, use_vowel_seq, true, after_id);
             break;
+        }
         }
     }
 
@@ -567,7 +589,7 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
     return;
 }
 
-void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map, bool can_have_any) const
+void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map, bool can_have_any, abc_t after_id) const
 {
     // FIXME(j_luo) clearer logic here -- e.g., <any> is not aviable for after_id.
     if (((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id)) && !can_have_any)
@@ -578,7 +600,7 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         word = static_cast<TreeNode *>(node)->words[order];
     else
         word = static_cast<MiniNode *>(node)->base->words[order];
-    auto misalign_score = word_space->get_misalignment_score(word, order, pos);
+    auto misalign_score = word_space->get_misalignment_score(word, order, pos, after_id);
 
     if (!char_map.contains(unit))
     {
@@ -597,17 +619,17 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
     Stress stress = word_space->opt.unit_stress[unit];
     if (stress != Stress::NOSTRESS)
     {
-        update_affected(node, word_space->opt.unit2base[unit], order, pos, char_map, can_have_any);
+        update_affected(node, word_space->opt.unit2base[unit], order, pos, char_map, can_have_any, after_id);
         if (stress == Stress::STRESSED)
         {
             if (unit != opt.any_s_id)
-                update_affected(node, opt.any_s_id, order, pos, char_map, can_have_any);
+                update_affected(node, opt.any_s_id, order, pos, char_map, can_have_any, after_id);
         }
         else if (unit != opt.any_uns_id)
-            update_affected(node, opt.any_uns_id, order, pos, char_map, can_have_any);
+            update_affected(node, opt.any_uns_id, order, pos, char_map, can_have_any, after_id);
     }
     else if ((unit != opt.any_id) && (!word_space->opt.is_vowel[unit]))
-        update_affected(node, opt.any_id, order, pos, char_map, can_have_any);
+        update_affected(node, opt.any_id, order, pos, char_map, can_have_any, after_id);
 }
 
 void ActionSpace::evaluate(MiniNode *node) const

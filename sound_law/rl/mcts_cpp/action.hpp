@@ -31,7 +31,8 @@ class ActionSpace
     Subpath get_best_subpath(TreeNode *, float, int, float, float, bool, bool, bool) const;
     MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool) const;
     IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t, SpecialType);
-    void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, bool) const;
+    void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, bool, abc_t) const;
+    void update_affected_with_after_id(MiniNode *, const Affected &, abc_t) const;
     // void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
 
     // Methods for expanding nodes.
@@ -39,11 +40,11 @@ class ActionSpace
     void expand(MiniNode *, const Subpath &, bool, bool) const;
     void expand_before(MiniNode *, int) const;
     void expand_special_type(MiniNode *, BaseNode *, int, abc_t, bool) const;
-    void expand_after(MiniNode *, BaseNode *, int, bool, bool, bool) const;
-    void expand_pre(MiniNode *, BaseNode *, int, bool, bool) const;
-    void expand_d_pre(MiniNode *, BaseNode *, int, bool, bool, bool) const;
-    void expand_post(MiniNode *, BaseNode *, int, bool, bool) const;
-    void expand_normal(MiniNode *, BaseNode *, int, int, bool, bool, bool) const;
+    void expand_after(MiniNode *, BaseNode *, int, bool, bool, bool, abc_t) const;
+    void expand_pre(MiniNode *, BaseNode *, int, bool, bool, abc_t) const;
+    void expand_d_pre(MiniNode *, BaseNode *, int, bool, bool, bool, abc_t) const;
+    void expand_post(MiniNode *, BaseNode *, int, bool, bool, abc_t) const;
+    void expand_normal(MiniNode *, BaseNode *, int, int, bool, bool, bool, abc_t) const;
     void expand_null(MiniNode *, BaseNode *, int) const;
     bool expand_null_only(MiniNode *, BaseNode *, int) const;
 

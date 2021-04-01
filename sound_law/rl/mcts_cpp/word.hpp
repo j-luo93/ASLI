@@ -66,5 +66,5 @@ public:
     float get_edit_dist(const IdSeq &, const IdSeq &, Alignment &) const;
     size_t size() const;
     // Get misalignment score for `word` with the end state at `order` at `position`.
-    float get_misalignment_score(const Word *, int, size_t) const;
+    float get_misalignment_score(const Word *, int, size_t, abc_t) const;
 };

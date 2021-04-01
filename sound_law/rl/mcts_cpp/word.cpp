@@ -208,7 +208,7 @@ size_t WordSpace::size() const { return words.size(); }
 
 const Alignment &Word::get_almt_at(int order) const { return almts.at(order); }
 
-float WordSpace::get_misalignment_score(const Word *word, int order, size_t position) const
+float WordSpace::get_misalignment_score(const Word *word, int order, size_t position, abc_t after_id) const
 {
     if (!opt.use_alignment)
         return 0.0;
@@ -221,5 +221,8 @@ float WordSpace::get_misalignment_score(const Word *word, int order, size_t posi
         return opt.ins_cost;
     assert(aligned_pos < end_words[order]->id_seq.size());
     const auto c2 = end_words[order]->id_seq[aligned_pos];
-    return opt.dist_mat[c1][c2];
+    if (after_id == abc::NONE)
+        return opt.dist_mat[c1][c2];
+    else
+        return opt.dist_mat[c1][c2] - opt.dist_mat[after_id][c2];
 }
