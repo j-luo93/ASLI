@@ -43,11 +43,11 @@ class TensorboardLaunchar:
 class HyperparameterTuner:
 
     def __init__(self, base_cmd: str):
-        self._cmd = base_cmd
-        self._msg_args = list()
+        self._base_cmd = base_cmd
         self._number_inputs = list()
         self._select_sliders = list()
         self._checkboxes = list()
+        self._grid_variables = None
 
     def add_number_input(self, is_default_func, cmd_func, msg_func, *args, **kwargs):
         self._number_inputs.append((is_default_func, cmd_func, msg_func, args, kwargs))
@@ -58,9 +58,15 @@ class HyperparameterTuner:
     def add_checkbox(self, cmd_func, msg_func, *args, **kwargs):
         self._checkboxes.append((cmd_func, msg_func, args, kwargs))
 
-    def render(self):
+    def render(self, grid_variable: str) -> List[Tuple[str, str]]:
 
         def render_col(col, ui_type: str, col_args, col_kwargs):
+            # For grid variable, render multiselect with all selected as default.
+            label = col_args[0]
+            if label == grid_variable:
+                options = col_args[1]
+                return col.multiselect(label, options, default=options)
+
             if ui_type == 'number_input':
                 render_func = col.number_input
             elif ui_type == 'select_slider':
@@ -69,22 +75,29 @@ class HyperparameterTuner:
                 render_func = col.checkbox
             return render_func(*col_args, **col_kwargs)
 
-        def update_core(value, is_default_func, cmd_func, msg_func):
+        def update_core(cmd_args: List[str], msg_args: List[str], value, is_default_func, cmd_func, msg_func):
+            # For grid variables, we need to save it for later.
+            if isinstance(value, list):
+                self._grid_variables = (value, is_default_func, cmd_func, msg_func)
+                return
+
             if not is_default_func(value):
                 cmd = cmd_func(value)
                 msg = msg_func(value)
                 if cmd:
-                    self._cmd += cmd
+                    cmd_args.append(cmd)
                 if msg:
-                    self._msg_args.append(msg)
+                    msg_args.append(msg)
 
+        cmd_args = list()
+        msg_args = list()
         # Render number_input.
         cols = list()
         for _ in range(0, len(self._number_inputs), 2):
             cols.extend(st.beta_columns(2))
         for col, (is_default_func, cmd_func, msg_func, args, kwargs) in zip(cols, self._number_inputs):
             value = render_col(col, 'number_input', args, kwargs)
-            update_core(value, is_default_func, cmd_func, msg_func)
+            update_core(cmd_args, msg_args, value, is_default_func, cmd_func, msg_func)
 
         # Render select_slider.
         cols = list()
@@ -93,7 +106,7 @@ class HyperparameterTuner:
             cols.extend([col1, col2])
         for col, (is_default_func, cmd_func, msg_func, args, kwargs) in zip(cols, self._select_sliders):
             value = render_col(col, 'select_slider', args, kwargs)
-            update_core(value, is_default_func, cmd_func, msg_func)
+            update_core(cmd_args, msg_args, value, is_default_func, cmd_func, msg_func)
 
         # Render checkbox.
         cols = list()
@@ -101,15 +114,20 @@ class HyperparameterTuner:
             cols.extend(st.beta_columns(3))
         for col, (cmd_func, msg_func, args, kwargs) in zip(cols, self._checkboxes):
             value = render_col(col, 'checkbox', args, kwargs)
-            update_core(value, lambda x: x if kwargs.get('value', False) else not x, cmd_func, msg_func)
+            update_core(cmd_args, msg_args, value,
+                        lambda x: x if kwargs.get('value', False) else not x, cmd_func, msg_func)
 
-    @property
-    def default_msg(self) -> str:
-        return '-'.join(self._msg_args)
-
-    @property
-    def cmd(self) -> str:
-        return self._cmd
+        if self._grid_variables is not None:
+            values, is_default_func, cmd_func, msg_func = self._grid_variables
+            ret = list()
+            for value in values:
+                grid_cmd_args = cmd_args[:]
+                grid_msg_args = msg_args[:]
+                update_core(grid_cmd_args, grid_msg_args, value, is_default_func, cmd_func, msg_func)
+                ret.append((self._base_cmd + ''.join(grid_cmd_args), '-'.join(grid_msg_args)))
+            return ret
+        else:
+            return [(self._base_cmd + ''.join(cmd_args), '-'.join(msg_args))]
 
 
 if __name__ == "__main__":
@@ -196,7 +214,10 @@ if __name__ == "__main__":
         all_runs = st.checkbox('all_runs')
     saved_runs = sorted(saved_runs, reverse=True)
 
-    selected_runs = st.multiselect('Saved run', saved_runs, help='Select saved runs to inspect.')
+    if not all_runs:
+        selected_runs = st.multiselect('Saved run', saved_runs, help='Select saved runs to inspect.')
+    else:
+        selected_runs = list()
     if selected_runs or all_runs:
         # Op to launch tensorboard.
         if not ports_to_use:
@@ -240,11 +261,6 @@ if __name__ == "__main__":
         base_cmd = f'python sound_law/main.py --config {config} --mcts_config SmallSims --save_interval 1'
 
         ht = HyperparameterTuner(base_cmd)
-        ht.add_number_input(lambda x: x == -1,
-                            lambda x: f' --gpu {x}',
-                            lambda x: None,
-                            'GPU', value=-1, min_value=-1, max_value=3)
-
         ht.add_select_slider(lambda x: x == 2000,
                              lambda x: f' --num_mcts_sims {x} --expansion_batch_size {x // 20}',
                              lambda x: f'nms{x}',
@@ -272,6 +288,9 @@ if __name__ == "__main__":
         ht.add_checkbox(lambda x: ' --use_max_value',
                         lambda x: 'umv',
                         'use_max_value')
+        ht.add_checkbox(lambda x: ' --play_strategy sample_ac',
+                        lambda x: 'sac',
+                        'sample_ac')
 
         ht.add_select_slider(lambda x: x == 50,
                              lambda x: f' --num_inner_steps {x}',
@@ -286,7 +305,7 @@ if __name__ == "__main__":
                              lambda x: f'ne{x}',
                              'num_episodes', [10, 50], value=10)
 
-        ht.add_checkbox(lambda x: ' --optim_cls sgd --learning_rate 0.1',
+        ht.add_checkbox(lambda x: ' --optim_cls sgd --learning_rate 0.01',
                         lambda x: 'sgd',
                         'SGD')
 
@@ -298,30 +317,36 @@ if __name__ == "__main__":
         ht.add_select_slider(lambda x: x == 1.0,
                              lambda x: f' --heur_c {x}',
                              lambda x: f'heur{x}',
-                             'heur_c', [1.0, 5.0], value=1.0)
+                             'heur_c', [0.0, 1.0, 5.0], value=1.0)
 
-        ht.render()
+        grid_variable = st.selectbox('grid variable', [None, 'num_mcts_sims'], index=0)
 
-        msg = st.text_input('message', help='The message to append to the run name.',
-                            value=ht.default_msg)
+        cmd_msg_pairs = ht.render(grid_variable)
 
-        cmd = ht.cmd
-        if msg:
-            cmd += f' --message {msg}'
+        for i, (cmd, default_msg) in enumerate(cmd_msg_pairs):
+            col1, col2 = st.beta_columns(2)
+            msg = col1.text_input('message', help='The message to append to the run name.',
+                                  value=default_msg)
+            if msg:
+                cmd += f' --message {msg}'
 
-        # Pretty-print command.
-        st.markdown("Command to run:\n```\n" + cmd.replace(' --', '  \n  --') + "\n```")
+            gpu_id = col2.number_input('GPU', value=i % 4, min_value=-1, max_value=3, key=f'gpu_job_{i}')
+            if gpu_id > -1:
+                cmd += f' --gpu {gpu_id}'
 
-        # Launch a new job.
-        if st.button('Launch job', key='launch_job'):
-            with st.spinner(f'Launching job "{cmd}"'):
+            # Pretty-print command.
+            st.markdown("Command to run:\n```\n" + cmd.replace(' --', '  \n  --') + "\n```")
 
-                def run_cmd():
-                    output = subprocess.run(cmd, capture_output=True, check=True, shell=True, text=True)
+            # Launch a new job.
+            if st.button('Launch job', key=f'launch_job_{i}'):
+                with st.spinner(f'Launching job "{cmd}"'):
 
-                thread = threading.Thread(target=run_cmd)
-                thread.start()
-                time.sleep(3)
+                    def run_cmd():
+                        output = subprocess.run(cmd, capture_output=True, check=True, shell=True, text=True)
+
+                    thread = threading.Thread(target=run_cmd)
+                    thread.start()
+                    time.sleep(3)
 
     # Take research notes.
     with st.beta_expander('Research note'):
@@ -330,7 +355,10 @@ if __name__ == "__main__":
             rn_df = pd.DataFrame([], columns=['Timestamp', 'Run', 'Note'])
         else:
             rn_df = pd.read_csv(research_note_path, sep='\t')
-        run = st.selectbox('Which run', saved_runs)
+        no_run = st.checkbox('no_run')
+        run = ''
+        if not no_run:
+            run = st.selectbox('Which run', saved_runs)
         note = st.text_area('Research note')
         if st.button('Add research note') and note:
             rn_df = rn_df.append({'Timestamp': datetime.now().strftime('%y-%m-%e %H:%M:%S'),
