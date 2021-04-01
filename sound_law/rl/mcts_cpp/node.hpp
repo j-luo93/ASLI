@@ -25,6 +25,9 @@ private:
     vec<float> misalign_scores;
 
 public:
+    const float start_dist;
+
+    inline Affected(float start_dist) : start_dist(start_dist){};
     inline size_t size() const { return orders.size(); };
     inline void push_back(int order, size_t position, float misalign_score)
     {
@@ -35,7 +38,7 @@ public:
         if (misalign_score > 0.0)
             ++num_misaligned;
     }
-    inline float get_misalignment_score() const { return total_misalign_score; }
+    inline float get_misalignment_score() const { return total_misalign_score / start_dist; }
     inline size_t get_num_misaligned() const { return num_misaligned; }
     inline int get_order_at(size_t index) const { return orders[index]; };
     inline int get_position_at(size_t index) const { return positions[index]; };

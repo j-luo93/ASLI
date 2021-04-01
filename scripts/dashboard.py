@@ -284,7 +284,7 @@ if __name__ == "__main__":
                         'used_aligned_repr')
         ht.add_checkbox(lambda x: ' --use_num_misaligned',
                         lambda x: 'unm',
-                        'use_num_misaligned')
+                        '(DO NOT USE) use_num_misaligned')
         ht.add_checkbox(lambda x: ' --use_max_value',
                         lambda x: 'umv',
                         'use_max_value')

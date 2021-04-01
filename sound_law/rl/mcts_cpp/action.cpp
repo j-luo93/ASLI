@@ -1,6 +1,6 @@
 #include "action.hpp"
 
-ActionSpace::ActionSpace(WordSpace *word_space, const ActionSpaceOpt &as_opt) : word_space(word_space), opt(as_opt) {}
+ActionSpace::ActionSpace(WordSpace *word_space, const ActionSpaceOpt &as_opt, float start_dist) : word_space(word_space), opt(as_opt), start_dist(start_dist) {}
 
 TreeNode *ActionSpace::apply_new_action(TreeNode *node, const Subpath &subpath)
 {
@@ -297,7 +297,7 @@ void ActionSpace::expand(TreeNode *node) const
     }
 
     // Null/Stop option.
-    ActionManager::add_action(node, opt.null_id, Affected());
+    ActionManager::add_action(node, opt.null_id, Affected(start_dist));
 
     auto char_map = map<abc_t, size_t>();
     // std::cerr << "=============================\n";
@@ -391,7 +391,7 @@ void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chos
 
 void ActionSpace::update_affected_with_after_id(MiniNode *node, const Affected &affected, abc_t after_id) const
 {
-    auto new_affected = Affected();
+    auto new_affected = Affected(start_dist);
     for (size_t index = 0; index < affected.size(); ++index)
     {
         const auto order = affected.get_order_at(index);
@@ -413,8 +413,8 @@ void ActionSpace::expand_before(MiniNode *node, int chosen_index) const
     // CLL and CLR
     // std::cerr << "cllr\n";
     auto full_aff = node->get_affected_at(0);
-    auto cll_aff = Affected();
-    auto clr_aff = Affected();
+    auto cll_aff = Affected(start_dist);
+    auto clr_aff = Affected(start_dist);
     // for (const auto &item : full_aff)
     for (size_t i = 0; i < full_aff.size(); ++i)
     {
@@ -527,7 +527,7 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
 
     if (node->stopped)
     {
-        ActionManager::add_action(node, opt.null_id, Affected());
+        ActionManager::add_action(node, opt.null_id, Affected(start_dist));
         SPDLOG_TRACE("Phase {}, keeping only Null action due to stopped status.", str::from(node->ap));
     }
     else
@@ -613,7 +613,7 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
     {
         // Add one more permission char.
         char_map[unit] = node->get_num_actions();
-        auto aff = Affected();
+        auto aff = Affected(start_dist);
         aff.push_back(order, pos, misalign_score);
         ActionManager::add_action(node, unit, aff);
     }

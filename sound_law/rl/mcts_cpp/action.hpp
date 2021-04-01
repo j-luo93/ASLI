@@ -60,7 +60,7 @@ class ActionSpace
 
     void connect(BaseNode *, const Subpath &) const;
 
-    ActionSpace(WordSpace *, const ActionSpaceOpt &);
+    ActionSpace(WordSpace *, const ActionSpaceOpt &, float);
     map<abc_t, vec<abc_t>> permissible_changes;
     map<abc_t, abc_t> cl_map;
     map<abc_t, abc_t> gbj_map;
@@ -74,4 +74,5 @@ class ActionSpace
 
 public:
     const ActionSpaceOpt opt;
+    const float start_dist;
 };

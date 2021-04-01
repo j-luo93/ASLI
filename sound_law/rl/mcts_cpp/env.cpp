@@ -25,7 +25,7 @@ Env::Env(const EnvOpt &env_opt, const ActionSpaceOpt &as_opt, const WordSpaceOpt
     end = NodeFactory::get_tree_node(word_space->end_words);
 
     // Set up the action space properly.
-    action_space = new ActionSpace(word_space, as_opt);
+    action_space = new ActionSpace(word_space, as_opt, start->get_dist());
     action_space->expand(start);
 
     // Set up lru cache.
