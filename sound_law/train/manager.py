@@ -151,7 +151,7 @@ class OnePairManager:
             env_opt = PyEnvOpt(s_arr, s_lengths, t_arr, t_lengths, g.final_reward, g.step_penalty)
             as_opt = PyActionSpaceOpt(NULL_ID, EMP_ID, SOT_ID, EOT_ID, ANY_ID, ANY_S_ID,
                                       ANY_UNS_ID, self.tgt_abc['j'], self.tgt_abc['w'], g.site_threshold, g.dist_threshold)
-            ws_opt = PyWordSpaceOpt(self.tgt_abc.dist_mat, 0.5,
+            ws_opt = PyWordSpaceOpt(self.tgt_abc.dist_mat, 1.0,
                                     g.use_alignment,
                                     self.tgt_abc.is_vowel,
                                     self.tgt_abc.is_consonant,

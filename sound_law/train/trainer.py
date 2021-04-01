@@ -276,7 +276,7 @@ class MctsTrainer(RLTrainer):
                 # weights = weights.align_as(pi_ce_losses)
                 entropies = (-agent_inputs.mcts_pis * (1e-8 + agent_inputs.mcts_pis).log()).sum(dim=-1)
                 pi_ce_losses = (-agent_inputs.mcts_pis * logits).sum(dim=-1) - entropies
-                for i in range(6):
+                for i in range(7):
                     metrics += Metric(f'entropy_{i}', entropies[:, i].sum(), g.mcts_batch_size)
                     metrics += Metric(f'pi_ce_los_{i}', pi_ce_losses[:, i].sum(), g.mcts_batch_size)
 

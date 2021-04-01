@@ -16,7 +16,7 @@ from lingpy.sequence.sound_classes import ipa2tokens
 from pypheature.nphthong import Nphthong
 from pypheature.process import FeatureProcessor
 from sound_law.utils import run_section, run_with_argument
-from xib.aligned_corpus.transcriber import RuleBasedTranscriber
+# from xib.aligned_corpus.transcriber import RuleBasedTranscriber
 
 
 @lru_cache(maxsize=None)

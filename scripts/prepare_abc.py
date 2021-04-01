@@ -305,7 +305,7 @@ if __name__ == "__main__":
                 merged_cnt = get_proto_phones(std_ph_df, raw_ph_df, words_df)
                 proto2cnt, i2pp, pp2i, kept_ids, segments = get_kept_phones(merged_cnt, processor)
                 st.write(f'{len(kept_ids)} sounds are kept.')
-                insert_cost = 0.5
+                insert_cost = 1.0
                 dist_mat = get_edit_dist(i2pp, segments, insert_cost)
 
                 kept_dist_mat = dist_mat[np.asarray(kept_ids).reshape(-1, 1), kept_ids]
@@ -321,7 +321,8 @@ if __name__ == "__main__":
                     sort_i = kept_dist_mat[i, :].copy().argsort()
                     dists = kept_dist_mat[i, sort_i]
                     # Since the closest sound is always itself, we need to use index top_k, instead of top_k - 1.
-                    max_dist = max(dists[top_k], insert_cost)
+                    # max_dist = max(dists[top_k], insert_cost)
+                    max_dist = dists[top_k]
                     for j, d in zip(sort_i, dists):
                         if d > max_dist:
                             break

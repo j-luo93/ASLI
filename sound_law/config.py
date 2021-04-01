@@ -24,7 +24,7 @@ class ZSLatIta:  # "ZS" stands for zero-shot.
     src_lang: str = 'lat'
     tgt_lang: str = 'ita'
     dropout: float = 0.2
-    num_steps: int = 10000
+    num_steps: int = 100
     input_format: str = 'wikt'
     eval_interval: int = 1000
     control_mode: str = 'none'
