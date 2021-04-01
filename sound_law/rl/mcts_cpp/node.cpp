@@ -48,6 +48,7 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool
     float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
     auto scores = vec<float>(priors.size());
     assert(priors.size() == pruned.size());
+    // std::cerr << "=======================================\n";
     for (size_t i = 0; i < priors.size(); ++i)
     {
         float nsa = static_cast<float>(action_counts[i]);
@@ -65,6 +66,7 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool
             h = heur_c > 0.0 ? heur_c * static_cast<float>(affected[i].get_num_misaligned()) / (1 + nsa) : 0.0;
         else
             h = heur_c > 0.0 ? heur_c * affected[i].get_misalignment_score() / (1 + nsa) : 0.0;
+        // std::cerr << permissible_chars[i] << ":" << h << " ";
 
         // std::cerr << "--------------\n";
         // std::cerr << affected[i].num_misaligned() << " ";
@@ -81,6 +83,7 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool
         // scores[i] = pruned[i] ? -9999.9 : (mv + u + h + noise);
         // scores[i] = q + u; //+ h + randf(0.01);
     }
+    // std::cerr << "\n";
     return scores;
 }
 
@@ -430,7 +433,7 @@ size_t BaseNode::get_num_affected_at(size_t index) const { return affected[index
 
 abc_t BaseNode::get_action_at(size_t index) const { return permissible_chars[index]; }
 
-void BaseNode::update_affected_at(size_t index, int order, size_t pos, bool aligned) { affected[index].push_back(order, pos, aligned); }
+void BaseNode::update_affected_at(size_t index, int order, size_t pos, float misalign_score) { affected[index].push_back(order, pos, misalign_score); }
 
 void BaseNode::init_stats()
 {

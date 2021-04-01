@@ -154,6 +154,7 @@ class OnePairManager:
             ws_opt = PyWordSpaceOpt(self.tgt_abc.dist_mat, 0.5,
                                     g.use_alignment,
                                     self.tgt_abc.is_vowel,
+                                    self.tgt_abc.is_consonant,
                                     self.tgt_abc.unit_stress,
                                     self.tgt_abc.unit2base,
                                     self.tgt_abc.unit2stressed,

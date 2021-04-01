@@ -300,6 +300,7 @@ void ActionSpace::expand(TreeNode *node) const
     ActionManager::add_action(node, opt.null_id, Affected());
 
     auto char_map = map<abc_t, size_t>();
+    // std::cerr << "=============================\n";
     for (int order = 0; order < node->words.size(); ++order)
     {
         auto &id_seq = node->words[order]->id_seq;
@@ -307,7 +308,13 @@ void ActionSpace::expand(TreeNode *node) const
         // Skip the boundaries.
         for (int pos = 1; pos < n - 1; ++pos)
             if (in_bound(pos, n))
+            {
+                // auto word = static_cast<TreeNode *>(node)->words[order];
+                // auto misalign_score = word_space->get_misalignment_score(word, order, pos, abc::NONE);
+                // if (id_seq[pos] == 375)
+                //     std::cerr << order << " " << pos << " " << misalign_score << "\n";
                 update_affected(node, id_seq[pos], order, pos, char_map, false, abc::NONE);
+            }
     }
 
     expand_stats(node);
@@ -615,6 +622,8 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         // Add one more position.
         ActionManager::update_affected_at(node, char_map[unit], order, pos, misalign_score);
     }
+    // if (unit == 375)
+    //     std::cerr << node->get_affected_at(char_map[unit]).get_misalignment_score() << "\n";
 
     Stress stress = word_space->opt.unit_stress[unit];
     if (stress != Stress::NOSTRESS)
@@ -628,7 +637,7 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         else if (unit != opt.any_uns_id)
             update_affected(node, opt.any_uns_id, order, pos, char_map, can_have_any, after_id);
     }
-    else if ((unit != opt.any_id) && (!word_space->opt.is_vowel[unit]))
+    else if ((unit != opt.any_id) && (word_space->opt.is_consonant[unit]))
         update_affected(node, opt.any_id, order, pos, char_map, can_have_any, after_id);
 }
 

@@ -61,6 +61,7 @@ cdef extern from "mcts_cpp/word.hpp":
         float ins_cost
         bool use_alignment
         vector[bool] is_vowel
+        vector[bool] is_consonant
         vector[Stress] unit_stress
         vector[abc_t] unit2base
         vector[abc_t] unit2stressed

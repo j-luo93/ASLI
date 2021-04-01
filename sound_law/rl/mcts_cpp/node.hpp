@@ -127,7 +127,7 @@ private:
     friend class ActionManager;
 
     void add_action(abc_t, const Affected &);
-    void update_affected_at(size_t, int, size_t, bool);
+    void update_affected_at(size_t, int, size_t, float);
     void clear_priors();
     // Set prior to 0.0.
     void dummy_evaluate();
@@ -409,7 +409,7 @@ class ActionManager
     friend class ActionSpace;
 
     static void add_action(BaseNode *node, abc_t action, const Affected &affected) { node->add_action(action, affected); }
-    static void update_affected_at(BaseNode *node, size_t index, int order, size_t pos, bool aligned) { node->update_affected_at(index, order, pos, aligned); }
+    static void update_affected_at(BaseNode *node, size_t index, int order, size_t pos, float misalign_score) { node->update_affected_at(index, order, pos, misalign_score); }
     static void init_pruned(BaseNode *node) { node->init_pruned(); }
     static void init_stats(BaseNode *node) { node->init_stats(); };
     static void init_rewards(TransitionNode *node) { node->init_rewards(); }

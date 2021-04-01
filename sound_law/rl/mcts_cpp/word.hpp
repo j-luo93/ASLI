@@ -42,6 +42,7 @@ struct WordSpaceOpt
     float ins_cost;
     bool use_alignment;
     vec<bool> is_vowel;
+    vec<bool> is_consonant;
     vec<Stress> unit_stress;
     vec<abc_t> unit2base;
     vec<abc_t> unit2stressed;

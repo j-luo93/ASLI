@@ -218,9 +218,11 @@ float WordSpace::get_misalignment_score(const Word *word, int order, size_t posi
     const auto c1 = word->id_seq[position];
     const auto aligned_pos = almt.aligned_pos[position];
     if (aligned_pos == alignment::INSERTED)
-        return opt.ins_cost;
+        return ((after_id == 4) || (after_id == abc::NONE)) ? opt.ins_cost : 0.0;
     assert(aligned_pos < end_words[order]->id_seq.size());
     const auto c2 = end_words[order]->id_seq[aligned_pos];
+    if (after_id == 4)
+        return opt.dist_mat[c1][c2] - opt.ins_cost;
     if (after_id == abc::NONE)
         return opt.dist_mat[c1][c2];
     else
