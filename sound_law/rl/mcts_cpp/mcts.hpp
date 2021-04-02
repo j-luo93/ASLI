@@ -6,14 +6,10 @@
 
 struct MctsOpt
 {
-    float puct_c;
     int game_count;
     float virtual_loss;
     int num_threads;
-    float heur_c;
-    bool add_noise;
-    bool use_num_misaligned;
-    bool use_max_value;
+    SelectionOpt selection_opt;
 };
 
 struct Edge

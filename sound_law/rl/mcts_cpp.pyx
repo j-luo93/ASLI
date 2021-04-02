@@ -2,7 +2,7 @@
 from .mcts_cpp cimport TreeNode, IdSeq, VocabIdSeq, Env, Mcts
 from .mcts_cpp cimport Stress, NOSTRESS, STRESSED, UNSTRESSED
 from .mcts_cpp cimport SpecialType, NONE, CLL, CLR, VS, GBJ, GBW
-from .mcts_cpp cimport PlayStrategy, MAX, SAMPLE_AC
+from .mcts_cpp cimport PlayStrategy, MAX, SAMPLE_AC, POLICY
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -24,6 +24,7 @@ PyST_GBW = <abc_t>GBW
 
 PyPS_MAX = <int>MAX
 PyPS_SAMPLE_AC = <int>SAMPLE_AC
+PyPS_POLICY = <int>POLICY
 
 cdef class PyTreeNode:
     cdef TreeNode *ptr
@@ -88,6 +89,10 @@ cdef class PyTreeNode:
     @property
     def pruned(self):
         return np.asarray((<BaseNode *>self.ptr).get_pruned(), dtype='bool')
+
+    @property
+    def priors(self):
+        return np.asarray((<BaseNode *>self.ptr).get_priors(), dtype='float32')
 
     # @property
     # def prev_action(self):
@@ -181,14 +186,17 @@ cdef class PyMctsOpt:
                   bool use_num_misaligned,
                   bool use_max_value):
         self.c_obj = MctsOpt()
-        self.c_obj.puct_c = puct_c
         self.c_obj.game_count = game_count
         self.c_obj.virtual_loss = virtual_loss
         self.c_obj.num_threads = num_threads
-        self.c_obj.heur_c = heur_c
-        self.c_obj.add_noise = add_noise
-        self.c_obj.use_num_misaligned = use_num_misaligned
-        self.c_obj.use_max_value = use_max_value
+
+        cdef SelectionOpt sel_obj = SelectionOpt()
+        sel_obj.puct_c = puct_c
+        sel_obj.heur_c = heur_c
+        sel_obj.add_noise = add_noise
+        sel_obj.use_num_misaligned = use_num_misaligned
+        sel_obj.use_max_value = use_max_value
+        self.c_obj.selection_opt = sel_obj
 
 cdef class PyEnv:
     cdef Env *ptr
@@ -358,8 +366,10 @@ cdef class PyMcts:
         cdef PlayStrategy ps
         if play_strategy == PyPS_MAX:
             ps = MAX
-        else:
+        elif play_strategy == PyPS_SAMPLE_AC:
             ps = SAMPLE_AC
+        else:
+            ps = POLICY
 
         return PyPath.from_c_obj(self.ptr.play(py_tnode.ptr, start_depth, ps), type(py_tnode))
         # cdef FullActionPath full_action = self.ptr.play(py_tnode.ptr)
@@ -438,7 +448,7 @@ cdef object c_parallel_stack_actions(vector[BNptr] nodes, int num_threads):
         for i in prange(n, num_threads=num_threads):
             pc = nodes[i].get_actions()
             ac = nodes[i].get_action_counts()
-            vc = <float>(nodes[i].get_visit_count())
+            vc = 1e-8 + <float>(nodes[i].get_visit_count())
             for j in range(pc.size()):
                 actions[i, j] = pc[j]
                 mcts_pis[i, j] = <float>(ac[j]) / vc
@@ -474,7 +484,7 @@ def parallel_gather_trajectory(PyPath path, int num_threads, bool use_alignment,
             chosen_index = chosen_indices[i]
             chosen_action = chosen_actions[i]
             actions.push_back(chosen_action)
-            qs.push_back(node.get_total_values()[chosen_index] / node.get_action_counts()[chosen_index])
+            qs.push_back(node.get_total_values()[chosen_index] / (1e-8 + node.get_action_counts()[chosen_index]))
         if node.is_transitional():
             rewards.push_back((<TransitionNode *>(node)).get_rewards()[chosen_index])
     if use_alignment:

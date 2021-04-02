@@ -66,12 +66,15 @@ Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int
     assert(!node->is_leaf());
     auto path = Path(old_path);              // This extends the old path. Used for detecting circles.
     auto new_path = Path(node, start_depth); // This only records the extended part. Used for backing up values later.
+    auto sel_opt = opt.selection_opt;
+    // In `eval` mode, `add_noise` is turned off.
+    if (is_eval)
+        sel_opt.add_noise = false;
     while ((new_path.get_depth() < depth_limit) && (!node->is_leaf()))
     {
         // Complete sampling one action.
         SPDLOG_DEBUG("Mcts: node str\n{}", str::from(node));
-        bool add_noise = is_eval ? false : opt.add_noise;
-        auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c, add_noise, opt.use_num_misaligned, opt.use_max_value);
+        auto subpath = env->action_space->get_best_subpath(node, sel_opt);
         SPDLOG_DEBUG("Mcts: node subpath found.");
 
         // Add virtual loss.

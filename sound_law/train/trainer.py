@@ -226,6 +226,9 @@ class MctsTrainer(RLTrainer):
 
         eval_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker, num_episodes=1, is_eval=True)[0]
         metrics += Metric('eval_reward', eval_tr.total_reward, 1)
+        eval_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker,
+                                             num_episodes=1, is_eval=True, no_simulation=True)[0]
+        metrics += Metric('eval_reward_policy', eval_tr.total_reward, 1)
 
         # Add these new episodes to the replay buffer.
         for i, tr in enumerate(new_tr, 1):

@@ -26,10 +26,10 @@ TreeNode::TreeNode(const vec<Word *> &words,
 bool BaseNode::is_expanded() const { return (permissible_chars.size() > 0); }
 bool BaseNode::is_evaluated() const { return (priors.size() > 0); }
 
-ChosenChar BaseNode::get_best_action(float puct_c, float heur_c, bool add_noise, bool use_num_misaligned, bool use_max_value) const
+ChosenChar BaseNode::get_best_action(const SelectionOpt &sel_opt) const
 {
     assert(is_expanded() && is_evaluated());
-    auto scores = get_scores(puct_c, heur_c, add_noise, use_num_misaligned, use_max_value);
+    auto scores = get_scores(sel_opt);
     auto it = std::max_element(scores.begin(), scores.end());
     int index = std::distance(scores.begin(), it);
     auto ret = ChosenChar(index, permissible_chars[index]);
@@ -42,7 +42,7 @@ inline float randf(float high)
     return high * static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 }
 
-vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool use_num_misaligned, bool use_max_value) const
+vec<float> BaseNode::get_scores(const SelectionOpt &sel_opt) const
 {
     assert(!stopped || !is_tree_node());
     float sqrt_ns = sqrt(static_cast<float>(visit_count)); // + 1;
@@ -53,19 +53,19 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool
     {
         float nsa = static_cast<float>(action_counts[i]);
         float q;
-        if (use_max_value)
+        if (sel_opt.use_max_value)
             q = nsa > 0 ? max_values[i] : 0.0;
         else
             q = total_values[i] / (nsa + 1e-8);
         float p = priors[i];
-        float u = puct_c * p * sqrt_ns / (1 + nsa);
+        float u = sel_opt.puct_c * p * sqrt_ns / (1 + nsa);
         // float h = heur_c * (static_cast<float>(affected[i].size())) / (1 + nsa);
         // float h = heur_c * sqrt(static_cast<float>(affected[i].size())) / (1 + nsa);
         float h;
-        if (use_num_misaligned)
-            h = heur_c > 0.0 ? heur_c * static_cast<float>(affected[i].get_num_misaligned()) / (1 + nsa) : 0.0;
+        if (sel_opt.use_num_misaligned)
+            h = sel_opt.heur_c > 0.0 ? sel_opt.heur_c * static_cast<float>(affected[i].get_num_misaligned()) / (1 + nsa) : 0.0;
         else
-            h = heur_c > 0.0 ? heur_c * affected[i].get_misalignment_score() / (1 + nsa) : 0.0;
+            h = sel_opt.heur_c > 0.0 ? sel_opt.heur_c * affected[i].get_misalignment_score() / (1 + nsa) : 0.0;
         // std::cerr << permissible_chars[i] << ":" << h << " ";
 
         // std::cerr << "--------------\n";
@@ -78,7 +78,7 @@ vec<float> BaseNode::get_scores(float puct_c, float heur_c, bool add_noise, bool
         // scores[i] = q + u + randf(0.001);
         // scores[i] = pruned[i] ? -9999.9 : (q + u);
         // scores[i] = pruned[i] ? -9999.9 : (q + u + h + randf(0.01));
-        float noise = add_noise ? randf(1e-8) : 0.0;
+        float noise = sel_opt.add_noise ? randf(1e-8) : 0.0;
         scores[i] = pruned[i] ? -9999.9 : (q + u + h + noise);
         // scores[i] = pruned[i] ? -9999.9 : (mv + u + h + noise);
         // scores[i] = q + u; //+ h + randf(0.01);
@@ -163,7 +163,7 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini(PlayStrategy ps) const
         assert(max_index != -1);
         index = max_index;
     }
-    else
+    else if (ps == PlayStrategy::SAMPLE_AC)
     {
         auto probs = vec<float>();
         probs.reserve(action_counts.size());
@@ -190,6 +190,14 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini(PlayStrategy ps) const
             }
             low = high;
         }
+    }
+    else
+    {
+        assert(!is_evaluated());
+        index = 0;
+        for (size_t i = 1; i < priors.size(); ++i)
+            if (priors[i] > priors[index])
+                index = i;
     }
     // // Select the node with the max average return, i.e., both puct_c and heur_c are set to 0.
     // auto scores = get_scores(0.0, 0.0);
@@ -495,6 +503,7 @@ const vec<abc_t> &BaseNode::get_actions() const { return permissible_chars; }
 const vec<visit_t> &BaseNode::get_action_counts() const { return action_counts; }
 const vec<float> &BaseNode::get_total_values() const { return total_values; }
 visit_t BaseNode::get_visit_count() const { return visit_count; }
+const vec<float> &BaseNode::get_priors() const { return priors; }
 
 void BaseNode::virtual_select(size_t index, int game_count, float virtual_loss)
 {

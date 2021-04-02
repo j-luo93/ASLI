@@ -3,6 +3,15 @@
 #include "common.hpp"
 #include "word.hpp"
 
+struct SelectionOpt
+{
+    float puct_c;
+    float heur_c;
+    bool add_noise;
+    bool use_num_misaligned;
+    bool use_max_value;
+};
+
 // This enum class documents which phase a node is in, in terms of finishing sampling an action.
 enum class ActionPhase : int
 {
@@ -147,11 +156,12 @@ public:
     abc_t get_action_at(size_t) const;
     const Affected &get_affected_at(size_t) const;
     size_t get_num_affected_at(size_t) const;
-    vec<float> get_scores(float, float, bool, bool, bool) const;
+    vec<float> get_scores(const SelectionOpt &) const;
     // Given the current action phase, get the best action.
-    ChosenChar get_best_action(float, float, bool, bool, bool) const;
+    ChosenChar get_best_action(const SelectionOpt &) const;
     bool is_expanded() const;
     bool is_evaluated() const;
+    const vec<float> &get_priors() const;
     // Play one mini-step.
     pair<BaseNode *, ChosenChar> play_mini(PlayStrategy) const;
 
@@ -194,6 +204,7 @@ class MiniNode : public BaseNode
 private:
     friend class NodeFactory;
     friend class ActionManager;
+    friend class BaseNode; // `evaluate` can be called within `BaseNode`.
 
     void evaluate();
 

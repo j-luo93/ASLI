@@ -19,7 +19,8 @@ from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.trajectory import Trajectory, VocabState
 
 # pylint: disable=no-name-in-module
-from .mcts_cpp import PyMcts, PyPS_MAX, PyPS_SAMPLE_AC, parallel_stack_ids
+from .mcts_cpp import (PyMcts, PyPS_MAX, PyPS_POLICY, PyPS_SAMPLE_AC,
+                       parallel_stack_ids)
 
 # pylint: enable=no-name-in-module
 
@@ -113,7 +114,10 @@ class Mcts(PyMcts):
         self.env.add_noise(state, meta_noise, special_noise, g.noise_ratio)
 
     def collect_episodes(self, init_state: VocabState,
-                         tracker: Optional[Tracker] = None, num_episodes: int = 0, is_eval: bool = False) -> List[Trajectory]:
+                         tracker: Optional[Tracker] = None,
+                         num_episodes: int = 0,
+                         is_eval: bool = False,
+                         no_simulation: bool = False) -> List[Trajectory]:
         trajectories = list()
         self.agent.eval()
         if is_eval:
@@ -133,23 +137,31 @@ class Mcts(PyMcts):
                 for ri in range(g.max_rollout_length):
                     if not is_eval:
                         self.add_noise(root)
-                    # Run many simulations before take one action. Simulations take place in batches. Each batch
-                    # would be evaluated and expanded after batched selection.
-                    num_batches = g.num_mcts_sims // g.expansion_batch_size
-                    for _ in range(num_batches):
-                        paths, steps = self.select(root, g.expansion_batch_size, ri, g.max_rollout_length, played_path)
-                        steps = get_tensor(steps) if g.use_finite_horizon else None
-                        new_states = [path.get_last_node() for path in paths]
-                        values = self.evaluate(new_states, steps=steps)
-                        self.backup(paths, values)
-                        if tracker is not None:
-                            tracker.update('mcts', incr=g.expansion_batch_size)
-                    if ri == 0 and ei % g.episode_check_interval == 0:
-                        k = min(20, root.num_actions)
-                        logging.debug(pad_for_log(str(get_tensor(root.action_counts).topk(k))))
-                        logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
-                    ps = PyPS_MAX if is_eval else self.play_strategy
-                    new_path = self.play(root, ri, ps)
+                    if is_eval and no_simulation:
+                        # breakpoint()  # BREAKPOINT(j_luo)
+                        new_path = self.play(root, ri, PyPS_POLICY)
+                        steps = get_tensor([steps + 1]) if g.use_finite_horizon else None
+                        values = self.evaluate([new_path.get_last_node()], steps=steps)
+                        self.backup([new_path], values)
+                    else:
+                        # Run many simulations before take one action. Simulations take place in batches. Each batch
+                        # would be evaluated and expanded after batched selection.
+                        num_batches = g.num_mcts_sims // g.expansion_batch_size
+                        for _ in range(num_batches):
+                            paths, steps = self.select(root, g.expansion_batch_size, ri,
+                                                       g.max_rollout_length, played_path)
+                            steps = get_tensor(steps) if g.use_finite_horizon else None
+                            new_states = [path.get_last_node() for path in paths]
+                            values = self.evaluate(new_states, steps=steps)
+                            self.backup(paths, values)
+                            if tracker is not None:
+                                tracker.update('mcts', incr=g.expansion_batch_size)
+                        if ri == 0 and ei % g.episode_check_interval == 0:
+                            k = min(20, root.num_actions)
+                            logging.debug(pad_for_log(str(get_tensor(root.action_counts).topk(k))))
+                            logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
+                        ps = PyPS_MAX if is_eval else self.play_strategy
+                        new_path = self.play(root, ri, ps)
                     if played_path is None:
                         played_path = new_path
                     else:

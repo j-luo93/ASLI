@@ -51,6 +51,7 @@ cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
 cdef extern from "mcts_cpp/common.hpp" namespace "PlayStrategy":
     cdef PlayStrategy MAX
     cdef PlayStrategy SAMPLE_AC
+    cdef PlayStrategy POLICY
 
 cdef extern from "mcts_cpp/word.hpp":
     cdef cppclass Word nogil:
@@ -128,9 +129,19 @@ cdef extern from "mcts_cpp/node.hpp":
     ctypedef vector[pair[int, size_t]] Affected
     ctypedef pair[int, abc_t] ChosenChar
 
+    cdef cppclass SelectionOpt nogil:
+        float puct_c
+        float heur_c
+        bool add_noise
+        bool use_num_misaligned
+        bool use_max_value
+
+        SelectionOpt()
+
     cdef cppclass BaseNode nogil:
         vector[bool] get_pruned()
         vector[abc_t] get_actions()
+        vector[float] get_priors()
         vector[visit_t] get_action_counts()
         vector[float] get_total_values()
         visit_t get_visit_count()
@@ -168,14 +179,10 @@ ctypedef BaseNode * BNptr
 
 cdef extern from "mcts_cpp/mcts.hpp":
     cdef cppclass MctsOpt nogil:
-        float puct_c
         int game_count
         float virtual_loss
         int num_threads
-        float heur_c
-        bool add_noise
-        bool use_num_misaligned
-        bool use_max_value
+        SelectionOpt selection_opt
 
         MctsOpt()
 

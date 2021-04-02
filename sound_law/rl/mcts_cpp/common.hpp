@@ -119,7 +119,8 @@ enum class SpecialType : abc_t // Treat it as a special char to compatibility wi
 enum class PlayStrategy : int
 {
     MAX,
-    SAMPLE_AC
+    SAMPLE_AC,
+    POLICY
 };
 
 template <class K, class V>
