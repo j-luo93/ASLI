@@ -264,7 +264,9 @@ class MctsTrainer(RLTrainer):
                 self.optimizer.zero_grad()
 
                 policies = self.agent.get_policy(agent_inputs.id_seqs, almts=(agent_inputs.almts1, agent_inputs.almts2))
+                # print(policies[:, 2, self.mcts.env.abc['ẽ']].exp().mean())
                 # values = self.agent.get_values(agent_inputs.id_seqs, steps=agent_inputs.steps)
+                # breakpoint()  # BREAKPOINT(j_luo)
                 with NoName(policies, agent_inputs.permissible_actions):
                     mask = agent_inputs.permissible_actions == SENTINEL_ID
                     pa = agent_inputs.permissible_actions

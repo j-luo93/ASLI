@@ -51,7 +51,6 @@ cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
 cdef extern from "mcts_cpp/common.hpp" namespace "PlayStrategy":
     cdef PlayStrategy MAX
     cdef PlayStrategy SAMPLE_AC
-    cdef PlayStrategy POLICY
 
 cdef extern from "mcts_cpp/word.hpp":
     cdef cppclass Word nogil:
@@ -144,6 +143,7 @@ cdef extern from "mcts_cpp/node.hpp":
         vector[float] get_priors()
         vector[visit_t] get_action_counts()
         vector[float] get_total_values()
+        vector[float] get_max_values()
         visit_t get_visit_count()
         bool is_tree_node()
         bool is_transitional()
@@ -204,6 +204,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
 
         vector[Path] select(TreeNode *, int, int, int)
         vector[Path] select(TreeNode *, int, int, int, Path)
+        TreeNode * select_one_pi_step(TreeNode *)
         void eval()
         void train()
         void backup(vector[Path], vector[float])

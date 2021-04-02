@@ -2,7 +2,7 @@
 from .mcts_cpp cimport TreeNode, IdSeq, VocabIdSeq, Env, Mcts
 from .mcts_cpp cimport Stress, NOSTRESS, STRESSED, UNSTRESSED
 from .mcts_cpp cimport SpecialType, NONE, CLL, CLR, VS, GBJ, GBW
-from .mcts_cpp cimport PlayStrategy, MAX, SAMPLE_AC, POLICY
+from .mcts_cpp cimport PlayStrategy, MAX, SAMPLE_AC
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -24,7 +24,6 @@ PyST_GBW = <abc_t>GBW
 
 PyPS_MAX = <int>MAX
 PyPS_SAMPLE_AC = <int>SAMPLE_AC
-PyPS_POLICY = <int>POLICY
 
 cdef class PyTreeNode:
     cdef TreeNode *ptr
@@ -85,6 +84,10 @@ cdef class PyTreeNode:
     @property
     def total_values(self):
         return np.asarray((<BaseNode *>self.ptr).get_total_values(), dtype='float32')
+
+    @property
+    def max_values(self):
+        return np.asarray((<BaseNode *>self.ptr).get_max_values(), dtype='float32')
 
     @property
     def pruned(self):
@@ -350,6 +353,9 @@ cdef class PyMcts:
         steps = np.asarray(steps_vec, dtype='long')
         return paths, steps
 
+    def select_one_pi_step(self, PyTreeNode py_tnode):
+        return wrap_node(type(py_tnode), self.ptr.select_one_pi_step(py_tnode.ptr))
+
     def eval(self):
         self.ptr.eval()
 
@@ -368,8 +374,6 @@ cdef class PyMcts:
             ps = MAX
         elif play_strategy == PyPS_SAMPLE_AC:
             ps = SAMPLE_AC
-        else:
-            ps = POLICY
 
         return PyPath.from_c_obj(self.ptr.play(py_tnode.ptr, start_depth, ps), type(py_tnode))
         # cdef FullActionPath full_action = self.ptr.play(py_tnode.ptr)
@@ -494,7 +498,15 @@ def parallel_gather_trajectory(PyPath path, int num_threads, bool use_alignment,
     # We don't need the last state's permissible actions since it's not explored.
     base_nodes.pop_back()
     permissible_actions, mcts_pis = c_parallel_stack_actions(base_nodes, num_threads)
+    cdef vector[float] priors
+    ret = list()
+    for i in range(base_nodes.size()):
+        np.zeros([base_nodes.size()])
+        priors = base_nodes[i].get_priors()
+        x = np.asarray(priors, dtype='float32')
+        ret.append(x)
+
     if use_alignment:
         return id_seqs, almts1, almts2, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
     else:
-        return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
+        return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs), ret

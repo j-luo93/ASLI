@@ -87,8 +87,9 @@ class Trajectory:
                 played_path, g.num_workers, g.use_aligned_repr, max_end_length)
             assert len(self.id_seqs) == len(self.almts1) == len(self.almts2)
         else:
-            self.id_seqs, self.actions, self.rewards, self.permissible_actions, self.mcts_pis, self.qs = parallel_gather_trajectory(
+            self.id_seqs, self.actions, self.rewards, self.permissible_actions, self.mcts_pis, self.qs, self.ret = parallel_gather_trajectory(
                 played_path, g.num_workers, g.use_aligned_repr, max_end_length)
+        # breakpoint()  # BREAKPOINT(j_luo)
         self.done = played_path.get_last_node().done
         self._num_edges = len(self.id_seqs) - 1
         assert len(self.rewards) == len(self.id_seqs) - 1

@@ -120,7 +120,6 @@ enum class PlayStrategy : int
 {
     MAX,
     SAMPLE_AC,
-    POLICY
 };
 
 template <class K, class V>

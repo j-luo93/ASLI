@@ -29,9 +29,21 @@ bool BaseNode::is_evaluated() const { return (priors.size() > 0); }
 ChosenChar BaseNode::get_best_action(const SelectionOpt &sel_opt) const
 {
     assert(is_expanded() && is_evaluated());
-    auto scores = get_scores(sel_opt);
-    auto it = std::max_element(scores.begin(), scores.end());
-    int index = std::distance(scores.begin(), it);
+    int index;
+    if (sel_opt.policy_only)
+    {
+        index = 0;
+        for (size_t i = 1; i < priors.size(); ++i)
+            if (priors[i] > priors[index])
+                index = i;
+        // std::cerr << index << "\n";
+    }
+    else
+    {
+        auto scores = get_scores(sel_opt);
+        auto it = std::max_element(scores.begin(), scores.end());
+        index = std::distance(scores.begin(), it);
+    }
     auto ret = ChosenChar(index, permissible_chars[index]);
     SPDLOG_DEBUG("BaseNode: getting best subaction ({0}, {1})", ret.first, ret.second);
     return ret;
@@ -190,14 +202,6 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini(PlayStrategy ps) const
             }
             low = high;
         }
-    }
-    else
-    {
-        assert(!is_evaluated());
-        index = 0;
-        for (size_t i = 1; i < priors.size(); ++i)
-            if (priors[i] > priors[index])
-                index = i;
     }
     // // Select the node with the max average return, i.e., both puct_c and heur_c are set to 0.
     // auto scores = get_scores(0.0, 0.0);
@@ -493,7 +497,7 @@ void MiniNode::evaluate()
     if (is_evaluated())
         return;
 
-    if (ap == ActionPhase::SPECIAL_TYPE)
+    if (ap == ActionPhase::BEFORE) // NOTE(j_luo) Use `BEFORE` instead of `SPECIAL_TYPE` here.
         priors = base->evaluate_special_actions(permissible_chars);
     else
         priors = base->evaluate_actions(permissible_chars, ap);
@@ -502,6 +506,7 @@ void MiniNode::evaluate()
 const vec<abc_t> &BaseNode::get_actions() const { return permissible_chars; }
 const vec<visit_t> &BaseNode::get_action_counts() const { return action_counts; }
 const vec<float> &BaseNode::get_total_values() const { return total_values; }
+const vec<float> &BaseNode::get_max_values() const { return max_values; }
 visit_t BaseNode::get_visit_count() const { return visit_count; }
 const vec<float> &BaseNode::get_priors() const { return priors; }
 
@@ -545,7 +550,28 @@ void TreeNode::add_noise(const vec<vec<float>> &meta_noise, const vec<float> &sp
 
 vec<float> TreeNode::evaluate_actions(const vec<abc_t> &actions, ActionPhase ap) const
 {
-    const auto &full_priors = meta_priors[static_cast<int>(ap) + 1]; // +1 because the first is used for the tree node.
+    size_t index;
+    switch (ap)
+    {
+    case ActionPhase::SPECIAL_TYPE:
+        index = 1;
+        break;
+    case ActionPhase::AFTER:
+        index = 2;
+        break;
+    case ActionPhase::PRE:
+        index = 3;
+        break;
+    case ActionPhase::D_PRE:
+        index = 4;
+        break;
+    case ActionPhase::POST:
+        index = 5;
+        break;
+    }
+    const auto &full_priors = meta_priors.at(index);
+    // if (ap == ActionPhase::SPECIAL_TYPE)
+    //     std::cerr << full_priors.at(56) << " " << full_priors.at(4) << "\n";
     return gather_priors(full_priors, actions);
 }
 

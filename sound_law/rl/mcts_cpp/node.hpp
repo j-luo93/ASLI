@@ -10,6 +10,7 @@ struct SelectionOpt
     bool add_noise;
     bool use_num_misaligned;
     bool use_max_value;
+    bool policy_only = false;
 };
 
 // This enum class documents which phase a node is in, in terms of finishing sampling an action.
@@ -131,6 +132,7 @@ private:
 public:
     const vec<visit_t> &get_action_counts() const;
     const vec<float> &get_total_values() const;
+    const vec<float> &get_max_values() const;
     visit_t get_visit_count() const;
 
     /* ---------------------- Action-related ---------------------- */

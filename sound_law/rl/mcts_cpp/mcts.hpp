@@ -62,6 +62,7 @@ public:
 
     vec<Path> select(TreeNode *, const int, const int, const int) const;
     vec<Path> select(TreeNode *, const int, const int, const int, const Path &) const;
+    TreeNode *select_one_pi_step(TreeNode *) const;
     void eval();
     void train();
     void backup(const vec<Path> &, const vec<float> &) const;

@@ -130,6 +130,19 @@ vec<Path> Mcts::select(TreeNode *root, const int num_sims, const int start_depth
     return paths;
 }
 
+TreeNode *Mcts::select_one_pi_step(TreeNode *root) const
+{
+    auto sel_opt = opt.selection_opt;
+    sel_opt.policy_only = true;
+    auto subpath = env->action_space->get_best_subpath(root, sel_opt);
+    auto new_node = env->apply_action(root, subpath);
+    // HACK(j_luo)
+    StatsManager::virtual_select(root, subpath.chosen_seq[0].first, 1, 0.0);
+    for (size_t i = 0; i < 6; ++i)
+        StatsManager::virtual_select(subpath.mini_node_seq[i], subpath.chosen_seq[i + 1].first, 1, 0.0);
+    return new_node;
+}
+
 void Mcts::eval() { is_eval = true; }
 void Mcts::train() { is_eval = false; }
 
