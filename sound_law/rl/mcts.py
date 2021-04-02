@@ -116,6 +116,10 @@ class Mcts(PyMcts):
                          tracker: Optional[Tracker] = None, num_episodes: int = 0, is_eval: bool = False) -> List[Trajectory]:
         trajectories = list()
         self.agent.eval()
+        if is_eval:
+            self.eval()
+        else:
+            self.train()
         num_episodes = num_episodes or g.num_episodes
         with self.agent.policy_grad(False), self.agent.value_grad(False):
             for ei in range(num_episodes):

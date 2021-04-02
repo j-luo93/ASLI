@@ -58,6 +58,7 @@ Mcts::Mcts(Env *env, const MctsOpt &opt) : env(env), opt(opt)
         tp = new Pool(opt.num_threads);
     else
         tp = nullptr;
+    is_eval = false;
 }
 
 Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int depth_limit, const Path &old_path) const
@@ -69,7 +70,8 @@ Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int
     {
         // Complete sampling one action.
         SPDLOG_DEBUG("Mcts: node str\n{}", str::from(node));
-        auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c, opt.add_noise, opt.use_num_misaligned, opt.use_max_value);
+        bool add_noise = is_eval ? false : opt.add_noise;
+        auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c, add_noise, opt.use_num_misaligned, opt.use_max_value);
         SPDLOG_DEBUG("Mcts: node subpath found.");
 
         // Add virtual loss.
@@ -124,6 +126,9 @@ vec<Path> Mcts::select(TreeNode *root, const int num_sims, const int start_depth
     SPDLOG_DEBUG("Mcts: selected.");
     return paths;
 }
+
+void Mcts::eval() { is_eval = true; }
+void Mcts::train() { is_eval = false; }
 
 void Mcts::backup(const vec<Path> &paths, const vec<float> &values) const
 {

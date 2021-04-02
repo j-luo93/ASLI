@@ -342,6 +342,12 @@ cdef class PyMcts:
         steps = np.asarray(steps_vec, dtype='long')
         return paths, steps
 
+    def eval(self):
+        self.ptr.eval()
+
+    def train(self):
+        self.ptr.train()
+
     def backup(self, py_paths, vector[float] values):
         cdef vector[Path] paths = vector[Path]()
         for py_p in py_paths:
