@@ -114,6 +114,7 @@ cdef extern from "mcts_cpp/env.hpp":
         size_t get_num_words()
         void add_noise(TreeNode *, vector[vector[float]], vector[float], float)
         size_t get_max_end_length()
+        vector[vector[abc_t]] expand_all_actions(TreeNode *)
 
 cdef extern from "mcts_cpp/node.hpp":
 

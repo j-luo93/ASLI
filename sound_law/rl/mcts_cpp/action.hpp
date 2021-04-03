@@ -46,6 +46,7 @@ class ActionSpace
     void expand_normal(MiniNode *, BaseNode *, int, int, bool, bool, bool) const;
     void expand_null(MiniNode *, BaseNode *, int) const;
     bool expand_null_only(MiniNode *, BaseNode *, int) const;
+    vec<vec<abc_t>> expand_all_actions(TreeNode *) const;
 
     void evaluate(MiniNode *) const;
     // This will create a new tree node without checking first if the child exists. Use `apply_action` in `Env` if checking is needed.
