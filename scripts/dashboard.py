@@ -279,9 +279,6 @@ if __name__ == "__main__":
         ht.add_checkbox(lambda x: ' --add_noise',
                         lambda x: 'noise',
                         'add_noise')
-        ht.add_checkbox(lambda x: ' --use_aligned_repr',
-                        lambda x: 'uar',
-                        'used_aligned_repr')
         ht.add_checkbox(lambda x: ' --use_num_misaligned',
                         lambda x: 'unm',
                         '(DO NOT USE) use_num_misaligned')
@@ -292,10 +289,14 @@ if __name__ == "__main__":
                         lambda x: 'sac',
                         'sample_ac')
 
+        ht.add_select_slider(lambda x: x == 'state',
+                             lambda x: f' --repr_mode {x}',
+                             lambda x: f'rm_{x}',
+                             'repr_mode', ['state', 'word', 'char'], value='state')
         ht.add_select_slider(lambda x: x == 50,
                              lambda x: f' --num_inner_steps {x}',
                              lambda x: f'nis{x}',
-                             'num_inner_steps', [5, 50], value=50)
+                             'num_inner_steps', [5, 10, 25, 50], value=50)
         ht.add_select_slider(lambda x: x == 1000,
                              lambda x: f' --replay_buffer_size {x}',
                              lambda x: f'rbs{x}',
@@ -304,25 +305,44 @@ if __name__ == "__main__":
                              lambda x: f' --num_episodes {x}',
                              lambda x: f'ne{x}',
                              'num_episodes', [10, 50], value=10)
+        ht.add_select_slider(lambda x: x == 1,
+                             lambda x: f' --puct_c {x}',
+                             lambda x: f'puct{x}',
+                             'puct_c', [1, 3, 5], value=1)
 
         ht.add_checkbox(lambda x: ' --optim_cls sgd --learning_rate 0.01',
                         lambda x: 'sgd',
                         'SGD')
 
+        decay2str = {
+            1e-3: 'm3',
+            1e-4: 'm4',
+            3e-4: '3m4'
+        }
         ht.add_select_slider(lambda x: x == 0.0,
                              lambda x: f' --weight_decay {x}',
-                             lambda x: f'wd_m{3 if x == 1e-3 else 4}',
-                             'weight_decay', [0.0, 1e-4, 1e-3], value=0.0)
+                             lambda x: f'wd_{decay2str[x]}',
+                             'weight_decay', [0.0, 1e-4, 3e-4, 1e-3], value=0.0)
 
         ht.add_select_slider(lambda x: x == 1.0,
                              lambda x: f' --heur_c {x}',
                              lambda x: f'heur{x}',
                              'heur_c', [0.0, 1.0, 5.0], value=1.0)
 
-        grid_variable = st.selectbox('grid variable', [None, 'num_mcts_sims'], index=0)
+        grid_variable = st.selectbox(
+            'grid variable', [None, 'num_mcts_sims', 'num_inner_steps', 'weight_decay', 'puct_c'], index=0)
 
         cmd_msg_pairs = ht.render(grid_variable)
 
+        # Main body to launch jobs.
+        def run_job(cmd: str):
+            def run_cmd():
+                output = subprocess.run(cmd, capture_output=True, check=True, shell=True, text=True)
+
+            thread = threading.Thread(target=run_cmd)
+            thread.start()
+
+        jobs = list()
         for i, (cmd, default_msg) in enumerate(cmd_msg_pairs):
             col1, col2 = st.beta_columns(2)
             msg = col1.text_input('message', help='The message to append to the run name.',
@@ -337,16 +357,18 @@ if __name__ == "__main__":
             # Pretty-print command.
             st.markdown("Command to run:\n```\n" + cmd.replace(' --', '  \n  --') + "\n```")
 
+            jobs.append(cmd)
             # Launch a new job.
             if st.button('Launch job', key=f'launch_job_{i}'):
                 with st.spinner(f'Launching job "{cmd}"'):
-
-                    def run_cmd():
-                        output = subprocess.run(cmd, capture_output=True, check=True, shell=True, text=True)
-
-                    thread = threading.Thread(target=run_cmd)
-                    thread.start()
+                    run_job(cmd)
                     time.sleep(3)
+
+        if st.button('Launch all jobs', key='launch_all_jobs'):
+            with st.spinner(f'Launching all jobs'):
+                for cmd in jobs:
+                    run_job(cmd)
+                time.sleep(3)
 
     # Take research notes.
     with st.beta_expander('Research note'):

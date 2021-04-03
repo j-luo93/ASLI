@@ -65,7 +65,7 @@ class AgentInputs:
     @classmethod
     def from_edges(cls,
                    edges: List[TrEdge]) -> AgentInputs:
-                #    sparse: bool = False) -> AgentInputs:
+        #    sparse: bool = False) -> AgentInputs:
 
         def gather(attr: str):
             """Gather information from trajectory edges. See definition for `TrEdge`."""
@@ -94,7 +94,7 @@ class AgentInputs:
         if g.use_finite_horizon:
             steps = get_tensor(gather('step'))
         almts1 = almts2 = None
-        if g.use_aligned_repr:
+        if g.repr_mode != 'state':
             almts1 = get_tensor(pad(gather('almt1'), PAD_ID, 'long')).rename('batch', 'word', 'pos')
             almts2 = get_tensor(pad(gather('almt2'), PAD_ID, 'long')).rename('batch', 'word', 'pos')
         return cls(edges, id_seqs, permissible_actions, rewards, mcts_pis, qs, steps=steps, almts1=almts1, almts2=almts2)

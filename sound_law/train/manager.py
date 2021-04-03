@@ -63,8 +63,8 @@ add_argument('use_num_misaligned', dtype=bool, default=False,
              msg="Flag to use number of misaligned characters instead of edit distance as heuristic.")
 add_argument('use_max_value', dtype=bool, default=False, msg="Flag to use max_value as q during exploration.")
 add_argument('use_alignment', dtype=bool, default=False, msg="Flag to use alignment to compute heuristics.")
-add_argument('use_aligned_repr', dtype=bool, default=False,
-             msg="Flag to use alignment to learned aligned representations.")
+add_argument('repr_mode', dtype=str, default='state', choices=['state', 'word', 'char'],
+             msg="Mode of using alignment to learned aligned representations.")
 
 add_condition('use_phono_features', True, 'share_src_tgt_abc', True)
 add_condition('use_rl', True, 'share_src_tgt_abc', True)

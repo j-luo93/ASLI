@@ -132,10 +132,10 @@ class StateEncoder(nn.Module):
     # FIXME(j_luo) this might not be instance-specific.
     @cacheable(switch='state_repr')
     def forward(self, curr_ids: LT, end_ids: LT, almts: Optional[Tuple[LT, LT]] = None):
-        if g.use_aligned_repr and almts is None:
-            raise RuntimeError(f'Must pass `almts` if `use_aligned_repr` is True.')
+        if g.repr_mode != 'state' and almts is None:
+            raise RuntimeError(f'Must pass `almts` if `repr_mode` is not "state".')
 
-        if g.use_aligned_repr:
+        if g.repr_mode != 'state':
             curr_almts, end_almts = almts
             assert curr_almts.shape == curr_ids.shape
             assert end_almts.shape[1:] == end_ids.shape
@@ -159,7 +159,12 @@ class StateEncoder(nn.Module):
             aligned_end_ids = aligned_end_ids.narrow(-1, 0, max_len - 1).rename('batch', 'word', 'pos')
             curr_char_emb = self._get_char_embedding(aligned_curr_ids)
             end_char_emb = self._get_char_embedding(aligned_end_ids)
-            state_repr = self._get_word_embedding_from_chars(curr_char_emb - end_char_emb).mean(dim='word')
+            if g.repr_mode == 'char':
+                state_repr = self._get_word_embedding_from_chars(curr_char_emb - end_char_emb).mean(dim='word')
+            else:
+                curr_word_emb = self._get_word_embedding_from_chars(curr_char_emb)
+                end_word_emb = self._get_word_embedding_from_chars(end_char_emb)
+                state_repr = (curr_word_emb - end_word_emb).mean(dim='word')
         else:
             word_repr = self._get_word_embedding(curr_ids)
             end_word_repr = self._get_word_embedding(end_ids)

@@ -206,6 +206,12 @@ class MctsTrainer(RLTrainer):
         self.replay_buffer: Deque[TrEdge] = deque(maxlen=g.replay_buffer_size)
         self.buffer_weight: Deque[float] = deque(maxlen=g.replay_buffer_size)
         super().__init__(*args, **kwargs)
+        hparams = dict()
+        for k, v in g.as_dict().items():
+            if not isinstance(v, (int, float, bool, str)):
+                v = str(v)
+            hparams[k] = v
+        self.metric_writer.add_hparams(hparams, dict())
 
     def add_trackables(self):
         super().add_trackables()
@@ -232,8 +238,10 @@ class MctsTrainer(RLTrainer):
 
         # Add these new episodes to the replay buffer.
         for i, tr in enumerate(new_tr, 1):
+            global_step = i + self.tracker['step'].value * g.num_episodes
             self.metric_writer.add_scalar('episode_reward', tr.rewards.sum(),
-                                          global_step=i + self.tracker['step'].value * g.num_episodes)
+                                          global_step=global_step)
+            self.metric_writer.add_text('trajectory', str(tr), global_step=global_step)
             # NOTE(j_luo) Use temperature if it's positive.
             if g.tau > 0.0:
                 weight = math.exp(tr.total_reward * 10.0)
