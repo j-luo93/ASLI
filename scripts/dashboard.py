@@ -11,6 +11,12 @@ import pandas as pd
 import streamlit as st
 
 
+class Terminal:
+
+    def __init__(self, name: str):
+        self._name = name
+
+
 class TensorboardLaunchar:
 
     def __init__(self, port: int, *, selected_runs: Optional[Union[str, List[str]]] = None, saved_dir: Optional[str] = None):
@@ -130,10 +136,98 @@ class HyperparameterTuner:
             return [(self._base_cmd + ''.join(cmd_args), '-'.join(msg_args))]
 
 
+class JobScheduler:
+
+    def __init__(self, job_path: str):
+        self.job_path = Path(job_path)
+
+    def add_job_to_queue(self, job: str):
+        with self.job_path.open('a', encoding='utf8') as fout:
+            fout.write(job + '\n')
+
+    def clear_job_queue(self):
+        with self.job_path.open('w') as fout:
+            pass
+
+    def get_job_queue(self) -> List[str]:
+        if self.job_path.exists():
+            jobs = [job for job in self.job_path.open('r', encoding='utf8').read(-1).strip().split('\n') if job]
+            if jobs:
+                return jobs
+        return list()
+
+    def show_job_queue(self) -> List[str]:
+        jobs = self.get_job_queue()
+        if jobs:
+            st.write(jobs)
+        else:
+            st.write('Job queue is empty.')
+        return jobs
+
+    def run(self):
+        jobs = self.get_job_queue()
+
+        def run_job(job: str):
+            output = subprocess.run(job, capture_output=True, check=True, shell=True, text=True)
+
+        if jobs:
+            with st.spinner('Running all jobs in the queue.'):
+                for job in jobs:
+                    thread = threading.Thread(target=run_job, args=(job, ))
+                    thread.start()
+                time.sleep(3)
+
+    def run_impl(self):
+        pass
+
+
+@st.cache(hash_funcs={Terminal: id})
+def get_terminal(name: str) -> Terminal:
+    return Terminal(name)
+
+
 if __name__ == "__main__":
+    earliest_date = st.sidebar.date_input('Earliest date',
+                                          value=date.fromisoformat('2021-03-28'),
+                                          help='Earliest date to start looking for log files.')
+    directory_choice = st.sidebar.radio('Which directory', ['log', 'saved'], index=0)
+    with st.sidebar.beta_expander('Filter by'):
+        regex = st.text_input('regex')
+
+    with st.sidebar.beta_expander('Advanced'):
+        log_dir = st.text_input('Log directory',
+                                value='log',
+                                help='Log directory with saved log files.')
+        imp_dir = st.text_input('Important directory',
+                                value='saved',
+                                help='Directory to save important runs.')
+        research_note_path = st.text_input('Research note',
+                                           value='research_notes.tsv',
+                                           help='File to store research notes.')
+        job_queue_path = st.text_input('Job queue',
+                                       value='job_queue.txt',
+                                       help='File to store job queue.')
+
+    log_dir = Path(log_dir)
+    imp_dir = Path(imp_dir)
+    js = JobScheduler(job_queue_path)
+    saved_runs = list()
+    all_runs = False
+    if directory_choice == 'log':
+        for folder_with_date in log_dir.glob('*/'):
+            folder_date = date.fromisoformat(folder_with_date.name)
+            if folder_date >= earliest_date:
+                for saved_run in folder_with_date.glob('*/*/'):
+                    if not regex or re.search(regex, str(saved_run)):
+                        saved_runs.append(saved_run)
+    else:
+        for saved_folder in imp_dir.glob('*/'):
+            saved_runs.append(saved_folder)
+        all_runs = st.checkbox('all_runs')
+    saved_runs = sorted(saved_runs, reverse=True)
+
     # Show GPU stats if avaiable.
-    with st.beta_expander('GPU'):
-        to_refresh = st.button('Refresh')
+    if st.checkbox('show GPUs'):
         output = subprocess.run('command -v gpustat', capture_output=True, check=True, text=True, shell=True)
         if output.stdout:
             gpu_stats_output = subprocess.run('gpustat --json', capture_output=True, check=True, text=True, shell=True)
@@ -150,7 +244,7 @@ if __name__ == "__main__":
             st.table(gpu_df)
 
     # Tensorboard stats.
-    with st.beta_expander("Tensorboard"):
+    if st.checkbox("Show Tensorboard"):
         output = subprocess.run('pgrep -u $(whoami) tensorboard', shell=True,
                                 text=True, capture_output=True)
 
@@ -179,41 +273,6 @@ if __name__ == "__main__":
                     subprocess.run(f'kill -9 {pid}', shell=True)
                 st.write('tensorboard processes killed.')
 
-    earliest_date = st.sidebar.date_input('Earliest date',
-                                          value=date.fromisoformat('2021-03-28'),
-                                          help='Earliest date to start looking for log files.')
-    directory_choice = st.sidebar.radio('Which directory', ['log', 'saved'], index=0)
-    with st.sidebar.beta_expander('Filter by'):
-        regex = st.text_input('regex')
-
-    with st.sidebar.beta_expander('Advanced'):
-        log_dir = st.text_input('Log directory',
-                                value='log',
-                                help='Log directory with saved log files.')
-        imp_dir = st.text_input('Important directory',
-                                value='saved',
-                                help='Directory to save important runs.')
-        research_note_path = st.text_input('Research note',
-                                           value='research_notes.tsv',
-                                           help='File to store research notes.')
-
-    log_dir = Path(log_dir)
-    imp_dir = Path(imp_dir)
-    saved_runs = list()
-    all_runs = False
-    if directory_choice == 'log':
-        for folder_with_date in log_dir.glob('*/'):
-            folder_date = date.fromisoformat(folder_with_date.name)
-            if folder_date >= earliest_date:
-                for saved_run in folder_with_date.glob('*/*/'):
-                    if not regex or re.search(regex, str(saved_run)):
-                        saved_runs.append(saved_run)
-    else:
-        for saved_folder in imp_dir.glob('*/'):
-            saved_runs.append(saved_folder)
-        all_runs = st.checkbox('all_runs')
-    saved_runs = sorted(saved_runs, reverse=True)
-
     if not all_runs:
         selected_runs = st.multiselect('Saved run', saved_runs, help='Select saved runs to inspect.')
     else:
@@ -232,28 +291,35 @@ if __name__ == "__main__":
                 launcher.launch()
                 if not launcher.is_successful():
                     st.error(launcher.output.stderr)
-        # Op to mark an important run.
-        if directory_choice == 'log' and len(selected_runs) == 1:
-            selected_run = selected_runs[0]
-            with st.beta_expander("Mark as important"):
-                name = st.text_input('name', help='The new name for this important run.',
-                                     value=str(selected_run).split('/')[2])
-                col1, col2, col3 = st.beta_columns([1, 1, 5])
-                overwrite = col2.radio('overwrite', ['Y', 'N'], index=1, help='Overwrite the link.')
-                if col1.button('Mark') and name:
-                    with st.spinner('Marking as important'):
-                        imp_dir.mkdir(parents=True, exist_ok=True)
+
+        # Op to mark important runs.
+        if directory_choice == 'log' and selected_runs:
+            names = list()
+            with st.beta_expander('Names'):
+                for selected_run in selected_runs:
+                    name = st.text_input('name', help='The new name for this important run.',
+                                         value=str(selected_run).split('/')[2])
+                    names.append(name)
+
+            col1, col2, col3 = st.beta_columns([1, 1, 5])
+            col3_text = col3.empty()
+            overwrite = col2.radio('overwrite', ['Y', 'N'], index=1, help='Overwrite the link.')
+            if all(bool(name) for name in names):
+                if col1.button('Mark'):
+                    imp_dir.mkdir(parents=True, exist_ok=True)
+                    for name, selected_run in zip(names, selected_runs):
                         link = imp_dir / name
                         if overwrite == 'Y':
                             link.unlink()
                         try:
                             link.symlink_to(selected_run.resolve(), target_is_directory=True)
-                            col3.write('Marked.')
+                            col3_text.write('Marked.')
                         except FileExistsError:
-                            col3.write('File already exists. Choose a different name.')
+                            col3_text.write('File already exists. Choose a different name.')
+                            break
 
-    # Job creation.
-    with st.beta_expander('Job creation'):
+    # Job schedule.
+    with st.beta_expander('Job schedule'):
         lang = st.selectbox('language', ['Gothic', 'Old Norse', 'Old English'])
         lang2config = {'Gothic': 'Got', 'Old Norse': 'Non', 'Old English': 'Ang'}
         lang2config = {k: 'OPRLPgmc' + v for k, v in lang2config.items()}
@@ -292,7 +358,7 @@ if __name__ == "__main__":
         ht.add_select_slider(lambda x: x == 'state',
                              lambda x: f' --repr_mode {x}',
                              lambda x: f'rm_{x}',
-                             'repr_mode', ['state', 'word', 'char'], value='state')
+                             'repr_mode', ['state', 'word', 'char'], value='word')
         ht.add_select_slider(lambda x: x == 50,
                              lambda x: f' --num_inner_steps {x}',
                              lambda x: f'nis{x}',
@@ -334,14 +400,6 @@ if __name__ == "__main__":
 
         cmd_msg_pairs = ht.render(grid_variable)
 
-        # Main body to launch jobs.
-        def run_job(cmd: str):
-            def run_cmd():
-                output = subprocess.run(cmd, capture_output=True, check=True, shell=True, text=True)
-
-            thread = threading.Thread(target=run_cmd)
-            thread.start()
-
         jobs = list()
         for i, (cmd, default_msg) in enumerate(cmd_msg_pairs):
             col1, col2 = st.beta_columns(2)
@@ -358,17 +416,21 @@ if __name__ == "__main__":
             st.markdown("Command to run:\n```\n" + cmd.replace(' --', '  \n  --') + "\n```")
 
             jobs.append(cmd)
-            # Launch a new job.
-            if st.button('Launch job', key=f'launch_job_{i}'):
-                with st.spinner(f'Launching job "{cmd}"'):
-                    run_job(cmd)
-                    time.sleep(3)
+            # Add a new job.
+            if st.button('Add job', key=f'add_job_{i}'):
+                js.add_job_to_queue(cmd)
 
-        if st.button('Launch all jobs', key='launch_all_jobs'):
-            with st.spinner(f'Launching all jobs'):
-                for cmd in jobs:
-                    run_job(cmd)
-                time.sleep(3)
+        if st.button('Add all jobs', key='add_all_jobs'):
+            for cmd in jobs:
+                js.add_job_to_queue(cmd)
+
+        job_queue = js.show_job_queue()
+        col1, col2 = st.beta_columns(2)
+        if job_queue:
+            if col2.button('Clear job queue', key='clear_job_queue'):
+                js.clear_job_queue()
+        if col1.button('Run job queue', key='run_job_queue'):
+            js.run()
 
     # Take research notes.
     with st.beta_expander('Research note'):
