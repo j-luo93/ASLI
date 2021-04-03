@@ -62,4 +62,5 @@ public:
             ret = std::max(ret, word->id_seq.size());
         return ret;
     }
+    inline vec<vec<abc_t>> expand_all_actions(TreeNode *base) const { return action_space->expand_all_actions(base); }
 };

@@ -689,3 +689,71 @@ void ActionSpace::connect(BaseNode *base, const Subpath &subpath) const
         parent = child;
     }
 }
+
+vec<vec<abc_t>> ActionSpace::expand_all_actions(TreeNode *base) const
+{
+    auto queue = vec<tuple<int, Subpath, BaseNode *>>();
+    queue.push_back({0, Subpath(), base});
+    size_t i = 0;
+    while (i < queue.size())
+    {
+        const auto item = queue[i++];
+        const auto length = std::get<0>(item);
+        if (length == 7)
+            continue;
+        const auto &path = std::get<1>(item);
+        const auto parent = std::get<2>(item);
+        assert(parent->is_expanded());
+        for (size_t index = 0; index < parent->get_num_actions(); ++index)
+        {
+            auto action = parent->get_action_at(index);
+            ActionPhase ap;
+            switch (length)
+            {
+            case 0:
+                ap = ActionPhase::BEFORE;
+                break;
+            case 1:
+                ap = ActionPhase::SPECIAL_TYPE;
+                break;
+            case 2:
+                ap = ActionPhase::AFTER;
+                break;
+            case 3:
+                ap = ActionPhase::PRE;
+                break;
+            case 4:
+                ap = ActionPhase::D_PRE;
+                break;
+            case 5:
+                ap = ActionPhase::POST;
+                break;
+            }
+            const auto chosen = ChosenChar{index, action};
+            auto new_path = path;
+            new_path.chosen_seq[length] = chosen;
+            if (length == 6)
+            {
+                queue.push_back({7, new_path, nullptr});
+                break;
+            }
+            new_path.stopped = (new_path.chosen_seq[0].first == 0);
+            auto child = get_mini_node(base, parent, chosen, ap, new_path.stopped);
+            new_path.mini_node_seq[length] = child;
+            bool use_vowel_seq = ((length > 1) && (static_cast<SpecialType>(new_path.chosen_seq[1].second) == SpecialType::VS));
+            expand(child, new_path, use_vowel_seq, false);
+            queue.push_back({length + 1, new_path, child});
+        }
+    }
+
+    auto ret = vec<vec<abc_t>>();
+    for (size_t index = 1; index < queue.size(); ++index)
+    {
+        const auto &subpath = std::get<1>(queue[index]);
+        auto action_vec = vec<abc_t>();
+        for (const auto &item : subpath.chosen_seq)
+            action_vec.push_back(item.second);
+        ret.push_back(action_vec);
+    }
+    return ret;
+}

@@ -297,6 +297,9 @@ cdef class PyEnv:
     def max_end_length(self) -> int:
         return self.ptr.get_max_end_length()
 
+    def expand_all_actions(self, PyTreeNode py_tnode):
+        return self.ptr.expand_all_actions(py_tnode.ptr)
+
 cdef inline TreeNode *get_ptr(PyTreeNode py_node):
     return py_node.ptr
 
