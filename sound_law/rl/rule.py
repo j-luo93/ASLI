@@ -1,4 +1,3 @@
-# TODO(djwyen) make scripts/evaluate.py import its functions frorm here instead
 from __future__ import annotations
 
 import logging
@@ -420,3 +419,191 @@ class PlainState:
         cls = type(self)
         assert cls.end_state is not None
         return self.dist_from(cls.end_state.segments)
+
+
+Action = SoundChangeAction
+
+
+def order_matters(a: Action, b: Action, state: PlainState) -> bool:
+    '''Checks whether the order in which two actions are applied to a state changes the outcome.'''
+    ordering1 = state.apply_action(a).apply_action(b)  # apply A then B
+    ordering2 = state.apply_action(b).apply_action(a)  # apply B then A
+    return ordering1.segments == ordering2.segments
+
+
+def contextual_order_matters(a: int, b: int, actions: List[Action], state: PlainState) -> bool:
+    '''Checks whether swapping actions a and b changes the final state'''
+    # apply all actions a->b
+    # apply all actions b->a
+    # TODO implement this
+    return False
+
+
+def build_action_graph(actions: List[Action], state: PlainState) -> Dict[Action, Set[Action]]:
+    '''Builds a directed graph in which nodes are actions and edge u->v exists if the order of actions u and v on the state matter, and u precedes v in actions'''
+    # FIXME the function signature isn't correct since it uses action_id in the dict, not actions themselves.
+    nodes = {act.action_id for act in gold}
+    edges = {}  # maps an action_id to a set of action_ids that it has edges to
+    current_state = initial_state
+    for i, act1 in enumerate(gold):
+        for act2 in gold[i + 1:]:
+            if order_matters(act1, act2, current_state):
+                if act1.action_id not in edges:
+                    edges[act1.action_id] = set()
+                edges[act1.action_id].add(act2.action_id)
+        current_state = current_state.apply_action(act1)  # evolve the system
+    # for each node, we BFS from it to identify all nodes reachable from it. We memoize to make this computationally efficient — we only need to visit each node once.
+    reachable = {}  # maps an action_id to /all/ action_id that action can reach in the graph
+    for act in nodes:
+        stack = []
+    # TODO implement
+    # when you reach a node already in reachable, just extend that node's reachable nodes.
+    return edges
+
+
+def identify_descendants(edges: Dict[Action, Set[Action]]) -> Dict[Action, Set[Action]]:
+    # FIXME the function signature isn't correct since it uses action_id in the dicts, not actions themselves.
+    descendants = {}  # maps an action_id to a set of all action_id that are reachable from it
+    queue = [edges[next(edges.keys())]]
+    visited = set()
+    # run BFS on the graph using the queue
+    while len(queue) > 0:
+        node = queue.pop()
+        children = edges[node]
+        queue.extend(children)
+    # TODO implement
+    return descendants
+
+
+def match_rules(gold: List[List[Action]], candidate: List[List[Action]], initial_state: PlainState) -> List[Tuple[Int]]:
+    '''
+    Determines the best matching of rules between gold and candidate under the current ordering and bundling of rules. Bundled rules are treated as a block; only the end state after applying all of the rules is considered.
+
+    Assumes there are more bundles in candidate than in gold; that is, every block in gold will be matched with something, while the blocks in candidate may not get matched to anything.
+
+    Returns the optimal partitioning.
+    '''
+    # TODO(djwyen) update so that candidate is just a list of actions instead, so we don't presuppose any blocking?
+    m = len(gold)
+    n = len(candidate)
+    memo = {}  # for memoization. maps a tuple (i,j) to the value of subproblem x(i,j)
+    # maps index i to state s_i, the state achieved after applying gold rules 0 through i in gold to initial_state.
+    gold_state_dict = {}
+    cand_state_dict = {}  # similarly, maps index j to state s_j obtained by appling rules 0-j in candidate to initial_state
+    # maps (i,j) to (k,l) if subproblem (i,j) goes to subproblem (k,l). Use to reconstruct the matching discovered
+    subproblem_graph = {}
+
+    # populate the dictionaries
+    current_state = initial_state
+    for i, block in enumerate(gold):
+        for act in block:
+            current_state = current_state.apply_action(act)
+        gold_state_dict[i] = current_state
+    current_state = initial_state
+    for j, block in enumerate(candidate):
+        for act in block:
+            current_state = current_state.apply_action(act)
+        cand_state_dict[j] = current_state
+
+    def x(i: int, j: int) -> float:
+        '''Returns the minimum distance achievable matching rules gold[i:] to candidate[j:] using dynamic programming.'''
+
+        if (i, j) in memo:
+            return memo[(i, j)]
+        if i == m:  # matching complete
+            return 0
+        if j == n and i != m:  # must match everything in gold
+            return float('inf')
+
+        s_i = gold_state_dict[i]
+        s_j = cand_state_dict[j]
+        dist = s_i.dist_from(s_j.segments)
+        take_dist = x(i + 1, j + 1) + dist  # ie match i to j
+        skip_dist = x(i, j + 1)  # match i with something else
+
+        if take_dist <= skip_dist:
+            memo[(i, j)] = take_dist
+            subproblem_graph[(i, j)] = (i + 1, j + 1)
+            return take_dist
+        else:
+            memo[(i, j)] = skip_dist
+            subproblem_graph[(i, j)] = (i, j + 1)
+            return skip_dist
+
+    # run the DP problem to populate subproblem_graph
+    min_dist = x(0, 0)
+    # reconstruct the solution
+    i = 0
+    j = 0
+    rule_matching = []  # contains tuple (i,j) if matching i->j was established
+    while i != m:
+        i_new, j_new = subproblem_graph[(i, j)]
+        if i_new == i + 1:  # the take route was taken, so matching i->j was established
+            rule_matching.append((i, j))
+        i, j = i_new, j_new
+
+    return rule_matching
+
+
+def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] = None) -> Tuple[OnePairManager, List[SoundChangeAction], List[PlainState], List[str]]:
+    add_argument("in_path", dtype=str, msg="Input path to the saved path file.")
+    # Get alphabet and action space.
+    initiator = setup()
+    initiator.run()
+    manager = OnePairManager()
+
+    dump = pickle.load(open(g.segments_dump_path, 'rb'))
+    _fp.load_repository(dump['proto_ph_map'].keys())
+
+    # Get the list of rules.
+    gold = list()
+    if raw_inputs is not None:
+        for ri in raw_inputs:
+            gold.extend(get_actions(*ri))
+    elif g.in_path:
+        with open(g.in_path, 'r', encoding='utf8') as fin:
+            lines = [line.strip() for line in fin.readlines()]
+            gold = get_actions(lines, range(len(lines)))
+    else:
+        df = pd.read_csv('data/test_annotations.csv')
+        df = df.dropna(subset=['ref no.'])
+        for ref in ref_no[g.tgt_lang]:
+            rows = df[df['ref no.'].str.startswith(ref)]
+            gold.extend(get_actions(rows['rule'],
+                                    orders=rows['order'],
+                                    refs=rows['ref no.']))
+
+    # Simulate the actions and get the distance.
+    PlainState.env = manager.env
+    PlainState.end_state = PlainState(manager.env.end)
+    PlainState.abc = manager.tgt_abc
+    state = PlainState(manager.env.start)
+    states = [state]
+    actions = list()
+    refs = list()
+    expanded_gold = list()
+
+    # def test(s1, s2):
+    #     seq1 = [PlainState.abc[u] for u in s1.split()]
+    #     seq2 = [PlainState.abc[u] for u in s2.split()]
+    #     return PlainState.env.get_edit_dist(seq1, seq2)
+
+    logging.info(f"Starting dist: {state.dist:.3f}")
+    for hr in gold:
+        if hr.expandable:
+            action_q = hr.specialize(state)
+            logging.warning(f"This is an expandable rule: {hr}")
+        else:
+            action_q = [hr.to_action()]
+        for action in action_q:
+            logging.info(f"Applying {action}")
+            state = state.apply_action(action)
+            states.append(state)
+            actions.append(action)
+            refs.append(hr.ref)
+            expanded_gold.append(action)
+            logging.info(f"New dist: {state.dist:.3f}")
+
+    # NOTE(j_luo) We can only score based on expanded rules.
+    gold = expanded_gold
+    return manager, gold, states, refs
