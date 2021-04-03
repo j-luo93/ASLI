@@ -14,12 +14,13 @@ import bisect
 from dev_misc import add_argument, g
 from sound_law.main import setup
 # from sound_law.data.alphabet import Alphabet
-# from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
+from sound_law.rl.action import SoundChangeAction
 # from sound_law.rl.env import ToyEnv
 # from sound_law.rl.mcts_cpp import \
 #     PyNull_abc  # pylint: disable=no-name-in-module
 # from sound_law.rl.trajectory import VocabState
 import sound_law.rl.rule as rule
+from sound_law.rl.rule import HandwrittenRule
 
 class ToyEnv():
 
@@ -45,6 +46,15 @@ class ToyEnv():
     #     state1 = self.apply_action(state, act1)
     #     state2 = self.apply_action(state, act2)
     #     return self.get_state_edit_dist(state1, state2)
+
+
+def read_rules_from_txt(filename: str) -> List[SoundChangeAction]:
+    '''Reads rules from a given file. Currently assuming file is a list of rules with commas at the end, formatted the same way test_annotations.csv is with [ruletype]: a > b / [context] _ [context], eg basic: z > ∅ / [+syllabic] r _ # '''
+    rules = []
+    with open(filename, 'r') as f:
+        for line in f:
+            rules.append(HandwrittenRule.from_str(line).to_action())
+    return rules
 
 
 def match_rulesets(gold: List[List[SoundChangeAction]],
@@ -84,12 +94,18 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
         paired_costs = [] # entries are of form (varname, i, [j...k], cost) — ie the variable pairing i with rules [j...k] has cost coefficient cost. Costs are in increasing order.
 
         block = gold[i]
+        print('block', i, block)
         gold_state = env.apply_block(curr_state, block)
         for j in range(len(cand)):
             rule = cand[j]
             a_var_name = 'a_' + str(i) + ',' + str(j)
+            # print(type(env))
+            # print(type(curr_state))
+            print('cand:', j, rule)
+
             cand_state = env.apply_action(curr_state, rule)
             cost = env.get_state_edit_dist(gold_state, cand_state)
+            print(cost)
             new_tuple = (a_var_name, i, [j], cost)
 
             # add this cost to the list if it's better than what we currently have
@@ -167,9 +183,21 @@ if __name__ == "__main__":
 
     manager, gold, states, refs = rule.simulate()
     initial_state = states[0]
+    # print(gold)
+    # turn gold rules into singleton lists since we expect gold to be in the form of blocks
 
-    gold = [[x,x] for x in range(10)]
-    cand = [x for x in range(20)]
-    env = ToyEnv('foo')
+    cand = read_rules_from_txt('data/toy_cand_rules.txt')
+    print(cand)
+    # print(type(cand[0]))
+    # print(gold)
+    # gold = read_rules_from_txt('data/toy_gold_rules.txt')
+    gold = [[x] for x in gold]
+
+    # gold = [[x,x] for x in range(10)]
+    # cand = [x for x in range(20)]
+    # env = ToyEnv('foo')
+    
+    env = manager.env
+    # print(env.__dict__.keys())
 
     match_rulesets(gold, cand, env)
