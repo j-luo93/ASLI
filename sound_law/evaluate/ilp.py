@@ -1,24 +1,25 @@
 from __future__ import annotations
 
+import logging
 import pickle
 import re
 from dataclasses import dataclass, field
 from typing import ClassVar, List, Set, Dict, Optional, Union
+import pandas as pd
 
 from ortools.linear_solver import pywraplp
 import random
 import bisect
 
-# from dev_misc import add_argument, g
+from dev_misc import add_argument, g
+from sound_law.main import setup
 # from sound_law.data.alphabet import Alphabet
-# from sound_law.main import setup
 # from sound_law.rl.action import SoundChangeAction, SoundChangeActionSpace
 # from sound_law.rl.env import ToyEnv
 # from sound_law.rl.mcts_cpp import \
 #     PyNull_abc  # pylint: disable=no-name-in-module
 # from sound_law.rl.trajectory import VocabState
-# from sound_law.train.manager import OnePairManager
-
+import sound_law.rl.rule as rule
 
 class ToyEnv():
 
@@ -164,8 +165,8 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
 
 if __name__ == "__main__":
 
-    # manager, gold, states, refs = simulate()
-    # initial_state = states[0]
+    manager, gold, states, refs = rule.simulate()
+    initial_state = states[0]
 
     gold = [[x,x] for x in range(10)]
     cand = [x for x in range(20)]
