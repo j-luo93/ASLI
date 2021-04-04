@@ -324,7 +324,7 @@ class BasicMcts:
     segments_dump_path: 'path' = 'data/nel_segs.pkl'
     ngram_path: 'path' = 'data/nel_ngram.pkl'
     use_finite_horizon: bool = True
-    use_max_value: bool = True
+    use_max_value: bool = False
     use_conditional: bool = True
     use_value_guidance: bool = False
 

@@ -40,7 +40,9 @@ class Mcts(PyMcts):
     add_argument('num_workers', default=4, dtype=int, msg='Number of workers for parallelizing MCTS.')
     add_argument('dirichlet_alpha', default=0.03, dtype=float, msg='Alpha value for the Dirichlet noise.')
     add_argument('noise_ratio', default=0.25, dtype=float, msg='Mixing ratio for the Dirichlet noise.')
-    add_argument('play_strategy', default='max', dtype=str, choices=['max', 'sample_ac'], msg='Play strategy.')
+    add_argument('play_strategy', default='max', dtype=str,
+                 choices=['max', 'sample_ac', 'sample_mv'], msg='Play strategy.')
+    add_argument('exponent', default=1.0, dtype=float, msg='The exponent for sample_ac play strategy.')
 
     def __init__(self, *args, agent: BasePG = None, **kwargs):
         self.agent = agent
@@ -163,9 +165,12 @@ class Mcts(PyMcts):
                             logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
                             logging.debug(pad_for_log(str(get_tensor(root.max_values).topk(k))))
                     ps = self.play_strategy
-                    if is_eval and no_simulation:
-                        ps = PyPS_SAMPLE_AC
-                    new_path = self.play(root, ri, ps)
+                    if is_eval:
+                        if no_simulation:
+                            ps = PyPS_SAMPLE_AC
+                        else:
+                            ps = PyPS_MAX
+                    new_path = self.play(root, ri, ps, g.exponent)
                     if played_path is None:
                         played_path = new_path
                     else:

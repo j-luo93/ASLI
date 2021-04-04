@@ -51,6 +51,7 @@ cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
 cdef extern from "mcts_cpp/common.hpp" namespace "PlayStrategy":
     cdef PlayStrategy MAX
     cdef PlayStrategy SAMPLE_AC
+    cdef PlayStrategy SAMPLE_MV
 
 cdef extern from "mcts_cpp/word.hpp":
     cdef cppclass Word nogil:
@@ -209,7 +210,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         void eval()
         void train()
         void backup(vector[Path], vector[float])
-        Path play(TreeNode *, int, PlayStrategy)
+        Path play(TreeNode *, int, PlayStrategy, float)
 
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:

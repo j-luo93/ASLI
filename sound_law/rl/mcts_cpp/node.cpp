@@ -124,17 +124,17 @@ bool BaseNode::is_pruned() const { return num_unpruned_actions == 0; }
 
 bool TreeNode::is_leaf() const { return priors.size() == 0; }
 
-pair<TreeNode *, Subpath> TreeNode::play(PlayStrategy ps) const
+pair<TreeNode *, Subpath> TreeNode::play(PlayStrategy ps, float exponent) const
 {
     SPDLOG_TRACE("Playing one step.");
     auto subpath = Subpath();
-    auto mini_ret = play_mini(ps);
+    auto mini_ret = play_mini(ps, exponent);
     BaseNode *node = mini_ret.first;
     subpath.mini_node_seq[0] = static_cast<MiniNode *>(node);
     subpath.chosen_seq[0] = mini_ret.second;
     for (int i = 1; i < 7; ++i)
     {
-        auto mini_ret = node->play_mini(ps);
+        auto mini_ret = node->play_mini(ps, exponent);
         if (i < 6)
             subpath.mini_node_seq[i] = static_cast<MiniNode *>(mini_ret.first);
         subpath.chosen_seq[i] = mini_ret.second;
@@ -144,7 +144,7 @@ pair<TreeNode *, Subpath> TreeNode::play(PlayStrategy ps) const
     return std::make_pair(static_cast<TreeNode *>(node), subpath);
 }
 
-pair<BaseNode *, ChosenChar> BaseNode::play_mini(PlayStrategy ps) const
+pair<BaseNode *, ChosenChar> BaseNode::play_mini(PlayStrategy ps, float exponent) const
 {
     // int index = 0;
     // for (size_t i = 1; i < permissible_chars.size(); ++i)
@@ -175,15 +175,38 @@ pair<BaseNode *, ChosenChar> BaseNode::play_mini(PlayStrategy ps) const
         assert(max_index != -1);
         index = max_index;
     }
-    else if (ps == PlayStrategy::SAMPLE_AC)
+    else
     {
         auto probs = vec<float>();
         probs.reserve(action_counts.size());
         float sum = 0.0;
-        for (const auto ac : action_counts)
+        if (ps == PlayStrategy::SAMPLE_AC)
         {
-            probs.push_back(pow(static_cast<float>(ac), 1.0));
-            sum += probs.back();
+            for (size_t i = 0; i < action_counts.size(); ++i)
+            {
+                auto ac = action_counts[i];
+                if (ac > 0)
+                    probs.push_back(pruned[i] ? 1e-8 : pow(static_cast<float>(ac), exponent));
+                else
+                    probs.push_back(0);
+                sum += probs.back();
+            }
+        }
+        else if (ps == PlayStrategy::SAMPLE_MV)
+        {
+            for (size_t i = 0; i < max_values.size(); ++i)
+            {
+                auto mv = max_values[i];
+                auto ac = action_counts[i];
+                if (ac > 0)
+                    if (pruned[i])
+                        probs.push_back(1e-8);
+                    else
+                        probs.push_back(exp(mv * exponent));
+                else
+                    probs.push_back(0);
+                sum += probs.back();
+            }
         }
         for (auto &prob : probs)
             prob /= sum;

@@ -2,6 +2,7 @@ import json
 import re
 import subprocess
 import threading
+import psutil
 import time
 from datetime import date, datetime
 from pathlib import Path
@@ -9,12 +10,6 @@ from typing import List, Optional, Tuple, Union
 
 import pandas as pd
 import streamlit as st
-
-
-class Terminal:
-
-    def __init__(self, name: str):
-        self._name = name
 
 
 class TensorboardLaunchar:
@@ -140,6 +135,7 @@ class JobScheduler:
 
     def __init__(self, job_path: str):
         self.job_path = Path(job_path)
+        self._scheduler_thread = None
 
     def add_job_to_queue(self, job: str):
         with self.job_path.open('a', encoding='utf8') as fout:
@@ -164,26 +160,72 @@ class JobScheduler:
             st.write('Job queue is empty.')
         return jobs
 
+    def update_job_queue(self, job_queue: List[str]):
+        with self.job_path.open('w', encoding='utf8') as fout:
+            for job in job_queue:
+                fout.write(job + '\n')
+
+    # def run(self):
+    #     jobs = self.get_job_queue()
+
+    #     def run_job(job: str):
+    #         output = subprocess.run(job, capture_output=True, check=True, shell=True, text=True)
+
+    #     if jobs:
+    #         with st.spinner('Running all jobs in the queue.'):
+    #             for job in jobs:
+    #                 thread = threading.Thread(target=run_job, args=(job, ))
+    #                 thread.start()
+    #             time.sleep(3)
     def run(self):
-        jobs = self.get_job_queue()
 
-        def run_job(job: str):
-            output = subprocess.run(job, capture_output=True, check=True, shell=True, text=True)
+        def run_impl():
 
-        if jobs:
-            with st.spinner('Running all jobs in the queue.'):
-                for job in jobs:
-                    thread = threading.Thread(target=run_job, args=(job, ))
-                    thread.start()
-                time.sleep(3)
+            def get_spare_gpu() -> int:
+                gpu_stats_output = subprocess.run('gpustat --json', capture_output=True,
+                                                  check=True, text=True, shell=True)
+                gpu_stats_json = json.loads(gpu_stats_output.stdout)
+                idx2n = dict()
+                for gpu_info in gpu_stats_json['gpus']:
+                    gpu_idx = gpu_info['index']
+                    n_processes = len([proc for proc in gpu_info['processes'] if proc['pid'] != 27262])
+                    idx2n[gpu_idx] = n_processes
+                idx, n_processes = sorted(idx2n.items(), key=lambda item: item[1])[0]
+                if n_processes < 2:
+                    return idx
+                return -1
 
-    def run_impl(self):
-        pass
+            def run_job(job: str):
+                output = subprocess.run(job, capture_output=True, check=True, shell=True, text=True)
+
+            def run_on_spare_gpu(job: str):
+                while True:
+                    time.sleep(10)
+                    gpu_idx = get_spare_gpu()
+                    if gpu_idx != -1:
+                        job = job + f' --gpu {gpu_idx}'
+                        thread = threading.Thread(target=run_job, args=(job, ))
+                        thread.start()
+                        break
+
+            while True:
+                print('here')
+                job_queue = self.get_job_queue()
+                if not job_queue:
+                    break
+
+                job = job_queue.pop(0)
+                run_on_spare_gpu(job)
+                self.update_job_queue(job_queue)
+
+        if self._scheduler_thread is None:
+            self._scheduler_thread = threading.Thread(target=run_impl)
+            self._scheduler_thread.start()
 
 
-@st.cache(hash_funcs={Terminal: id})
-def get_terminal(name: str) -> Terminal:
-    return Terminal(name)
+@st.cache(hash_funcs={JobScheduler: id})
+def get_job_scheduler(job_queue_path: str) -> JobScheduler:
+    return JobScheduler(job_queue_path)
 
 
 if __name__ == "__main__":
@@ -210,21 +252,7 @@ if __name__ == "__main__":
 
     log_dir = Path(log_dir)
     imp_dir = Path(imp_dir)
-    js = JobScheduler(job_queue_path)
-    saved_runs = list()
-    all_runs = False
-    if directory_choice == 'log':
-        for folder_with_date in log_dir.glob('*/'):
-            folder_date = date.fromisoformat(folder_with_date.name)
-            if folder_date >= earliest_date:
-                for saved_run in folder_with_date.glob('*/*/'):
-                    if not regex or re.search(regex, str(saved_run)):
-                        saved_runs.append(saved_run)
-    else:
-        for saved_folder in imp_dir.glob('*/'):
-            saved_runs.append(saved_folder)
-        all_runs = st.checkbox('all_runs')
-    saved_runs = sorted(saved_runs, reverse=True)
+    js = get_job_scheduler(job_queue_path)
 
     # Show GPU stats if avaiable.
     if st.checkbox('show GPUs'):
@@ -243,8 +271,14 @@ if __name__ == "__main__":
             gpu_df = pd.DataFrame(gpu_df_records)
             st.table(gpu_df)
 
+    # Show CPU stats.
+    if st.checkbox('show CPUs and RAM'):
+        st.write(psutil.virtual_memory().available / 1024 / 1024 / 1024)
+        st.write(psutil.cpu_count())
+        st.write(psutil.cpu_percent())
+
     # Tensorboard stats.
-    if st.checkbox("Show Tensorboard"):
+    if st.beta_expander("Tensorboard"):
         output = subprocess.run('pgrep -u $(whoami) tensorboard', shell=True,
                                 text=True, capture_output=True)
 
@@ -273,6 +307,21 @@ if __name__ == "__main__":
                     subprocess.run(f'kill -9 {pid}', shell=True)
                 st.write('tensorboard processes killed.')
 
+    saved_runs = list()
+    all_runs = False
+    if directory_choice == 'log':
+        for folder_with_date in log_dir.glob('*/'):
+            folder_date = date.fromisoformat(folder_with_date.name)
+            if folder_date >= earliest_date:
+                for saved_run in folder_with_date.glob('*/*/'):
+                    if not regex or re.search(regex, str(saved_run)):
+                        saved_runs.append(saved_run)
+    else:
+        for saved_folder in imp_dir.glob('*/'):
+            saved_runs.append(saved_folder)
+        all_runs = st.checkbox('all_runs')
+
+    saved_runs = sorted(saved_runs, reverse=True)
     if not all_runs:
         selected_runs = st.multiselect('Saved run', saved_runs, help='Select saved runs to inspect.')
     else:
@@ -351,14 +400,15 @@ if __name__ == "__main__":
         ht.add_checkbox(lambda x: ' --use_max_value',
                         lambda x: 'umv',
                         'use_max_value')
-        ht.add_checkbox(lambda x: ' --play_strategy sample_ac',
-                        lambda x: 'sac',
-                        'sample_ac')
 
         ht.add_select_slider(lambda x: x == 'state',
                              lambda x: f' --repr_mode {x}',
                              lambda x: f'rm_{x}',
                              'repr_mode', ['state', 'word', 'char'], value='word')
+        ht.add_select_slider(lambda x: x == 'max',
+                             lambda x: f' --play_strategy {x}',
+                             lambda x: f'ps_{x}',
+                             'repr_mode', ['max', 'sample_ac', 'sample_mv'], value='sample_ac')
         ht.add_select_slider(lambda x: x == 50,
                              lambda x: f' --num_inner_steps {x}',
                              lambda x: f'nis{x}',
@@ -375,6 +425,10 @@ if __name__ == "__main__":
                              lambda x: f' --puct_c {x}',
                              lambda x: f'puct{x}',
                              'puct_c', [1, 3, 5], value=1)
+        ht.add_select_slider(lambda x: x == 1.0,
+                             lambda x: f' --exponent {x}',
+                             lambda x: f'exp{x}',
+                             'exponent', [1, 2.5, 5, 7.5, 10], value=1.0)
 
         ht.add_checkbox(lambda x: ' --optim_cls sgd --learning_rate 0.01',
                         lambda x: 'sgd',
@@ -396,7 +450,7 @@ if __name__ == "__main__":
                              'heur_c', [0.0, 1.0, 5.0], value=1.0)
 
         grid_variable = st.selectbox(
-            'grid variable', [None, 'num_mcts_sims', 'num_inner_steps', 'weight_decay', 'puct_c'], index=0)
+            'grid variable', [None, 'num_mcts_sims', 'num_inner_steps', 'weight_decay', 'puct_c', 'exponent'], index=0)
 
         cmd_msg_pairs = ht.render(grid_variable)
 
@@ -408,9 +462,9 @@ if __name__ == "__main__":
             if msg:
                 cmd += f' --message {msg}'
 
-            gpu_id = col2.number_input('GPU', value=i % 4, min_value=-1, max_value=3, key=f'gpu_job_{i}')
-            if gpu_id > -1:
-                cmd += f' --gpu {gpu_id}'
+            # gpu_id = col2.number_input('GPU', value=i % 4, min_value=-1, max_value=3, key=f'gpu_job_{i}')
+            # if gpu_id > -1:
+            #     cmd += f' --gpu {gpu_id}'
 
             # Pretty-print command.
             st.markdown("Command to run:\n```\n" + cmd.replace(' --', '  \n  --') + "\n```")

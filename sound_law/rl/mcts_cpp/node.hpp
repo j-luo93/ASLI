@@ -165,7 +165,7 @@ public:
     bool is_evaluated() const;
     const vec<float> &get_priors() const;
     // Play one mini-step.
-    pair<BaseNode *, ChosenChar> play_mini(PlayStrategy) const;
+    pair<BaseNode *, ChosenChar> play_mini(PlayStrategy, float) const;
 
     /* --------------------- Pruning-related --------------------- */
 
@@ -302,7 +302,7 @@ public:
     float get_dist() const;
     bool is_done() const;
     bool is_leaf() const;
-    pair<TreeNode *, Subpath> play(PlayStrategy) const;
+    pair<TreeNode *, Subpath> play(PlayStrategy, float) const;
     const IdSeq &get_id_seq(int) const;
     size_t size() const;
     bool is_transitional() const override;

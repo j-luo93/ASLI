@@ -120,6 +120,7 @@ enum class PlayStrategy : int
 {
     MAX,
     SAMPLE_AC,
+    SAMPLE_MV
 };
 
 template <class K, class V>

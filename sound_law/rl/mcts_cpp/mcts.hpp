@@ -66,10 +66,10 @@ public:
     void eval();
     void train();
     void backup(const vec<Path> &, const vec<float> &) const;
-    inline Path play(TreeNode *node, int start_depth, PlayStrategy ps)
+    inline Path play(TreeNode *node, int start_depth, PlayStrategy ps, float exponent)
     {
         auto ret = Path(node, start_depth);
-        auto play_ret = node->play(ps);
+        auto play_ret = node->play(ps, exponent);
         ret.append(play_ret.second, play_ret.first);
         for (const auto node : ret.get_all_nodes())
             env->cache.put_persistent(node);

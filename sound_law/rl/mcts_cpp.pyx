@@ -2,7 +2,7 @@
 from .mcts_cpp cimport TreeNode, IdSeq, VocabIdSeq, Env, Mcts
 from .mcts_cpp cimport Stress, NOSTRESS, STRESSED, UNSTRESSED
 from .mcts_cpp cimport SpecialType, NONE, CLL, CLR, VS, GBJ, GBW
-from .mcts_cpp cimport PlayStrategy, MAX, SAMPLE_AC
+from .mcts_cpp cimport PlayStrategy, MAX, SAMPLE_AC, SAMPLE_MV
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -24,6 +24,7 @@ PyST_GBW = <abc_t>GBW
 
 PyPS_MAX = <int>MAX
 PyPS_SAMPLE_AC = <int>SAMPLE_AC
+PyPS_SAMPLE_MV = <int>SAMPLE_MV
 
 cdef class PyTreeNode:
     cdef TreeNode *ptr
@@ -371,14 +372,16 @@ cdef class PyMcts:
             paths.push_back(PyPath.get_c_obj(py_p))
         self.ptr.backup(paths, values)
 
-    def play(self, PyTreeNode py_tnode, int start_depth, int play_strategy):
+    def play(self, PyTreeNode py_tnode, int start_depth, int play_strategy, float exponent):
         cdef PlayStrategy ps
         if play_strategy == PyPS_MAX:
             ps = MAX
         elif play_strategy == PyPS_SAMPLE_AC:
             ps = SAMPLE_AC
+        elif play_strategy == PyPS_SAMPLE_MV:
+            ps = SAMPLE_MV
 
-        return PyPath.from_c_obj(self.ptr.play(py_tnode.ptr, start_depth, ps), type(py_tnode))
+        return PyPath.from_c_obj(self.ptr.play(py_tnode.ptr, start_depth, ps, exponent), type(py_tnode))
         # cdef FullActionPath full_action = self.ptr.play(py_tnode.ptr)
         # return wrap_node(type(py_tnode), full_action.first.first), full_action.first.second, full_action.second
 
