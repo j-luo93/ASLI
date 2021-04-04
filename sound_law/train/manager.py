@@ -18,7 +18,7 @@ from sound_law.data.alphabet import (ANY_ID, ANY_S_ID, ANY_UNS_ID, EMP_ID,
 from sound_law.data.cognate import CognateRegistry, get_paths
 from sound_law.data.data_loader import DataLoaderRegistry
 from sound_law.data.setting import Setting, Split
-from sound_law.evaluate.evaluator import Evaluator
+from sound_law.evaluate.evaluator import Evaluator, MctsEvaluator
 from sound_law.rl.action import SoundChangeAction
 from sound_law.rl.agent import A2C, VanillaPolicyGradient
 from sound_law.rl.env import SoundChangeEnv  # , TrajectoryCollector
@@ -253,7 +253,8 @@ class OnePairManager:
                 # tr.save(g.log_dir)
                 return
             else:
-                trainer = get_trainer(model, 'rl', None, metric_writer, mcts=mcts)
+                evaluator = MctsEvaluator(mcts, metric_writer=metric_writer)
+                trainer = get_trainer(model, 'rl', evaluator, metric_writer, mcts=mcts)
             # else:
             #     collector = TrajectoryCollector(g.batch_size,
             #                                     max_rollout_length=g.max_rollout_length,

@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 import torch
-
 from dev_misc import FT, LT, add_argument, g, get_tensor
 from dev_misc.devlib import get_array
 from dev_misc.devlib.dp import EditDist
@@ -18,6 +17,7 @@ from dev_misc.utils import pad_for_log, pbar
 from sound_law.data.alphabet import Alphabet
 from sound_law.data.data_loader import OnePairBatch, OnePairDataLoader
 from sound_law.evaluate.edit_dist import edit_dist_all
+from sound_law.rl.mcts import Mcts
 from sound_law.s2s.decoder import get_beam_probs
 from sound_law.s2s.one_pair import OnePairModel
 from sound_law.train.trainer import get_ce_loss
@@ -249,3 +249,23 @@ class Evaluator:
             records.append(record)
 
         return records
+
+
+class MctsEvaluator:
+
+    def __init__(self, mcts: Mcts, metric_writer: Optional[MetricWriter] = None):
+        self.mcts = mcts
+        self.metric_writer = metric_writer
+
+    def evaluate(self, stage: str, global_step: int) -> Metrics:
+        metrics = Metrics()
+        eval_tr = self.mcts.collect_episodes(self.mcts.env.start, num_episodes=1, is_eval=True)[0]
+        metrics += Metric('eval_reward', eval_tr.total_reward, 1)
+        eval_tr = self.mcts.collect_episodes(self.mcts.env.start, num_episodes=1, is_eval=True, no_simulation=True)[0]
+        metrics += Metric('eval_reward_policy', eval_tr.total_reward, 1)
+        metrics = metrics.with_prefix('eval')
+        logging.info(metrics.get_table(title=f'Eval: {stage}', num_paddings=8))
+        if self.metric_writer is not None:
+            self.metric_writer.add_metrics(metrics, global_step=global_step)
+            self.metric_writer.flush()
+        return metrics
