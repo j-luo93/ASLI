@@ -61,7 +61,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                    cand: List[SoundChangeAction], 
                    env: SoundChangeEnv,
                    match_proportion: float = .7,
-                   k_matches: int = 10) -> List[Tuple[Int, Tuple[Int]]]:
+                   k_matches: int = 10) -> List[List[Int, List[Int]]]:
     '''Finds the optimal matching of rule blocks in the gold ruleset to 0, 1, or 2 rules in the candidate ruleset. Frames the problem as an integer linear program. Returns a list of tuples with the matching.'''
 
     solver = pywraplp.Solver.CreateSolver('SCIP') # TODO investigate other solvers
@@ -108,7 +108,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
 
             for j in range(len(cand)):
                 rule = cand[j]
-                a_var_name = 'a_' + str(i) + ',' + str(j)
+                a_var_name = 'a_' + str(i) + ',(' + str(j) + ')'
                 # print('cand:', j, rule)
 
                 # TODO(djwyen) add try/excepts to each other application of apply_action 
@@ -193,41 +193,53 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
     solver.Solve()
 
     # reconstruct the solution and return it
-    print('Minimum objective function value = %d' % solver.Objective().Value())
-    # print()
-    # # Print the value of each variable in the solution.
-    # for variable in v.keys():
-    #     print('%s = %d' % (variable.name(), variable.solution_value()))
-    # # [END print_solution]
+    print('Minimum objective function value = %f' % solver.Objective().Value())
 
     # interpret solution as a matching, returning a list pairing indices of blocks in gold to a list of indices of matched rules in cand
-    # TODO(djwyen) implement this, for now just print out the soln
+    matching = []
     for name, var in v.items():
-        if var.solution_value():
-            print('%s = %d' % (var.name(), var.solution_value()))
+        if var.solution_value(): # ie if this variable was set to 1
+            # print('%s = %d' % (var.name(), var.solution_value()))
+
+            # process the variable name to extract the IDs of the matched rules
+            # example name: b_16,(20,24,27)
+            id_half = name.split('_')[1] # name: 16,(20,24,27)
+            gold_half, cand_half = id_half.split('(') # 16, ; 20,24,27)
+            gold_var = int(gold_half[:-1]) # remove the comma and turn into an int
+            cand_vars = cand_half[:-1].split(',') # remove the right paren and split on the commas
+            cand_vars = [int(x) for x in cand_vars] # make the numbers into ints
+
+            match = [gold_var, cand_vars]
+            matching.append(match)
     
-    return
+            if g.interpret_matching:
+                gold_id, cand_ids = match
+                gold_block = gold[gold_id]
+                cand_rules = [cand[j] for j in cand_ids]
+                cost = objective.GetCoefficient(v[name])
+                print('---')
+                print('gold block', gold_id, ':', gold_block)
+                print('matched to rules:', cand_rules)
+                print('with dist', str(cost))
+    
+    return matching
+    
+
 
 if __name__ == "__main__":
-    add_argument("match_proportion", dtype=float, msg="Proportion of gold blocks to force matches on")
+    add_argument("match_proportion", dtype=float, default=.7, msg="Proportion of gold blocks to force matches on")
+    add_argument("k_matches", dtype=int, default=10, msg="Number of matches to consider per gold block")
+    add_argument("interpret_matching", dtype=bool, default=False, msg="Flag to print out the rule matching")
 
     manager, gold, states, refs = rule.simulate()
     initial_state = states[0]
-    # print(gold)
-    # turn gold rules into singleton lists since we expect gold to be in the form of blocks
 
     cand = read_rules_from_txt('data/toy_cand_rules.txt')
-    # print(cand)
-    # print(type(cand[0]))
-    # print(gold)
     # gold = read_rules_from_txt('data/toy_gold_rules.txt')
+    
+    # turn gold rules into singleton lists since we expect gold to be in the form of blocks
     gold = [[x] for x in gold]
 
-    # gold = [[x,x] for x in range(10)]
-    # cand = [x for x in range(20)]
-    # env = ToyEnv('foo')
-    
     env = manager.env
-    # print(env.__dict__.keys())
 
-    match_rulesets(gold, cand, env, g.match_proportion)
+    matching = match_rulesets(gold, cand, env, g.match_proportion, g.k_matches)
