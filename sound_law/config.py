@@ -26,7 +26,7 @@ class ZSLatIta:  # "ZS" stands for zero-shot.
     dropout: float = 0.2
     num_steps: int = 100
     input_format: str = 'wikt'
-    eval_interval: int = 1000
+    eval_interval: int = 1
     control_mode: str = 'none'
     train_tgt_langs: Tuple[str, ...] = ('ron', 'cat', 'spa', 'por')
     task: str = 'one_to_many'

@@ -239,6 +239,7 @@ class MctsTrainer(RLTrainer):
         self.metric_writer.add_hparams(hparams, dict())
         self.replay_buffer = ReplayBuffer()
         self.best_metrics = Metrics()
+        self._old_state = dict()
 
     def add_trackables(self):
         super().add_trackables()
@@ -261,7 +262,8 @@ class MctsTrainer(RLTrainer):
         except AttributeError:
             pass
         new_score = eval_metrics['eval/eval_reward'].value
-        if new_score > best_score:
+        logging.info(f'Best score is {max(new_score, best_score):.3f}.')
+        if new_score >= best_score:  # The same as the best score is tolerated.
             best_score = new_score
             self.best_metrics = Metrics(Metric('best_score', best_score, 1))
             return True
@@ -271,10 +273,17 @@ class MctsTrainer(RLTrainer):
         if not self._update_best_score(eval_metrics):
             logging.imp('eval_reward has not been improved.')
             self.tracker.update('tolerance')
+            if g.improved_player_only:
+                logging.imp('Loading old state dict.')
+                self.agent.load_state_dict(self._old_state)
+        else:
+            self.tracker.reset('tolerance')
         self.metric_writer.add_metrics(self.best_metrics, self.tracker['step'].value)
         return self.tracker.is_finished('tolerance')
 
     def train_one_step(self, dl: OnePairDataLoader):
+        if g.improved_player_only:
+            self._old_state = self.agent.state_dict()
         # Collect episodes with the latest agent first.
         new_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker)
         # new_tr = self.mcts.collect_episodes(dl.init_state, dl.end_state, self.tracker)

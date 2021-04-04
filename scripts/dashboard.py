@@ -209,7 +209,6 @@ class JobScheduler:
                         break
 
             while True:
-                print('here')
                 job_queue = self.get_job_queue()
                 if not job_queue:
                     break
@@ -412,7 +411,7 @@ if __name__ == "__main__":
         ht.add_select_slider(lambda x: x == 50,
                              lambda x: f' --num_inner_steps {x}',
                              lambda x: f'nis{x}',
-                             'num_inner_steps', [5, 10, 25, 50], value=50)
+                             'num_inner_steps', [5, 10, 25, 50, 100, 200], value=50)
         ht.add_select_slider(lambda x: x == 1000,
                              lambda x: f' --replay_buffer_size {x}',
                              lambda x: f'rbs{x}',
@@ -433,6 +432,9 @@ if __name__ == "__main__":
         ht.add_checkbox(lambda x: ' --optim_cls sgd --learning_rate 0.01',
                         lambda x: 'sgd',
                         'SGD')
+        ht.add_checkbox(lambda x: ' --improved_player_only',
+                        lambda x: 'ipo',
+                        'improved_player_only')
 
         decay2str = {
             1e-3: 'm3',
