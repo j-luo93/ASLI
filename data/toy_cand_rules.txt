@@ -1,0 +1,38 @@
+basic: i > e / _ #
+basic: e > ã / _ #
+basic: ã > a / _ #
+basic: õː > o / _ #
+basic: oː > o / _ #
+basic: uː > u / _ #
+basic: oːː > o / _ #
+basic: e > i
+basic: a{-} > u / _ m
+basic: i > e / _ r
+basic: i > e / _ x
+basic: i > e / _ xʷ
+basic: u > o / _ r
+basic: u > o / _ x
+basic: u > o / _ xʷ
+basic: x > h
+basic: xʷ > h
+VS: eː{-} > a / .{+} _
+basic: h > k / _ l a
+basic: h > k / _ t a
+basic: h > k / _ m oː
+basic: h > k / _ j a
+basic: h > k / _ t s
+basic: h > k / _ s w
+basic: ai > i / _ #
+basic: ai > e
+basic: au > o
+basic: i > e / _ j a
+basic: a > o / _ z #
+basic: z > s
+basic: j > ∅ / . i _ i .
+CLR: i > iː / _ i
+CLR: j > iː / . _ i .
+basic: z > ∅ / . m _ #
+basic: eː > e / _ a
+CLR: z > rː / _ r
+basic: ð > t / r _
+basic: θ > h / _ s #
