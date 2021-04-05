@@ -58,6 +58,7 @@ Mcts::Mcts(Env *env, const MctsOpt &opt) : env(env), opt(opt)
         tp = new Pool(opt.num_threads);
     else
         tp = nullptr;
+    is_eval = false;
 }
 
 Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int depth_limit, const Path &old_path) const
@@ -65,11 +66,15 @@ Path Mcts::select_single_thread(TreeNode *node, const int start_depth, const int
     assert(!node->is_leaf());
     auto path = Path(old_path);              // This extends the old path. Used for detecting circles.
     auto new_path = Path(node, start_depth); // This only records the extended part. Used for backing up values later.
+    auto sel_opt = opt.selection_opt;
+    // In `eval` mode, `add_noise` is turned off.
+    if (is_eval)
+        sel_opt.add_noise = false;
     while ((new_path.get_depth() < depth_limit) && (!node->is_leaf()))
     {
         // Complete sampling one action.
         SPDLOG_DEBUG("Mcts: node str\n{}", str::from(node));
-        auto subpath = env->action_space->get_best_subpath(node, opt.puct_c, opt.game_count, opt.virtual_loss, opt.heur_c, opt.add_noise);
+        auto subpath = env->action_space->get_best_subpath(node, sel_opt);
         SPDLOG_DEBUG("Mcts: node subpath found.");
 
         // Add virtual loss.
@@ -124,6 +129,30 @@ vec<Path> Mcts::select(TreeNode *root, const int num_sims, const int start_depth
     SPDLOG_DEBUG("Mcts: selected.");
     return paths;
 }
+
+TreeNode *Mcts::select_one_step(TreeNode *root, bool policy_only, bool random_select) const
+{
+    auto sel_opt = opt.selection_opt;
+    sel_opt.policy_only = policy_only;
+    sel_opt.random_select = random_select;
+    auto subpath = env->action_space->get_best_subpath(root, sel_opt);
+    auto new_node = env->apply_action(root, subpath);
+    // HACK(j_luo)
+    if (random_select)
+        env->action_space->expand(new_node);
+
+    // HACK(j_luo)
+    StatsManager::virtual_select(root, subpath.chosen_seq[0].first, 1, 0.0);
+    for (size_t i = 0; i < 6; ++i)
+        StatsManager::virtual_select(subpath.mini_node_seq[i], subpath.chosen_seq[i + 1].first, 1, 0.0);
+    return new_node;
+}
+
+TreeNode *Mcts::select_one_pi_step(TreeNode *root) const { return select_one_step(root, true, false); }
+TreeNode *Mcts::select_one_random_step(TreeNode *root) const { return select_one_step(root, false, true); }
+
+void Mcts::eval() { is_eval = true; }
+void Mcts::train() { is_eval = false; }
 
 void Mcts::backup(const vec<Path> &paths, const vec<float> &values) const
 {
@@ -188,6 +217,14 @@ void Path::merge(const Path &other)
 }
 
 TreeNode *Path::get_last_node() const { return tree_nodes.back(); }
+vec<abc_t> Path::get_last_action_vec() const
+{
+    auto ret = vec<abc_t>();
+    const auto &subpath = subpaths.back();
+    for (const auto &item : subpath.chosen_seq)
+        ret.push_back(item.second);
+    return ret;
+}
 
 Path::Path(const Path &other)
 {

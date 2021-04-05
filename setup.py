@@ -1,5 +1,7 @@
 import os
 
+import numpy as np
+
 from Cython.Build import cythonize
 from setuptools import Extension, find_packages, setup
 
@@ -11,6 +13,7 @@ def get_ext(*args, **kwargs):
                      extra_link_args=extra_args,
                      extra_compile_args=extra_args,
                      undef_macros=['NDEBUG'],
+                     include_dirs=[np.get_include()],
                      **kwargs)
 
 

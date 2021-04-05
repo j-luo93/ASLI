@@ -3,6 +3,17 @@
 #include "common.hpp"
 #include "word.hpp"
 
+struct SelectionOpt
+{
+    float puct_c;
+    float heur_c;
+    bool add_noise;
+    bool use_num_misaligned;
+    bool use_max_value;
+    bool policy_only = false;
+    bool random_select = false;
+};
+
 // This enum class documents which phase a node is in, in terms of finishing sampling an action.
 enum class ActionPhase : int
 {
@@ -17,22 +28,28 @@ enum class ActionPhase : int
 class Affected
 {
 private:
+    float total_misalign_score = 0.0;
     size_t num_misaligned = 0;
 
     vec<int> orders;
     vec<size_t> positions;
-    vec<bool> aligned;
+    vec<float> misalign_scores;
 
 public:
+    const float start_dist;
+
+    inline Affected(float start_dist) : start_dist(start_dist){};
     inline size_t size() const { return orders.size(); };
-    inline void push_back(int order, size_t position, bool aligned)
+    inline void push_back(int order, size_t position, float misalign_score)
     {
         orders.push_back(order);
         positions.push_back(position);
-        this->aligned.push_back(aligned);
-        if (!aligned)
+        this->misalign_scores.push_back(misalign_score);
+        total_misalign_score += misalign_score;
+        if (misalign_score > 0.0)
             ++num_misaligned;
     }
+    inline float get_misalignment_score() const { return total_misalign_score / start_dist; }
     inline size_t get_num_misaligned() const { return num_misaligned; }
     inline int get_order_at(size_t index) const { return orders[index]; };
     inline int get_position_at(size_t index) const { return positions[index]; };
@@ -116,6 +133,7 @@ private:
 public:
     const vec<visit_t> &get_action_counts() const;
     const vec<float> &get_total_values() const;
+    const vec<float> &get_max_values() const;
     visit_t get_visit_count() const;
 
     /* ---------------------- Action-related ---------------------- */
@@ -124,7 +142,7 @@ private:
     friend class ActionManager;
 
     void add_action(abc_t, const Affected &);
-    void update_affected_at(size_t, int, size_t, bool);
+    void update_affected_at(size_t, int, size_t, float);
     void clear_priors();
     // Set prior to 0.0.
     void dummy_evaluate();
@@ -141,13 +159,14 @@ public:
     abc_t get_action_at(size_t) const;
     const Affected &get_affected_at(size_t) const;
     size_t get_num_affected_at(size_t) const;
-    vec<float> get_scores(float, float, bool) const;
+    vec<float> get_scores(const SelectionOpt &) const;
     // Given the current action phase, get the best action.
-    ChosenChar get_best_action(float, float, bool) const;
+    ChosenChar get_best_action(const SelectionOpt &) const;
     bool is_expanded() const;
     bool is_evaluated() const;
+    const vec<float> &get_priors() const;
     // Play one mini-step.
-    pair<BaseNode *, ChosenChar> play_mini() const;
+    pair<BaseNode *, ChosenChar> play_mini(PlayStrategy, float) const;
 
     /* --------------------- Pruning-related --------------------- */
 
@@ -188,6 +207,7 @@ class MiniNode : public BaseNode
 private:
     friend class NodeFactory;
     friend class ActionManager;
+    friend class BaseNode; // `evaluate` can be called within `BaseNode`.
 
     void evaluate();
 
@@ -283,7 +303,7 @@ public:
     float get_dist() const;
     bool is_done() const;
     bool is_leaf() const;
-    pair<TreeNode *, Subpath> play() const;
+    pair<TreeNode *, Subpath> play(PlayStrategy, float) const;
     const IdSeq &get_id_seq(int) const;
     size_t size() const;
     bool is_transitional() const override;
@@ -347,7 +367,7 @@ class Traverser
     // Visit one node and append it to the queue if it hasn't been visited.
     static void visit(BaseNode *node, vec<BaseNode *> &queue)
     {
-        if (!node->visited)
+        if (!node->visited && (node->visit_count > 0))
         {
             node->visited = true;
             queue.push_back(node);
@@ -406,7 +426,7 @@ class ActionManager
     friend class ActionSpace;
 
     static void add_action(BaseNode *node, abc_t action, const Affected &affected) { node->add_action(action, affected); }
-    static void update_affected_at(BaseNode *node, size_t index, int order, size_t pos, bool aligned) { node->update_affected_at(index, order, pos, aligned); }
+    static void update_affected_at(BaseNode *node, size_t index, int order, size_t pos, float misalign_score) { node->update_affected_at(index, order, pos, misalign_score); }
     static void init_pruned(BaseNode *node) { node->init_pruned(); }
     static void init_stats(BaseNode *node) { node->init_stats(); };
     static void init_rewards(TransitionNode *node) { node->init_rewards(); }

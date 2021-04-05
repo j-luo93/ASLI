@@ -32,6 +32,9 @@ cdef extern from "mcts_cpp/common.hpp":
     cdef cppclass SpecialType:
         pass
 
+    cdef cppclass PlayStrategy:
+        pass
+
 cdef extern from "mcts_cpp/common.hpp" namespace "Stress":
     cdef Stress NOSTRESS
     cdef Stress STRESSED
@@ -45,6 +48,11 @@ cdef extern from "mcts_cpp/common.hpp" namespace "SpecialType":
     cdef SpecialType GBJ
     cdef SpecialType GBW
 
+cdef extern from "mcts_cpp/common.hpp" namespace "PlayStrategy":
+    cdef PlayStrategy MAX
+    cdef PlayStrategy SAMPLE_AC
+    cdef PlayStrategy SAMPLE_MV
+
 cdef extern from "mcts_cpp/word.hpp":
     cdef cppclass Word nogil:
         IdSeq id_seq
@@ -54,6 +62,7 @@ cdef extern from "mcts_cpp/word.hpp":
         float ins_cost
         bool use_alignment
         vector[bool] is_vowel
+        vector[bool] is_consonant
         vector[Stress] unit_stress
         vector[abc_t] unit2base
         vector[abc_t] unit2stressed
@@ -109,22 +118,35 @@ cdef extern from "mcts_cpp/env.hpp":
         void register_gbw_map(abc_t, abc_t)
         float get_edit_dist(IdSeq, IdSeq)
         TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
+        int get_num_affected(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
         void clear_stats(TreeNode *, bool)
         void clear_priors(TreeNode *, bool)
         size_t get_num_words()
         void add_noise(TreeNode *, vector[vector[float]], vector[float], float)
         size_t get_max_end_length()
+        vector[vector[abc_t]] expand_all_actions(TreeNode *)
 
 cdef extern from "mcts_cpp/node.hpp":
 
     ctypedef vector[pair[int, size_t]] Affected
     ctypedef pair[int, abc_t] ChosenChar
 
+    cdef cppclass SelectionOpt nogil:
+        float puct_c
+        float heur_c
+        bool add_noise
+        bool use_num_misaligned
+        bool use_max_value
+
+        SelectionOpt()
+
     cdef cppclass BaseNode nogil:
         vector[bool] get_pruned()
         vector[abc_t] get_actions()
+        vector[float] get_priors()
         vector[visit_t] get_action_counts()
         vector[float] get_total_values()
+        vector[float] get_max_values()
         visit_t get_visit_count()
         bool is_tree_node()
         bool is_transitional()
@@ -160,12 +182,10 @@ ctypedef BaseNode * BNptr
 
 cdef extern from "mcts_cpp/mcts.hpp":
     cdef cppclass MctsOpt nogil:
-        float puct_c
         int game_count
         float virtual_loss
         int num_threads
-        float heur_c
-        bool add_noise
+        SelectionOpt selection_opt
 
         MctsOpt()
 
@@ -179,6 +199,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         vector[abc_t] get_all_chosen_actions()
         void merge(Path)
         TreeNode *get_last_node()
+        vector[abc_t] get_last_action_vec()
 
     cdef cppclass Mcts nogil:
         MctsOpt opt
@@ -187,8 +208,12 @@ cdef extern from "mcts_cpp/mcts.hpp":
 
         vector[Path] select(TreeNode *, int, int, int)
         vector[Path] select(TreeNode *, int, int, int, Path)
+        TreeNode * select_one_pi_step(TreeNode *)
+        TreeNode * select_one_random_step(TreeNode *)
+        void eval()
+        void train()
         void backup(vector[Path], vector[float])
-        Path play(TreeNode *, int)
+        Path play(TreeNode *, int, PlayStrategy, float)
 
 # Convertible types between numpy and c++ template.
 ctypedef fused convertible:

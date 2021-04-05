@@ -24,9 +24,9 @@ class ZSLatIta:  # "ZS" stands for zero-shot.
     src_lang: str = 'lat'
     tgt_lang: str = 'ita'
     dropout: float = 0.2
-    num_steps: int = 10000
+    num_steps: int = 100
     input_format: str = 'wikt'
-    eval_interval: int = 1000
+    eval_interval: int = 1
     control_mode: str = 'none'
     train_tgt_langs: Tuple[str, ...] = ('ron', 'cat', 'spa', 'por')
     task: str = 'one_to_many'
@@ -183,6 +183,8 @@ class Ppo:
 
 @reg
 class OPRLFake(OPLatSpaPhono):
+    char_emb_size: int = 128
+    hidden_size: int = 128
     use_rl: bool = True
     agent: str = 'a2c'
     num_layers: int = 1
@@ -282,6 +284,7 @@ class OPRLPgmcGot(OPRLFake):
     src_lang: str = 'pgmc'
     tgt_lang: str = 'got'
     max_rollout_length: int = 20
+    replay_buffer_size: int = 1000
 
 
 @reg
@@ -289,13 +292,15 @@ class OPRLPgmcNon(OPRLFake):
     src_lang: str = 'pgmc'
     tgt_lang: str = 'non'
     max_rollout_length: int = 40
+    replay_buffer_size: int = 2000
 
 
 @reg
 class OPRLPgmcAng(OPRLFake):
     src_lang: str = 'pgmc'
     tgt_lang: str = 'ang'
-    max_rollout_length: int = 50
+    max_rollout_length: int = 60
+    replay_buffer_size: int = 3000
 
 
 @mcts_reg
@@ -305,7 +310,7 @@ class BasicMcts:
     expansion_batch_size: int = 10
     num_mcts_sims: int = 40
     num_inner_steps: int = 50
-    step_penalty: float = 0.001
+    step_penalty: float = 0.0
     learning_rate: float = 1e-3
     virtual_loss: float = 0.5
     game_count: int = 3
@@ -319,7 +324,7 @@ class BasicMcts:
     segments_dump_path: 'path' = 'data/nel_segs.pkl'
     ngram_path: 'path' = 'data/nel_ngram.pkl'
     use_finite_horizon: bool = True
-    use_max_value: bool = True
+    use_max_value: bool = False
     use_conditional: bool = True
     use_value_guidance: bool = False
 
@@ -327,11 +332,21 @@ class BasicMcts:
 @mcts_reg
 class SmallSims(BasicMcts):
     # This does not work for R10C.
-    expansion_batch_size: int = 40
+    expansion_batch_size: int = 100
     episode_check_interval: int = 10
-    num_mcts_sims: int = 1000
+    num_inner_steps: int = 50
+    use_alignment: bool = True
+    heur_c: float = 1.0
+    dirichlet_alpha: float = 0.03
+    noise_ratio: float = 0.3
+    site_threshold: int = 2
+    dist_threshold: float = 0.0
+    episode_check_interval: int = 1
+    num_mcts_sims: int = 2000
     num_episodes: int = 10
     virtual_loss: float = 0.2
+    num_workers: int = 1
+    puct_c: float = 1.0
 
 
 @mcts_reg

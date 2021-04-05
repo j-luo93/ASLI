@@ -4,9 +4,10 @@ import sys
 from argparse import ArgumentParser
 from dataclasses import asdict, dataclass
 from functools import lru_cache
-from typing import List
+from typing import List, Tuple
 
 import pandas as pd
+import streamlit as st
 from cltk.phonology.old_english.orthophonology import \
     OldEnglishOrthophonology as oe
 from cltk.phonology.old_norse.orthophonology import on
@@ -14,7 +15,8 @@ from lingpy.sequence.sound_classes import ipa2tokens
 
 from pypheature.nphthong import Nphthong
 from pypheature.process import FeatureProcessor
-from xib.aligned_corpus.transcriber import RuleBasedTranscriber
+from sound_law.utils import run_section, run_with_argument
+# from xib.aligned_corpus.transcriber import RuleBasedTranscriber
 
 
 @lru_cache(maxsize=None)
@@ -116,7 +118,13 @@ def show_all_segs(series):
     segs = set()
     for tokens in series:
         segs.update(tokens)
-    print(' '.join(sorted(segs)))
+    out = ', '.join(sorted(segs))
+    if st._is_running_with_streamlit:
+        st.write(out)
+        st.write(f'Number of sounds: {len(segs)}')
+    else:
+        print(out)
+        print(f'Number of sounds: {len(segs)}')
 
 
 to_break_got = {
@@ -134,6 +142,102 @@ to_break = {
     'non': dict()
 }
 
+got2ipa_map = {
+    'g': 'ɡ',
+    "ah": "aːh",
+    "aih": "ɛh",
+    "air": "ɛr",
+    "ai": "ɛː",
+    "auh": "ɔh",
+    "aur": "ɔr",
+    "au": "ɔː",
+    "ei": "iː",
+    "e": "eː",
+    "o": "oː",
+    "ur": "uːr",
+    "uh": "uːh",
+    "ab": "aβ",
+    "ɛb": "ɛβ",
+    "ɔb": "ɔβ",
+    "ib": "iβ",
+    "eb": "eβ",
+    "ob": "oβ",
+    "ub": "uβ",
+    "bd": "βd",
+    "bn": "βn",
+    "bm": "βm",
+    "bɡ": "βɡ",
+    "bl": "βl",
+    "bj": "βj",
+    "br": "βr",
+    "bw": "βw",
+    "bz": "βz",
+    " β": " b",
+    "ad": "að",
+    "ɛd": "ɛð",
+    "ɔd": "ɔð",
+    "id": "ið",
+    "ed": "eð",
+    "od": "oð",
+    "ud": "uð",
+    "db": "ðb",
+    "dβ": "ðβ",
+    "dn": "ðn",
+    "dm": "ðm",
+    "dɡ": "ðɡ",
+    "dl": "ðl",
+    "dj": "ðj",
+    "dr": "ðr",
+    "dw": "ðw",
+    "dz": "ðz",
+    " ð": " d",
+    # "f": "ɸ",
+    "f": "f",
+    "ɡw": "ɡʷ",
+    "hw": "hʷ",
+    "aɡ": "aɣ",
+    "ɛɡ": "ɛɣ",
+    "ɔɡ": "ɔɣ",
+    "iɡ": "iɣ",
+    "eɡ": "eɣ",
+    "oɡ": "oɣ",
+    "uɡ": "uɣ",
+    "ɡb": "ɣb",
+    "ɡβ": "ɣβ",
+    "ɡn": "ɣn",
+    "ɡm": "ɣm",
+    "ɡɡ": "ŋɡ",
+    "ɡl": "ɣl",
+    "ɡj": "ɣj",
+    "ɡr": "ɣr",
+    "ɡw": "ɣw",
+    "ɡz": "ɣz",
+    "ɡp": "xp",
+    "ɡt": "xt",
+    "ɡk": "ŋk",
+    "ɡɸ": "xɸ",
+    "ɡh": "xh",
+    "ɡs": "xs",
+    "ɡþ": "xþ",
+    "ɡq": "xq",
+    " ɣ": " ɡ",
+    " x": " ɡ",
+    "qw": "kʷ",
+    "þ": "θ",
+    'ƕ': 'hʷ',
+    'q': 'kʷ'
+}
+
+
+def replace(s: str, repl_map: List[Tuple[str, str]]) -> str:
+    for x, y in repl_map:
+        s = s.replace(x, y)
+    return s
+
+
+def got_transcribe(s: str) -> str:
+    return replace(s, got2ipa_map.items())
+
 
 def break_false_complex(s: List[str], lang: str = None) -> List[str]:
     assert lang is not None
@@ -146,60 +250,83 @@ def break_false_complex(s: List[str], lang: str = None) -> List[str]:
     return ret
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
-    parser.add_argument('lang', help="Daughter language.")
-    args = parser.parse_args()
+PDF = pd.DataFrame
 
-    # Get Proto-Germanic cognate data extracted from Wiktionary.
-    gem_pro = pd.read_csv('data/gem-pro.tsv', sep='\t')
+
+@run_section('Loading data...', 'Loading done.')
+def load_data(gem_pro_path: str, swadesh_gem_pro_path: str) -> Tuple[PDF, PDF]:
+    # Get cognate data.
+    gem_pro = pd.read_csv(gem_pro_path, sep='\t')
     # Get Swadesh list.
-    swa = pd.read_csv('data/swadesh_gem_pro.tsv', sep='\t', header=None)
-    # Remove any duplicates or words that do not have a unique reflex.
+    swa = pd.read_csv(swadesh_gem_pro_path, sep='\t', header=None)
+    return gem_pro, swa
+
+
+@run_section('Removing any duplicates or words that do not have a unique reflex...',
+             'Removal done.')
+def remove_duplicate(gem_pro: PDF, swa: PDF) -> PDF:
     to_keep = set()
     for tokens in swa[2]:
         for token in tokens.split():
             to_keep.add(token.strip('*'))
     kept = gem_pro[gem_pro['gem-pro'].isin(to_keep)].reset_index(drop=True)
-    desc = kept[kept['desc_lang'] == args.lang].reset_index(drop=True)
+    desc = kept[kept['desc_lang'] == lang].reset_index(drop=True)
     dups = {k for k, v in desc['gem-pro'].value_counts().to_dict().items() if v > 1}
     desc = desc[~desc['gem-pro'].isin(dups)].reset_index(drop=True)
+    return desc
 
-    # IPA transcription.
-    def replace(s: str) -> str:
-        for x, y in to_rectify:
-            s = s.replace(x, y)
-        return s
 
-    if args.lang == "got":
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    st.title('Prepare RL dataset.')
+    st.header('Specify the arguments first:')
+    lang = run_with_argument('lang',
+                             parser=parser,
+                             default='',
+                             msg='Daughter language.')
+    out_dir = run_with_argument('out_dir',
+                                parser=parser,
+                                default='data/wikt',
+                                msg='Output directory')
+    gem_pro_path = run_with_argument('gem_pro_path',
+                                     parser=parser,
+                                     default='data/gem-pro.tsv',
+                                     msg='Path to the Proto-Germanic cognate data extracted from Wiktionary.')
+    swadesh_gem_pro_path = run_with_argument('swadesh_gem_pro_path',
+                                             parser=parser,
+                                             default='data/swadesh_gem_pro.tsv',
+                                             msg='Path to the Proto-Germanic Swadesh list.')
+    gem_pro, swa = load_data(gem_pro_path, swadesh_gem_pro_path)
+    desc = remove_duplicate(gem_pro, swa)
+    st.write(f'{len(desc)} entries in total')
+
+    if lang == "got":
         ipa_col = 'got_ipa'
         form_col = 'latin'
-        got_tr = RuleBasedTranscriber('got')
-        desc[form_col] = desc['desc_form'].apply(got_transliterate)
-        desc[ipa_col] = desc[form_col].apply(got_tr.transcribe).apply(lambda s: i2t(list(s)[0]))
-    elif args.lang == 'ang':
+        desc = desc.assign(**{form_col: desc['desc_form'].apply(got_transliterate)})
+        desc = desc.assign(**{ipa_col: desc[form_col].apply(got_transcribe).apply(i2t)})
+    elif lang == 'ang':
         ipa_col = 'ang_ipa'
         form_col = 'desc_form'
         # NOTE(j_luo) Use the simple `a` phoneme to conform to other transcribers.
         to_rectify = [('ɑ', 'a'), ('g', 'ɡ'), ('h', 'x'), ('hʷ', 'xʷ'), ('ç', 'x')]
 
         desc[ipa_col] = desc[form_col].apply(lambda s: oe(
-            s.strip('-').replace('ċ', 'c').replace('ġ', 'g'))).apply(i2t).apply(lambda lst: [replace(x) for x in lst])
-    elif args.lang == 'non':
+            s.strip('-').replace('ċ', 'c').replace('ġ', 'g'))).apply(i2t).apply(lambda lst: [replace(x, to_rectify) for x in lst])
+    elif lang == 'non':
         ipa_col = 'non_ipa'
         form_col = 'desc_form'
-        # NOTE(j_luo) Use the simple `a` phoneme to conform to other transcribers.
-        # desc[ipa_col] = desc[form_col].apply(on.transcribe).str.replace(
-        #     'g', 'ɡ').str.replace('ɸ', 'f').str.replace('h', 'x').apply(i2t).str.replace('')
         to_rectify = [('g', 'ɡ'), ('gʷ', 'ɡʷ'), ('h', 'x'), ('hʷ', 'xʷ'), ('ɛ', 'e'), ('ɣ', 'ɡ'), ('ɔ', 'o')]
-        desc[ipa_col] = desc[form_col].apply(on.transcribe).apply(i2t).apply(lambda lst: [replace(x) for x in lst])
+        desc[ipa_col] = desc[form_col].apply(on.transcribe).apply(
+            i2t).apply(lambda lst: [replace(x, to_rectify) for x in lst])
 
     else:
-        raise ValueError(f'Unrecognized language "{args.lang}".')
+        raise ValueError(f'Unrecognized language "{lang}".')
+    st.write(desc)
 
     # Get rid of false complex segments.
     show_all_segs(desc[ipa_col])
-    desc[ipa_col] = desc[ipa_col].apply(break_false_complex, lang=args.lang)
+    desc[ipa_col] = desc[ipa_col].apply(break_false_complex, lang=lang)
     show_all_segs(desc[ipa_col])
 
     desc['pgm_ipa'] = desc['gem-pro'].apply(PGmc_ipa_trans).apply(i2t)
@@ -212,10 +339,15 @@ if __name__ == "__main__":
     src_df['ipa'] = desc['pgm_ipa'].apply(''.join)
     src_df['tokens'] = desc['pgm_ipa'].apply(' '.join)
     src_df['split'] = 'train'
-    src_df.to_csv('test_src.tsv', sep='\t', index=None)
+    src_out_path = f'{out_dir}/pgmc-{lang}/pgmc.tsv'
+    src_df.to_csv(src_out_path, sep='\t', index=None)
+    st.write(f'Source written to {src_out_path}.')
+
     tgt_df = pd.DataFrame()
     tgt_df['transcription'] = desc[form_col]
     tgt_df['ipa'] = desc[ipa_col].apply(''.join)
     tgt_df['tokens'] = desc[ipa_col].apply(' '.join)
     tgt_df['split'] = 'train'
-    tgt_df.to_csv('test_tgt.tsv', sep='\t', index=None)
+    tgt_out_path = f'{out_dir}/pgmc-{lang}/{lang}.tsv'
+    tgt_df.to_csv(tgt_out_path, sep='\t', index=None)
+    st.write(f'Target written to {tgt_out_path}.')

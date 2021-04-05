@@ -2,6 +2,7 @@
 from .mcts_cpp cimport TreeNode, IdSeq, VocabIdSeq, Env, Mcts
 from .mcts_cpp cimport Stress, NOSTRESS, STRESSED, UNSTRESSED
 from .mcts_cpp cimport SpecialType, NONE, CLL, CLR, VS, GBJ, GBW
+from .mcts_cpp cimport PlayStrategy, MAX, SAMPLE_AC, SAMPLE_MV
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -20,6 +21,10 @@ PyST_CLR = <abc_t>CLR
 PyST_VS = <abc_t>VS
 PyST_GBJ = <abc_t>GBJ
 PyST_GBW = <abc_t>GBW
+
+PyPS_MAX = <int>MAX
+PyPS_SAMPLE_AC = <int>SAMPLE_AC
+PyPS_SAMPLE_MV = <int>SAMPLE_MV
 
 cdef class PyTreeNode:
     cdef TreeNode *ptr
@@ -82,8 +87,16 @@ cdef class PyTreeNode:
         return np.asarray((<BaseNode *>self.ptr).get_total_values(), dtype='float32')
 
     @property
+    def max_values(self):
+        return np.asarray((<BaseNode *>self.ptr).get_max_values(), dtype='float32')
+
+    @property
     def pruned(self):
         return np.asarray((<BaseNode *>self.ptr).get_pruned(), dtype='bool')
+
+    @property
+    def priors(self):
+        return np.asarray((<BaseNode *>self.ptr).get_priors(), dtype='float32')
 
     # @property
     # def prev_action(self):
@@ -138,7 +151,9 @@ cdef class PyWordSpaceOpt:
 
     def __cinit__(self, float[:, ::1] np_dist_mat, float ins_cost,
                   bool use_alignment,
-                  bool[::1] np_is_vowel, int[::1] np_unit_stress,
+                  bool[::1] np_is_vowel,
+                  bool[::1] np_is_consonant,
+                  int[::1] np_unit_stress,
                   abc_t[::1] np_unit2base, abc_t[::1] np_unit2stressed,
                   abc_t[::1] np_unit2unstressed):
         cdef size_t n = np_dist_mat.shape[0]
@@ -152,6 +167,7 @@ cdef class PyWordSpaceOpt:
         self.c_obj.ins_cost = ins_cost
         self.c_obj.use_alignment = use_alignment
         self.c_obj.is_vowel = np2vector(np_is_vowel)
+        self.c_obj.is_consonant = np2vector(np_is_consonant)
         cdef size_t num_abc = len(np_is_vowel)
         cdef vector[Stress] unit_stress = vector[Stress](num_abc)
         for i in range(num_abc):
@@ -170,14 +186,37 @@ cdef class PyMctsOpt:
                   float virtual_loss,
                   int num_threads,
                   float heur_c,
-                  bool add_noise):
+                  bool add_noise,
+                  bool use_num_misaligned,
+                  bool use_max_value):
         self.c_obj = MctsOpt()
-        self.c_obj.puct_c = puct_c
         self.c_obj.game_count = game_count
         self.c_obj.virtual_loss = virtual_loss
         self.c_obj.num_threads = num_threads
-        self.c_obj.heur_c = heur_c
-        self.c_obj.add_noise = add_noise
+
+        cdef SelectionOpt sel_obj = SelectionOpt()
+        sel_obj.puct_c = puct_c
+        sel_obj.heur_c = heur_c
+        sel_obj.add_noise = add_noise
+        sel_obj.use_num_misaligned = use_num_misaligned
+        sel_obj.use_max_value = use_max_value
+        self.c_obj.selection_opt = sel_obj
+
+cdef SpecialType to_special_type(rtype: str):
+    cdef SpecialType st
+    if rtype == 'basic':
+        st = NONE
+    elif rtype == 'VS':
+        st = VS
+    elif rtype == 'CLL':
+        st = CLL
+    elif rtype == 'CLR':
+        st = CLR
+    elif rtype == 'GBJ':
+        st = GBJ
+    elif rtype == 'GBW':
+        st = GBW
+    return st
 
 cdef class PyEnv:
     cdef Env *ptr
@@ -218,23 +257,22 @@ cdef class PyEnv:
                      abc_t d_pre_id,
                      abc_t post_id,
                      abc_t d_post_id):
-        cdef SpecialType st
-        if rtype == 'basic':
-            st = NONE
-        elif rtype == 'VS':
-            st = VS
-        elif rtype == 'CLL':
-            st = CLL
-        elif rtype == 'CLR':
-            st = CLR
-        elif rtype == 'GBJ':
-            st = GBJ
-        elif rtype == 'GBW':
-            st = GBW
-
+        cdef SpecialType st = to_special_type(rtype)
         cdef TreeNode *new_node = self.ptr.apply_action(py_node.ptr, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, st)
         tnode_cls = type(self).tnode_cls
         return wrap_node(tnode_cls, new_node)
+
+    def get_num_affected(self,
+                         PyTreeNode py_node,
+                         abc_t before_id,
+                         abc_t after_id,
+                         rtype: str,
+                         abc_t pre_id,
+                         abc_t d_pre_id,
+                         abc_t post_id,
+                         abc_t d_post_id):
+        cdef SpecialType st = to_special_type(rtype)
+        return self.ptr.get_num_affected(py_node.ptr, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, st)
 
     def evict(self, size_t until_size):
         return self.ptr.evict(until_size)
@@ -275,6 +313,9 @@ cdef class PyEnv:
     def max_end_length(self) -> int:
         return self.ptr.get_max_end_length()
 
+    def expand_all_actions(self, PyTreeNode py_tnode):
+        return self.ptr.expand_all_actions(py_tnode.ptr)
+
 cdef inline TreeNode *get_ptr(PyTreeNode py_node):
     return py_node.ptr
 
@@ -294,6 +335,9 @@ cdef class PyPath:
 
     def get_last_node(self):
         return wrap_node(self.__dict__['tnode_cls'], self.ptr.get_last_node())
+
+    def get_last_action_vec(self):
+        return self.ptr.get_last_action_vec()
 
     @staticmethod
     cdef PyPath from_c_obj(Path path, tnode_cls):
@@ -331,14 +375,34 @@ cdef class PyMcts:
         steps = np.asarray(steps_vec, dtype='long')
         return paths, steps
 
+    def select_one_pi_step(self, PyTreeNode py_tnode):
+        return wrap_node(type(py_tnode), self.ptr.select_one_pi_step(py_tnode.ptr))
+
+    def select_one_random_step(self, PyTreeNode py_tnode):
+        return wrap_node(type(py_tnode), self.ptr.select_one_random_step(py_tnode.ptr))
+
+    def eval(self):
+        self.ptr.eval()
+
+    def train(self):
+        self.ptr.train()
+
     def backup(self, py_paths, vector[float] values):
         cdef vector[Path] paths = vector[Path]()
         for py_p in py_paths:
             paths.push_back(PyPath.get_c_obj(py_p))
         self.ptr.backup(paths, values)
 
-    def play(self, PyTreeNode py_tnode, int start_depth):
-        return PyPath.from_c_obj(self.ptr.play(py_tnode.ptr, start_depth), type(py_tnode))
+    def play(self, PyTreeNode py_tnode, int start_depth, int play_strategy, float exponent):
+        cdef PlayStrategy ps
+        if play_strategy == PyPS_MAX:
+            ps = MAX
+        elif play_strategy == PyPS_SAMPLE_AC:
+            ps = SAMPLE_AC
+        elif play_strategy == PyPS_SAMPLE_MV:
+            ps = SAMPLE_MV
+
+        return PyPath.from_c_obj(self.ptr.play(py_tnode.ptr, start_depth, ps, exponent), type(py_tnode))
         # cdef FullActionPath full_action = self.ptr.play(py_tnode.ptr)
         # return wrap_node(type(py_tnode), full_action.first.first), full_action.first.second, full_action.second
 
@@ -415,7 +479,7 @@ cdef object c_parallel_stack_actions(vector[BNptr] nodes, int num_threads):
         for i in prange(n, num_threads=num_threads):
             pc = nodes[i].get_actions()
             ac = nodes[i].get_action_counts()
-            vc = <float>(nodes[i].get_visit_count())
+            vc = 1e-8 + <float>(nodes[i].get_visit_count())
             for j in range(pc.size()):
                 actions[i, j] = pc[j]
                 mcts_pis[i, j] = <float>(ac[j]) / vc
@@ -451,7 +515,7 @@ def parallel_gather_trajectory(PyPath path, int num_threads, bool use_alignment,
             chosen_index = chosen_indices[i]
             chosen_action = chosen_actions[i]
             actions.push_back(chosen_action)
-            qs.push_back(node.get_total_values()[chosen_index] / node.get_action_counts()[chosen_index])
+            qs.push_back(node.get_total_values()[chosen_index] / (1e-8 + node.get_action_counts()[chosen_index]))
         if node.is_transitional():
             rewards.push_back((<TransitionNode *>(node)).get_rewards()[chosen_index])
     if use_alignment:
@@ -461,7 +525,15 @@ def parallel_gather_trajectory(PyPath path, int num_threads, bool use_alignment,
     # We don't need the last state's permissible actions since it's not explored.
     base_nodes.pop_back()
     permissible_actions, mcts_pis = c_parallel_stack_actions(base_nodes, num_threads)
+    cdef vector[float] priors
+    ret = list()
+    for i in range(base_nodes.size()):
+        np.zeros([base_nodes.size()])
+        priors = base_nodes[i].get_priors()
+        x = np.asarray(priors, dtype='float32')
+        ret.append(x)
+
     if use_alignment:
         return id_seqs, almts1, almts2, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
     else:
-        return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs)
+        return id_seqs, np.asarray(actions), np.asarray(rewards), permissible_actions, mcts_pis, np.asarray(qs), ret

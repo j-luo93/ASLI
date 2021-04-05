@@ -103,6 +103,7 @@ class Alphabet:
         # Get vowel info.
         n = len(self._id2unit)
         self.is_vowel = np.zeros(n, dtype=bool)
+        self.is_consonant = np.zeros(n, dtype=bool)
         self.unit_stress = np.zeros(n, dtype='int32')
         self.unit2base = np.arange(n, dtype='uint16')
         self.unit2stressed = np.arange(n, dtype='uint16')
@@ -127,6 +128,9 @@ class Alphabet:
                     self.unit2stressed[base_id] = i
                 else:
                     self.unit2unstressed[base_id] = i
+        for u in units:
+            if not u.endswith('{+}') and not u.endswith('{-}'):
+                self.is_consonant[self._unit2id[u]] = True
 
         self.stats: pd.DataFrame = pd.DataFrame.from_dict(cnt)
         self.dist_mat = self.edges = self.cl_map = self.gb_map = None
