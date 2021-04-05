@@ -45,6 +45,7 @@ public:
     vec<abc_t> get_all_chosen_actions() const;
     void merge(const Path &);
     TreeNode *get_last_node() const;
+    vec<abc_t> get_last_action_vec() const;
 };
 
 class Mcts
@@ -54,6 +55,7 @@ class Mcts
     bool is_eval;
 
     Path select_single_thread(TreeNode *, const int, const int, const Path &) const;
+    TreeNode *select_one_step(TreeNode *, bool, bool) const;
 
 public:
     MctsOpt opt;
@@ -63,6 +65,7 @@ public:
     vec<Path> select(TreeNode *, const int, const int, const int) const;
     vec<Path> select(TreeNode *, const int, const int, const int, const Path &) const;
     TreeNode *select_one_pi_step(TreeNode *) const;
+    TreeNode *select_one_random_step(TreeNode *) const;
     void eval();
     void train();
     void backup(const vec<Path> &, const vec<float> &) const;

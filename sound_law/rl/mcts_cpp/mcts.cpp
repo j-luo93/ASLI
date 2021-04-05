@@ -130,18 +130,26 @@ vec<Path> Mcts::select(TreeNode *root, const int num_sims, const int start_depth
     return paths;
 }
 
-TreeNode *Mcts::select_one_pi_step(TreeNode *root) const
+TreeNode *Mcts::select_one_step(TreeNode *root, bool policy_only, bool random_select) const
 {
     auto sel_opt = opt.selection_opt;
-    sel_opt.policy_only = true;
+    sel_opt.policy_only = policy_only;
+    sel_opt.random_select = random_select;
     auto subpath = env->action_space->get_best_subpath(root, sel_opt);
     auto new_node = env->apply_action(root, subpath);
+    // HACK(j_luo)
+    if (random_select)
+        env->action_space->expand(new_node);
+
     // HACK(j_luo)
     StatsManager::virtual_select(root, subpath.chosen_seq[0].first, 1, 0.0);
     for (size_t i = 0; i < 6; ++i)
         StatsManager::virtual_select(subpath.mini_node_seq[i], subpath.chosen_seq[i + 1].first, 1, 0.0);
     return new_node;
 }
+
+TreeNode *Mcts::select_one_pi_step(TreeNode *root) const { return select_one_step(root, true, false); }
+TreeNode *Mcts::select_one_random_step(TreeNode *root) const { return select_one_step(root, false, true); }
 
 void Mcts::eval() { is_eval = true; }
 void Mcts::train() { is_eval = false; }
@@ -209,6 +217,14 @@ void Path::merge(const Path &other)
 }
 
 TreeNode *Path::get_last_node() const { return tree_nodes.back(); }
+vec<abc_t> Path::get_last_action_vec() const
+{
+    auto ret = vec<abc_t>();
+    const auto &subpath = subpaths.back();
+    for (const auto &item : subpath.chosen_seq)
+        ret.push_back(item.second);
+    return ret;
+}
 
 Path::Path(const Path &other)
 {

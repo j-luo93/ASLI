@@ -53,6 +53,19 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
                                     SpecialType st)
 {
     Subpath subpath = Subpath();
+    return apply_action(node, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, st, subpath);
+}
+
+TreeNode *ActionSpace::apply_action(TreeNode *node,
+                                    abc_t before_id,
+                                    abc_t after_id,
+                                    abc_t pre_id,
+                                    abc_t d_pre_id,
+                                    abc_t post_id,
+                                    abc_t d_post_id,
+                                    SpecialType st,
+                                    Subpath &subpath)
+{
 
     // std::cerr << "before\n";
     auto before = ChosenChar({node->get_action_index(before_id), before_id});
@@ -695,13 +708,20 @@ vec<vec<abc_t>> ActionSpace::expand_all_actions(TreeNode *base) const
     auto queue = vec<tuple<int, Subpath, BaseNode *>>();
     queue.push_back({0, Subpath(), base});
     size_t i = 0;
+    auto ret = vec<vec<abc_t>>();
     while (i < queue.size())
     {
         const auto item = queue[i++];
         const auto length = std::get<0>(item);
-        if (length == 7)
-            continue;
         const auto &path = std::get<1>(item);
+        if (length == 7)
+        {
+            auto action_vec = vec<abc_t>();
+            for (const auto &item : path.chosen_seq)
+                action_vec.push_back(item.second);
+            ret.push_back(action_vec);
+            continue;
+        }
         const auto parent = std::get<2>(item);
         assert(parent->is_expanded());
         for (size_t index = 0; index < parent->get_num_actions(); ++index)
@@ -745,15 +765,19 @@ vec<vec<abc_t>> ActionSpace::expand_all_actions(TreeNode *base) const
             queue.push_back({length + 1, new_path, child});
         }
     }
-
-    auto ret = vec<vec<abc_t>>();
-    for (size_t index = 1; index < queue.size(); ++index)
-    {
-        const auto &subpath = std::get<1>(queue[index]);
-        auto action_vec = vec<abc_t>();
-        for (const auto &item : subpath.chosen_seq)
-            action_vec.push_back(item.second);
-        ret.push_back(action_vec);
-    }
     return ret;
+}
+
+int ActionSpace::get_num_affected(TreeNode *node,
+                                  abc_t before,
+                                  abc_t after,
+                                  abc_t pre,
+                                  abc_t d_pre,
+                                  abc_t post,
+                                  abc_t d_post,
+                                  SpecialType special_type)
+{
+    Subpath subpath = Subpath();
+    apply_action(node, before, after, pre, d_pre, post, d_post, special_type, subpath);
+    return subpath.mini_node_seq[5]->get_num_affected_at(subpath.chosen_seq[6].first);
 }

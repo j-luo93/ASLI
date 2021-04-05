@@ -47,6 +47,14 @@ public:
                                   abc_t post,
                                   abc_t d_post,
                                   SpecialType special_type) { return action_space->apply_action(node, before, after, pre, d_pre, post, d_post, special_type); };
+    inline int get_num_affected(TreeNode *node,
+                                abc_t before,
+                                abc_t after,
+                                abc_t pre,
+                                abc_t d_pre,
+                                abc_t post,
+                                abc_t d_post,
+                                SpecialType special_type) { return action_space->get_num_affected(node, before, after, pre, d_pre, post, d_post, special_type); };
     inline void register_cl_map(abc_t before, abc_t after) { action_space->register_cl_map(before, after); };
     inline void register_gbj_map(abc_t before, abc_t after) { action_space->register_gbj_map(before, after); };
     inline void register_gbw_map(abc_t before, abc_t after) { action_space->register_gbw_map(before, after); };

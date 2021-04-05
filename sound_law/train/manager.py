@@ -160,33 +160,39 @@ class OnePairManager:
                                     self.tgt_abc.unit2stressed,
                                     self.tgt_abc.unit2unstressed)
             self.env = SoundChangeEnv(env_opt, as_opt, ws_opt, abc=self.tgt_abc)
+            dl = self.dl_reg.get_loaders_by_name('rl')
+            self.model = self._get_model(dl=dl)
+            # if g.use_mcts:
+            mcts_opt = PyMctsOpt(g.puct_c, g.game_count, g.virtual_loss, g.num_workers,
+                                 g.heur_c, g.add_noise, g.use_num_misaligned, g.use_max_value)
+            self.mcts = Mcts(self.env, mcts_opt, agent=self.model)
 
-    def run(self):
+    def _get_model(self, dl=None):
         phono_feat_mat = special_ids = None
         if g.use_phono_features:
             phono_feat_mat = get_tensor(self.src_abc.pfm)
             special_ids = get_tensor(self.src_abc.special_ids)
 
-        metric_writer = MetricWriter(g.log_dir, flush_secs=5)
+        phono_kwargs = {
+            'phono_feat_mat': phono_feat_mat,
+            'special_ids': special_ids
+        }
+        if g.use_rl:
+            end_state = self.env.end
+            agent_cls = VanillaPolicyGradient if g.agent == 'vpg' else A2C
+            model = agent_cls(len(self.tgt_abc), self.env, end_state, **phono_kwargs)
+        else:
+            model = OnePairModel(len(self.src_abc), len(self.tgt_abc), **phono_kwargs)
+        if g.saved_model_path is not None:
+            model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
+            logging.imp(f'Loaded from {g.saved_model_path}.')
+        if has_gpus():
+            model.cuda()
+        logging.info(model)
+        return model
 
-        def get_model(dl=None):
-            phono_kwargs = {
-                'phono_feat_mat': phono_feat_mat,
-                'special_ids': special_ids
-            }
-            if g.use_rl:
-                end_state = self.env.end
-                agent_cls = VanillaPolicyGradient if g.agent == 'vpg' else A2C
-                model = agent_cls(len(self.tgt_abc), self.env, end_state, **phono_kwargs)
-            else:
-                model = OnePairModel(len(self.src_abc), len(self.tgt_abc), **phono_kwargs)
-            if g.saved_model_path is not None:
-                model.load_state_dict(torch.load(g.saved_model_path, map_location=torch.device('cpu')))
-                logging.imp(f'Loaded from {g.saved_model_path}.')
-            if has_gpus():
-                model.cuda()
-            logging.info(model)
-            return model
+    def run(self):
+        metric_writer = MetricWriter(g.log_dir, flush_secs=5)
 
         def get_trainer(model, train_name, evaluator, metric_writer, **kwargs):
             if g.use_rl:
@@ -227,7 +233,7 @@ class OnePairManager:
             dev_dl = self.dl_reg[dev_name]
             test_dl = self.dl_reg[test_name]
 
-            model = get_model()
+            model = self._get_model()
 
             evaluator = Evaluator(model, {train_name: train_e_dl, dev_name: dev_dl, test_name: test_dl},
                                   self.tgt_abc,
@@ -241,20 +247,14 @@ class OnePairManager:
                 trainer.train(self.dl_reg)
 
         if g.use_rl:
-            dl = self.dl_reg.get_loaders_by_name('rl')
-            model = get_model(dl=dl)
-            # if g.use_mcts:
-            mcts_opt = PyMctsOpt(g.puct_c, g.game_count, g.virtual_loss, g.num_workers,
-                                 g.heur_c, g.add_noise, g.use_num_misaligned, g.use_max_value)
-            mcts = Mcts(self.env, mcts_opt, agent=model)
             # mcts.set_logging_options(g.mcts_verbose_level, g.mcts_log_to_file)
             if g.evaluate_only:
-                tr = mcts.collect_episodes(mcts.env.start, num_episodes=1, is_eval=True)[0]
+                tr = self.mcts.collect_episodes(self.mcts.env.start, num_episodes=1, is_eval=True)[0]
                 # tr.save(g.log_dir)
                 return
             else:
-                evaluator = MctsEvaluator(mcts, metric_writer=metric_writer)
-                trainer = get_trainer(model, 'rl', evaluator, metric_writer, mcts=mcts)
+                evaluator = MctsEvaluator(self.mcts, metric_writer=metric_writer)
+                trainer = get_trainer(self.model, 'rl', evaluator, metric_writer, mcts=self.mcts)
             # else:
             #     collector = TrajectoryCollector(g.batch_size,
             #                                     max_rollout_length=g.max_rollout_length,

@@ -11,6 +11,7 @@ struct SelectionOpt
     bool use_num_misaligned;
     bool use_max_value;
     bool policy_only = false;
+    bool random_select = false;
 };
 
 // This enum class documents which phase a node is in, in terms of finishing sampling an action.

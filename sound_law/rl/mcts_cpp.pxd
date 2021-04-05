@@ -118,6 +118,7 @@ cdef extern from "mcts_cpp/env.hpp":
         void register_gbw_map(abc_t, abc_t)
         float get_edit_dist(IdSeq, IdSeq)
         TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
+        int get_num_affected(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType) except +
         void clear_stats(TreeNode *, bool)
         void clear_priors(TreeNode *, bool)
         size_t get_num_words()
@@ -198,6 +199,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         vector[abc_t] get_all_chosen_actions()
         void merge(Path)
         TreeNode *get_last_node()
+        vector[abc_t] get_last_action_vec()
 
     cdef cppclass Mcts nogil:
         MctsOpt opt
@@ -207,6 +209,7 @@ cdef extern from "mcts_cpp/mcts.hpp":
         vector[Path] select(TreeNode *, int, int, int)
         vector[Path] select(TreeNode *, int, int, int, Path)
         TreeNode * select_one_pi_step(TreeNode *)
+        TreeNode * select_one_random_step(TreeNode *)
         void eval()
         void train()
         void backup(vector[Path], vector[float])

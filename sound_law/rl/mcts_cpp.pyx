@@ -202,6 +202,22 @@ cdef class PyMctsOpt:
         sel_obj.use_max_value = use_max_value
         self.c_obj.selection_opt = sel_obj
 
+cdef SpecialType to_special_type(rtype: str):
+    cdef SpecialType st
+    if rtype == 'basic':
+        st = NONE
+    elif rtype == 'VS':
+        st = VS
+    elif rtype == 'CLL':
+        st = CLL
+    elif rtype == 'CLR':
+        st = CLR
+    elif rtype == 'GBJ':
+        st = GBJ
+    elif rtype == 'GBW':
+        st = GBW
+    return st
+
 cdef class PyEnv:
     cdef Env *ptr
 
@@ -241,23 +257,22 @@ cdef class PyEnv:
                      abc_t d_pre_id,
                      abc_t post_id,
                      abc_t d_post_id):
-        cdef SpecialType st
-        if rtype == 'basic':
-            st = NONE
-        elif rtype == 'VS':
-            st = VS
-        elif rtype == 'CLL':
-            st = CLL
-        elif rtype == 'CLR':
-            st = CLR
-        elif rtype == 'GBJ':
-            st = GBJ
-        elif rtype == 'GBW':
-            st = GBW
-
+        cdef SpecialType st = to_special_type(rtype)
         cdef TreeNode *new_node = self.ptr.apply_action(py_node.ptr, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, st)
         tnode_cls = type(self).tnode_cls
         return wrap_node(tnode_cls, new_node)
+
+    def get_num_affected(self,
+                         PyTreeNode py_node,
+                         abc_t before_id,
+                         abc_t after_id,
+                         rtype: str,
+                         abc_t pre_id,
+                         abc_t d_pre_id,
+                         abc_t post_id,
+                         abc_t d_post_id):
+        cdef SpecialType st = to_special_type(rtype)
+        return self.ptr.get_num_affected(py_node.ptr, before_id, after_id, pre_id, d_pre_id, post_id, d_post_id, st)
 
     def evict(self, size_t until_size):
         return self.ptr.evict(until_size)
@@ -321,6 +336,9 @@ cdef class PyPath:
     def get_last_node(self):
         return wrap_node(self.__dict__['tnode_cls'], self.ptr.get_last_node())
 
+    def get_last_action_vec(self):
+        return self.ptr.get_last_action_vec()
+
     @staticmethod
     cdef PyPath from_c_obj(Path path, tnode_cls):
         cdef PyPath obj = PyPath.__new__(PyPath, tnode_cls)
@@ -359,6 +377,9 @@ cdef class PyMcts:
 
     def select_one_pi_step(self, PyTreeNode py_tnode):
         return wrap_node(type(py_tnode), self.ptr.select_one_pi_step(py_tnode.ptr))
+
+    def select_one_random_step(self, PyTreeNode py_tnode):
+        return wrap_node(type(py_tnode), self.ptr.select_one_random_step(py_tnode.ptr))
 
     def eval(self):
         self.ptr.eval()

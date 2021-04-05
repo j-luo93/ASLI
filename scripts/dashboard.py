@@ -2,6 +2,7 @@ import json
 import re
 import subprocess
 import threading
+from itertools import product
 import psutil
 import time
 from datetime import date, datetime
@@ -48,7 +49,7 @@ class HyperparameterTuner:
         self._number_inputs = list()
         self._select_sliders = list()
         self._checkboxes = list()
-        self._grid_variables = None
+        self._grid_variables = list()
 
     def add_number_input(self, is_default_func, cmd_func, msg_func, *args, **kwargs):
         self._number_inputs.append((is_default_func, cmd_func, msg_func, args, kwargs))
@@ -59,12 +60,12 @@ class HyperparameterTuner:
     def add_checkbox(self, cmd_func, msg_func, *args, **kwargs):
         self._checkboxes.append((cmd_func, msg_func, args, kwargs))
 
-    def render(self, grid_variable: str) -> List[Tuple[str, str]]:
+    def render(self, grid_variables: List[str]) -> List[Tuple[str, str]]:
 
         def render_col(col, ui_type: str, col_args, col_kwargs):
             # For grid variable, render multiselect with all selected as default.
             label = col_args[0]
-            if label == grid_variable:
+            if label in grid_variables:
                 options = col_args[1]
                 return col.multiselect(label, options, default=options)
 
@@ -79,7 +80,7 @@ class HyperparameterTuner:
         def update_core(cmd_args: List[str], msg_args: List[str], value, is_default_func, cmd_func, msg_func):
             # For grid variables, we need to save it for later.
             if isinstance(value, list):
-                self._grid_variables = (value, is_default_func, cmd_func, msg_func)
+                self._grid_variables.append((value, is_default_func, cmd_func, msg_func))
                 return
 
             if not is_default_func(value):
@@ -118,13 +119,14 @@ class HyperparameterTuner:
             update_core(cmd_args, msg_args, value,
                         lambda x: x if kwargs.get('value', False) else not x, cmd_func, msg_func)
 
-        if self._grid_variables is not None:
-            values, is_default_func, cmd_func, msg_func = self._grid_variables
+        if self._grid_variables:
             ret = list()
-            for value in values:
+            for grid_cell in product(*[gv[0] for gv in self._grid_variables]):
                 grid_cmd_args = cmd_args[:]
                 grid_msg_args = msg_args[:]
-                update_core(grid_cmd_args, grid_msg_args, value, is_default_func, cmd_func, msg_func)
+                for i, value in enumerate(grid_cell):
+                    is_default_func, cmd_func, msg_func = self._grid_variables[i][1:]
+                    update_core(grid_cmd_args, grid_msg_args, value, is_default_func, cmd_func, msg_func)
                 ret.append((self._base_cmd + ''.join(grid_cmd_args), '-'.join(grid_msg_args)))
             return ret
         else:
@@ -216,6 +218,8 @@ class JobScheduler:
                 job = job_queue.pop(0)
                 run_on_spare_gpu(job)
                 self.update_job_queue(job_queue)
+
+            self._scheduler_thread = None
 
         if self._scheduler_thread is None:
             self._scheduler_thread = threading.Thread(target=run_impl)
@@ -407,7 +411,7 @@ if __name__ == "__main__":
         ht.add_select_slider(lambda x: x == 'max',
                              lambda x: f' --play_strategy {x}',
                              lambda x: f'ps_{x}',
-                             'repr_mode', ['max', 'sample_ac', 'sample_mv'], value='sample_ac')
+                             'play_strategy', ['max', 'sample_ac', 'sample_mv'], value='sample_ac')
         ht.add_select_slider(lambda x: x == 50,
                              lambda x: f' --num_inner_steps {x}',
                              lambda x: f'nis{x}',
@@ -451,10 +455,10 @@ if __name__ == "__main__":
                              lambda x: f'heur{x}',
                              'heur_c', [0.0, 1.0, 5.0], value=1.0)
 
-        grid_variable = st.selectbox(
-            'grid variable', [None, 'num_mcts_sims', 'num_inner_steps', 'weight_decay', 'puct_c', 'exponent'], index=0)
+        grid_variables = st.multiselect(
+            'grid variable', ['num_mcts_sims', 'num_inner_steps', 'weight_decay', 'puct_c', 'exponent', 'play_strategy', 'num_episodes'])
 
-        cmd_msg_pairs = ht.render(grid_variable)
+        cmd_msg_pairs = ht.render(grid_variables)
 
         jobs = list()
         for i, (cmd, default_msg) in enumerate(cmd_msg_pairs):

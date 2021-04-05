@@ -32,6 +32,12 @@ int2st = {
 }
 
 
+def strip_stress(s):
+    if '{' in s:
+        return s[:-3]
+    return s
+
+
 class VocabState(PyTreeNode):
     """State representing the vocab. Use `VocabStateSpace` to create one instance."""
 
@@ -61,6 +67,26 @@ class VocabState(PyTreeNode):
         for id_seq in self.vocab:
             words.append([self.abc[i] for i in id_seq])  # pylint: disable=unsubscriptable-object
         return words
+
+    @property
+    def alphabet(self) -> List[str]:
+        ret = set()
+        for segments in self.segment_list:
+            ret.update([strip_stress(seg) for seg in segments])
+        ret.remove('<SOT>')
+        ret.remove('<EOT>')
+        return sorted(ret)
+
+    def get_num_occurences(self, unit: str) -> int:
+        has_stress = '{' in unit
+        ret = 0
+        for segments in self.segment_list:
+            for seg in segments:
+                if has_stress:
+                    ret += strip_stress(seg) == unit
+                else:
+                    ret += seg == unit
+        return ret
 
 
 @dataclass

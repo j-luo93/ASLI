@@ -30,13 +30,16 @@ ChosenChar BaseNode::get_best_action(const SelectionOpt &sel_opt) const
 {
     assert(is_expanded() && is_evaluated());
     int index;
-    if (sel_opt.policy_only)
+    if (sel_opt.random_select)
+    {
+        index = rand() % permissible_chars.size();
+    }
+    else if (sel_opt.policy_only)
     {
         index = 0;
         for (size_t i = 1; i < priors.size(); ++i)
             if (priors[i] > priors[index])
                 index = i;
-        // std::cerr << index << "\n";
     }
     else
     {
@@ -452,7 +455,7 @@ size_t BaseNode::get_action_index(abc_t action) const
 {
     auto it = std::find(permissible_chars.begin(), permissible_chars.end(), action);
     if (it == permissible_chars.end())
-        throw std::runtime_error("Target not found.");
+        throw std::runtime_error("Target not found. This is usually the result of an action affecting zero site.");
     else
         return std::distance(permissible_chars.begin(), it);
 }

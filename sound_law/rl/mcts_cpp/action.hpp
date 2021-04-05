@@ -53,6 +53,8 @@ class ActionSpace
     // This will create a new tree node without checking first if the child exists. Use `apply_action` in `Env` if checking is needed.
     TreeNode *apply_new_action(TreeNode *, const Subpath &);
     TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType);
+    TreeNode *apply_action(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType, Subpath &);
+    int get_num_affected(TreeNode *, abc_t, abc_t, abc_t, abc_t, abc_t, abc_t, SpecialType);
     void register_permissible_change(abc_t, abc_t);
     void register_cl_map(abc_t, abc_t);
     void register_gbj_map(abc_t, abc_t);
