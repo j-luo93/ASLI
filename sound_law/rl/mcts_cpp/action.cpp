@@ -66,7 +66,6 @@ TreeNode *ActionSpace::apply_action(TreeNode *node,
                                     SpecialType st,
                                     Subpath &subpath)
 {
-
     // std::cerr << "before\n";
     auto before = ChosenChar({node->get_action_index(before_id), before_id});
     bool stopped = (before.first == 0);
@@ -320,6 +319,7 @@ void ActionSpace::expand(TreeNode *node) const
         size_t n = id_seq.size();
         // Skip the boundaries.
         for (int pos = 1; pos < n - 1; ++pos)
+        {
             if (in_bound(pos, n))
             {
                 // auto word = static_cast<TreeNode *>(node)->words[order];
@@ -328,6 +328,7 @@ void ActionSpace::expand(TreeNode *node) const
                 //     std::cerr << order << " " << pos << " " << misalign_score << "\n";
                 update_affected(node, id_seq[pos], order, pos, char_map, false, abc::NONE);
             }
+        }
     }
 
     expand_stats(node);
@@ -338,6 +339,8 @@ void ActionSpace::expand(TreeNode *node) const
         if (node->get_num_affected_at(i) < opt.site_threshold)
             PruningManager::prune(node, i);
 
+    // std::cerr << "Expanding tree nodes\n";
+    // node->show_action_stats();
     // std::cerr << "-----------------\n";
     // for (size_t i = 0; i < node->permissible_chars.size(); ++i)
     // {
@@ -394,7 +397,7 @@ void ActionSpace::expand_special_type(MiniNode *node, BaseNode *parent, int chos
             update_affected_with_after_id(node, aff, gbw_map.at(before));
         else if (force_apply)
             // HACK(j_luo) this is hacky.
-            for (abc_t after_id = 0; after_id < 1000; ++after_id)
+            for (abc_t after_id = 0; after_id < opt.num_abc; ++after_id)
                 update_affected_with_after_id(node, aff, after_id);
         else
             for (abc_t after_id : permissible_changes.at(before))
@@ -470,6 +473,7 @@ void ActionSpace::expand_normal(MiniNode *node, BaseNode *parent, int chosen_ind
 
     const auto &words = node->base->words;
     const auto &affected = parent->get_affected_at(chosen_index);
+    // std::cerr << "Before expanding, chosen_index for parent: " << chosen_index << "\n";
     auto char_map = map<abc_t, size_t>();
     // for (const auto &aff : affected)
     for (size_t i = 0; i < affected.size(); ++i)
@@ -501,6 +505,7 @@ bool ActionSpace::expand_null_only(MiniNode *node, BaseNode *parent, int chosen_
     if ((last_unit == opt.null_id) || (last_unit == opt.any_id) || (last_unit == opt.any_s_id) || (last_unit == opt.any_uns_id))
     {
         SPDLOG_TRACE("Phase {}, keeping only Null action.", str::from(node->ap));
+        // std::cerr << "Before expanding, chosen_index for parent: " << chosen_index << "\n";
         expand_null(node, parent, chosen_index);
         return true;
     }
@@ -593,6 +598,8 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
             if (node->get_num_affected_at(i) < opt.site_threshold)
                 PruningManager::prune(node, i);
 
+    // std::cerr << "Expanded mini nodes " << str::from(node->ap) << "\n";
+    // node->show_action_stats();
     // std::cerr << "-----------------\n";
     // std::cerr << str::from(node->ap) << " " << node->permissible_chars.size() << "\n";
 
@@ -609,12 +616,8 @@ void ActionSpace::expand(MiniNode *node, const Subpath &subpath, bool use_vowel_
     return;
 }
 
-void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map, bool can_have_any, abc_t after_id) const
+void ActionSpace::update_affected_impl(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map, abc_t after_id) const
 {
-    // FIXME(j_luo) clearer logic here -- e.g., <any> is not aviable for after_id.
-    if (((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id)) && !can_have_any)
-        return;
-
     Word *word;
     if (node->is_tree_node())
         word = static_cast<TreeNode *>(node)->words[order];
@@ -635,23 +638,54 @@ void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t 
         // Add one more position.
         ActionManager::update_affected_at(node, char_map[unit], order, pos, misalign_score);
     }
-    // if (unit == 375)
-    //     std::cerr << node->get_affected_at(char_map[unit]).get_misalignment_score() << "\n";
+}
+
+void ActionSpace::update_affected(BaseNode *node, abc_t unit, int order, size_t pos, map<abc_t, size_t> &char_map, bool can_have_any, abc_t after_id) const
+{
+    auto queue = vec<abc_t>();
+    // Include include `unit` itself.
+    queue.push_back(unit);
+
+    bool real_can_have_any = (can_have_any && (unit != opt.eot_id) && (unit != opt.sot_id));
+    if (real_can_have_any)
+        queue.push_back(opt.any_id);
 
     Stress stress = word_space->opt.unit_stress[unit];
+    // Vowel case (every vowel is annotated with stress information):
     if (stress != Stress::NOSTRESS)
     {
-        update_affected(node, word_space->opt.unit2base[unit], order, pos, char_map, can_have_any, after_id);
-        if (stress == Stress::STRESSED)
-        {
-            if (unit != opt.any_s_id)
-                update_affected(node, opt.any_s_id, order, pos, char_map, can_have_any, after_id);
-        }
-        else if (unit != opt.any_uns_id)
-            update_affected(node, opt.any_uns_id, order, pos, char_map, can_have_any, after_id);
+        queue.push_back(word_space->opt.unit2base[unit]);
+        if (real_can_have_any)
+            if (stress == Stress::STRESSED)
+                queue.push_back(opt.any_s_id);
+            else
+                queue.push_back(opt.any_uns_id);
     }
-    else if ((unit != opt.any_id) && (word_space->opt.is_consonant[unit]))
-        update_affected(node, opt.any_id, order, pos, char_map, can_have_any, after_id);
+
+    for (const auto u : queue)
+        update_affected_impl(node, u, order, pos, char_map, after_id);
+
+    // // FIXME(j_luo) clearer logic here -- e.g., <any> is not aviable for after_id.
+    // if (((unit == opt.any_id) || (unit == opt.any_s_id) || (unit == opt.any_uns_id)) && !can_have_any)
+    //     return;
+
+    // // if (unit == 375)
+    // //     std::cerr << node->get_affected_at(char_map[unit]).get_misalignment_score() << "\n";
+
+    // Stress stress = word_space->opt.unit_stress[unit];
+    // if (stress != Stress::NOSTRESS)
+    // {
+    //     update_affected(node, word_space->opt.unit2base[unit], order, pos, char_map, can_have_any, after_id);
+    //     if (stress == Stress::STRESSED)
+    //     {
+    //         if (unit != opt.any_s_id)
+    //             update_affected(node, opt.any_s_id, order, pos, char_map, can_have_any, after_id);
+    //     }
+    //     else if (unit != opt.any_uns_id)
+    //         update_affected(node, opt.any_uns_id, order, pos, char_map, can_have_any, after_id);
+    // }
+    // else if ((unit != opt.any_id) && (word_space->opt.is_consonant[unit]))
+    //     update_affected(node, opt.any_id, order, pos, char_map, can_have_any, after_id);
 }
 
 void ActionSpace::evaluate(MiniNode *node) const

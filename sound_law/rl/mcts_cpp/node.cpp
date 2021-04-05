@@ -455,7 +455,10 @@ size_t BaseNode::get_action_index(abc_t action) const
 {
     auto it = std::find(permissible_chars.begin(), permissible_chars.end(), action);
     if (it == permissible_chars.end())
+        // {
+        //     std::cerr << action << "\n";
         throw std::runtime_error("Target not found. This is usually the result of an action affecting zero site.");
+    // }
     else
         return std::distance(permissible_chars.begin(), it);
 }
@@ -624,4 +627,12 @@ pair<vec<vec<size_t>>, vec<vec<size_t>>> TreeNode::get_alignments() const
         almts2.push_back(almt.pos_seq2);
     }
     return ret;
+}
+
+void BaseNode::show_action_stats() const
+{
+    assert(is_expanded());
+    for (size_t i = 0; i < permissible_chars.size(); ++i)
+        std::cerr << permissible_chars[i] << ":" << affected[i].size() << " ";
+    std::cerr << "\n";
 }

@@ -31,7 +31,7 @@ class ToyEnv():
         # somehow apply action to state
         new_state = state
         return new_state
-    
+
     def apply_block(self, state, block):
         '''Applies a block of actions in order'''
         for act in block:
@@ -58,7 +58,7 @@ def read_rules_from_txt(filename: str) -> List[SoundChangeAction]:
 
 
 def match_rulesets(gold: List[List[SoundChangeAction]],
-                   cand: List[SoundChangeAction], 
+                   cand: List[SoundChangeAction],
                    env: SoundChangeEnv,
                    match_proportion: float = .7,
                    k_matches: int = 10) -> List[List[Int, List[Int]]]:
@@ -80,7 +80,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
         c['gold_' + str(i)] = solver.Constraint(0, 1)
     for j in range(len(cand)):
         c['cand_' + str(j)] = solver.Constraint(0, 1)
-    
+
     # finally, this matching constraint forces the model to match at least some of the rules (otherwise it would just match no rules to vacuously achieve a minimum objective of 0)
     # it stipulates that the sum of all variables must be >= some minimum match number
     # by the handshake lemma, only a constraint needs to be placed on gold — this implies some amount of matching with candidate
@@ -89,7 +89,6 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
 
     curr_state = env.start
     objective = solver.Objective()
-
     for i in range(len(gold)):
         # as an optimization, we only create variables for the best k_matches that a given gold block has with collections of rules in candidate. We assume that matchings with higher cost would never be chosen anyway and won't affect the solution, so they can just be excluded from the linear program.
         highest_cost = None
@@ -111,8 +110,9 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                 a_var_name = 'a_' + str(i) + ',(' + str(j) + ')'
                 # print('cand:', j, rule)
 
-                # TODO(djwyen) add try/excepts to each other application of apply_action 
-                try: 
+                # TODO(djwyen) add try/excepts to each other application of apply_action
+                breakpoint()  # BREAKPOINT(j_luo)
+                try:
                     cand_state = env.apply_action(curr_state, rule)
                 except RuntimeError:
                     # this rule doesn't change anything, ie it has zero application sites. That causes the RuntimeError to be thrown.
@@ -128,7 +128,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                             del paired_costs[-1]
                         bisect.insort_left(paired_costs, new_tuple) # insert in sorted order
                         highest_cost = paired_costs[-1][3] # update costs
-            
+
             for j in range(len(cand)):
                 rule1 = cand[j]
                 for k in range(j+1, len(cand)):
@@ -148,7 +148,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                                 del paired_costs[-1]
                             bisect.insort_left(paired_costs, new_tuple)
                             highest_cost = paired_costs[-1][3]
-            
+
             for j in range(len(cand)):
                 rule1 = cand[j]
                 for k in range(j+1, len(cand)):
@@ -170,7 +170,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                                     del paired_costs[-1]
                                 bisect.insort_left(paired_costs, new_tuple)
                                 highest_cost = paired_costs[-1][3]
-            
+
             # now that we have the k matchings with the lowest edit distance with this particular gold block, we can add the variables corresponding to these matchings to each of the relevant constraints:
             for var_name, i, cand_rules, cost in paired_costs:
                 v[var_name] = solver.IntVar(0, 1, var_name)
@@ -183,7 +183,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
             # update the state and continue onto the next block in gold
             curr_state = gold_state
 
-    # we now update min_match with bounds based on the number of actually active gold blocks 
+    # we now update min_match with bounds based on the number of actually active gold blocks
     min_match_number = int(match_proportion * number_active_gold_blocks)
     c['min_match'].SetBounds(min_match_number, number_active_gold_blocks)
 
@@ -211,7 +211,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
 
             match = [gold_var, cand_vars]
             matching.append(match)
-    
+
             if g.interpret_matching:
                 gold_id, cand_ids = match
                 gold_block = gold[gold_id]
@@ -221,9 +221,9 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                 print('gold block', gold_id, ':', gold_block)
                 print('matched to rules:', cand_rules)
                 print('with dist', str(cost))
-    
+
     return matching
-    
+
 
 
 if __name__ == "__main__":
@@ -236,7 +236,7 @@ if __name__ == "__main__":
 
     cand = read_rules_from_txt('data/toy_cand_rules.txt')
     # gold = read_rules_from_txt('data/toy_gold_rules.txt')
-    
+
     # turn gold rules into singleton lists since we expect gold to be in the form of blocks
     gold = [[x] for x in gold]
 

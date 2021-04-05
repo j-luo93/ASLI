@@ -26,8 +26,8 @@ int2st = {
     PyST_CLR: 'CLR',
     PyST_NONE: 'basic',
     PyST_VS: 'VS',
-    PyST_GBJ: 'GB',
-    PyST_GBW: 'GB',
+    PyST_GBJ: 'GBJ',
+    PyST_GBW: 'GBW',
     NULL_ID: None  # This is used in STOP action.
 }
 

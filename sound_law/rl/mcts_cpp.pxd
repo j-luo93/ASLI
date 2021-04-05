@@ -88,6 +88,7 @@ cdef extern from "mcts_cpp/action.hpp":
         abc_t glide_w
         int site_threshold
         float dist_threshold
+        size_t num_abc
 
         ActionSpaceOpt()
 

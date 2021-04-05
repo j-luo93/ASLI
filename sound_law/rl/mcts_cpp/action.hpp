@@ -16,6 +16,7 @@ struct ActionSpaceOpt
     abc_t glide_w;
     int site_threshold;
     float dist_threshold;
+    size_t num_abc;
 };
 
 class Env;
@@ -32,6 +33,7 @@ class ActionSpace
     MiniNode *get_mini_node(TreeNode *, BaseNode *, const ChosenChar &, ActionPhase, bool) const;
     IdSeq change_id_seq(const IdSeq &, const vec<size_t> &, abc_t, SpecialType);
     void update_affected(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, bool, abc_t) const;
+    void update_affected_impl(BaseNode *, abc_t, int, size_t, map<abc_t, size_t> &, abc_t) const;
     void update_affected_with_after_id(MiniNode *, const Affected &, abc_t) const;
     // void update_affected(BaseNode *, const IdSeq &, int, size_t, int, map<abc_t, size_t> &);
 

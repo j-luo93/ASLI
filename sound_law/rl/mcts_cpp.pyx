@@ -132,7 +132,7 @@ cdef class PyEnvOpt:
 cdef class PyActionSpaceOpt:
     cdef ActionSpaceOpt c_obj
 
-    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t any_s_id, abc_t any_uns_id, abc_t glide_j, abc_t glide_w, int site_threshold, float dist_threshold):
+    def __cinit__(self, abc_t null_id, abc_t emp_id, abc_t sot_id, abc_t eot_id, abc_t any_id, abc_t any_s_id, abc_t any_uns_id, abc_t glide_j, abc_t glide_w, int site_threshold, float dist_threshold, size_t num_abc):
         self.c_obj = ActionSpaceOpt()
         self.c_obj.null_id = null_id
         self.c_obj.emp_id = emp_id
@@ -145,6 +145,7 @@ cdef class PyActionSpaceOpt:
         self.c_obj.glide_w = glide_w
         self.c_obj.site_threshold = site_threshold
         self.c_obj.dist_threshold = dist_threshold
+        self.c_obj.num_abc = num_abc
 
 cdef class PyWordSpaceOpt:
     cdef WordSpaceOpt c_obj

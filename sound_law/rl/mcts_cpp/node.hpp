@@ -167,6 +167,7 @@ public:
     const vec<float> &get_priors() const;
     // Play one mini-step.
     pair<BaseNode *, ChosenChar> play_mini(PlayStrategy, float) const;
+    void show_action_stats() const;
 
     /* --------------------- Pruning-related --------------------- */
 
@@ -326,7 +327,7 @@ namespace str
         case ActionPhase::D_PRE:
             return "D_PRE";
         case ActionPhase::POST:
-            return "D_POST";
+            return "POST";
         case ActionPhase::SPECIAL_TYPE:
             return "SPECIAL_TYPE";
         }
