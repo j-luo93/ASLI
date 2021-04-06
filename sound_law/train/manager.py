@@ -25,7 +25,7 @@ from sound_law.rl.env import SoundChangeEnv  # , TrajectoryCollector
 from sound_law.rl.mcts import Mcts
 # pylint: disable=no-name-in-module
 from sound_law.rl.mcts_cpp import (  # pylint: disable=no-name-in-module
-    PyActionSpaceOpt, PyEnv, PyEnvOpt, PyWordSpaceOpt, PyMctsOpt)
+    PyActionSpaceOpt, PyEnv, PyEnvOpt, PyMctsOpt, PyWordSpaceOpt)
 # pylint: enable=no-name-in-module
 from sound_law.rl.trajectory import VocabState
 from sound_law.s2s.module import CharEmbedding, EmbParams, PhonoEmbedding
@@ -33,6 +33,7 @@ from sound_law.s2s.one_pair import OnePairModel
 from sound_law.s2s.one_to_many import OneToManyModel
 
 from .trainer import MctsTrainer, Trainer
+
 # from .trainer import MctsTrainer, PolicyGradientTrainer, Trainer
 
 add_argument('batch_size', default=32, dtype=int, msg='Batch size.')
@@ -251,7 +252,8 @@ class OnePairManager:
             # mcts.set_logging_options(g.mcts_verbose_level, g.mcts_log_to_file)
             if g.evaluate_only:
                 tr = self.mcts.collect_episodes(self.mcts.env.start, num_episodes=1, is_eval=True)[0]
-                # tr.save(g.log_dir)
+                tr.save(g.log_dir / 'path.txt')
+                logging.info(str(tr))
                 return
             else:
                 evaluator = MctsEvaluator(self.mcts, metric_writer=metric_writer)

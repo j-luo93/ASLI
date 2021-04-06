@@ -190,7 +190,9 @@ class JobScheduler:
                 idx2n = dict()
                 for gpu_info in gpu_stats_json['gpus']:
                     gpu_idx = gpu_info['index']
-                    n_processes = len([proc for proc in gpu_info['processes'] if proc['pid'] != 27262])
+                    # if gpu_idx < 3:
+                    #     continue
+                    n_processes = len(gpu_info['processes'])
                     idx2n[gpu_idx] = n_processes
                 idx, n_processes = sorted(idx2n.items(), key=lambda item: item[1])[0]
                 if n_processes < 2:
@@ -467,6 +469,12 @@ if __name__ == "__main__":
                                   value=default_msg)
             if msg:
                 cmd += f' --message {msg}'
+
+            override_log_dir = col2.text_input('log_dir',
+                                               help='The actual log directory (overriding the default) to save everything.')
+
+            if override_log_dir:
+                cmd += f' --log_dir {override_log_dir}'
 
             # gpu_id = col2.number_input('GPU', value=i % 4, min_value=-1, max_value=3, key=f'gpu_job_{i}')
             # if gpu_id > -1:

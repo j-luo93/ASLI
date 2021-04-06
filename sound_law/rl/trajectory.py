@@ -109,19 +109,27 @@ class Trajectory:
     def __init__(self, played_path: PyPath, max_end_length: int):
         # NOTE(j_luo) They have different batch size. `id_seqs` has n + 1, `rewards` has n (last state doesn't have any q due to being unexplored), while the remaining tree have 7 * n each.
         if g.repr_mode != 'state':
-            self.id_seqs, self.almts1, self.almts2, self.actions, self.rewards, self.permissible_actions, self.mcts_pis, self.qs = parallel_gather_trajectory(
+
+            self.id_seqs, self.almts1, self.almts2, action_vecs, self.rewards, self.permissible_actions, self.mcts_pis, self.qs = parallel_gather_trajectory(
                 played_path, g.num_workers, True, max_end_length)
             assert len(self.id_seqs) == len(self.almts1) == len(self.almts2)
         else:
-            self.id_seqs, self.actions, self.rewards, self.permissible_actions, self.mcts_pis, self.qs, self.ret = parallel_gather_trajectory(
+            self.id_seqs, action_vecs, self.rewards, self.permissible_actions, self.mcts_pis, self.qs, self.ret = parallel_gather_trajectory(
                 played_path, g.num_workers, False, max_end_length)
-        # breakpoint()  # BREAKPOINT(j_luo)
         self.done = played_path.get_last_node().done
         self._num_edges = len(self.id_seqs) - 1
         assert len(self.rewards) == len(self.id_seqs) - 1
-        assert len(self.actions) == len(self.permissible_actions) == len(
+        assert len(action_vecs) == len(self.permissible_actions) == len(
             self.mcts_pis) == len(self.qs) == 7 * self._num_edges
         self.total_reward = self.rewards.sum()
+
+        self.actions = list()
+        for i in range(self._num_edges):
+            start = 7 * i
+            action = a.SoundChangeAction(action_vecs[start], action_vecs[start + 2],
+                                         int2st[action_vecs[start + 1]], action_vecs[start + 3],
+                                         action_vecs[start + 4], action_vecs[start + 5], action_vecs[start + 6])
+            self.actions.append(action)
 
     def __len__(self):
         return self._num_edges
@@ -135,10 +143,8 @@ class Trajectory:
             s1 = self.id_seqs[i + 1]
             start = 7 * i
             end = start + 7
+            action = self.actions[i]
             r = self.rewards[i]
-            action = a.SoundChangeAction(self.actions[start], self.actions[start + 2],
-                                         int2st[self.actions[start + 1]], self.actions[start + 3],
-                                         self.actions[start + 4], self.actions[start + 5], self.actions[start + 6])
             qs = self.qs[start:end]
             pa = self.permissible_actions[start: end]
             mcts_pi = self.mcts_pis[start: end]
@@ -147,3 +153,8 @@ class Trajectory:
                 almt1 = self.almts1[i]
                 almt2 = self.almts2[i]
             yield TrEdge(i, s0, action, pa, r, qs, s1, mcts_pi, almt1=almt1, almt2=almt2)
+
+    def save(self, path: Union[str, Path]):
+        with Path(path).open('w', encoding='utf8') as fout:
+            for action in self.actions:
+                fout.write(str(action) + '\n')
