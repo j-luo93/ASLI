@@ -195,6 +195,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
 
     # reconstruct the solution and return it
     print('Minimum objective function value = %f' % solver.Objective().Value())
+    print('Minimum objective function value per match = %f' % (solver.Objective().Value() / min_match_number))
 
     # interpret solution as a matching, returning a list pairing indices of blocks in gold to a list of indices of matched rules in cand
     matching = []
@@ -238,8 +239,16 @@ if __name__ == "__main__":
     # gold = read_rules_from_txt('data/toy_gold_rules.txt')
 
     # turn gold rules into singleton lists since we expect gold to be in the form of blocks
-    gold = [[x] for x in gold]
+    # Group rules by refs. Assume refs are chronologically ordered.
+    gold_blocks = list()
+    ref_set = set()  # This stores every ref that has been encountered.
+    for gold_rule, ref in zip(gold, refs):
+        if ref not in ref_set:
+            ref_set.add(ref)
+            gold_blocks.append([gold_rule])
+        else:
+            gold_blocks[-1].append(gold_rule)
 
     env = manager.env
 
-    matching = match_rulesets(gold, cand, env, g.match_proportion, g.k_matches)
+    matching = match_rulesets(gold_blocks, cand, env, g.match_proportion, g.k_matches)
