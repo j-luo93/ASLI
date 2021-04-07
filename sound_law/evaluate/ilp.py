@@ -6,7 +6,8 @@ import pickle
 import random
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, Dict, List, Optional, Set, Union
+from itertools import combinations
+from typing import ClassVar, Dict, Iterator, List, Optional, Set, Union
 
 import pandas as pd
 from ortools.linear_solver import pywraplp
@@ -62,7 +63,8 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                    cand: List[SoundChangeAction],
                    env: SoundChangeEnv,
                    match_proportion: float = .7,
-                   k_matches: int = 10) -> List[List[Int, List[Int]]]:
+                   k_matches: int = 10,
+                   max_power_set_size: int = 3) -> List[List[Int, List[Int]]]:
     '''Finds the optimal matching of rule blocks in the gold ruleset to 0, 1, or 2 rules in the candidate ruleset. Frames the problem as an integer linear program. Returns a list of tuples with the matching.'''
 
     solver = pywraplp.Solver.CreateSolver('SCIP')  # TODO investigate other solvers
@@ -107,22 +109,25 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
             number_active_gold_blocks += 1
             # actually loop over the variables and create variables for this block
 
-            for j in range(len(cand)):
-                rule = cand[j]
-                a_var_name = 'a_' + str(i) + ',(' + str(j) + ')'
-                # print('cand:', j, rule)
+            def generate_match_candidates(var_name_prefix: str, power_set_size: int) -> Iterator[Tuple[str, int, List[int], float]]:
+                for combo in combinations(enumerate(cand), power_set_size):
+                    cand_indices, cand_rules = list(zip(*combo))
+                    try:
+                        cand_state = env.apply_block(curr_state, cand_rules)
+                    except RuntimeError:
+                        # this rule doesn't change anything, ie it has zero application sites. That causes the RuntimeError to be thrown.
+                        # exclude this rule from consideration since it shouldn't be matched
+                        pass
+                    else:
+                        cost = env.get_state_edit_dist(gold_state, cand_state)
+                        var_name = f'{var_name_prefix}_{i},({",".join(map(str, cand_indices))})'
+                        yield var_name, i, cand_indices, cost
 
-                # TODO(djwyen) add try/excepts to each other application of apply_action
-                try:
-                    cand_state = env.apply_action(curr_state, rule)
-                except RuntimeError:
-                    # this rule doesn't change anything, ie it has zero application sites. That causes the RuntimeError to be thrown.
-                    # exclude this rule from consideration since it shouldn't be matched
-                    pass
-                else:
-                    cost = env.get_state_edit_dist(gold_state, cand_state)
-                    new_tuple = (a_var_name, i, [j], cost)
-
+            # This stores all pairs of `var_name_prefix` and `power_set_size`. "pss" stands for power set size.
+            config_pairs = [(f'pss{i}', i) for i in range(1, max_power_set_size + 1)]
+            for var_name_prefix, power_set_size in config_pairs:
+                for new_tuple in generate_match_candidates(var_name_prefix, power_set_size):
+                    cost = new_tuple[-1]
                     # add this cost to the list if it's better than what we currently have
                     if len(paired_costs) < k_matches or cost < highest_cost:
                         if len(paired_costs) == k_matches:
@@ -130,47 +135,70 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                         bisect.insort_left(paired_costs, new_tuple)  # insert in sorted order
                         highest_cost = paired_costs[-1][3]  # update costs
 
-            for j in range(len(cand)):
-                rule1 = cand[j]
-                for k in range(j + 1, len(cand)):
-                    rule2 = cand[k]
-                    b_var_name = 'b_' + str(i) + ',(' + str(j) + ',' + str(k) + ')'
+            # for j in range(len(cand)):
+            #     rule = cand[j]
+            #     a_var_name = 'a_' + str(i) + ',(' + str(j) + ')'
+            #     # print('cand:', j, rule)
 
-                    try:
-                        cand_state = env.apply_block(curr_state, [rule1, rule2])
-                    except RuntimeError:
-                        pass
-                    else:
-                        cost = env.get_state_edit_dist(gold_state, cand_state)
-                        new_tuple = (b_var_name, i, [j, k], cost)
+            #     # TODO(djwyen) add try/excepts to each other application of apply_action
+            #     try:
+            #         cand_state = env.apply_action(curr_state, rule)
+            #     except RuntimeError:
+            #         # this rule doesn't change anything, ie it has zero application sites. That causes the RuntimeError to be thrown.
+            #         # exclude this rule from consideration since it shouldn't be matched
+            #         pass
+            #     else:
+            #         cost = env.get_state_edit_dist(gold_state, cand_state)
+            #         new_tuple = (a_var_name, i, [j], cost)
 
-                        if len(paired_costs) < k_matches or cost < highest_cost:
-                            if len(paired_costs) == k_matches:
-                                del paired_costs[-1]
-                            bisect.insort_left(paired_costs, new_tuple)
-                            highest_cost = paired_costs[-1][3]
+            #         # add this cost to the list if it's better than what we currently have
+            #         if len(paired_costs) < k_matches or cost < highest_cost:
+            #             if len(paired_costs) == k_matches:
+            #                 del paired_costs[-1]
+            #             bisect.insort_left(paired_costs, new_tuple)  # insert in sorted order
+            #             highest_cost = paired_costs[-1][3]  # update costs
 
-            for j in range(len(cand)):
-                rule1 = cand[j]
-                for k in range(j + 1, len(cand)):
-                    rule2 = cand[k]
-                    for l in range(k + 1, len(cand)):
-                        rule3 = cand[l]
-                        c_var_name = 'c_' + str(i) + ',(' + str(j) + ',' + str(k) + ',' + str(l) + ')'
+            # for j in range(len(cand)):
+            #     rule1 = cand[j]
+            #     for k in range(j + 1, len(cand)):
+            #         rule2 = cand[k]
+            #         b_var_name = 'b_' + str(i) + ',(' + str(j) + ',' + str(k) + ')'
 
-                        try:
-                            cand_state = env.apply_block(curr_state, [rule1, rule2, rule3])
-                        except RuntimeError:
-                            pass
-                        else:
-                            cost = env.get_state_edit_dist(gold_state, cand_state)
-                            new_tuple = (c_var_name, i, [j, k, l], cost)
+            #         try:
+            #             cand_state = env.apply_block(curr_state, [rule1, rule2])
+            #         except RuntimeError:
+            #             pass
+            #         else:
+            #             cost = env.get_state_edit_dist(gold_state, cand_state)
+            #             new_tuple = (b_var_name, i, [j, k], cost)
 
-                            if len(paired_costs) < k_matches or cost < highest_cost:
-                                if len(paired_costs) == k_matches:
-                                    del paired_costs[-1]
-                                bisect.insort_left(paired_costs, new_tuple)
-                                highest_cost = paired_costs[-1][3]
+            #             if len(paired_costs) < k_matches or cost < highest_cost:
+            #                 if len(paired_costs) == k_matches:
+            #                     del paired_costs[-1]
+            #                 bisect.insort_left(paired_costs, new_tuple)
+            #                 highest_cost = paired_costs[-1][3]
+
+            # for j in range(len(cand)):
+            #     rule1 = cand[j]
+            #     for k in range(j + 1, len(cand)):
+            #         rule2 = cand[k]
+            #         for l in range(k + 1, len(cand)):
+            #             rule3 = cand[l]
+            #             c_var_name = 'c_' + str(i) + ',(' + str(j) + ',' + str(k) + ',' + str(l) + ')'
+
+            #             try:
+            #                 cand_state = env.apply_block(curr_state, [rule1, rule2, rule3])
+            #             except RuntimeError:
+            #                 pass
+            #             else:
+            #                 cost = env.get_state_edit_dist(gold_state, cand_state)
+            #                 new_tuple = (c_var_name, i, [j, k, l], cost)
+
+            #                 if len(paired_costs) < k_matches or cost < highest_cost:
+            #                     if len(paired_costs) == k_matches:
+            #                         del paired_costs[-1]
+            #                     bisect.insort_left(paired_costs, new_tuple)
+            #                     highest_cost = paired_costs[-1][3]
 
             # now that we have the k matchings with the lowest edit distance with this particular gold block, we can add the variables corresponding to these matchings to each of the relevant constraints:
             for var_name, i, cand_rules, cost in paired_costs:
@@ -231,11 +259,13 @@ if __name__ == "__main__":
     add_argument("match_proportion", dtype=float, default=.7, msg="Proportion of gold blocks to force matches on")
     add_argument("k_matches", dtype=int, default=10, msg="Number of matches to consider per gold block")
     add_argument("interpret_matching", dtype=bool, default=False, msg="Flag to print out the rule matching")
+    add_argument('cand_path', dtype=str, default='data/toy_cand_rules.txt', msg='Path to the candidate rule file.')
+    add_argument('max_power_set_size', dtype=int, default=3, msg='Maximum power set size.')
 
     manager, gold, states, refs = rule.simulate()
     initial_state = states[0]
 
-    cand = read_rules_from_txt('data/toy_cand_rules.txt')
+    cand = read_rules_from_txt(g.cand_path)
     # gold = read_rules_from_txt('data/toy_gold_rules.txt')
 
     # turn gold rules into singleton lists since we expect gold to be in the form of blocks
@@ -251,4 +281,4 @@ if __name__ == "__main__":
 
     env = manager.env
 
-    matching = match_rulesets(gold_blocks, cand, env, g.match_proportion, g.k_matches)
+    matching = match_rulesets(gold_blocks, cand, env, g.match_proportion, g.k_matches, g.max_power_set_size)
