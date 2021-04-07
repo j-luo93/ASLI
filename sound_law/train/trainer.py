@@ -266,6 +266,9 @@ class MctsTrainer(RLTrainer):
         if new_score >= best_score:  # The same as the best score is tolerated.
             best_score = new_score
             self.best_metrics = Metrics(Metric('best_score', best_score, 1))
+            best_path = g.log_dir / 'best_run'
+            with best_path.open('w') as fout:
+                fout.write(self.stage)
             return True
         return False
 

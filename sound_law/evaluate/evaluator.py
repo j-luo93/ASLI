@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 import torch
+
 from dev_misc import FT, LT, add_argument, g, get_tensor
 from dev_misc.devlib import get_array
 from dev_misc.devlib.dp import EditDist
@@ -259,9 +260,15 @@ class MctsEvaluator:
 
     def evaluate(self, stage: str, global_step: int) -> Metrics:
         metrics = Metrics()
+        folder = g.log_dir / 'eval'
+        folder.mkdir(parents=True, exist_ok=True)
         eval_tr = self.mcts.collect_episodes(self.mcts.env.start, num_episodes=1, is_eval=True)[0]
+        eval_tr.save(folder / f'{stage}.path')
+        logging.info(str(eval_tr))
         metrics += Metric('eval_reward', eval_tr.total_reward, 1)
         eval_tr = self.mcts.collect_episodes(self.mcts.env.start, num_episodes=1, is_eval=True, no_simulation=True)[0]
+        eval_tr.save(folder / f'{stage}.path')
+        logging.info(str(eval_tr))
         metrics += Metric('eval_reward_policy', eval_tr.total_reward, 1)
         metrics = metrics.with_prefix('eval')
         logging.info(metrics.get_table(title=f'Eval: {stage}', num_paddings=8))

@@ -250,13 +250,11 @@ class OnePairManager:
 
         if g.use_rl:
             # mcts.set_logging_options(g.mcts_verbose_level, g.mcts_log_to_file)
+            evaluator = MctsEvaluator(self.mcts, metric_writer=metric_writer)
             if g.evaluate_only:
-                tr = self.mcts.collect_episodes(self.mcts.env.start, num_episodes=1, is_eval=True)[0]
-                tr.save(g.log_dir / 'path.txt')
-                logging.info(str(tr))
+                evaluator.evaluate('evaluate_only', 0)
                 return
             else:
-                evaluator = MctsEvaluator(self.mcts, metric_writer=metric_writer)
                 trainer = get_trainer(self.model, 'rl', evaluator, metric_writer, mcts=self.mcts)
             # else:
             #     collector = TrajectoryCollector(g.batch_size,
