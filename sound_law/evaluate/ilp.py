@@ -1,12 +1,14 @@
 from __future__ import annotations
+from collections import Counter
+from typing import Tuple
 
 import bisect
 import logging
 import pickle
 import random
 import re
-from dataclasses import dataclass, field
-from itertools import combinations
+from dataclasses import dataclass, field, astuple
+from itertools import combinations, chain
 from typing import ClassVar, Dict, Iterator, List, Optional, Set, Union
 
 import pandas as pd
@@ -59,12 +61,21 @@ def read_rules_from_txt(filename: str) -> List[SoundChangeAction]:
     return rules
 
 
+@dataclass(order=True)
+class MatchCandidate:
+    cost: float
+    var_name: str
+    gold_index: int
+    cand_indices: List[int]
+
+
 def match_rulesets(gold: List[List[SoundChangeAction]],
                    cand: List[SoundChangeAction],
                    env: SoundChangeEnv,
                    match_proportion: float = .7,
                    k_matches: int = 10,
-                   max_power_set_size: int = 3) -> List[List[Int, List[Int]]]:
+                   max_power_set_size: int = 3,
+                   use_greedy_growth: bool = False) -> List[List[int, List[int]]]:
     '''Finds the optimal matching of rule blocks in the gold ruleset to 0, 1, or 2 rules in the candidate ruleset. Frames the problem as an integer linear program. Returns a list of tuples with the matching.'''
 
     solver = pywraplp.Solver.CreateSolver('SCIP')  # TODO investigate other solvers
@@ -92,6 +103,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
 
     curr_state = env.start
     objective = solver.Objective()
+    size_cnt = Counter()
     for i in range(len(gold)):
         # as an optimization, we only create variables for the best k_matches that a given gold block has with collections of rules in candidate. We assume that matchings with higher cost would never be chosen anyway and won't affect the solution, so they can just be excluded from the linear program.
         highest_cost = None
@@ -109,8 +121,24 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
             number_active_gold_blocks += 1
             # actually loop over the variables and create variables for this block
 
-            def generate_match_candidates(var_name_prefix: str, power_set_size: int) -> Iterator[Tuple[str, int, List[int], float]]:
-                for combo in combinations(enumerate(cand), power_set_size):
+            def generate_match_candidates(var_name_prefix: str, power_set_size: int,
+                                          bases: Optional[List[MatchCandidate]] = None) -> Iterator[MatchCandidate]:
+                """Generate new match candidates. If `bases` s provided, grow them by adding one more rule (`power_set_size` is ignored in this case)."""
+                # Each item in the iterator is a list (of size `power_set_size` if `bases` is None, otherwise one more than `bases`)
+                # of (index, action) tuples, where `index` is the action's index in `cand`.
+                iterator: Iterator[List[Tuple[int, SoundChangeAction]]]
+                if bases is None:
+                    iterator = combinations(enumerate(cand), power_set_size)
+                else:
+                    def grow_from_base(base: MatchCandidate) -> Iterator[List[Tuple[int, SoundChangeAction]]]:
+                        last_j = base.cand_indices[-1]
+                        base_block = [(ind, cand[ind]) for ind in base.cand_indices]
+                        for j, rule in enumerate(cand[last_j + 1:], last_j + 1):
+                            yield base_block + [(j, rule)]
+
+                    iterator = chain(*[grow_from_base(base) for base in bases])
+
+                for combo in iterator:
                     cand_indices, cand_rules = list(zip(*combo))
                     try:
                         cand_state = env.apply_block(curr_state, cand_rules)
@@ -121,19 +149,36 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                     else:
                         cost = env.get_state_edit_dist(gold_state, cand_state)
                         var_name = f'{var_name_prefix}_{i},({",".join(map(str, cand_indices))})'
-                        yield var_name, i, cand_indices, cost
+                        yield MatchCandidate(cost, var_name, i, cand_indices)
 
-            # This stores all pairs of `var_name_prefix` and `power_set_size`. "pss" stands for power set size.
-            config_pairs = [(f'pss{i}', i) for i in range(1, max_power_set_size + 1)]
-            for var_name_prefix, power_set_size in config_pairs:
-                for new_tuple in generate_match_candidates(var_name_prefix, power_set_size):
-                    cost = new_tuple[-1]
+            def update_top_candidates(highest_cost: float, new_candidates: List[MatchCandidate]) -> float:
+                """Update top match candidates. Remember to return the updated `highest_cost` to the caller."""
+                for new_tuple in new_candidates:
+                    cost = new_tuple.cost
                     # add this cost to the list if it's better than what we currently have
                     if len(paired_costs) < k_matches or cost < highest_cost:
                         if len(paired_costs) == k_matches:
                             del paired_costs[-1]
                         bisect.insort_left(paired_costs, new_tuple)  # insert in sorted order
-                        highest_cost = paired_costs[-1][3]  # update costs
+                        highest_cost = paired_costs[-1].cost  # update costs
+                return highest_cost
+
+            if use_greedy_growth:
+                power_set_size = 1
+                pss1_seeds = generate_match_candidates('pss1', power_set_size)
+                highest_cost = update_top_candidates(highest_cost, pss1_seeds)
+                seeds = paired_costs
+                while seeds and power_set_size < max_power_set_size:
+                    power_set_size += 1
+                    highest_cost = update_top_candidates(highest_cost,
+                                                         generate_match_candidates(f'pss{power_set_size}', power_set_size, bases=seeds))
+                    seeds = [match for match in paired_costs if len(match.cand_indices) == power_set_size]
+            else:
+                # This stores all pairs of `var_name_prefix` and `power_set_size`. "pss" stands for power set size.
+                config_pairs = [(f'pss{l}', l) for l in range(1, max_power_set_size + 1)]
+                for var_name_prefix, power_set_size in config_pairs:
+                    highest_cost = update_top_candidates(highest_cost,
+                                                         generate_match_candidates(var_name_prefix, power_set_size))
 
             # for j in range(len(cand)):
             #     rule = cand[j]
@@ -201,16 +246,19 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
             #                     highest_cost = paired_costs[-1][3]
 
             # now that we have the k matchings with the lowest edit distance with this particular gold block, we can add the variables corresponding to these matchings to each of the relevant constraints:
-            for var_name, i, cand_rules, cost in paired_costs:
+            for match_cand in paired_costs:
+                cost, var_name, i, cand_rules = astuple(match_cand)
                 v[var_name] = solver.IntVar(0, 1, var_name)
                 c['gold_' + str(i)].SetCoefficient(v[var_name], 1)
                 for rule_index in cand_rules:
                     c['cand_' + str(rule_index)].SetCoefficient(v[var_name], 1)
                 c['min_match'].SetCoefficient(v[var_name], 1)
                 objective.SetCoefficient(v[var_name], cost)
+                size_cnt[len(cand_rules)] += 1
 
             # update the state and continue onto the next block in gold
             curr_state = gold_state
+    print('Counts for all top power set sizes', size_cnt)
 
     # we now update min_match with bounds based on the number of actually active gold blocks
     min_match_number = int(match_proportion * number_active_gold_blocks)
@@ -261,6 +309,7 @@ if __name__ == "__main__":
     add_argument("interpret_matching", dtype=bool, default=False, msg="Flag to print out the rule matching")
     add_argument('cand_path', dtype=str, default='data/toy_cand_rules.txt', msg='Path to the candidate rule file.')
     add_argument('max_power_set_size', dtype=int, default=3, msg='Maximum power set size.')
+    add_argument("use_greedy_growth", dtype=bool, default=False, msg="Flag to grow the kept candidates greedily.")
 
     manager, gold, states, refs = rule.simulate()
     initial_state = states[0]
@@ -281,4 +330,5 @@ if __name__ == "__main__":
 
     env = manager.env
 
-    matching = match_rulesets(gold_blocks, cand, env, g.match_proportion, g.k_matches, g.max_power_set_size)
+    matching = match_rulesets(gold_blocks, cand, env,
+                              g.match_proportion, g.k_matches, g.max_power_set_size, g.use_greedy_growth)
