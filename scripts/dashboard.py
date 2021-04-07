@@ -190,8 +190,6 @@ class JobScheduler:
                 idx2n = dict()
                 for gpu_info in gpu_stats_json['gpus']:
                     gpu_idx = gpu_info['index']
-                    # if gpu_idx < 3:
-                    #     continue
                     n_processes = len(gpu_info['processes'])
                     idx2n[gpu_idx] = n_processes
                 idx, n_processes = sorted(idx2n.items(), key=lambda item: item[1])[0]
@@ -457,36 +455,43 @@ if __name__ == "__main__":
                              lambda x: f'heur{x}',
                              'heur_c', [0.0, 1.0, 5.0], value=1.0)
 
-        grid_variables = st.multiselect(
-            'grid variable', ['num_mcts_sims', 'num_inner_steps', 'weight_decay', 'puct_c', 'exponent', 'play_strategy', 'num_episodes'])
+        grid_variables = st.multiselect('grid variable',
+                                        ['num_mcts_sims', 'num_inner_steps', 'weight_decay', 'puct_c', 'exponent', 'play_strategy', 'num_episodes', 'heur_c',
+                                         'repr_mode'])
 
         cmd_msg_pairs = ht.render(grid_variables)
+        show_all_cmds = len(cmd_msg_pairs) <= 10
+        st.text(f'There are {len(cmd_msg_pairs)} jobs in total.')
 
         jobs = list()
         for i, (cmd, default_msg) in enumerate(cmd_msg_pairs):
-            col1, col2 = st.beta_columns(2)
-            msg = col1.text_input('message', help='The message to append to the run name.',
-                                  value=default_msg)
-            if msg:
-                cmd += f' --message {msg}'
+            if show_all_cmds:
+                col1, col2 = st.beta_columns(2)
+                msg = col1.text_input('message', help='The message to append to the run name.',
+                                      value=default_msg)
+                if msg:
+                    cmd += f' --message {msg}'
 
-            override_log_dir = col2.text_input('log_dir',
-                                               help='The actual log directory (overriding the default) to save everything.')
+                override_log_dir = col2.text_input('log_dir',
+                                                   help='The actual log directory (overriding the default) to save everything.',
+                                                   key=f'override_log_dir{i}')
 
-            if override_log_dir:
-                cmd += f' --log_dir {override_log_dir}'
+                if override_log_dir:
+                    cmd += f' --log_dir {override_log_dir}'
 
-            # gpu_id = col2.number_input('GPU', value=i % 4, min_value=-1, max_value=3, key=f'gpu_job_{i}')
-            # if gpu_id > -1:
-            #     cmd += f' --gpu {gpu_id}'
+                # gpu_id = col2.number_input('GPU', value=i % 4, min_value=-1, max_value=3, key=f'gpu_job_{i}')
+                # if gpu_id > -1:
+                #     cmd += f' --gpu {gpu_id}'
 
-            # Pretty-print command.
-            st.markdown("Command to run:\n```\n" + cmd.replace(' --', '  \n  --') + "\n```")
+                # Pretty-print command.
+                st.markdown("Command to run:\n```\n" + cmd.replace(' --', '  \n  --') + "\n```")
 
+                # Add a new job.
+                if st.button('Add job', key=f'add_job_{i}'):
+                    js.add_job_to_queue(cmd)
+            else:
+                cmd += f' --message {default_msg}'
             jobs.append(cmd)
-            # Add a new job.
-            if st.button('Add job', key=f'add_job_{i}'):
-                js.add_job_to_queue(cmd)
 
         if st.button('Add all jobs', key='add_all_jobs'):
             for cmd in jobs:
