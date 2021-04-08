@@ -267,7 +267,7 @@ class MctsEvaluator:
         logging.info(str(eval_tr))
         metrics += Metric('eval_reward', eval_tr.total_reward, 1)
         eval_tr = self.mcts.collect_episodes(self.mcts.env.start, num_episodes=1, is_eval=True, no_simulation=True)[0]
-        eval_tr.save(folder / f'{stage}.path')
+        eval_tr.save(folder / f'{stage}.policy.path')
         logging.info(str(eval_tr))
         metrics += Metric('eval_reward_policy', eval_tr.total_reward, 1)
         metrics = metrics.with_prefix('eval')

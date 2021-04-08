@@ -2,15 +2,21 @@ import json
 import re
 import subprocess
 import threading
-from itertools import product
-import psutil
 import time
+from collections import Counter
+from dataclasses import asdict, dataclass
 from datetime import date, datetime
+from itertools import product
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from subprocess import CompletedProcess
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 import pandas as pd
+import psutil
 import streamlit as st
+import torch
+from google.protobuf.json_format import MessageToDict
+from tensorflow.python.summary.summary_iterator import summary_iterator
 
 
 class TensorboardLaunchar:
@@ -21,7 +27,7 @@ class TensorboardLaunchar:
             selected_runs = [selected_runs]
         self.selected_runs = selected_runs
         self.port = port
-        self.output = None
+        self.output: Optional[CompletedProcess] = None
         self._thread = None
 
     def launch(self):
@@ -42,7 +48,7 @@ class TensorboardLaunchar:
         return self.output is None
 
 
-class HyperparameterTuner:
+class HParamTuner:
 
     def __init__(self, base_cmd: str):
         self._base_cmd = base_cmd
@@ -50,6 +56,17 @@ class HyperparameterTuner:
         self._select_sliders = list()
         self._checkboxes = list()
         self._grid_variables = list()
+
+    @property
+    def hyperparameters(self) -> List[str]:
+        ret = list()
+        for ni in self._number_inputs:
+            ret.append(ni[3][0])
+        for ss in self._select_sliders:
+            ret.append(ss[3][0])
+        for cb in self._checkboxes:
+            ret.append(cb[2][0])
+        return ret
 
     def add_number_input(self, is_default_func, cmd_func, msg_func, *args, **kwargs):
         self._number_inputs.append((is_default_func, cmd_func, msg_func, args, kwargs))
@@ -73,7 +90,7 @@ class HyperparameterTuner:
                 render_func = col.number_input
             elif ui_type == 'select_slider':
                 render_func = col.select_slider
-            elif ui_type == 'checkbox':
+            else:
                 render_func = col.checkbox
             return render_func(*col_args, **col_kwargs)
 
@@ -167,18 +184,6 @@ class JobScheduler:
             for job in job_queue:
                 fout.write(job + '\n')
 
-    # def run(self):
-    #     jobs = self.get_job_queue()
-
-    #     def run_job(job: str):
-    #         output = subprocess.run(job, capture_output=True, check=True, shell=True, text=True)
-
-    #     if jobs:
-    #         with st.spinner('Running all jobs in the queue.'):
-    #             for job in jobs:
-    #                 thread = threading.Thread(target=run_job, args=(job, ))
-    #                 thread.start()
-    #             time.sleep(3)
     def run(self):
 
         def run_impl():
@@ -190,8 +195,11 @@ class JobScheduler:
                 idx2n = dict()
                 for gpu_info in gpu_stats_json['gpus']:
                     gpu_idx = gpu_info['index']
+                    if gpu_idx < 1:
+                        continue
                     n_processes = len(gpu_info['processes'])
                     idx2n[gpu_idx] = n_processes
+                idx2n[1] += 1
                 idx, n_processes = sorted(idx2n.items(), key=lambda item: item[1])[0]
                 if n_processes < 2:
                     return idx
@@ -229,6 +237,88 @@ class JobScheduler:
 @st.cache(hash_funcs={JobScheduler: id})
 def get_job_scheduler(job_queue_path: str) -> JobScheduler:
     return JobScheduler(job_queue_path)
+
+
+@dataclass
+class Record:
+    wall_time: float
+    tag: str
+    value: float
+    step: Optional[int] = None
+
+
+class EventFile:
+    """This is a wrapper class to access the records stored in an event file (produced by tensorboard)."""
+
+    def __init__(self, path: Union[Path, str]):
+        self.path = Path(path)
+
+    def __iter__(self) -> Iterator[Record]:
+        """`summary_iterator` yields a structured record that can be accessed by first calling `MessageToDict`.
+        Afterwards, it can be accessed like a normal dict with a structure as follows:
+
+        wallTime: float
+        (optional) fileVersion: str
+        (optional) step: int
+        (optional) summary:
+            value: [
+                tag: str
+                simpleValue: float
+            ]
+        Brackets mean it can have multiple values (like a list).
+        """
+        default_step = Counter()
+        for e in summary_iterator(str(self.path)):
+            e = MessageToDict(e)
+            wall_time = e['wallTime']
+            try:
+                v = e['summary']['value']
+                assert len(v) == 1
+                v = v[0]
+                tag = v['tag']
+                value = float(v['simpleValue'])
+                if value == 2.0:
+                    value = 1.0
+                try:
+                    step = int(e['step'])
+                except KeyError:
+                    step = default_step[tag]
+                    default_step[tag] += 1
+                yield Record(wall_time, tag, value, step=step)
+            except KeyError:
+                pass
+
+
+def get_latest_runs(log_dir: Path) -> List[str]:
+    latest_runs = list()
+    for i in range(1, 51):
+        name = f'OPRLPgmcGot-SmallSims-nms300-rm_word-umv-sgd-ipo-rand{i}'
+        dates = ['2021-04-04', '2021-04-05']
+        runs = list()
+        for date in dates:
+            folder = log_dir / date / name
+            runs.extend([str(x) for x in folder.glob('*/')])
+        assert runs
+
+        latest_run = sorted(runs, reverse=True)[0]
+        latest_runs.append(latest_run)
+    return latest_runs
+
+
+# @st.cache(suppress_st_warning=True)
+def load_events(runs: List[str]) -> pd.DataFrame:
+    records = list()
+    pbar = st.progress(0.0)
+    for i, run in enumerate(runs, 1):
+        event_file = EventFile(list(Path(run).glob('events*'))[0])
+
+        for record in event_file:
+            record = asdict(record)
+            record['run'] = i
+            records.append(record)
+        pbar.progress(i / len(runs))
+    record_df = pd.DataFrame(records)
+    return record_df
 
 
 if __name__ == "__main__":
@@ -281,11 +371,10 @@ if __name__ == "__main__":
         st.write(psutil.cpu_percent())
 
     # Tensorboard stats.
+    ports_to_use = list(range(8701, 8710))  # Use these ten ports.
     if st.beta_expander("Tensorboard"):
         output = subprocess.run('pgrep -u $(whoami) tensorboard', shell=True,
                                 text=True, capture_output=True)
-
-        ports_to_use = list(range(8701, 8710))  # Use these ten ports.
 
         def get_pid_info(pid: int) -> Tuple[int, str]:
             port = subprocess.run(
@@ -295,7 +384,7 @@ if __name__ == "__main__":
 
         tb_records = list()
         for pid in output.stdout.split():
-            port, cmd = get_pid_info(pid)
+            port, cmd = get_pid_info(int(pid))
             tb_records.append({'pid': pid, 'port': port, 'command': cmd})
             try:
                 ports_to_use.remove(port)
@@ -311,10 +400,14 @@ if __name__ == "__main__":
                 st.write('tensorboard processes killed.')
 
     saved_runs = list()
-    all_runs = False
+    all_runs = st.checkbox('all_runs')
     if directory_choice == 'log':
         for folder_with_date in log_dir.glob('*/'):
-            folder_date = date.fromisoformat(folder_with_date.name)
+            try:
+                folder_date = date.fromisoformat(folder_with_date.name)
+            except ValueError:
+                # Skip this if this doesn't conform to our directory naming convention.
+                continue
             if folder_date >= earliest_date:
                 for saved_run in folder_with_date.glob('*/*/'):
                     if not regex or re.search(regex, str(saved_run)):
@@ -322,14 +415,13 @@ if __name__ == "__main__":
     else:
         for saved_folder in imp_dir.glob('*/'):
             saved_runs.append(saved_folder)
-        all_runs = st.checkbox('all_runs')
-
     saved_runs = sorted(saved_runs, reverse=True)
+    st.text(f'{len(saved_runs)} in total.')
     if not all_runs:
         selected_runs = st.multiselect('Saved run', saved_runs, help='Select saved runs to inspect.')
     else:
-        selected_runs = list()
-    if selected_runs or all_runs:
+        selected_runs = all_runs
+    if selected_runs:
         # Op to launch tensorboard.
         if not ports_to_use:
             st.info('No usable ports left. Please kill more tensorboard processes.')
@@ -337,7 +429,7 @@ if __name__ == "__main__":
             port = ports_to_use[0]
             with st.spinner(f'Launching Tensorboard at port {port}...'):
                 if all_runs:
-                    launcher = TensorboardLaunchar(port, saved_dir=imp_dir)
+                    launcher = TensorboardLaunchar(port, saved_dir=str(imp_dir))
                 else:
                     launcher = TensorboardLaunchar(port, selected_runs=selected_runs)
                 launcher.launch()
@@ -345,12 +437,13 @@ if __name__ == "__main__":
                     st.error(launcher.output.stderr)
 
         # Op to mark important runs.
-        if directory_choice == 'log' and selected_runs:
+        if directory_choice == 'log':
             names = list()
             with st.beta_expander('Names'):
                 for selected_run in selected_runs:
+                    name_value = str(selected_run).split('/')[2]
                     name = st.text_input('name', help='The new name for this important run.',
-                                         value=str(selected_run).split('/')[2])
+                                         value=name_value)
                     names.append(name)
 
             col1, col2, col3 = st.beta_columns([1, 1, 5])
@@ -378,7 +471,9 @@ if __name__ == "__main__":
         config = lang2config[lang]
         base_cmd = f'python sound_law/main.py --config {config} --mcts_config SmallSims --save_interval 1'
 
-        ht = HyperparameterTuner(base_cmd)
+        base_cmd = f'python sound_law/main.py --config {config} --mcts_config SmallSims --save_interval 1'
+
+        ht = HParamTuner(base_cmd)
         ht.add_select_slider(lambda x: x == 2000,
                              lambda x: f' --num_mcts_sims {x} --expansion_batch_size {x // 20}',
                              lambda x: f'nms{x}',
@@ -399,7 +494,7 @@ if __name__ == "__main__":
                         'add_noise')
         ht.add_checkbox(lambda x: ' --use_num_misaligned',
                         lambda x: 'unm',
-                        '(DO NOT USE) use_num_misaligned')
+                        'use_num_misaligned')
         ht.add_checkbox(lambda x: ' --use_max_value',
                         lambda x: 'umv',
                         'use_max_value')
@@ -522,5 +617,17 @@ if __name__ == "__main__":
                                   'Run': run,
                                   'Note': note},
                                  ignore_index=True)
-            rn_df.to_csv(research_note_path, sep='\t', index=None)
+            rn_df.to_csv(research_note_path, sep='\t', index=False)
         st.write(rn_df)
+
+    if selected_runs:
+        with st.beta_expander('Analysis'):
+            for selected_run in selected_runs:
+                # Get all hparams.
+                hparams_path = Path(selected_run) / 'hparams.pth'
+                state_dict = torch.load(str(hparams_path))
+                # HACK(j_luo) SGD uses different param names.
+                hparams = {hp: state_dict[hp].value for hp in ht.hyperparameters if hp != 'SGD'}
+                hparams.update({hp: state_dict[hp].value for hp in ['optim_cls', 'learning_rate']})
+                st.write(hparams)
+
