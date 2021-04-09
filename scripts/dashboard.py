@@ -1,4 +1,5 @@
 import json
+import math
 import re
 import subprocess
 import threading
@@ -11,12 +12,124 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
+# import seaborn as sns
+import altair as alt
+import numpy as np
 import pandas as pd
 import psutil
 import streamlit as st
 import torch
 from google.protobuf.json_format import MessageToDict
 from tensorflow.python.summary.summary_iterator import summary_iterator
+
+
+class SwarmTransformer:
+    """This is taken from https://github.com/mwaskom/seaborn/blob/master/seaborn/categorical.py."""
+
+    def __call__(self, points):
+        orig_xy = np.concatenate([points, np.full_like(points[:, 0], 0.01).reshape(-1, 1)], axis=-1)  # type:ignore
+        sorter = np.argsort(orig_xy[:, 1])  # type: ignore
+        orig_xyr = orig_xy[sorter]
+        swarm = self.beeswarm(orig_xyr)
+        new_xy = np.empty_like(points)
+        new_xy[sorter] = swarm[:, :2]  # type: ignore
+        return new_xy
+
+    def beeswarm(self, orig_xyr):
+        """Adjust x position of points to avoid overlaps."""
+        # In this method, `x` is always the categorical axis
+        # Center of the swarm, in point coordinates
+        midline = orig_xyr[0, 0]
+
+        # Start the swarm with the first point
+        swarm = np.atleast_2d(orig_xyr[0])
+
+        # Loop over the remaining points
+        for xyr_i in orig_xyr[1:]:
+
+            # Find the points in the swarm that could possibly
+            # overlap with the point we are currently placing
+            neighbors = self.could_overlap(xyr_i, swarm)
+
+            # Find positions that would be valid individually
+            # with respect to each of the swarm neighbors
+            candidates = self.position_candidates(xyr_i, neighbors)
+
+            # Sort candidates by their centrality
+            offsets = np.abs(candidates[:, 0] - midline)
+            candidates = candidates[np.argsort(offsets)]
+
+            # Find the first candidate that does not overlap any neighbors
+            new_xyr_i = self.first_non_overlapping_candidate(candidates, neighbors)
+
+            # Place it into the swarm
+            swarm = np.vstack([swarm, new_xyr_i])
+
+        return swarm
+
+    def could_overlap(self, xyr_i, swarm):
+        """Return a list of all swarm points that could overlap with target."""
+        # Because we work backwards through the swarm and can short-circuit,
+        # the for-loop is faster than vectorization
+        _, y_i, r_i = xyr_i
+        neighbors = []
+        for xyr_j in reversed(swarm):
+            _, y_j, r_j = xyr_j
+            if (y_i - y_j) < (r_i + r_j):
+                neighbors.append(xyr_j)
+            else:
+                break
+        return np.array(neighbors)[::-1]
+
+    def position_candidates(self, xyr_i, neighbors):
+        """Return a list of coordinates that might be valid by adjusting x."""
+        candidates = [xyr_i]
+        x_i, y_i, r_i = xyr_i
+        left_first = True
+        for x_j, y_j, r_j in neighbors:
+            dy = y_i - y_j
+            dx = np.sqrt(max((r_i + r_j) ** 2 - dy ** 2, 0)) * 1.05  # type: ignore
+            cl, cr = (x_j - dx, y_i, r_i), (x_j + dx, y_i, r_i)
+            if left_first:
+                new_candidates = [cl, cr]
+            else:
+                new_candidates = [cr, cl]
+            candidates.extend(new_candidates)
+            left_first = not left_first
+        return np.array(candidates)
+
+    def first_non_overlapping_candidate(self, candidates, neighbors):
+        """Find the first candidate that does not overlap with the swarm."""
+
+        # If we have no neighbors, all candidates are good.
+        if len(neighbors) == 0:
+            return candidates[0]
+
+        neighbors_x = neighbors[:, 0]
+        neighbors_y = neighbors[:, 1]
+        neighbors_r = neighbors[:, 2]
+
+        for xyr_i in candidates:
+
+            x_i, y_i, r_i = xyr_i
+
+            dx = neighbors_x - x_i
+            dy = neighbors_y - y_i
+            sq_distances = np.square(dx) + np.square(dy)  # type: ignore
+
+            sep_needed = np.square(neighbors_r + r_i)
+
+            # Good candidate does not overlap any of neighbors which means that
+            # squared distance between candidate and any of the neighbors has
+            # to be at least square of the summed radii
+            good_candidate = np.all(sq_distances >= sep_needed)
+
+            if good_candidate:
+                return xyr_i
+
+        raise RuntimeError(
+            "No non-overlapping candidates found. This should not happen."
+        )
 
 
 class TensorboardLaunchar:
@@ -199,9 +312,8 @@ class JobScheduler:
                         continue
                     n_processes = len(gpu_info['processes'])
                     idx2n[gpu_idx] = n_processes
-                idx2n[1] += 1
                 idx, n_processes = sorted(idx2n.items(), key=lambda item: item[1])[0]
-                if n_processes < 2:
+                if n_processes < 1:
                     return idx
                 return -1
 
@@ -289,35 +401,15 @@ class EventFile:
                 pass
 
 
-def get_latest_runs(log_dir: Path) -> List[str]:
-    latest_runs = list()
-    for i in range(1, 51):
-        name = f'OPRLPgmcGot-SmallSims-nms300-rm_word-umv-sgd-ipo-rand{i}'
-        dates = ['2021-04-04', '2021-04-05']
-        runs = list()
-        for date in dates:
-            folder = log_dir / date / name
-            runs.extend([str(x) for x in folder.glob('*/')])
-        assert runs
-
-        latest_run = sorted(runs, reverse=True)[0]
-        latest_runs.append(latest_run)
-    return latest_runs
-
-
-# @st.cache(suppress_st_warning=True)
-def load_events(runs: List[str]) -> pd.DataFrame:
+@st.cache
+def load_event(run: str) -> pd.DataFrame:
     records = list()
-    pbar = st.progress(0.0)
-    for i, run in enumerate(runs, 1):
-        event_file = EventFile(list(Path(run).glob('events*'))[0])
-
-        for record in event_file:
-            record = asdict(record)
-            record['run'] = i
-            records.append(record)
-        pbar.progress(i / len(runs))
+    event_file = EventFile(list(Path(run).glob('events*'))[0])
+    for record in event_file:
+        record = asdict(record)
+        records.append(record)
     record_df = pd.DataFrame(records)
+    record_df = record_df.assign(run=run)
     return record_df
 
 
@@ -401,7 +493,9 @@ if __name__ == "__main__":
 
     saved_runs = list()
     all_runs = st.checkbox('all_runs')
+    latest_only = st.checkbox('latest_only')
     if directory_choice == 'log':
+        latest_config = dict()
         for folder_with_date in log_dir.glob('*/'):
             try:
                 folder_date = date.fromisoformat(folder_with_date.name)
@@ -411,7 +505,16 @@ if __name__ == "__main__":
             if folder_date >= earliest_date:
                 for saved_run in folder_with_date.glob('*/*/'):
                     if not regex or re.search(regex, str(saved_run)):
-                        saved_runs.append(saved_run)
+                        if latest_only:
+                            segs = str(saved_run).split('/')
+                            config = segs[-2]
+                            timestamp = str(folder_date) + ' ' + segs[-1]
+                            if config not in latest_config or latest_config[config][0] < timestamp:
+                                latest_config[config] = (timestamp, saved_run)
+                        else:
+                            saved_runs.append(saved_run)
+        if latest_only:
+            saved_runs = [v[1] for v in latest_config.values()]
     else:
         for saved_folder in imp_dir.glob('*/'):
             saved_runs.append(saved_folder)
@@ -420,7 +523,7 @@ if __name__ == "__main__":
     if not all_runs:
         selected_runs = st.multiselect('Saved run', saved_runs, help='Select saved runs to inspect.')
     else:
-        selected_runs = all_runs
+        selected_runs = saved_runs
     if selected_runs:
         # Op to launch tensorboard.
         if not ports_to_use:
@@ -622,12 +725,137 @@ if __name__ == "__main__":
 
     if selected_runs:
         with st.beta_expander('Analysis'):
-            for selected_run in selected_runs:
+            pbar = st.progress(0.0)
+            record_dfs = list()
+            ht_hparams = ht.hyperparameters
+            # HACK(j_luo) SGD uses different param names.
+            ht_hparams.remove('SGD')
+            ht_hparams.extend(['optim_cls', 'learning_rate', 'tgt_lang'])
+
+            for run_id, selected_run in enumerate(selected_runs, 1):
                 # Get all hparams.
                 hparams_path = Path(selected_run) / 'hparams.pth'
                 state_dict = torch.load(str(hparams_path))
-                # HACK(j_luo) SGD uses different param names.
-                hparams = {hp: state_dict[hp].value for hp in ht.hyperparameters if hp != 'SGD'}
-                hparams.update({hp: state_dict[hp].value for hp in ['optim_cls', 'learning_rate']})
-                st.write(hparams)
+                hparams = {hp: state_dict[hp].value for hp in ht_hparams}
 
+                # Extract events and incorporate hparams into the records as well.
+                record = load_event(selected_run)
+                record = record.assign(**hparams)
+                record_dfs.append(record)
+                pbar.progress(run_id / len(selected_runs))
+            record_df: pd.DataFrame = pd.concat(record_dfs, ignore_index=True)  # type: ignore
+            scores_df = record_df[record_df['tag'] == 'best_score'][['run', 'step', 'value'] + ht_hparams]
+            analysis_lang = st.selectbox('language', ['Gothic', 'Old Norse', 'Old English'], key='analysis_lang')
+            if analysis_lang == 'Gothic':
+                scores_df = scores_df[scores_df['tgt_lang'] == 'got']
+            elif analysis_lang == 'Old Norse':
+                scores_df = scores_df[scores_df['tgt_lang'] == 'non']
+            else:
+                scores_df = scores_df[scores_df['tgt_lang'] == 'ang']
+
+            cols_to_show = ['value'] + ht_hparams
+
+            best_score_df = scores_df.sort_values(by=['run', 'step']).pivot_table(
+                index='run', values=cols_to_show, aggfunc={col: 'last' for col in cols_to_show}).reset_index()  # type: ignore
+
+            col1, col2, col3, col4 = st.beta_columns(4)
+            heur = col1.radio('heur', [None, '+', '-'])
+            more = col2.radio('more', [None, '+', '-'])
+            big = col3.radio('big', [None, '+', '-'])
+            repr_mode = col4.radio('repr_mode', [None, 'state', 'word'])
+            hparam_mask = pd.Series([True] * len(best_score_df))
+            if heur:
+                hparam_mask &= best_score_df['heur_c'] == (1.0 if heur == '+' else 0.0)
+            if more:
+                hparam_mask &= best_score_df['puct_c'] == (5.0 if more == '+' else 1.0)
+            if big:
+                hparam_mask &= best_score_df['num_mcts_sims'] == (2000 if big == '+' else 300)
+            if repr_mode:
+                hparam_mask &= best_score_df['repr_mode'] == repr_mode
+
+            to_inspect = best_score_df[hparam_mask]
+            st.write(to_inspect)
+
+            # best_score_df.to_csv('best_score.tsv', sep='\t', index=False)
+
+            row_var = 'heur_c'
+            col_var = 'puct_c'
+            group_var = 'num_mcts_sims'
+            bar_var = 'play_strategy'
+            style_var = 'use_max_value'
+            hue_var = 'repr_mode'
+
+            row_values = sorted(set(to_inspect[row_var]))
+            col_values = sorted(set(to_inspect[col_var]))
+            group_values = sorted(set(to_inspect[group_var]))
+
+            min_unit = 0.05
+            max_value = math.ceil(to_inspect['value'].max() / min_unit) * min_unit  # type: ignore
+            min_value = math.floor(to_inspect['value'].min() / min_unit) * min_unit  # type: ignore
+
+            swarm_tr = SwarmTransformer()
+
+            def get_bar_chart(bar_df):
+                charts = list()
+                for i, v in enumerate(sorted(set(bar_df[bar_var]))):
+                    points_subset_df = bar_df[bar_df[bar_var] == v].assign(x=i)
+                    points_subset = points_subset_df[['x', 'value']].values
+                    points_subset = swarm_tr(points_subset)
+                    points_df = pd.DataFrame(points_subset, columns=['x', 'y'])
+                    points_df = pd.concat(
+                        [points_df, points_subset_df[[hue_var, style_var]].reset_index(drop=True)], axis=1)
+                    charts.append(alt.Chart(points_df, width=40).mark_point(filled=True, size=50).encode(
+                        x='x:Q',
+                        y=alt.Y('y:Q',
+                                scale=alt.Scale(domain=(min_value, max_value))),
+                        color=f'{hue_var}:N',
+                        shape=f'{style_var}:N'))
+                return alt.layer(*charts)
+                # return alt.Chart(bar_df, width=40).mark_point(filled=True, size=50).encode(
+                #     # x=alt.X(f'jitter:Q',
+                #     #         title=None,
+                #     #         axis=alt.Axis(values=[0], ticks=False, grid=False, labels=False),
+                #     #         scale=alt.Scale()),
+                #     x=f'{bar_var}:N',
+                #     y=alt.Y('value:Q',
+                #             scale=alt.Scale(domain=(min_value, max_value))),
+                #     color=f'{hue_var}:N',
+                #     shape=f'{style_var}:N')
+                # column=alt.Column(f'{bar_var}:N')
+                # ).transform_calculate(
+                #     # Generate Gaussian jitter with a Box-Muller transform
+                #     jitter='0'  # 'clamp(0.1 * sqrt(-2*log(random()))*cos(2*PI*random()), -0.1, 0.1)'
+                # )
+
+            def get_group_chart(grid_df, title: str = ''):
+                rcharts = list()
+                for gv in group_values:
+                    bar_df = grid_df[grid_df[group_var] == gv]
+                    rcharts.append(get_bar_chart(bar_df))
+                return alt.hconcat(*rcharts,
+                                   title=alt.TitleParams(title,
+                                                         anchor='middle',
+                                                         align='center',
+                                                         orient='top'))
+
+            chart = alt.vconcat()
+            for r, rv in enumerate(row_values):
+                rcharts = list()
+                for cv in col_values:
+                    grid_df = to_inspect[(to_inspect[row_var] == rv) & (to_inspect[col_var] == cv)]
+                    # Only add title at the top row.
+                    title = f'{col_var} = {cv}' if r == 0 else ''
+                    rcharts.append(get_group_chart(grid_df, title=title))
+                chart &= alt.hconcat(*rcharts,
+                                     title=alt.TitleParams(f'{row_var} = {rv}',
+                                                           anchor='middle',
+                                                           align='center',
+                                                           orient='right'))
+            chart.configure_view(stroke=None)
+
+            st.write(chart)
+
+            average_col = st.selectbox('average_col', [None, 'repr_mode', 'puct_c',
+                                                       'play_strategy', 'use_max_value', 'heur_c', 'num_mcts_sims'])
+            if average_col:
+                st.write(to_inspect.pivot_table(index=average_col, values='value', aggfunc='mean'))
