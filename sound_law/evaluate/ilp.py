@@ -1,28 +1,24 @@
 from __future__ import annotations
-from collections import Counter
-from typing import Tuple
 
 import bisect
 import logging
 import pickle
 import random
 import re
-from dataclasses import dataclass, field, astuple
-from itertools import combinations, chain
-from typing import ClassVar, Dict, Iterator, List, Optional, Set, Union
+import typing
+from collections import Counter
+from dataclasses import astuple, dataclass, field
+from itertools import chain, combinations
+from typing import ClassVar, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 import pandas as pd
-from ortools.linear_solver import pywraplp
-
-# from sound_law.rl.env import ToyEnv
-# from sound_law.rl.mcts_cpp import \
-#     PyNull_abc  # pylint: disable=no-name-in-module
-# from sound_law.rl.trajectory import VocabState
 import sound_law.rl.rule as rule
 from dev_misc import add_argument, g
+from ortools.linear_solver import pywraplp
 from sound_law.main import setup
 # from sound_law.data.alphabet import Alphabet
 from sound_law.rl.action import SoundChangeAction
+from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.rule import HandwrittenRule
 
 
@@ -75,7 +71,9 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                    match_proportion: float = .7,
                    k_matches: int = 10,
                    max_power_set_size: int = 3,
-                   use_greedy_growth: bool = False) -> List[List[int, List[int]]]:
+                   use_greedy_growth: bool = False,
+                   interpret_matching: bool = False,
+                   silent: bool = False) -> Tuple[List[Tuple[int, List[int]]], int, float, int, Dict[int, int]]:
     '''Finds the optimal matching of rule blocks in the gold ruleset to 0, 1, or 2 rules in the candidate ruleset. Frames the problem as an integer linear program. Returns a list of tuples with the matching.'''
 
     solver = pywraplp.Solver.CreateSolver('SCIP')  # TODO investigate other solvers
@@ -179,72 +177,6 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                 for var_name_prefix, power_set_size in config_pairs:
                     highest_cost = update_top_candidates(highest_cost,
                                                          generate_match_candidates(var_name_prefix, power_set_size))
-
-            # for j in range(len(cand)):
-            #     rule = cand[j]
-            #     a_var_name = 'a_' + str(i) + ',(' + str(j) + ')'
-            #     # print('cand:', j, rule)
-
-            #     # TODO(djwyen) add try/excepts to each other application of apply_action
-            #     try:
-            #         cand_state = env.apply_action(curr_state, rule)
-            #     except RuntimeError:
-            #         # this rule doesn't change anything, ie it has zero application sites. That causes the RuntimeError to be thrown.
-            #         # exclude this rule from consideration since it shouldn't be matched
-            #         pass
-            #     else:
-            #         cost = env.get_state_edit_dist(gold_state, cand_state)
-            #         new_tuple = (a_var_name, i, [j], cost)
-
-            #         # add this cost to the list if it's better than what we currently have
-            #         if len(paired_costs) < k_matches or cost < highest_cost:
-            #             if len(paired_costs) == k_matches:
-            #                 del paired_costs[-1]
-            #             bisect.insort_left(paired_costs, new_tuple)  # insert in sorted order
-            #             highest_cost = paired_costs[-1][3]  # update costs
-
-            # for j in range(len(cand)):
-            #     rule1 = cand[j]
-            #     for k in range(j + 1, len(cand)):
-            #         rule2 = cand[k]
-            #         b_var_name = 'b_' + str(i) + ',(' + str(j) + ',' + str(k) + ')'
-
-            #         try:
-            #             cand_state = env.apply_block(curr_state, [rule1, rule2])
-            #         except RuntimeError:
-            #             pass
-            #         else:
-            #             cost = env.get_state_edit_dist(gold_state, cand_state)
-            #             new_tuple = (b_var_name, i, [j, k], cost)
-
-            #             if len(paired_costs) < k_matches or cost < highest_cost:
-            #                 if len(paired_costs) == k_matches:
-            #                     del paired_costs[-1]
-            #                 bisect.insort_left(paired_costs, new_tuple)
-            #                 highest_cost = paired_costs[-1][3]
-
-            # for j in range(len(cand)):
-            #     rule1 = cand[j]
-            #     for k in range(j + 1, len(cand)):
-            #         rule2 = cand[k]
-            #         for l in range(k + 1, len(cand)):
-            #             rule3 = cand[l]
-            #             c_var_name = 'c_' + str(i) + ',(' + str(j) + ',' + str(k) + ',' + str(l) + ')'
-
-            #             try:
-            #                 cand_state = env.apply_block(curr_state, [rule1, rule2, rule3])
-            #             except RuntimeError:
-            #                 pass
-            #             else:
-            #                 cost = env.get_state_edit_dist(gold_state, cand_state)
-            #                 new_tuple = (c_var_name, i, [j, k, l], cost)
-
-            #                 if len(paired_costs) < k_matches or cost < highest_cost:
-            #                     if len(paired_costs) == k_matches:
-            #                         del paired_costs[-1]
-            #                     bisect.insort_left(paired_costs, new_tuple)
-            #                     highest_cost = paired_costs[-1][3]
-
             # now that we have the k matchings with the lowest edit distance with this particular gold block, we can add the variables corresponding to these matchings to each of the relevant constraints:
             for match_cand in paired_costs:
                 cost, var_name, i, cand_rules = astuple(match_cand)
@@ -256,9 +188,20 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                 objective.SetCoefficient(v[var_name], cost)
                 size_cnt[len(cand_rules)] += 1
 
+            # Match gold with a null candidate rule. Note that there is no constraint on the candidate side.
+            null_cost = env.get_state_edit_dist(gold_state, curr_state)
+            var_name = f'pss0_{i},(-1)'  # -1 stands for the null candidate rule.
+            v[var_name] = null_match = solver.IntVar(0, 1, var_name)
+            c[f'gold_{i}'].SetCoefficient(null_match, 1)
+            c['min_match'].SetCoefficient(null_match, 1)
+            objective.SetCoefficient(null_match, null_cost)
+
             # update the state and continue onto the next block in gold
             curr_state = gold_state
-    print('Counts for all top power set sizes', size_cnt)
+
+    if not silent:
+        print('Counts for all top power set sizes', size_cnt)
+        print(f'Number of action gold blocks: {number_active_gold_blocks}')
 
     # we now update min_match with bounds based on the number of actually active gold blocks
     min_match_number = int(match_proportion * number_active_gold_blocks)
@@ -266,12 +209,15 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
 
     # solve the ILP
     objective.SetMinimization()
-    print("Solving the ILP...")
-    solver.Solve()
+    if not silent:
+        print("Solving the ILP...")
+    status = solver.Solve()
 
     # reconstruct the solution and return it
-    print('Minimum objective function value = %f' % solver.Objective().Value())
-    print('Minimum objective function value per match = %f' % (solver.Objective().Value() / min_match_number))
+    final_value = solver.Objective().Value()
+    if not silent:
+        print('Minimum objective function value = %f' % final_value)
+        print('Minimum objective function value per match = %f' % (final_value / min_match_number))
 
     # interpret solution as a matching, returning a list pairing indices of blocks in gold to a list of indices of matched rules in cand
     matching = []
@@ -290,17 +236,17 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
             match = [gold_var, cand_vars]
             matching.append(match)
 
-            if g.interpret_matching:
+            if interpret_matching:
                 gold_id, cand_ids = match
                 gold_block = gold[gold_id]
-                cand_rules = [cand[j] for j in cand_ids]
+                cand_rules = [cand[j] if j > -1 else None for j in cand_ids]
                 cost = objective.GetCoefficient(v[name])
                 print('---')
                 print('gold block', gold_id, ':', gold_block)
                 print('matched to rules:', cand_rules)
                 print('with dist', str(cost))
 
-    return matching
+    return matching, status, final_value, min_match_number, size_cnt
 
 
 if __name__ == "__main__":
@@ -308,8 +254,10 @@ if __name__ == "__main__":
     add_argument("k_matches", dtype=int, default=10, msg="Number of matches to consider per gold block")
     add_argument("interpret_matching", dtype=bool, default=False, msg="Flag to print out the rule matching")
     add_argument('cand_path', dtype=str, default='data/toy_cand_rules.txt', msg='Path to the candidate rule file.')
+    add_argument('out_path', dtype=str, msg='File to write the results to.')
     add_argument('max_power_set_size', dtype=int, default=3, msg='Maximum power set size.')
     add_argument("use_greedy_growth", dtype=bool, default=False, msg="Flag to grow the kept candidates greedily.")
+    add_argument("silent", dtype=bool, default=False, msg="Flag to suppress printing.")
 
     manager, gold, states, refs = rule.simulate()
     initial_state = states[0]
@@ -330,5 +278,8 @@ if __name__ == "__main__":
 
     env = manager.env
 
-    matching = match_rulesets(gold_blocks, cand, env,
-                              g.match_proportion, g.k_matches, g.max_power_set_size, g.use_greedy_growth)
+    results = match_rulesets(gold_blocks, cand, env,
+                             g.match_proportion, g.k_matches, g.max_power_set_size, g.use_greedy_growth, g.interpret_matching, g.silent)
+    if g.out_path:
+        with open(g.out_path, 'wb') as fout:
+            pickle.dump(results, fout)

@@ -84,9 +84,18 @@ class SoundChangeEnv(PyEnv):
                                     action.d_post_id)
 
     def apply_block(self, state: VocabState, block: List[SoundChangeAction]) -> VocabState:
+        """Apply action to a block of actions sequentially. Only raise error if none of the rules apply."""
         curr_state = state
+        applied = False
         for action in block:
-            curr_state = self.apply_action(curr_state, action)
+            try:
+                curr_state = self.apply_action(curr_state, action)
+            except RuntimeError:
+                continue
+            else:
+                applied = True
+        if not applied:
+            raise RuntimeError(f'None of the rules in the block applies.')
         return curr_state
 
     def get_state_edit_dist(self, state1: VocabState, state2: VocabState) -> float:
