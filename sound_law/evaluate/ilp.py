@@ -73,7 +73,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                    max_power_set_size: int = 3,
                    use_greedy_growth: bool = False,
                    interpret_matching: bool = False,
-                   silent: bool = False) -> Tuple[List[Tuple[int, List[int]]], int, float, int, Dict[int, int]]:
+                   silent: bool = False) -> Tuple[List[Tuple[int, List[int]]], int, float, float, Dict[int, int]]:
     '''Finds the optimal matching of rule blocks in the gold ruleset to 0, 1, or 2 rules in the candidate ruleset. Frames the problem as an integer linear program. Returns a list of tuples with the matching.'''
 
     solver = pywraplp.Solver.CreateSolver('SCIP')  # TODO investigate other solvers
@@ -102,6 +102,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
     curr_state = env.start
     objective = solver.Objective()
     size_cnt = Counter()
+    total_null_costs = 0.0
     for i in range(len(gold)):
         # as an optimization, we only create variables for the best k_matches that a given gold block has with collections of rules in candidate. We assume that matchings with higher cost would never be chosen anyway and won't affect the solution, so they can just be excluded from the linear program.
         highest_cost = None
@@ -111,6 +112,8 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
         # print('block', i, block)
         try:
             gold_state = env.apply_block(curr_state, block)
+            null_cost = env.get_state_edit_dist(gold_state, curr_state)
+            total_null_costs += null_cost
         except RuntimeError:
             # this block in gold doesn't actually apply to any items, causing the RuntimeError
             # it's nonsensical to discuss what rules are most similar to a block that does nothing so we skip this block: we don't match it with anything, and we don't even give it a variable for the ILP
@@ -184,16 +187,15 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                 c['gold_' + str(i)].SetCoefficient(v[var_name], 1)
                 for rule_index in cand_rules:
                     c['cand_' + str(rule_index)].SetCoefficient(v[var_name], 1)
-                c['min_match'].SetCoefficient(v[var_name], 1)
+                c['min_match'].SetCoefficient(v[var_name], null_cost)
                 objective.SetCoefficient(v[var_name], cost)
                 size_cnt[len(cand_rules)] += 1
 
             # Match gold with a null candidate rule. Note that there is no constraint on the candidate side.
-            null_cost = env.get_state_edit_dist(gold_state, curr_state)
             var_name = f'pss0_{i},(-1)'  # -1 stands for the null candidate rule.
             v[var_name] = null_match = solver.IntVar(0, 1, var_name)
             c[f'gold_{i}'].SetCoefficient(null_match, 1)
-            c['min_match'].SetCoefficient(null_match, 1)
+            c['min_match'].SetCoefficient(null_match, null_cost)
             objective.SetCoefficient(null_match, null_cost)
 
             # update the state and continue onto the next block in gold
@@ -204,8 +206,9 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
         print(f'Number of action gold blocks: {number_active_gold_blocks}')
 
     # we now update min_match with bounds based on the number of actually active gold blocks
-    min_match_number = int(match_proportion * number_active_gold_blocks)
-    c['min_match'].SetBounds(min_match_number, number_active_gold_blocks)
+    # min_match_number = int(match_proportion * number_active_gold_blocks)
+    # c['min_match'].SetBounds(min_match_number, number_active_gold_blocks)
+    c['min_match'].SetBounds(match_proportion * total_null_costs, total_null_costs)
 
     # solve the ILP
     objective.SetMinimization()
@@ -217,7 +220,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
     final_value = solver.Objective().Value()
     if not silent:
         print('Minimum objective function value = %f' % final_value)
-        print('Minimum objective function value per match = %f' % (final_value / min_match_number))
+        print('Minimum objective function value percentage = %f' % (1.0 - final_value / total_null_costs))
 
     # interpret solution as a matching, returning a list pairing indices of blocks in gold to a list of indices of matched rules in cand
     matching = []
@@ -246,7 +249,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                 print('matched to rules:', cand_rules)
                 print('with dist', str(cost))
 
-    return matching, status, final_value, min_match_number, size_cnt
+    return matching, status, final_value, total_null_costs, size_cnt
 
 
 if __name__ == "__main__":
