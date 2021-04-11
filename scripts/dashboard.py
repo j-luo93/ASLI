@@ -745,57 +745,53 @@ if __name__ == "__main__":
                 pbar.progress(run_id / len(selected_runs))
             record_df: pd.DataFrame = pd.concat(record_dfs, ignore_index=True)  # type: ignore
             scores_df = record_df[record_df['tag'] == 'best_score'][['run', 'step', 'value'] + ht_hparams]
-            analysis_lang = st.selectbox('language', ['Gothic', 'Old Norse', 'Old English'], key='analysis_lang')
-            if analysis_lang == 'Gothic':
-                scores_df = scores_df[scores_df['tgt_lang'] == 'got']
-            elif analysis_lang == 'Old Norse':
-                scores_df = scores_df[scores_df['tgt_lang'] == 'non']
-            else:
-                scores_df = scores_df[scores_df['tgt_lang'] == 'ang']
+            # analysis_lang = st.selectbox('language', ['Gothic', 'Old Norse', 'Old English'], key='analysis_lang')
+            # if analysis_lang == 'Gothic':
+            #     scores_df = scores_df[scores_df['tgt_lang'] == 'got']
+            # elif analysis_lang == 'Old Norse':
+            #     scores_df = scores_df[scores_df['tgt_lang'] == 'non']
+            # else:
+            #     scores_df = scores_df[scores_df['tgt_lang'] == 'ang']
 
             cols_to_show = ['value'] + ht_hparams
 
             best_score_df = scores_df.sort_values(by=['run', 'step']).pivot_table(
                 index='run', values=cols_to_show, aggfunc={col: 'last' for col in cols_to_show}).reset_index()  # type: ignore
 
-            col1, col2, col3, col4 = st.beta_columns(4)
+            col1, col2 = st.beta_columns(2)
             heur = col1.radio('heur', [None, '+', '-'])
-            more = col2.radio('more', [None, '+', '-'])
-            big = col3.radio('big', [None, '+', '-'])
-            repr_mode = col4.radio('repr_mode', [None, 'state', 'word'])
+            big = col2.radio('big', [None, '+', '-'])
             hparam_mask = pd.Series([True] * len(best_score_df))
             if heur:
                 hparam_mask &= best_score_df['heur_c'] == (1.0 if heur == '+' else 0.0)
-            if more:
-                hparam_mask &= best_score_df['puct_c'] == (5.0 if more == '+' else 1.0)
             if big:
                 hparam_mask &= best_score_df['num_mcts_sims'] == (2000 if big == '+' else 300)
-            if repr_mode:
-                hparam_mask &= best_score_df['repr_mode'] == repr_mode
+            hparam_mask &= (best_score_df['puct_c'] == 1.0) & (best_score_df['repr_mode'] == 'state')
 
             to_inspect = best_score_df[hparam_mask]
             st.write(to_inspect)
 
             # best_score_df.to_csv('best_score.tsv', sep='\t', index=False)
 
-            row_var = 'heur_c'
-            col_var = 'puct_c'
+            row_var = 'tgt_lang'
+            col_var = 'play_strategy'
             group_var = 'num_mcts_sims'
-            bar_var = 'play_strategy'
+            bar_var = 'heur_c'
             style_var = 'use_max_value'
-            hue_var = 'repr_mode'
 
-            row_values = sorted(set(to_inspect[row_var]))
-            col_values = sorted(set(to_inspect[col_var]))
-            group_values = sorted(set(to_inspect[group_var]))
+            def sort_values(values):
+                if 'got' in values:
+                    return ['got', 'non', 'ang']
+                else:
+                    return sorted(values)
 
-            min_unit = 0.05
-            max_value = math.ceil(to_inspect['value'].max() / min_unit) * min_unit  # type: ignore
-            min_value = math.floor(to_inspect['value'].min() / min_unit) * min_unit  # type: ignore
+            row_values = sort_values(set(to_inspect[row_var]))  # type: ignore
+            col_values = sort_values(set(to_inspect[col_var]))  # type: ignore
+            group_values = sort_values(set(to_inspect[group_var]))  # type: ignore
 
             swarm_tr = SwarmTransformer()
 
-            def get_bar_chart(bar_df):
+            def get_bar_chart(bar_df, min_value: float, max_value: float):
                 charts = list()
                 for i, v in enumerate(sorted(set(bar_df[bar_var]))):
                     points_subset_df = bar_df[bar_df[bar_var] == v].assign(x=i)
@@ -803,12 +799,12 @@ if __name__ == "__main__":
                     points_subset = swarm_tr(points_subset)
                     points_df = pd.DataFrame(points_subset, columns=['x', 'y'])
                     points_df = pd.concat(
-                        [points_df, points_subset_df[[hue_var, style_var]].reset_index(drop=True)], axis=1)
+                        [points_df, points_subset_df[[bar_var, style_var]].reset_index(drop=True)], axis=1)
                     charts.append(alt.Chart(points_df, width=40).mark_point(filled=True, size=50).encode(
                         x='x:Q',
                         y=alt.Y('y:Q',
-                                scale=alt.Scale(domain=(min_value, max_value))),
-                        color=f'{hue_var}:N',
+                                scale=alt.Scale(domain=(min_value, max_value), nice=False)),
+                        color=f'{bar_var}:N',
                         shape=f'{style_var}:N'))
                 return alt.layer(*charts)
                 # return alt.Chart(bar_df, width=40).mark_point(filled=True, size=50).encode(
@@ -827,11 +823,11 @@ if __name__ == "__main__":
                 #     jitter='0'  # 'clamp(0.1 * sqrt(-2*log(random()))*cos(2*PI*random()), -0.1, 0.1)'
                 # )
 
-            def get_group_chart(grid_df, title: str = ''):
+            def get_group_chart(grid_df, min_value: float, max_value: float, title: str = ''):
                 rcharts = list()
                 for gv in group_values:
                     bar_df = grid_df[grid_df[group_var] == gv]
-                    rcharts.append(get_bar_chart(bar_df))
+                    rcharts.append(get_bar_chart(bar_df, min_value, max_value))
                 return alt.hconcat(*rcharts,
                                    title=alt.TitleParams(title,
                                                          anchor='middle',
@@ -839,13 +835,18 @@ if __name__ == "__main__":
                                                          orient='top'))
 
             chart = alt.vconcat()
+
+            min_unit = 0.05
             for r, rv in enumerate(row_values):
                 rcharts = list()
+                row_df = to_inspect[to_inspect[row_var] == rv]
+                min_value = math.floor(row_df['value'].min() / min_unit) * min_unit  # type: ignore
+                max_value = math.ceil(row_df['value'].max() / min_unit) * min_unit  # type: ignore
                 for cv in col_values:
                     grid_df = to_inspect[(to_inspect[row_var] == rv) & (to_inspect[col_var] == cv)]
                     # Only add title at the top row.
                     title = f'{col_var} = {cv}' if r == 0 else ''
-                    rcharts.append(get_group_chart(grid_df, title=title))
+                    rcharts.append(get_group_chart(grid_df, min_value, max_value, title=title))
                 chart &= alt.hconcat(*rcharts,
                                      title=alt.TitleParams(f'{row_var} = {rv}',
                                                            anchor='middle',
@@ -855,7 +856,7 @@ if __name__ == "__main__":
 
             st.write(chart)
 
-            average_col = st.selectbox('average_col', [None, 'repr_mode', 'puct_c',
-                                                       'play_strategy', 'use_max_value', 'heur_c', 'num_mcts_sims'])
+            average_col = st.selectbox('average_col',
+                                       [None, 'play_strategy', 'use_max_value', 'heur_c', 'num_mcts_sims'])
             if average_col:
                 st.write(to_inspect.pivot_table(index=average_col, values='value', aggfunc='mean'))
