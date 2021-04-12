@@ -1,3 +1,5 @@
+import pickle
+from sklearn.metrics import auc
 import json
 import math
 import re
@@ -12,7 +14,6 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
-# import seaborn as sns
 import altair as alt
 import numpy as np
 import pandas as pd
@@ -413,38 +414,38 @@ def load_event(run: str) -> pd.DataFrame:
     return record_df
 
 
-@st.cache
-def read_matching_score(path: str, cmd: str) -> float:
+# @st.cache
+def read_matching_score(path: str) -> float:
+    try:
+        with open(path, 'rb') as fin:
+            saved_results = pickle.load(fin)
+            matching, status, final_value, total_null_costs, size_cnt = saved_results
+            assert status == 0
+            return 1.0 - final_value / total_null_costs
+    except FileNotFoundError:
+        return -1
 
-    def rerun():
-        output = subprocess.run(f'{cmd} > {path}', shell=True, capture_output=True, text=True)
-        with open(path, 'a', encoding='utf8') as fout:
-            fout.write('\n' + output.stderr)
-        return output.stdout + '\n' + output.stderr
 
-    def extract(contents: str) -> float:
-        match = re.search(r'per match = ([\.\d]+)\b', contents).group(1)
-        return float(match)
-
-    with open(path, 'r', encoding='utf8') as fin:
-        contents = fin.read(-1).strip()
-        # If for some reason the contents is empty, rerun the evaluation.
-        if not contents:
-            contents = rerun()
-
-        if 'MPSOLVER_INFEASIBLE' in contents:
-            return -1
-
-        # Try to extract the score from the last line. If score if 0.0, it might be an indicator of infeasibile problems.
-        try:
-            match = extract(contents)
-            # Re-run to make sure it's not infeasible.
-            if match == 0.0:
-                match = extract(rerun())
-            st.write(path)
-            return match
-        except AttributeError:
-            return -1
+def read_matching_metrics(path_str: str) -> Tuple[float, pd.DataFrame]:
+    path = Path(path_str)
+    best_run = int((path / 'best_run').open('r').read(-1).strip())
+    saved_dict = torch.load(path / 'hparams.pth')
+    tgt_lang = saved_dict['tgt_lang'].value
+    records = list()
+    scores = [1.0]
+    for m in [0.2, 0.4, 0.6, 0.8, 1.0]:
+        for k in [10, 20, 30, 50, 100]:
+            for p in [1, 2, 3, 5, 10]:
+                score = read_matching_score(f'{path}/eval/{m}-{k}-{p}.pkl')
+                if k == 100 and p == 10:
+                    scores.append(score)
+                records.append({'match_proportion': m,
+                                'k_matches': k,
+                                'max_power_set_size': p,
+                                'score': score})
+    auc_score = auc([0, 0.2, 0.4, 0.6, 0.8, 1.0], scores)
+    match_df = pd.DataFrame(records)
+    return auc_score, match_df
 
 
 if __name__ == "__main__":
@@ -601,10 +602,10 @@ if __name__ == "__main__":
                             break
 
     # Job schedule.
+    lang2code = {'Gothic': 'Got', 'Old Norse': 'Non', 'Old English': 'Ang'}
     with st.beta_expander('Job schedule'):
         lang = st.selectbox('language', ['Gothic', 'Old Norse', 'Old English'])
-        lang2config = {'Gothic': 'Got', 'Old Norse': 'Non', 'Old English': 'Ang'}
-        lang2config = {k: 'OPRLPgmc' + v for k, v in lang2config.items()}
+        lang2config = {k: 'OPRLPgmc' + v for k, v in lang2code.items()}
         config = lang2config[lang]
         base_cmd = f'python sound_law/main.py --config {config} --mcts_config SmallSims --save_interval 1'
 
@@ -745,13 +746,13 @@ if __name__ == "__main__":
         else:
             rn_df = pd.read_csv(research_note_path, sep='\t')
         no_run = st.checkbox('no_run')
-        run = ''
+        path = ''
         if not no_run:
-            run = st.selectbox('Which run', saved_runs)
+            path = st.selectbox('Which run', saved_runs)
         note = st.text_area('Research note')
         if st.button('Add research note') and note:
             rn_df = rn_df.append({'Timestamp': datetime.now().strftime('%y-%m-%e %H:%M:%S'),
-                                  'Run': run,
+                                  'Run': path,
                                   'Note': note},
                                  ignore_index=True)
             rn_df.to_csv(research_note_path, sep='\t', index=False)
@@ -873,25 +874,39 @@ if __name__ == "__main__":
                 if average_col:
                     st.write(to_inspect.pivot_table(index=average_col, values='value', aggfunc='mean'))
             if st.checkbox('show matching'):
-                run = st.selectbox('which run', [None] + selected_runs)
-                if run is not None:
-                    best_run = int((run / 'best_run').open('r').read(-1).strip())
-                    saved_dict = torch.load(run / 'hparams.pth')
-                    tgt_lang = saved_dict['tgt_lang'].value
+                path = st.selectbox('which run', [None] + selected_runs)
+                if path is not None:
+                    auc_score, match_df = read_matching_metrics(path)
 
-                    base_cmd = f'python sound_law/evaluate/ilp.py --config OPRLPgmc{tgt_lang[0].upper()}{tgt_lang[1:]} --mcts_config SmallSims --cand_path {run}/eval/{best_run}.path --use_greedy_growth'
+                    chart = alt.Chart(match_df).mark_rect().encode(
+                        x='max_power_set_size:O',
+                        y='k_matches:O',
+                        color='score:Q',
+                        tooltip=[
+                            alt.Tooltip('max_power_set_size:O', title='max_power_set_size'),
+                            alt.Tooltip('k_matches:O', title='k_matches'),
+                            alt.Tooltip('score:Q', title='score'),
+                        ]
+                    ).facet(column='match_proportion')
+                    st.write(chart)
+                corr_data = list()
+                for i, run in enumerate(selected_runs, 1):
+                    auc_score, match_df = read_matching_metrics(run)
+                    lang = re.search(r'OPRLPgmc(\w\w\w)', str(run)).group(1).lower()
 
-                    saved_dict = torch.load(run / 'hparams.pth')
-                    tgt_lang = saved_dict['tgt_lang'].value
-                    records = list()
-                    for m in [0.2, 0.4, 0.6, 0.8, 1.0]:
-                        for k in [10, 20, 30, 50, 100]:
-                            for p in [1, 2, 3, 5, 10]:
-                                cmd = base_cmd + \
-                                    f' --match_proportion {m} --k_matches {k} --max_power_set_size {p}'
-                                records.append({'match_proportion': m,
-                                                'k_matches': k,
-                                                'max_power_set_size': p,
-                                                'score': read_matching_score(f'{run}/eval/{m}-{k}-{p}', cmd)})
-                    match_df = pd.DataFrame(records)
-                    st.write(match_df)
+                    is_complete = not bool((match_df['score'] == -1).sum())
+                    assert is_complete
+                    event_df = load_event(run)
+                    best_score = event_df[event_df['tag'] == 'best_score']['value'].max()
+                    corr_data.append((best_score, auc_score, lang))
+
+                corr_df = pd.DataFrame(corr_data, columns=['best_score', 'auc_score', 'lang'])
+                chart = alt.Chart(corr_df).mark_point().encode(
+                    x='best_score:Q',
+                    y='auc_score:Q',
+                    tooltip=[
+                        alt.Tooltip('best_score:Q', title='best_score'),
+                        alt.Tooltip('auc_score:Q', title='auc_score'),
+                    ]
+                ).interactive().facet(row='lang')
+                st.write(chart)

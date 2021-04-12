@@ -75,7 +75,7 @@ class SoundChangeAction:
                 return NULL_ID
             return cls.abc[unit]  # pylint: disable=unsubscriptable-object
 
-        return cls(cls.abc[before], to_int(after, 'a'),  # pylint: disable=unsubscriptable-object
+        return cls(to_int(before, 'a'), to_int(after, 'a'),  # pylint: disable=unsubscriptable-object
                    rtype,
                    to_int(pre, 'b'), to_int(d_pre, 'b'),
                    to_int(post, 'a'), to_int(d_post, 'a'))

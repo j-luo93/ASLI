@@ -235,6 +235,10 @@ class HandwrittenRule:
 
     @classmethod
     def from_str(cls, raw: str, ref: Optional[str] = None) -> HandwrittenRule:
+        raw = raw.strip()
+        if raw == 'STOP':
+            none = HandwrittenSegment.from_str(None)
+            return cls(none, none, 'basic', none, none, none, none, False, ref=ref)
 
         def get_segment(name: str) -> HS:
             return HandwrittenSegment.from_str(result.group(name))
