@@ -1,11 +1,19 @@
 import sound_law.rl.rule as rule
+from pathlib import Path
 from dev_misc import add_argument, g
 
 if __name__ == "__main__":
     add_argument("calc_metric", dtype=bool, default=False, msg="Whether to calculate the metrics.")
+    add_argument("out_path", dtype=str, msg="Path to the output file.")
 
     manager, gold, states, refs = rule.simulate()
     initial_state = states[0]
+    if g.in_path:
+        assert len(gold) == len(states) - 1
+        if g.out_path:
+            with Path(g.out_path).open('w', encoding='utf8') as fout:
+                for state in states:
+                    fout.write(f'{state.dist}\n')
 
     if g.calc_metric:
         # compute the similarity between the candidate ruleset and the gold standard ruleset

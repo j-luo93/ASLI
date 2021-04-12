@@ -874,33 +874,69 @@ if __name__ == "__main__":
                 if average_col:
                     st.write(to_inspect.pivot_table(index=average_col, values='value', aggfunc='mean'))
             if st.checkbox('show matching'):
-                path = st.selectbox('which run', [None] + selected_runs)
-                if path is not None:
-                    auc_score, match_df = read_matching_metrics(path)
+                # Show correlation.
+                # path = st.selectbox('which run', [None] + selected_runs)
+                # if path is not None:
+                #     auc_score, match_df = read_matching_metrics(path)
 
-                    chart = alt.Chart(match_df).mark_rect().encode(
-                        x='max_power_set_size:O',
-                        y='k_matches:O',
-                        color='score:Q',
-                        tooltip=[
-                            alt.Tooltip('max_power_set_size:O', title='max_power_set_size'),
-                            alt.Tooltip('k_matches:O', title='k_matches'),
-                            alt.Tooltip('score:Q', title='score'),
-                        ]
-                    ).facet(column='match_proportion')
-                    st.write(chart)
+                #     chart = alt.Chart(match_df).mark_rect().encode(
+                #         x='max_power_set_size:O',
+                #         y='k_matches:O',
+                #         color='score:Q',
+                #         tooltip=[
+                #             alt.Tooltip('max_power_set_size:O', title='max_power_set_size'),
+                #             alt.Tooltip('k_matches:O', title='k_matches'),
+                #             alt.Tooltip('score:Q', title='score'),
+                #         ]
+                #     ).facet(column='match_proportion')
+                #     st.write(chart)
+                # corr_data = list()
+                # for i, run in enumerate(selected_runs, 1):
+                #     auc_score, match_df = read_matching_metrics(run)
+                #     lang = re.search(r'OPRLPgmc(\w\w\w)', str(run)).group(1).lower()
+
+                #     is_complete = not bool((match_df['score'] == -1).sum())
+                #     assert is_complete
+                #     event_df = load_event(run)
+                #     best_score = event_df[event_df['tag'] == 'best_score']['value'].max()
+                #     corr_data.append((best_score, auc_score, lang))
+                # corr_df = pd.DataFrame(corr_data, columns=['best_score', 'auc_score', 'lang'])
+
+                # Use more correlation data by adding truncated paths.
                 corr_data = list()
+                lang2length = {'got': 20, 'non': 40, 'ang': 60}
                 for i, run in enumerate(selected_runs, 1):
-                    auc_score, match_df = read_matching_metrics(run)
                     lang = re.search(r'OPRLPgmc(\w\w\w)', str(run)).group(1).lower()
+                    best_run = int((Path(run) / 'best_run').open('r').read(-1).strip())
+                    length = lang2length[lang]
+                    records = list()
+                    score_path = f'{run}/eval/{best_run}.path.scores'
+                    with open(score_path) as fin:
+                        truncated_dists = list()
+                        for line in fin:
+                            truncated_dists.append(float(line.strip()))
+                    start_dist = truncated_dists[0]
+                    # last_record = None
+                    for l in range(5, length + 1, 5):
+                        if l >= len(truncated_dists):
+                            break
+                        record = {'truncate_length': l,
+                                  'best_score': 1.0 - truncated_dists[l] / start_dist, 'lang': lang, 'run': run}
+                        scores = [1.0]
+                        for m in [0.2, 0.4, 0.6, 0.8, 1.0]:
+                            match_score = read_matching_score(f'{run}/eval/{m}-100-10-{l}.pkl')
+                            scores.append(match_score)
+                            record[f'match_{m}'] = match_score
+                        assert all(score > -1 for score in scores)
+                        auc_score = auc([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], scores)
+                        record['auc_score'] = auc_score
+                        # last_record = record
+                        corr_data.append(record)
+                    # corr_data.append(last_record)
+                corr_df = pd.DataFrame(corr_data)
+                corr_df.to_csv('corr_df.tsv', sep='\t', index=False)
+                st.write(corr_df)
 
-                    is_complete = not bool((match_df['score'] == -1).sum())
-                    assert is_complete
-                    event_df = load_event(run)
-                    best_score = event_df[event_df['tag'] == 'best_score']['value'].max()
-                    corr_data.append((best_score, auc_score, lang))
-
-                corr_df = pd.DataFrame(corr_data, columns=['best_score', 'auc_score', 'lang'])
                 chart = alt.Chart(corr_df).mark_point().encode(
                     x='best_score:Q',
                     y='auc_score:Q',

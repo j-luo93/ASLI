@@ -567,7 +567,7 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
     elif g.in_path:
         with open(g.in_path, 'r', encoding='utf8') as fin:
             lines = [line.strip() for line in fin.readlines()]
-            gold = get_actions(lines, range(len(lines)))
+            gold = get_actions(lines)
     else:
         df = pd.read_csv('data/test_annotations.csv')
         df = df.dropna(subset=['ref no.'])

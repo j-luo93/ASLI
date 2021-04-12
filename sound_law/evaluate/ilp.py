@@ -73,7 +73,8 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                    max_power_set_size: int = 3,
                    use_greedy_growth: bool = False,
                    interpret_matching: bool = False,
-                   silent: bool = False) -> Tuple[List[Tuple[int, List[int]]], int, float, float, Dict[int, int]]:
+                   silent: bool = False,
+                   null_only: bool = False) -> Tuple[List[Tuple[int, List[int]]], int, float, float, Dict[int, int]]:
     '''Finds the optimal matching of rule blocks in the gold ruleset to 0, 1, or 2 rules in the candidate ruleset. Frames the problem as an integer linear program. Returns a list of tuples with the matching.'''
 
     solver = pywraplp.Solver.CreateSolver('SCIP')  # TODO investigate other solvers
@@ -120,6 +121,18 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
             pass
         else:
             number_active_gold_blocks += 1
+            # Match gold with a null candidate rule. Note that there is no constraint on the candidate side.
+            var_name = f'pss0_{i},(-1)'  # -1 stands for the null candidate rule.
+            v[var_name] = null_match = solver.IntVar(0, 1, var_name)
+            c[f'gold_{i}'].SetCoefficient(null_match, 1)
+            c['min_match'].SetCoefficient(null_match, null_cost)
+            objective.SetCoefficient(null_match, null_cost)
+
+            if null_only:
+                # update the state and continue onto the next block in gold
+                curr_state = gold_state
+                continue
+
             # actually loop over the variables and create variables for this block
 
             def generate_match_candidates(var_name_prefix: str, power_set_size: int,
@@ -191,13 +204,6 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                 objective.SetCoefficient(v[var_name], cost)
                 size_cnt[len(cand_rules)] += 1
 
-            # Match gold with a null candidate rule. Note that there is no constraint on the candidate side.
-            var_name = f'pss0_{i},(-1)'  # -1 stands for the null candidate rule.
-            v[var_name] = null_match = solver.IntVar(0, 1, var_name)
-            c[f'gold_{i}'].SetCoefficient(null_match, 1)
-            c['min_match'].SetCoefficient(null_match, null_cost)
-            objective.SetCoefficient(null_match, null_cost)
-
             # update the state and continue onto the next block in gold
             curr_state = gold_state
 
@@ -218,9 +224,22 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
 
     # reconstruct the solution and return it
     final_value = solver.Objective().Value()
+    max_cost = total_null_costs
+    if not null_only:
+        _, _, max_cost, _, _ = match_rulesets(gold,
+                                              cand,
+                                              env,
+                                              match_proportion,
+                                              k_matches,
+                                              max_power_set_size,
+                                              use_greedy_growth,
+                                              interpret_matching,
+                                              silent,
+                                              null_only=True)
+
     if not silent:
         print('Minimum objective function value = %f' % final_value)
-        print('Minimum objective function value percentage = %f' % (1.0 - final_value / total_null_costs))
+        print('Minimum objective function value percentage = %f' % (1.0 - final_value / max_cost))
 
     # interpret solution as a matching, returning a list pairing indices of blocks in gold to a list of indices of matched rules in cand
     matching = []
@@ -249,7 +268,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                 print('matched to rules:', cand_rules)
                 print('with dist', str(cost))
 
-    return matching, status, final_value, total_null_costs, size_cnt
+    return matching, status, final_value, max_cost, size_cnt
 
 
 if __name__ == "__main__":
@@ -261,11 +280,14 @@ if __name__ == "__main__":
     add_argument('max_power_set_size', dtype=int, default=3, msg='Maximum power set size.')
     add_argument("use_greedy_growth", dtype=bool, default=False, msg="Flag to grow the kept candidates greedily.")
     add_argument("silent", dtype=bool, default=False, msg="Flag to suppress printing.")
+    add_argument('cand_length', dtype=int, default=0, msg='Only take the first n candidate rules if positive.')
 
     manager, gold, states, refs = rule.simulate()
     initial_state = states[0]
 
     cand = read_rules_from_txt(g.cand_path)
+    if g.cand_length > 0:
+        cand = cand[:g.cand_length]
     # gold = read_rules_from_txt('data/toy_gold_rules.txt')
 
     # turn gold rules into singleton lists since we expect gold to be in the form of blocks
