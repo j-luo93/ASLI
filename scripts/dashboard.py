@@ -448,6 +448,16 @@ def read_matching_metrics(path_str: str) -> Tuple[float, pd.DataFrame]:
     return auc_score, match_df
 
 
+def load_stats(data_path: str) -> pd.DataFrame:
+    action_seq = pd.read_csv(str(Path(data_path) / 'action_seq.tsv'), sep='\t')
+    n_merger = action_seq['is_merger_bool'].sum()
+    n_split = action_seq['is_split_bool'].sum()
+    n_loss = action_seq['is_loss_bool'].sum()
+    n_irreg = (action_seq['num_aff'] < 2).sum()
+    records = {'n_merger': n_merger, 'n_split': n_split, 'n_loss': n_loss, 'n_irreg': n_irreg}
+    return pd.DataFrame([records])
+
+
 if __name__ == "__main__":
     earliest_date = st.sidebar.date_input('Earliest date',
                                           value=date.fromisoformat('2021-03-28'),
@@ -874,33 +884,38 @@ if __name__ == "__main__":
                 if average_col:
                     st.write(to_inspect.pivot_table(index=average_col, values='value', aggfunc='mean'))
             if st.checkbox('show matching'):
-                # Show correlation.
-                # path = st.selectbox('which run', [None] + selected_runs)
-                # if path is not None:
-                #     auc_score, match_df = read_matching_metrics(path)
+                # Get all matching scores.
+                path = st.selectbox('which run', [None] + selected_runs)
+                if path is not None:
+                    auc_score, match_df = read_matching_metrics(path)
 
-                #     chart = alt.Chart(match_df).mark_rect().encode(
-                #         x='max_power_set_size:O',
-                #         y='k_matches:O',
-                #         color='score:Q',
-                #         tooltip=[
-                #             alt.Tooltip('max_power_set_size:O', title='max_power_set_size'),
-                #             alt.Tooltip('k_matches:O', title='k_matches'),
-                #             alt.Tooltip('score:Q', title='score'),
-                #         ]
-                #     ).facet(column='match_proportion')
-                #     st.write(chart)
-                # corr_data = list()
-                # for i, run in enumerate(selected_runs, 1):
-                #     auc_score, match_df = read_matching_metrics(run)
-                #     lang = re.search(r'OPRLPgmc(\w\w\w)', str(run)).group(1).lower()
-
-                #     is_complete = not bool((match_df['score'] == -1).sum())
-                #     assert is_complete
-                #     event_df = load_event(run)
-                #     best_score = event_df[event_df['tag'] == 'best_score']['value'].max()
-                #     corr_data.append((best_score, auc_score, lang))
-                # corr_df = pd.DataFrame(corr_data, columns=['best_score', 'auc_score', 'lang'])
+                    chart = alt.Chart(match_df).mark_rect().encode(
+                        x='max_power_set_size:O',
+                        y='k_matches:O',
+                        color='score:Q',
+                        tooltip=[
+                            alt.Tooltip('max_power_set_size:O', title='max_power_set_size'),
+                            alt.Tooltip('k_matches:O', title='k_matches'),
+                            alt.Tooltip('score:Q', title='score'),
+                        ]
+                    ).facet(column='match_proportion')
+                    st.write(chart)
+                pbar = st.progress(0.0)
+                dfs = list()
+                all_match_results = list()
+                for i, run in enumerate(selected_runs, 1):
+                    auc_score, match_df = read_matching_metrics(run)
+                    lang = re.search(r'OPRLPgmc(\w\w\w)', str(run)).group(1).lower()
+                    match_df = match_df.assign(run=run, lang=lang)
+                    event_df = load_event(run)
+                    dfs.append(match_df)
+                    all_match_results.append((auc_score, match_df, event_df))
+                    pbar.progress(i / len(selected_runs))
+                with open('matching_results.pkl', 'wb') as fout:
+                    pickle.dump(all_match_results, fout)
+                match_df = pd.concat(dfs, ignore_index=True)
+                st.write(match_df)
+                match_df.to_csv('match_heatmap.tsv', sep='\t', index=False)
 
                 # Use more correlation data by adding truncated paths.
                 corr_data = list()
@@ -934,7 +949,7 @@ if __name__ == "__main__":
                         corr_data.append(record)
                     # corr_data.append(last_record)
                 corr_df = pd.DataFrame(corr_data)
-                corr_df.to_csv('corr_df.tsv', sep='\t', index=False)
+                # corr_df.to_csv('corr_df.tsv', sep='\t', index=False)
                 st.write(corr_df)
 
                 chart = alt.Chart(corr_df).mark_point().encode(
@@ -946,3 +961,51 @@ if __name__ == "__main__":
                     ]
                 ).interactive().facet(row='lang')
                 st.write(chart)
+            if st.checkbox('show synthetic results'):
+                stats_dfs = list()
+                record_dfs = list()
+                for run in selected_runs:
+                    record_df = load_event(run).assign(run=run)
+                    rand_idx = re.search(r'rand(\d+)', str(run)).group(1)
+                    stats_df = load_stats(f'data/wikt/pgmc-rand{rand_idx}').assign(run=run)
+                    stats_dfs.append(stats_df)
+                    record_dfs.append(record_df)
+                stats_df = pd.concat(stats_dfs, ignore_index=True)
+                record_df = pd.concat(record_dfs, ignore_index=True)  # type:ignore
+                best_score_df = record_df[record_df['tag'] == 'best_score'][['run', 'value', 'step']]
+                best_score_df = best_score_df.sort_values(by='run').pivot_table(
+                    index='run', values='value', aggfunc='max').reset_index()
+                stats_df = stats_df.merge(best_score_df, left_on='run', right_on='run')
+                stats_df = stats_df.rename(columns={'value': 'best_score'})
+                st.write(stats_df)
+
+                # st.bar_chart(stats_df['n_merger'].value_counts())
+                # st.bar_chart(stats_df['n_split'].value_counts())
+                # st.bar_chart(stats_df['n_loss'].value_counts())
+                st.bar_chart(stats_df['n_irreg'].value_counts())
+
+                # merger_box_plot = alt.Chart(stats_df).mark_boxplot().encode(
+                #     x='n_merger:O',
+                #     y='best_score:Q'
+                # )
+
+                # split_box_plot = alt.Chart(stats_df).mark_boxplot().encode(
+                #     x='n_split:O',
+                #     y='best_score:Q'
+                # )
+
+                # loss_box_plot = alt.Chart(stats_df).mark_boxplot().encode(
+                #     x='n_loss:O',
+                #     y='best_score:Q'
+                # )
+
+                box_plot = alt.Chart(stats_df).mark_circle().encode(
+                    x='n_irreg:O',
+                    y='best_score:Q'
+                )
+                st.write(box_plot)
+
+                # col1, col2, col3 = st.beta_columns(3)
+                # col1.write(merger_box_plot)
+                # col2.write(split_box_plot)
+                # col3.write(loss_box_plot)

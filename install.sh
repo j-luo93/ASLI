@@ -3,7 +3,7 @@ set -e
 function install_dep {
     cd $1
     pip install -r requirements.txt
-    pip install -e .
+    pip install --upgrade --no-deps --force-reinstall -e .
     cd ..
 }
 

@@ -22,7 +22,7 @@ from sound_law.rl.trajectory import VocabState, int2st
 from sound_law.utils import run_with_argument
 
 
-# @st.cache(hash_funcs={OnePairManager: id})
+@st.cache(hash_funcs={OnePairManager: id})
 def load_manager() -> OnePairManager:
     initiator = setup()
     initiator.run()
@@ -71,9 +71,35 @@ class ActionInfo:
 # @st.cache(suppress_st_warning=True, hash_funcs={OnePairManager: id, VocabState: id, SoundChangeEnv: id})
 
 
-def generate_episodes(manager: OnePairManager, num_episodes: int):
+def random_allocate(population_size: int, num_groups: int):
+    """Randomly allocate a population_size of `population_size` to `num_groups`, while ensuring every group has the same size."""
+    indices = list(range(population_size))
+    random.shuffle(indices)
+    group_size = population_size // num_groups
+    pop2group = dict()
+    for i in range(num_groups):
+        start = i * group_size
+        end = start + group_size
+        pop2group.update({k: i for k in indices[start: end]})
+    # The remaining population gets randomly assigned to a group (all disjoint).
+    overflow_pop = population_size - group_size * num_groups
+    overflow_groups = list()
+    overflow_i = 0
+    if overflow_pop:
+        overflow_groups = np.random.choice(num_groups, size=overflow_pop, replace=False)
+    groups = list()
+    for i in range(population_size):
+        if i in pop2group:
+            groups.append(pop2group[i])
+        else:
+            groups.append(overflow_groups[overflow_i])
+            overflow_i += 1
+    return groups
 
-    def sample_action(state: VocabState, step: int, played_path):
+
+def generate_episodes(manager: OnePairManager, num_episodes: int, site_threshold: int):
+
+    def sample_action(state: VocabState, step: int, played_path, is_irreg: bool):
         """Sample one action that is not STOP."""
         manager.env.evaluate(state,
                              np.zeros([6, len(manager.tgt_abc)], dtype='float32'),
@@ -84,12 +110,12 @@ def generate_episodes(manager: OnePairManager, num_episodes: int):
             action = get_action_from_path(new_path.get_last_action_vec())
             manager.env.clear_stats(state, True)
             num_aff = get_num_affected(manager.env, state, action)
-            if action.before_id != NULL_ID and num_aff >= 2:
+            if action.before_id != NULL_ID and ((is_irreg and num_aff < site_threshold) or (not is_irreg and num_aff >= site_threshold)):
                 if played_path is None:
                     played_path = new_path
                 else:
                     played_path.merge(new_path)
-                return action, played_path
+                return action, num_aff, played_path
 
     episode_status = st.text('Episode:')
     episode_pbar = st.progress(0.0)
@@ -98,17 +124,18 @@ def generate_episodes(manager: OnePairManager, num_episodes: int):
     config_df_records = list()
     states = list()
     action_seqs = list()
-    for episode in range(num_episodes):
+    num_steps = 10
+    num_irreg_targets = random_allocate(num_episodes, 11)
+    for episode, num_irreg_target in enumerate(num_irreg_targets):
         root = manager.env.start
         step_pbar.progress(0)
         n_merger = n_split = n_loss = 0
         played_path = None
         action_seq = list()
-        # tmp_states = list()
-        # print('==============================')
-        for step in range(10):
-            # print(f'Step {step}')
-            action, played_path = sample_action(root, step, played_path)
+        irreg_steps = np.random.choice(num_steps, size=num_irreg_target, replace=False)
+        for step in range(num_steps):
+            is_irreg = step in irreg_steps
+            action, num_aff, played_path = sample_action(root, step, played_path, is_irreg)
             is_merger_bool = is_merger(action, root, manager.tgt_abc)
             is_split_bool, num_aff = is_split(action, root, manager.tgt_abc, manager.env)
             is_loss_bool = is_loss(action)
@@ -124,7 +151,8 @@ def generate_episodes(manager: OnePairManager, num_episodes: int):
         action_seqs.append(action_seq)
         episode_pbar.progress((episode + 1) / num_episodes)
         episode_status.text(f'Episode: {episode + 1} / {num_episodes}')
-        config_df_records.append({'n_merger': n_merger, 'n_split': n_split, 'n_loss': n_loss})
+        config_df_records.append({'n_merger': n_merger, 'n_split': n_split, 'n_loss': n_loss,
+                                  'n_irreg': sum([action_info.num_aff < site_threshold for action_info in action_seq])})
     return pd.DataFrame(config_df_records), states, action_seqs
 
 
@@ -134,7 +162,7 @@ if __name__ == "__main__":
     sys.argv = 'dummy.py --config OPRLPgmcGot --mcts_config SmallSims --site_threshold 1 --dist_threshold 1000.0'.split()
     src_df = pd.read_csv(src_path, sep='\t')
     manager = load_manager()
-    config_df, states, action_seqs = generate_episodes(manager, 100)
+    config_df, states, action_seqs = generate_episodes(manager, 50, 2)
     st.write(config_df)
     st.subheader('n_merger')
     st.bar_chart(config_df['n_merger'].value_counts())
@@ -142,13 +170,15 @@ if __name__ == "__main__":
     st.bar_chart(config_df['n_split'].value_counts())
     st.subheader('n_loss')
     st.bar_chart(config_df['n_loss'].value_counts())
+    st.subheader('n_irreg')
+    st.bar_chart(config_df['n_irreg'].value_counts())
 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
 
     ax.scatter(
-        config_df["n_merger"] + np.random.random(100) * 0.3 - 0.15,
-        config_df["n_split"] + np.random.random(100) * 0.3 - 0.15,
+        config_df["n_merger"] + np.random.random(50) * 0.3 - 0.15,
+        config_df["n_split"] + np.random.random(50) * 0.3 - 0.15,
     )
 
     ax.set_xlabel("n_merger")
@@ -167,8 +197,8 @@ if __name__ == "__main__":
         tgt_df['split'] = 'train'
         out_folder = wikt_folder / f'pgmc-rand{i}'
         out_folder.mkdir(parents=True, exist_ok=True)
-        src_df.to_csv(str(out_folder / 'pgmc.tsv'), sep='\t', index=None)
-        tgt_df.to_csv(str(out_folder / f'rand{i}.tsv'), sep='\t', index=None)
+        src_df.to_csv(str(out_folder / 'pgmc.tsv'), sep='\t', index=False)
+        tgt_df.to_csv(str(out_folder / f'rand{i}.tsv'), sep='\t', index=False)
 
         action_records = list()
         for action_info in action_seq:
@@ -177,4 +207,4 @@ if __name__ == "__main__":
             action_records.append(record)
         action_df = pd.DataFrame(action_records)
 
-        action_df.to_csv(str(out_folder / 'action_seq.tsv'), sep='\t', index=None)
+        action_df.to_csv(str(out_folder / 'action_seq.tsv'), sep='\t', index=False)
