@@ -7,8 +7,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import ClassVar, Dict, List, Optional, Set, Tuple, Union
 
+import numpy as np
 import pandas as pd
-
 from dev_misc import add_argument, g
 from pypheature.nphthong import Nphthong
 from pypheature.process import (FeatureProcessor, NoMappingFound,
@@ -87,6 +87,12 @@ rtype_pat = ''.join([
     'VS',
     '|',
     'OGF',
+    '|',
+    'GBJ',
+    '|',
+    'GBW',
+    '|',
+    'GB',
     '|',
     'CLL',
     '|',
@@ -251,6 +257,9 @@ class HandwrittenRule:
         post = get_segment('post')
         d_post = get_segment('d_post')
         after = get_segment('after')
+        # HACK(j_luo) Some synthetically generated rules have stress information in the `after` position.
+        if after.has_stress():
+            after._raw_stress = None
         expandable = '[' in raw
 
         return cls(before, after, rtype, pre, d_pre, post, d_post, expandable, ref=ref)
@@ -275,7 +284,8 @@ class HandwrittenRule:
             tgt = self.pre if self.rtype == 'CLL' else self.post
             tgt_seg = tgt.to_segment()
             assert isinstance(tgt_seg, Nphthong) or tgt_seg.is_short()
-            after = f'{tgt_seg}ː{tgt.stress_str}'
+            # after = f'{tgt_seg}ː{tgt.stress_str}'
+            after = f'{tgt_seg}ː'
         elif self.rtype == 'GB':
             before_seg = self.before.to_segment()
             assert isinstance(before_seg, Nphthong)
@@ -565,9 +575,12 @@ def simulate(raw_inputs: Optional[List[Tuple[List[str], List[str], List[str]]]] 
         for ri in raw_inputs:
             gold.extend(get_actions(*ri))
     elif g.in_path:
-        with open(g.in_path, 'r', encoding='utf8') as fin:
-            lines = [line.strip() for line in fin.readlines()]
-            gold = get_actions(lines)
+        if str(g.in_path).endswith('tsv'):
+            lines = pd.read_csv(g.in_path, sep='\t')['action'].values  # type: ignore
+        else:
+            with open(g.in_path, 'r', encoding='utf8') as fin:
+                lines = [line.strip() for line in fin.readlines()]
+        gold = get_actions(lines)
     else:
         df = pd.read_csv('data/test_annotations.csv')
         df = df.dropna(subset=['ref no.'])

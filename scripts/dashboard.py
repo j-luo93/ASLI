@@ -1,7 +1,6 @@
-import pickle
-from sklearn.metrics import auc
 import json
 import math
+import pickle
 import re
 import subprocess
 import threading
@@ -20,8 +19,9 @@ import pandas as pd
 import psutil
 import streamlit as st
 import torch
-from google.protobuf.json_format import MessageToDict
-from tensorflow.python.summary.summary_iterator import summary_iterator
+from altair.vegalite.v4.schema.channels import Key
+from sklearn.metrics import auc
+from sound_law.utils import read_matching_score
 
 
 class SwarmTransformer:
@@ -352,112 +352,6 @@ def get_job_scheduler(job_queue_path: str) -> JobScheduler:
     return JobScheduler(job_queue_path)
 
 
-@dataclass
-class Record:
-    wall_time: float
-    tag: str
-    value: float
-    step: Optional[int] = None
-
-
-class EventFile:
-    """This is a wrapper class to access the records stored in an event file (produced by tensorboard)."""
-
-    def __init__(self, path: Union[Path, str]):
-        self.path = Path(path)
-
-    def __iter__(self) -> Iterator[Record]:
-        """`summary_iterator` yields a structured record that can be accessed by first calling `MessageToDict`.
-        Afterwards, it can be accessed like a normal dict with a structure as follows:
-
-        wallTime: float
-        (optional) fileVersion: str
-        (optional) step: int
-        (optional) summary:
-            value: [
-                tag: str
-                simpleValue: float
-            ]
-        Brackets mean it can have multiple values (like a list).
-        """
-        default_step = Counter()
-        for e in summary_iterator(str(self.path)):
-            e = MessageToDict(e)
-            wall_time = e['wallTime']
-            try:
-                v = e['summary']['value']
-                assert len(v) == 1
-                v = v[0]
-                tag = v['tag']
-                value = float(v['simpleValue'])
-                if value == 2.0:
-                    value = 1.0
-                try:
-                    step = int(e['step'])
-                except KeyError:
-                    step = default_step[tag]
-                    default_step[tag] += 1
-                yield Record(wall_time, tag, value, step=step)
-            except KeyError:
-                pass
-
-
-@st.cache
-def load_event(run: str) -> pd.DataFrame:
-    records = list()
-    event_file = EventFile(list(Path(run).glob('events*'))[0])
-    for record in event_file:
-        record = asdict(record)
-        records.append(record)
-    record_df = pd.DataFrame(records)
-    record_df = record_df.assign(run=run)
-    return record_df
-
-
-# @st.cache
-def read_matching_score(path: str) -> float:
-    try:
-        with open(path, 'rb') as fin:
-            saved_results = pickle.load(fin)
-            matching, status, final_value, total_null_costs, size_cnt = saved_results
-            assert status == 0
-            return 1.0 - final_value / total_null_costs
-    except FileNotFoundError:
-        return -1
-
-
-def read_matching_metrics(path_str: str) -> Tuple[float, pd.DataFrame]:
-    path = Path(path_str)
-    best_run = int((path / 'best_run').open('r').read(-1).strip())
-    saved_dict = torch.load(path / 'hparams.pth')
-    tgt_lang = saved_dict['tgt_lang'].value
-    records = list()
-    scores = [1.0]
-    for m in [0.2, 0.4, 0.6, 0.8, 1.0]:
-        for k in [10, 20, 30, 50, 100]:
-            for p in [1, 2, 3, 5, 10]:
-                score = read_matching_score(f'{path}/eval/{m}-{k}-{p}.pkl')
-                if k == 100 and p == 10:
-                    scores.append(score)
-                records.append({'match_proportion': m,
-                                'k_matches': k,
-                                'max_power_set_size': p,
-                                'score': score})
-    auc_score = auc([0, 0.2, 0.4, 0.6, 0.8, 1.0], scores)
-    match_df = pd.DataFrame(records)
-    return auc_score, match_df
-
-
-def load_stats(data_path: str) -> pd.DataFrame:
-    action_seq = pd.read_csv(str(Path(data_path) / 'action_seq.tsv'), sep='\t')
-    n_merger = action_seq['is_merger_bool'].sum()
-    n_split = action_seq['is_split_bool'].sum()
-    n_loss = action_seq['is_loss_bool'].sum()
-    n_irreg = (action_seq['num_aff'] < 2).sum()
-    records = {'n_merger': n_merger, 'n_split': n_split, 'n_loss': n_loss, 'n_irreg': n_irreg}
-    return pd.DataFrame([records])
-
-
 if __name__ == "__main__":
     earliest_date = st.sidebar.date_input('Earliest date',
                                           value=date.fromisoformat('2021-03-28'),
@@ -785,9 +679,9 @@ if __name__ == "__main__":
                     hparams = {hp: state_dict[hp].value for hp in ht_hparams}
 
                     # Extract events and incorporate hparams into the records as well.
-                    record = load_event(selected_run)
-                    record = record.assign(**hparams)
-                    record_dfs.append(record)
+                    match_record = load_event(selected_run)
+                    match_record = match_record.assign(**hparams)
+                    record_dfs.append(match_record)
                     pbar.progress(run_id / len(selected_runs))
                 record_df: pd.DataFrame = pd.concat(record_dfs, ignore_index=True)  # type: ignore
                 scores_df = record_df[record_df['tag'] == 'best_score'][['run', 'step', 'value'] + ht_hparams]
@@ -935,18 +829,18 @@ if __name__ == "__main__":
                     for l in range(5, length + 1, 5):
                         if l >= len(truncated_dists):
                             break
-                        record = {'truncate_length': l,
-                                  'best_score': 1.0 - truncated_dists[l] / start_dist, 'lang': lang, 'run': run}
+                        match_record = {'truncate_length': l,
+                                        'best_score': 1.0 - truncated_dists[l] / start_dist, 'lang': lang, 'run': run}
                         scores = [1.0]
                         for m in [0.2, 0.4, 0.6, 0.8, 1.0]:
                             match_score = read_matching_score(f'{run}/eval/{m}-100-10-{l}.pkl')
                             scores.append(match_score)
-                            record[f'match_{m}'] = match_score
+                            match_record[f'match_{m}'] = match_score
                         assert all(score > -1 for score in scores)
                         auc_score = auc([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], scores)
-                        record['auc_score'] = auc_score
+                        match_record['auc_score'] = auc_score
                         # last_record = record
-                        corr_data.append(record)
+                        corr_data.append(match_record)
                     # corr_data.append(last_record)
                 corr_df = pd.DataFrame(corr_data)
                 # corr_df.to_csv('corr_df.tsv', sep='\t', index=False)
@@ -964,25 +858,43 @@ if __name__ == "__main__":
             if st.checkbox('show synthetic results'):
                 stats_dfs = list()
                 record_dfs = list()
+                match_records = list()
                 for run in selected_runs:
                     record_df = load_event(run).assign(run=run)
                     rand_idx = re.search(r'rand(\d+)', str(run)).group(1)
+                    # rand_idx = re.search(r'rand-regress(\d+)', str(run)).group(1)
+                    # rand_idx = re.search(r'rand-merger(\d+)', str(run)).group(1)
+                    # stats_df = load_stats(f'data/wikt/pgmc-rand-regress{rand_idx}').assign(run=run)
+                    # stats_df = load_stats(f'data/wikt/pgmc-rand-merger{rand_idx}').assign(run=run)
                     stats_df = load_stats(f'data/wikt/pgmc-rand{rand_idx}').assign(run=run)
                     stats_dfs.append(stats_df)
                     record_dfs.append(record_df)
+                    scores = [1.0]
+                    match_record = {'run': run}
+                    for m in [0.2, 0.4, 0.6, 0.8, 1.0]:
+                        match_score = read_matching_score(f'{run}/eval/{m}-100-10.pkl')
+                        scores.append(match_score)
+                        match_record[f'match_{m}'] = match_score
+                    assert all(score > -1 for score in scores)
+                    auc_score = auc([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], scores)
+                    match_record['auc_score'] = auc_score
+                    match_records.append(match_record)
                 stats_df = pd.concat(stats_dfs, ignore_index=True)
                 record_df = pd.concat(record_dfs, ignore_index=True)  # type:ignore
+                match_df = pd.DataFrame(match_records)
                 best_score_df = record_df[record_df['tag'] == 'best_score'][['run', 'value', 'step']]
                 best_score_df = best_score_df.sort_values(by='run').pivot_table(
                     index='run', values='value', aggfunc='max').reset_index()
                 stats_df = stats_df.merge(best_score_df, left_on='run', right_on='run')
+                stats_df = stats_df.merge(match_df, left_on='run', right_on='run')
                 stats_df = stats_df.rename(columns={'value': 'best_score'})
                 st.write(stats_df)
 
-                # st.bar_chart(stats_df['n_merger'].value_counts())
+                # st.bar_chart(stats_df['n_regress'].value_counts())
+                st.bar_chart(stats_df['n_merger'].value_counts())
                 # st.bar_chart(stats_df['n_split'].value_counts())
                 # st.bar_chart(stats_df['n_loss'].value_counts())
-                st.bar_chart(stats_df['n_irreg'].value_counts())
+                # st.bar_chart(stats_df['n_irreg'].value_counts())
 
                 # merger_box_plot = alt.Chart(stats_df).mark_boxplot().encode(
                 #     x='n_merger:O',
@@ -999,11 +911,15 @@ if __name__ == "__main__":
                 #     y='best_score:Q'
                 # )
 
-                box_plot = alt.Chart(stats_df).mark_circle().encode(
+                box_plot = alt.Chart(stats_df).mark_boxplot().encode(
                     x='n_irreg:O',
-                    y='best_score:Q'
+                    # x='n_merger:O',
+                    # x='n_regress:O',
+                    # y='best_score:Q'
+                    y='auc_score:Q'
                 )
                 st.write(box_plot)
+                stats_df.to_csv('syn_regress.tsv', sep='\t', index=False)
 
                 # col1, col2, col3 = st.beta_columns(3)
                 # col1.write(merger_box_plot)

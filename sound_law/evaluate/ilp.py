@@ -155,7 +155,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
                 for combo in iterator:
                     cand_indices, cand_rules = list(zip(*combo))
                     try:
-                        cand_state = env.apply_block(curr_state, cand_rules)
+                        cand_state = env.apply_block(curr_state, cand_rules, strict=True)
                     except RuntimeError:
                         # this rule doesn't change anything, ie it has zero application sites. That causes the RuntimeError to be thrown.
                         # exclude this rule from consideration since it shouldn't be matched

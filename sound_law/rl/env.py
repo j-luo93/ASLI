@@ -83,15 +83,16 @@ class SoundChangeEnv(PyEnv):
                                     action.post_id,
                                     action.d_post_id)
 
-    def apply_block(self, state: VocabState, block: List[SoundChangeAction]) -> VocabState:
-        """Apply action to a block of actions sequentially. Only raise error if none of the rules apply."""
+    def apply_block(self, state: VocabState, block: List[SoundChangeAction], strict: bool = False) -> VocabState:
+        """Apply action to a block of actions sequentially. If `strict` is `False`, Only raise error if none of the rules apply."""
         curr_state = state
         applied = False
         for action in block:
             try:
                 curr_state = self.apply_action(curr_state, action)
             except RuntimeError:
-                continue
+                if strict:
+                    raise RuntimeError(f'Using strict mode, some rule in the block does not apply here.')
             else:
                 applied = True
         if not applied:
