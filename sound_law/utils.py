@@ -80,22 +80,24 @@ def read_matching_metrics(folder_path: PathLike) -> PDF:
 
     Returns:
         pd.DataFrame: the dataframe that summarizes all metrics. It contains the following columns:
-            match_name, match_proportion, k_matches, max_power_set_size, truncate_length and match_score.
+            match_name, match_proportion, k_matches, max_power_set_size, path_length, epoch, and match_score.
+            `epoch` is set to be `None`, reserved for the best run.
     """
     folder_path = Path(folder_path)
     # Pattern used for the majority of all matching results.
-    match_pat1 = re.compile(r'(?P<name>\w+)-(?P<mp>\d+)-(?P<km>\d+)-(?P<mpss>\d+)(-(?P<tl>\d+))?.pkl')
+    num = r'[\d\.]+'
+    match_pat1 = re.compile(rf'(?P<name>[a-zA-Z_]+)-(?P<mp>{num})-(?P<km>{num})-(?P<mpss>{num})(-(?P<pl>{num}))?\.pkl')
     # Pattern used for matching results with epoch number.
-    match_pat2 = re.compile(r'epoch(?P<epoch>\d+)-(?P<mp>\d+)-(?P<km>\d+)-(?P<mpss>\d+).pkl')
+    match_pat2 = re.compile(rf'epoch(?P<epoch>{num})-(?P<mp>{num})-(?P<km>{num})-(?P<mpss>{num})\.pkl')
 
     records = list()
-    for file_path in folder_path.glob('*.pkl'):
+    for file_path in folder_path.glob('eval/*.pkl'):
         match = match_pat1.match(file_path.name)
         if match is None:
-            matched_pat = 1
-        else:
             match = match_pat2.match(file_path.name)
             matched_pat = 2
+        else:
+            matched_pat = 1
 
         if match is None:
             continue
@@ -104,14 +106,14 @@ def read_matching_metrics(folder_path: PathLike) -> PDF:
         mp = match.group('mp')
         km = match.group('km')
         mpss = match.group('mpss')
-        tl = match.group('tl') if matched_pat == 1 else None
+        pl = match.group('pl') if matched_pat == 1 else None
         epoch = match.group('epoch') if matched_pat == 2 else None
         score = read_matching_score(file_path)
         records.append({'match_name': name,
                         'match_proportion': mp,
                         'k_matches': km,
                         'max_power_set_size': mpss,
-                        'truncate_length': tl,
+                        'path_length': pl,
                         'epoch': epoch,
                         'match_score': score})
     match_df = pd.DataFrame(records)
@@ -125,7 +127,7 @@ class Record:
     wall_time: float
     tag: str
     value: float
-    step: Optional[int] = None
+    epoch: Optional[int] = None
 
 
 class EventFile:
@@ -161,11 +163,11 @@ class EventFile:
                 if abs(value - 2.0) < 1e-6 and tag == 'best_score':
                     value = 1.0
                 try:
-                    step = int(e['step'])
+                    epoch = int(e['step'])
                 except KeyError:
-                    step = default_step[tag]
+                    epoch = default_step[tag]
                     default_step[tag] += 1
-                yield Record(wall_time, tag, value, step=step)
+                yield Record(wall_time, tag, value, epoch=epoch)
             except KeyError:
                 pass
 
@@ -197,7 +199,7 @@ def read_distance_metrics(run_folder: PathLike) -> PDF:
 
     Returns:
         PDF: a dataframe summarizing all results. It includes columns:
-            truncate_length, epoch, and distance_score.
+            path_length, epoch, and distance_score.
     """
     run_folder = Path(run_folder)
     records = list()
@@ -208,8 +210,8 @@ def read_distance_metrics(run_folder: PathLike) -> PDF:
             for line in fin:
                 truncated_dists.append(float(line))
         start_dist = truncated_dists[0]
-        for dist, l in enumerate(truncated_dists[1:], 1):
-            records.append({'truncate_length': l,
+        for l, dist in enumerate(truncated_dists[1:], 1):
+            records.append({'path_length': l,
                             'epoch': epoch,
                             'distance_score': 1.0 - dist / start_dist})
     record_df = pd.DataFrame(records)

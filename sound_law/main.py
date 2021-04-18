@@ -4,10 +4,10 @@ from typing import Optional
 
 import numpy as np
 import torch
-
 from dev_misc import Initiator, add_argument, g, parse_args
 from dev_misc.devlib.named_tensor import patch_named_tensors
 from dev_misc.trainlib import set_random_seeds
+
 from sound_law.config import a2c_reg, mcts_reg, reg, s2s_reg
 from sound_law.train.manager import OnePairManager, OneToManyManager
 

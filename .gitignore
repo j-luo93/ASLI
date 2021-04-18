@@ -105,7 +105,8 @@ ENV/
 .DS_Store
 .vscode
 /data
-log/
+log
+saved
 processed_log/
 notebooks/
 *.prof
@@ -113,7 +114,7 @@ notebooks/
 !sound_law/rl/mcts_cpp/*.cpp
 scripts/*
 dump/*
-cmdl/*
+cmd/*
 .testmondata
 overleaf/*
 grid/*
@@ -125,3 +126,4 @@ ini/*
 *.c
 *.html
 *.o
+out/
