@@ -26,6 +26,8 @@ add_argument('use_diacritics', dtype=bool, default=True, msg='Flag to use diacri
 add_argument('use_duplicate_phono', dtype=bool, default=True,
              msg='Whether to keep duplicate symbols based on their phonological features.')
 add_argument('noise_level', dtype=float, default=0.0, msg='Noise level on the target side.')
+add_argument('stress_included', dtype=bool, default=False,
+             msg='Flag to indicate that stress has already been included in the source language.')
 add_check(
     (Arg('use_duplicate_phono') == False) | (Arg('separate_output') == True) | (Arg('use_phono_features') == False))
 
@@ -168,7 +170,13 @@ class CognateRegistry:
             proto_ph_map = segments_dump['proto_ph_map']
             contents = [segments_dump['proto_ph_lst']]
             sources = ['dump']
-            std_func = handle_sequence_inputs(lambda s: proto_ph_map[s])
+
+            def map_to_proto_ph(s: str) -> str:
+                if '{' in s:
+                    return proto_ph_map[s[:-3]] + s[-3:]
+                return proto_ph_map[s]
+
+            std_func = handle_sequence_inputs(map_to_proto_ph)
             dist_mat = segments_dump['dist_mat']
             edges = segments_dump['edges']
             cl_map = segments_dump['cl_map']
@@ -195,9 +203,10 @@ class CognateRegistry:
         # Post-progress the unit seqs if needed.
         cols = ['post_unit_seq', 'id_seq', 'form']  # These are the columns to add.
         for lang in langs:
+            add_stress = lang == g.src_lang and not g.stress_included
             for df in self._lang2dfs[lang].values():
                 records = df['pre_unit_seq'].apply(postprocess, std_func=std_func,
-                                                   abc=abc, add_stress=(lang == g.src_lang)).tolist()
+                                                   abc=abc, add_stress=add_stress).tolist()
                 # NOTE(j_luo) Make sure to use the same index as the original `df` since duplicate indices indicate multiple references.
                 post = pd.DataFrame(records).set_index(df.index)
                 df[cols] = post[cols]

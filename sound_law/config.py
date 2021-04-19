@@ -2,9 +2,8 @@ from dataclasses import dataclass, make_dataclass
 from pathlib import Path
 from typing import Iterator, List, Tuple
 
-from inflection import camelize
-
 from dev_misc.arglib import Registry
+from inflection import camelize
 
 reg = Registry('config')
 a2c_reg = Registry('a2c_config')
@@ -301,6 +300,43 @@ class OPRLPgmcAng(OPRLFake):
     tgt_lang: str = 'ang'
     max_rollout_length: int = 60
     replay_buffer_size: int = 3000
+
+
+@reg
+class OPRLLatSpa(OPRLFake):
+    src_lang: str = 'la'
+    tgt_lang: str = 'es'
+    max_rollout_length: int = 40
+    replay_buffer_size: int = 2000
+    # Latin transcriptions include stress patterns.
+    stress_included: bool = True
+
+
+@reg
+class OPRLLatIta(OPRLLatSpa):
+    tgt_lang: str = 'it'
+
+
+@reg
+class OPRLLatFra(OPRLLatSpa):
+    tgt_lang: str = 'fr'
+
+
+@reg
+class OPRLSlaProRus(OPRLLatSpa):
+    # Proto-Slavic transcriptions do not have stress patterns, but they are very free so we choose to ignore stress altogether.
+    src_lang: str = 'sla-pro'
+    tgt_lang: str = 'ru'
+
+
+@reg
+class OPRLSlaProUkr(OPRLSlaProRus):
+    tgt_lang: str = 'uk'
+
+
+@reg
+class OPRLSlaProPol(OPRLSlaProRus):
+    tgt_lang: str = 'pl'
 
 
 @mcts_reg

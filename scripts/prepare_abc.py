@@ -282,7 +282,8 @@ if __name__ == "__main__":
 
     # Add some phones to the dataset -- they might not be present in the original data.
     added_phones = ['oːː', 'eːː', 'õː', 'ĩː', 'xʷ', 'gʷ', 'hʷ', 'ay', 'iuː', 'ioː',
-                    'io', 'eːo', 'æa', 'æːa', 'eo', 'iːu', 'iu', 'ɣː', 'ðː', 'wː', 'θː', 'βː', 'øy']
+                    'io', 'eːo', 'æa', 'æːa', 'eo', 'iːu', 'iu', 'ɣː', 'ðː', 'wː', 'θː', 'βː', 'øy',
+                    'tʲː', 'dʲː']
     words_df = add_phones(raw_words_df, added_phones)
     st.write(f'{", ".join(added_phones)}')
 

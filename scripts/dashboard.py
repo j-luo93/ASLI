@@ -506,10 +506,19 @@ if __name__ == "__main__":
                             break
 
     # Job schedule.
-    lang2code = {'Gothic': 'Got', 'Old Norse': 'Non', 'Old English': 'Ang'}
+    lang2code = {'Gothic': 'Got', 'Old Norse': 'Non', 'Old English': 'Ang',
+                 'Spanish': 'Spa', 'Italian': 'Ita', 'French': 'Fra',
+                 'Russian': 'Rus', 'Ukranian': 'Ukr', 'Polish': 'Pol'}
     with st.beta_expander('Job schedule'):
-        lang = st.selectbox('language', ['Gothic', 'Old Norse', 'Old English'])
-        lang2config = {k: 'OPRLPgmc' + v for k, v in lang2code.items()}
+        lang = st.selectbox('language', ['Gothic', 'Old Norse', 'Old English',
+                                         'Spanish', 'Italian', 'French',
+                                         'Russian', 'Ukranian', 'Polish'])
+        if lang in ['Gothic', 'Old Norse', 'Old English']:
+            lang2config = {k: 'OPRLPgmc' + v for k, v in lang2code.items()}
+        elif lang in ['Spanish', 'Italian', 'French']:
+            lang2config = {k: 'OPRLLat' + v for k, v in lang2code.items()}
+        else:
+            lang2config = {k: 'OPRLSlaPro' + v for k, v in lang2code.items()}
         config = lang2config[lang]
         base_cmd = f'python sound_law/main.py --config {config} --mcts_config SmallSims --save_interval 1'
 
