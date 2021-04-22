@@ -104,6 +104,7 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
     objective = solver.Objective()
     size_cnt = Counter()
     total_null_costs = 0.0
+    all_paired_costs = list()
     for i in range(len(gold)):
         # as an optimization, we only create variables for the best k_matches that a given gold block has with collections of rules in candidate. We assume that matchings with higher cost would never be chosen anyway and won't affect the solution, so they can just be excluded from the linear program.
         highest_cost = None
@@ -206,6 +207,16 @@ def match_rulesets(gold: List[List[SoundChangeAction]],
 
             # update the state and continue onto the next block in gold
             curr_state = gold_state
+            all_paired_costs.append(paired_costs)
+    # Compute the overlap rate for all pairs of sets of matching candidates.
+    n_overlap = n_total = 0
+    for pc1, pc2 in combinations(all_paired_costs, 2):
+        set1 = set(match.cand_indices for match in pc1)
+        set2 = set(match.cand_indices for match in pc2)
+        n_total += min(len(set1), len(set2))  # Sometimes the actual size is smaller than `k_matches`.
+        n_overlap += len(set1 & set2)
+    overlap_rate = n_overlap / (1e-8 + n_total)
+    print(f'Block overlap rate {n_overlap} / {n_total} = {overlap_rate:.3f}')
 
     if not silent:
         print('Counts for all top power set sizes', size_cnt)
