@@ -155,12 +155,15 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2, Alignment &
             --best_j;
             break;
         }
+        assert(best_i >= 0);
+        assert(best_j >= 0);
         if ((best_i == 0) && (best_j == 0))
             break;
     }
     // Go backwards and find the aligned indices.
-    size_t almt_pos1 = 0;
-    size_t almt_pos2 = 0;
+    size_t pos1 = 0;
+    size_t pos2 = 0;
+    size_t almt_pos = 0;
     auto &pos_seq1 = almt.pos_seq1;
     pos_seq1.reserve(l1);
     auto &pos_seq2 = almt.pos_seq2;
@@ -172,18 +175,19 @@ float WordSpace::get_edit_dist(const IdSeq &seq1, const IdSeq &seq2, Alignment &
         switch (*it)
         {
         case EditOp::INSERTION:
-            aligned_pos.push_back(alignment::INSERTED);
-            pos_seq1.push_back(almt_pos1++);
-            ++almt_pos2;
+            ++pos1;
+            pos_seq1.push_back(almt_pos++);
+            aligned_pos.push_back(static_cast<int>(alignment::INSERTED));
             break;
         case EditOp::DELETION:
-            ++almt_pos1;
-            pos_seq2.push_back(almt_pos2++);
+            ++pos2;
+            pos_seq2.push_back(almt_pos++);
             break;
         case EditOp::SUBSTITUTION:
-            aligned_pos.push_back(almt_pos2);
-            pos_seq1.push_back(almt_pos1++);
-            pos_seq2.push_back(almt_pos2++);
+            ++pos1;
+            aligned_pos.push_back(pos2++);
+            pos_seq1.push_back(almt_pos);
+            pos_seq2.push_back(almt_pos++);
             break;
         }
     }
@@ -204,11 +208,23 @@ size_t WordSpace::size() const { return words.size(); }
 
 const Alignment &Word::get_almt_at(int order) const { return almts.at(order); }
 
-bool WordSpace::is_aligned(const Word *word, int order, size_t position) const
+float WordSpace::get_misalignment_score(const Word *word, int order, size_t position, abc_t after_id) const
 {
+    if (!opt.use_alignment)
+        return 0.0;
+
     assert(opt.use_alignment);
     const auto &almt = word->get_almt_at(order);
     const auto c1 = word->id_seq[position];
-    const auto c2 = end_words[order]->id_seq[almt.aligned_pos[position]];
-    return opt.dist_mat[c1][c2] == 0.0;
+    const auto aligned_pos = almt.aligned_pos[position];
+    if (aligned_pos == alignment::INSERTED)
+        return ((after_id == 4) || (after_id == abc::NONE)) ? opt.ins_cost : 0.0;
+    assert(aligned_pos < end_words[order]->id_seq.size());
+    const auto c2 = end_words[order]->id_seq[aligned_pos];
+    if (after_id == 4)
+        return opt.dist_mat[c1][c2] - opt.ins_cost;
+    if (after_id == abc::NONE)
+        return opt.dist_mat[c1][c2];
+    else
+        return opt.dist_mat[c1][c2] - opt.dist_mat[after_id][c2];
 }

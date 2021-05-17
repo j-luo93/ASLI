@@ -1,11 +1,10 @@
 import logging
 import math
 from collections import deque
-from typing import Deque, Optional, Tuple
+from typing import Deque, List, Optional, Tuple
 
 import numpy as np
 import torch
-
 from dev_misc import FT, add_argument, g, get_tensor, get_zeros
 from dev_misc.devlib.named_tensor import NoName, get_named_range
 from dev_misc.trainlib import (Metric, Metrics, clip_grad, get_optim_params,
@@ -181,6 +180,30 @@ class RLTrainer(BaseTrainer):
         return self.model
 
 
+class ReplayBuffer:
+
+    def __init__(self):
+        if g.improved_player_only:
+            self._buffer: List[TrEdge] = list()
+            self._weight: List[float] = list()
+        else:
+            self._buffer: Deque[TrEdge] = deque(maxlen=g.replay_buffer_size)
+            self._weight: Deque[float] = deque(maxlen=g.replay_buffer_size)
+
+    def __len__(self):
+        return len(self._buffer)
+
+    def append(self, edge: TrEdge, weight: float):
+        self._buffer.append(edge)
+        self._weight.append(weight)
+
+    def sample(self, size: int):
+        w = np.asarray(self._weight)
+        w = w / w.sum()
+        edge_batch = np.random.choice(self._buffer, p=w, size=size)
+        return edge_batch
+
+
 class MctsTrainer(RLTrainer):
 
     add_argument('num_mcts_sims', default=100, dtype=int, msg='Number of MCTS simulations to run.')
@@ -190,10 +213,14 @@ class MctsTrainer(RLTrainer):
     add_argument('num_episodes', default=10, dtype=int, msg='Number of episodes.')
     add_argument('num_inner_steps', default=10, dtype=int, msg='Number of optimization step per batch.')
     add_argument('episode_check_interval', default=10, dtype=int, msg='Frequency of checking episodes')
+    add_argument('tolerance', default=5, dtype=int,
+                 msg='Tolerance is the maximum number of epochs without improving best score before early-stoppping.')
     add_argument('regress_lambda', default=0.01, dtype=float, msg='Hyperparameter for regression loss.')
     add_argument('use_value_guidance', default=True, dtype=bool,
                  msg='Flag to use predicted values to guide the search.')
     add_argument('tau', default=0.0, dtype=float, msg='Temperature for sampling episodes.')
+    add_argument('improved_player_only', default=False, dtype=bool,
+                 msg='Flag to use only improved player between epochs.')
 
     def __init__(self, *args, mcts: Mcts = None, **kwargs):
         if mcts is None:
@@ -203,19 +230,63 @@ class MctsTrainer(RLTrainer):
             raise ValueError(f'`expansion_batch_size should divide `num_mcts_sims`.')
 
         self.mcts = mcts
-        self.replay_buffer: Deque[TrEdge] = deque(maxlen=g.replay_buffer_size)
-        self.buffer_weight: Deque[float] = deque(maxlen=g.replay_buffer_size)
         super().__init__(*args, **kwargs)
+        hparams = dict()
+        for k, v in g.as_dict().items():
+            if not isinstance(v, (int, float, bool, str)):
+                v = str(v)
+            hparams[k] = v
+        self.metric_writer.add_hparams(hparams, dict())
+        self.replay_buffer = ReplayBuffer()
+        self.best_metrics = Metrics()
+        self._old_state = dict()
 
     def add_trackables(self):
         super().add_trackables()
+        self.tracker.add_count_trackable('tolerance', total=g.tolerance)
         step = self.tracker['step']
         episode = step.add_trackable('episode', total=g.num_episodes, endless=True)
         episode.add_trackable('rollout', total=g.max_rollout_length, endless=True)
         episode.add_trackable('mcts', total=g.num_mcts_sims, endless=True)
         step.add_trackable('inner_step', total=g.num_inner_steps, endless=True)
 
+    def evaluate_at_start(self):
+        metrics = self.evaluator.evaluate(self.stage, 0)
+        self._update_best_score(metrics)
+        self.metric_writer.add_metrics(self.best_metrics, self.tracker['step'].value)
+
+    def _update_best_score(self, eval_metrics: Metrics) -> bool:
+        best_score = -99999.9
+        try:
+            best_score = self.best_metrics.best_score.value
+        except AttributeError:
+            pass
+        new_score = eval_metrics['eval/eval_reward'].value
+        logging.info(f'Best score is {max(new_score, best_score):.3f}.')
+        if new_score >= best_score:  # The same as the best score is tolerated.
+            best_score = new_score
+            self.best_metrics = Metrics(Metric('best_score', best_score, 1))
+            best_path = g.log_dir / 'best_run'
+            with best_path.open('w') as fout:
+                fout.write(self.stage)
+            return True
+        return False
+
+    def should_terminate(self, eval_metrics: Metrics) -> bool:
+        if not self._update_best_score(eval_metrics):
+            logging.imp('eval_reward has not been improved.')
+            self.tracker.update('tolerance')
+            if g.improved_player_only:
+                logging.imp('Loading old state dict.')
+                self.agent.load_state_dict(self._old_state)
+        else:
+            self.tracker.reset('tolerance')
+        self.metric_writer.add_metrics(self.best_metrics, self.tracker['step'].value)
+        return self.tracker.is_finished('tolerance')
+
     def train_one_step(self, dl: OnePairDataLoader):
+        if g.improved_player_only:
+            self._old_state = self.agent.state_dict()
         # Collect episodes with the latest agent first.
         new_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker)
         # new_tr = self.mcts.collect_episodes(dl.init_state, dl.end_state, self.tracker)
@@ -224,11 +295,12 @@ class MctsTrainer(RLTrainer):
         success = Metric('success', sum(tr.done for tr in new_tr), g.num_episodes)
         metrics = Metrics(tr_rew, tr_len, success)
 
-        # eval_tr = self.mcts.collect_episodes(self.mcts.env.start, self.tracker, num_episodes=1, is_eval=True)[0]
-        # metrics +=  Metric('eval_reward', eval_tr.total_reward, 1)
-
         # Add these new episodes to the replay buffer.
-        for tr in new_tr:
+        for i, tr in enumerate(new_tr, 1):
+            global_step = i + self.tracker['step'].value * g.num_episodes
+            self.metric_writer.add_scalar('episode_reward', tr.rewards.sum(),
+                                          global_step=global_step)
+            self.metric_writer.add_text('trajectory', str(tr), global_step=global_step)
             # NOTE(j_luo) Use temperature if it's positive.
             if g.tau > 0.0:
                 weight = math.exp(tr.total_reward * 10.0)
@@ -236,16 +308,19 @@ class MctsTrainer(RLTrainer):
                 weight = 1.0
 
             for tr_edge in tr:
-                self.replay_buffer.append(tr_edge)
-                self.buffer_weight.append(weight)
+                self.replay_buffer.append(tr_edge, weight)
 
-        weights = np.asarray(self.buffer_weight)
-        weights = weights / weights.sum()
         # Main loop.
+        from torch.optim import SGD, Adam
+        optim_cls = Adam if g.optim_cls == 'adam' else SGD
+        optim_kwargs = dict()
+        if optim_cls == SGD:
+            optim_kwargs['momentum'] = 0.9
+        self.set_optimizer(optim_cls, lr=g.learning_rate, weight_decay=g.weight_decay, **optim_kwargs)
         with self.agent.policy_grad(True), self.agent.value_grad(True):
             for _ in range(g.num_inner_steps):
                 # Get a batch of training trajectories from the replay buffer.
-                edge_batch = np.random.choice(self.replay_buffer, p=weights, size=g.mcts_batch_size)
+                edge_batch = self.replay_buffer.sample(g.mcts_batch_size)
                 # edge_batch = np.random.choice(self.replay_buffer, size=g.mcts_batch_size)
                 agent_inputs = AgentInputs.from_edges(edge_batch)  # , self.mcts.env)#, sparse=True)
 
@@ -253,7 +328,9 @@ class MctsTrainer(RLTrainer):
                 self.optimizer.zero_grad()
 
                 policies = self.agent.get_policy(agent_inputs.id_seqs, almts=(agent_inputs.almts1, agent_inputs.almts2))
+                # print(policies[:, 2, self.mcts.env.abc['ẽ']].exp().mean())
                 # values = self.agent.get_values(agent_inputs.id_seqs, steps=agent_inputs.steps)
+                # breakpoint()  # BREAKPOINT(j_luo)
                 with NoName(policies, agent_inputs.permissible_actions):
                     mask = agent_inputs.permissible_actions == SENTINEL_ID
                     pa = agent_inputs.permissible_actions
@@ -268,7 +345,7 @@ class MctsTrainer(RLTrainer):
                 # weights = weights.align_as(pi_ce_losses)
                 entropies = (-agent_inputs.mcts_pis * (1e-8 + agent_inputs.mcts_pis).log()).sum(dim=-1)
                 pi_ce_losses = (-agent_inputs.mcts_pis * logits).sum(dim=-1) - entropies
-                for i in range(6):
+                for i in range(7):
                     metrics += Metric(f'entropy_{i}', entropies[:, i].sum(), g.mcts_batch_size)
                     metrics += Metric(f'pi_ce_los_{i}', pi_ce_losses[:, i].sum(), g.mcts_batch_size)
 

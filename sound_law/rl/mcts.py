@@ -19,7 +19,8 @@ from sound_law.rl.env import SoundChangeEnv
 from sound_law.rl.trajectory import Trajectory, VocabState
 
 # pylint: disable=no-name-in-module
-from .mcts_cpp import PyMcts, parallel_stack_ids
+from .mcts_cpp import (PyMcts, PyPS_MAX, PyPS_SAMPLE_AC,
+                       parallel_stack_ids)
 
 # pylint: enable=no-name-in-module
 
@@ -39,14 +40,22 @@ class Mcts(PyMcts):
     add_argument('num_workers', default=4, dtype=int, msg='Number of workers for parallelizing MCTS.')
     add_argument('dirichlet_alpha', default=0.03, dtype=float, msg='Alpha value for the Dirichlet noise.')
     add_argument('noise_ratio', default=0.25, dtype=float, msg='Mixing ratio for the Dirichlet noise.')
+    add_argument('play_strategy', default='max', dtype=str,
+                 choices=['max', 'sample_ac', 'sample_mv'], msg='Play strategy.')
+    add_argument('exponent', default=1.0, dtype=float, msg='The exponent for sample_ac play strategy.')
 
     def __init__(self, *args, agent: BasePG = None, **kwargs):
         self.agent = agent
+        if g.play_strategy == 'max':
+            self.play_strategy = PyPS_MAX
+        else:
+            self.play_strategy = PyPS_SAMPLE_AC
 
     def reset(self):
+        # Clear priors first and then stats -- stats are needed to speed up clearing.
         self.env.clear_priors(self.env.start, True)
         self.env.clear_stats(self.env.start, True)
-        logging.info(f'#trie nodes {self.env.evict(500000)}')
+        logging.debug(f'#trie nodes {self.env.evict(500000)}')
 
     def evaluate(self, states, steps: Optional[Union[int, LT]] = None) -> List[float]:
         """Expand and evaluate the leaf node."""
@@ -95,6 +104,7 @@ class Mcts(PyMcts):
                 if not state.is_leaf():
                     continue
 
+                # print(mp[1, 111])
                 self.env.evaluate(state, mp, sp)
         return values
 
@@ -107,10 +117,19 @@ class Mcts(PyMcts):
         self.env.add_noise(state, meta_noise, special_noise, g.noise_ratio)
 
     def collect_episodes(self, init_state: VocabState,
-                         tracker: Optional[Tracker] = None, num_episodes: int = 0, is_eval: bool = False) -> List[Trajectory]:
+                         tracker: Optional[Tracker] = None,
+                         num_episodes: int = 0,
+                         is_eval: bool = False,
+                         no_simulation: bool = False) -> List[Trajectory]:
         trajectories = list()
         self.agent.eval()
+        if is_eval:
+            self.eval()
+        else:
+            self.train()
         num_episodes = num_episodes or g.num_episodes
+        # if no_simulation:
+        #     breakpoint()  # BREAKPOINT(j_luo)
         with self.agent.policy_grad(False), self.agent.value_grad(False):
             for ei in range(num_episodes):
                 root = init_state
@@ -123,22 +142,35 @@ class Mcts(PyMcts):
                 for ri in range(g.max_rollout_length):
                     if not is_eval:
                         self.add_noise(root)
-                    # Run many simulations before take one action. Simulations take place in batches. Each batch
-                    # would be evaluated and expanded after batched selection.
-                    num_batches = g.num_mcts_sims // g.expansion_batch_size
-                    for _ in range(num_batches):
-                        paths, steps = self.select(root, g.expansion_batch_size, ri, g.max_rollout_length, played_path)
-                        steps = get_tensor(steps) if g.use_finite_horizon else None
-                        new_states = [path.get_last_node() for path in paths]
-                        values = self.evaluate(new_states, steps=steps)
-                        self.backup(paths, values)
-                        if tracker is not None:
-                            tracker.update('mcts', incr=g.expansion_batch_size)
-                    if ri == 0 and ei % g.episode_check_interval == 0:
-                        k = min(20, root.num_actions)
-                        logging.debug(pad_for_log(str(get_tensor(root.action_counts).topk(k))))
-                        logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
-                    new_path = self.play(root, ri)
+                    if is_eval and no_simulation:
+                        new_state = self.select_one_pi_step(root)
+                        steps = steps + 1 if g.use_finite_horizon else None
+                        values = self.evaluate([new_state], steps=steps)
+                    else:
+                        # Run many simulations before take one action. Simulations take place in batches. Each batch
+                        # would be evaluated and expanded after batched selection.
+                        num_batches = g.num_mcts_sims // g.expansion_batch_size
+                        for _ in range(num_batches):
+                            paths, steps = self.select(root, g.expansion_batch_size, ri,
+                                                       g.max_rollout_length, played_path)
+                            steps = get_tensor(steps) if g.use_finite_horizon else None
+                            new_states = [path.get_last_node() for path in paths]
+                            values = self.evaluate(new_states, steps=steps)
+                            self.backup(paths, values)
+                            if tracker is not None:
+                                tracker.update('mcts', incr=g.expansion_batch_size)
+                        if ri == 0 and ei % g.episode_check_interval == 0:
+                            k = min(20, root.num_actions)
+                            logging.debug(pad_for_log(str(get_tensor(root.action_counts).topk(k))))
+                            logging.debug(pad_for_log(str(get_tensor(root.q).topk(k))))
+                            logging.debug(pad_for_log(str(get_tensor(root.max_values).topk(k))))
+                    ps = self.play_strategy
+                    if is_eval:
+                        if no_simulation:
+                            ps = PyPS_SAMPLE_AC
+                        else:
+                            ps = PyPS_MAX
+                    new_path = self.play(root, ri, ps, g.exponent)
                     if played_path is None:
                         played_path = new_path
                     else:
@@ -158,5 +190,7 @@ class Mcts(PyMcts):
                 trajectories.append(trajectory)
                 if tracker is not None:
                     tracker.update('episode')
+        # if no_simulation:
+        #     breakpoint()  # BREAKPOINT(j_luo)
 
         return trajectories

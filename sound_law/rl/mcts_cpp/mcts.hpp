@@ -6,12 +6,10 @@
 
 struct MctsOpt
 {
-    float puct_c;
     int game_count;
     float virtual_loss;
     int num_threads;
-    float heur_c;
-    bool add_noise;
+    SelectionOpt selection_opt;
 };
 
 struct Edge
@@ -47,14 +45,17 @@ public:
     vec<abc_t> get_all_chosen_actions() const;
     void merge(const Path &);
     TreeNode *get_last_node() const;
+    vec<abc_t> get_last_action_vec() const;
 };
 
 class Mcts
 {
     Pool *tp;
     Env *env;
+    bool is_eval;
 
     Path select_single_thread(TreeNode *, const int, const int, const Path &) const;
+    TreeNode *select_one_step(TreeNode *, bool, bool) const;
 
 public:
     MctsOpt opt;
@@ -63,11 +64,15 @@ public:
 
     vec<Path> select(TreeNode *, const int, const int, const int) const;
     vec<Path> select(TreeNode *, const int, const int, const int, const Path &) const;
+    TreeNode *select_one_pi_step(TreeNode *) const;
+    TreeNode *select_one_random_step(TreeNode *) const;
+    void eval();
+    void train();
     void backup(const vec<Path> &, const vec<float> &) const;
-    inline Path play(TreeNode *node, int start_depth)
+    inline Path play(TreeNode *node, int start_depth, PlayStrategy ps, float exponent)
     {
         auto ret = Path(node, start_depth);
-        auto play_ret = node->play();
+        auto play_ret = node->play(ps, exponent);
         ret.append(play_ret.second, play_ret.first);
         for (const auto node : ret.get_all_nodes())
             env->cache.put_persistent(node);
