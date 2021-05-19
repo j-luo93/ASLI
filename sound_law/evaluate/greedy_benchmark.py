@@ -38,13 +38,21 @@ class ToyEnv():
 
     def get_state_edit_dist(self, state1, state2):
         # somehow compute the edit distance between these two states
-        state1_value = sum((ord(char) for char in state1), 0.0)
-        state2_value = sum((ord(char) for char in state2), 0.0)
-        return state1_value - state2_value
+        dist = 0.0
+        for i in range(len(state2)):
+            c2 = state2[i]
+            if i < len(state1):
+                c1 = state1[i]
+                dist += abs(ord(c1) - ord(c2))
+            else:
+                dist += 50
+
+        return dist
 
 def get_possible_actions(state: VocabState) -> List[SoundChangeAction]:
     # toy function for now
-    return [char for char in string.ascii_lowercase]
+    # return [char for char in string.ascii_lowercase]
+    return ['a', 'b', 'c', 'd', 'e', 'f', 'g']
 
 
 def greedily_find_rules(env: SoundChangeEnv, n_rules: int) -> List[SoundChangeAction]:
@@ -111,8 +119,12 @@ def beam_search_find_rules(env: SoundChangeEnv, n_rules: int, beam_width: int) -
 if __name__ == "__main__":
     # manager, gold, states, refs = rule.simulate()
 
-    toy_env = ToyEnv('', 'cat')
+    env = ToyEnv('', 'bed')
+
+    # print(env.get_state_edit_dist('cat', 'cat'))
     
-    greedy_rules = greedily_find_rules(toy_env, 3)
+    beam_rules = beam_search_find_rules(env, 3, 5)
+    greedy_rules = greedily_find_rules(env, 3)
     print(greedy_rules)
-    # matching = match_rulesets(gold, greedy_rules, toy_env)
+    print(beam_rules)
+    # matching = match_rulesets(gold, greedy_rules, env)
