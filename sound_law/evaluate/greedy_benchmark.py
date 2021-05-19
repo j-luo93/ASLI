@@ -112,8 +112,8 @@ def beam_search_find_rules(env: SoundChangeEnv, n_rules: int, beam_width: int) -
                     if len(new_beams) == (beam_width + 1):
                         del new_beams[-1]
         curr_beams = new_beams
-    # once we've built out our list of current beams to each be action sequences of the requested length, we return them
-    return curr_beams
+    # once we've built out our list of current beams to each be action sequences of the requested length, we return the best one
+    return curr_beams[0]
 
 
 if __name__ == "__main__":
