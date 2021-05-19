@@ -5,26 +5,29 @@ import pickle
 import re
 import bisect
 import random
+import string
 from dataclasses import dataclass, field
 from typing import ClassVar, List, Set, Dict, Optional, Union
 import pandas as pd
 
-from dev_misc import add_argument, g
-from sound_law.main import setup
-from sound_law.rl.action import SoundChangeAction
-import sound_law.rl.rule as rule
-from sound_law.rl.rule import HandwrittenRule
+# from dev_misc import add_argument, g
+# from sound_law.main import setup
+# from sound_law.rl.action import SoundChangeAction
+# import sound_law.rl.rule as rule
+# from sound_law.rl.rule import HandwrittenRule
 
-# from .ilp import match_rulesets, ToyEnv
+# from .ilp import match_rulesets
 
 class ToyEnv():
+    # in this toy environment, actions are single letters and states are strings created by appending them
 
-    def __init__(self, start_state):
+    def __init__(self, start_state, end_state):
         self.start = start_state
+        self.end = end_state
 
     def apply_action(self, state, act):
         # somehow apply action to state
-        new_state = state
+        new_state = state + act
         return new_state
 
     def apply_block(self, state, block):
@@ -35,15 +38,13 @@ class ToyEnv():
 
     def get_state_edit_dist(self, state1, state2):
         # somehow compute the edit distance between these two states
-        return (random.random() + 1) * random.randint(1, 20)
+        state1_value = sum((ord(char) for char in state1), 0.0)
+        state2_value = sum((ord(char) for char in state2), 0.0)
+        return state1_value - state2_value
 
 def get_possible_actions(state: VocabState) -> List[SoundChangeAction]:
-    # toy function for now using the toy data from earlier
-    rules = []
-    with open('data/toy_cand_rules.txt', 'r') as f:
-        for line in f:
-            rules.append(HandwrittenRule.from_str(line).to_action())
-    return rules
+    # toy function for now
+    return [char for char in string.ascii_lowercase]
 
 
 def greedily_find_rules(env: SoundChangeEnv, n_rules: int) -> List[SoundChangeAction]:
@@ -110,7 +111,7 @@ def beam_search_find_rules(env: SoundChangeEnv, n_rules: int, beam_width: int) -
 if __name__ == "__main__":
     # manager, gold, states, refs = rule.simulate()
 
-    toy_env = ToyEnv('foo')
+    toy_env = ToyEnv('', 'cat')
     
     greedy_rules = greedily_find_rules(toy_env, 3)
     print(greedy_rules)
