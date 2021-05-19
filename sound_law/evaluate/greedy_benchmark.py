@@ -4,6 +4,7 @@ import logging
 import pickle
 import re
 import bisect
+import random
 from dataclasses import dataclass, field
 from typing import ClassVar, List, Set, Dict, Optional, Union
 import pandas as pd
@@ -14,9 +15,27 @@ from sound_law.rl.action import SoundChangeAction
 import sound_law.rl.rule as rule
 from sound_law.rl.rule import HandwrittenRule
 
-from .ilp import match_rulesets
+# from .ilp import match_rulesets, ToyEnv
 
+class ToyEnv():
 
+    def __init__(self, start_state):
+        self.start = start_state
+
+    def apply_action(self, state, act):
+        # somehow apply action to state
+        new_state = state
+        return new_state
+
+    def apply_block(self, state, block):
+        '''Applies a block of actions in order'''
+        for act in block:
+            state = self.apply_action(state, act)
+        return state
+
+    def get_state_edit_dist(self, state1, state2):
+        # somehow compute the edit distance between these two states
+        return (random.random() + 1) * random.randint(1, 20)
 
 def get_possible_actions(state: VocabState) -> List[SoundChangeAction]:
     # toy function for now using the toy data from earlier
@@ -89,8 +108,10 @@ def beam_search_find_rules(env: SoundChangeEnv, n_rules: int, beam_width: int) -
 
 
 if __name__ == "__main__":
-    manager, gold, states, refs = rule.simulate()
+    # manager, gold, states, refs = rule.simulate()
+
+    toy_env = ToyEnv('foo')
     
-    greedy_rules = greedily_find_rules(manager.env, 3)
-    
-    matching = match_rulesets(gold, greedy_rules, manager.env)
+    greedy_rules = greedily_find_rules(toy_env, 3)
+    print(greedy_rules)
+    # matching = match_rulesets(gold, greedy_rules, toy_env)
