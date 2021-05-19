@@ -63,14 +63,14 @@ def greedily_find_rules(env: SoundChangeEnv, n_rules: int) -> List[SoundChangeAc
         possible_actions = get_possible_actions(curr_state)
         for act in possible_actions:
             # evaluate this rule
-            act_state = env.apply_action(act, curr_state)
+            act_state = env.apply_action(curr_state, act)
             act_dist = dist_from_end(act_state)
             # update best distance/action as necessary to find action with smallest edit distance from end state
             if best_act is None or (act_dist < best_distance):
                 best_act = act
                 best_distance = act_dist
         # set current state to one resulting from best rule and move on
-        curr_state = env.apply_action(best_act, curr_state)
+        curr_state = env.apply_action(curr_state, best_act)
         chosen_rules.append(best_act)
 
     return chosen_rules
@@ -94,7 +94,7 @@ def beam_search_find_rules(env: SoundChangeEnv, n_rules: int, beam_width: int) -
             beam_dist, beam_actions, beam_state = beam
             possible_actions = get_possible_actions(beam_state) # should pull this out of the for loop if it turns out this function is state-invariant
             for new_act in possible_actions:
-                new_state = env.apply_action(new_act, beam_state)
+                new_state = env.apply_action(beam_state, new_act)
                 new_dist = dist_from_end(new_state)
                 new_tuple = (new_dist, beam_actions + [new_act], new_state)
                 
