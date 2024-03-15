@@ -1,0 +1,135 @@
+reference	agee	note	rules
+A.1.1	*ē > *ā / [+stress]		basic: eː{+} > aː
+A.1.2	*-ī > *-i / _#		basic: iː > i / @ _ #
+A.1.3	*-ō > *-u / [-stress] _#		basic: oː{-} > u / @ _ #
+A.1.4	*-wū > *-u	/u/ should be unstressed, and /w/ should be after a consonant. This follows directly from rule A.1.3, and therefore the real change is w > ∅ / C _ u.	basic: w > ∅ / [-syllabic] _ u 
+A.1.5	*a > *u / _ *m	/a/ should be unstressed.	basic: a{-} > u / _ m
+A.1.6	*a > *i / [-stress] _ n	"""It is not entirely clear if this is even a regular sound change""."""	IRG
+A.1.7	*ai > *ē	/ai/ should be unstressed.	basic: ai{-} > eː
+A.1.8	*u > *[o] / ]σ [-high]	/u/ should be stressed. It can't trigger when there is a nasal or /j/ in the coda. Writing this in one single rule is not achievable since the main rule is a VS-type rule, but the exceptions for nasal consonants and /j/ should use a basic-type. Use the reversion strategy.	VS: u{+} > o / _ [+syllabic, -high]; basic: o{+} > u / _ [+nasal, -syllabic]; basic: o{+} > u / _ j
+A.1.9	*ō > ū / _ [σ	/oː/ should be unstressed.	VS: oː{-} > uː / _ @
+A.1.10	*V₁V₂ > *V̄₃	"""Unstressed diphthongs were monophthongized to long mid vowels"". It is not clear what diphthongs are affected from this description, but according to Wikipedia [https://en.wikipedia.org/wiki/Phonological_history_of_English#Northwest_Germanic_period], the underlying changes are au > oː and ai > eː."	basic: au{-} > oː; basic: ai{-} > eː
+A.1.11	*kᵂ > *kw		UR-E
+B.1.1	*V̂# > V̄; *V̄# > V; *V# > ∅	This describes a chain shift, where rule ordering matters.	basic: [+syllabic, -long] > ∅ / _ #; basic: [+syllabic, +long, -overlong] > [-long] / _ #; basic: [+syllabic, +overlong] > [-overlong] / _ #
+B.1.2	*e, *i > i		basic: e > i
+B.1.3	*ē₁, *ē₂ > *ē₁	The debate about the phonological and phonetic characteristics of *ē₁ and *ē₂ is out-of-scope.	MISC
+B.1.4	*a > *u > / _ *m	Similar to A.1.5, /a/ should be unstressed.	basic: a{-} > u / _ m
+B.1.5	*i, *u > [ɛ, ɔ] / _ /r, h, hᵂ/	/h/ and /hᵂ/ are realized as /x/ and /xᵂ/.	basic: i > ɛ / _ r; basic: i > ɛ / _ x; basic: i > ɛ / _ xᵂ; basic: u > ɔ / _ r; basic: u > ɔ / _ x; basic: u > ɔ / _ xᵂ
+B.1.6	*h (/x/) > /h/	/xᵂ/ is also affected.	basic: x > h; basic: xᵂ > hᵂ
+B.1.7	-ggw-, -ngw- > -/ngw/-	"""However, the evidence for this change is scant, so it is a highly uncertain sound change""
+."	IRG
+B.1.8	*ē > a / [+stress] _	/eː/ should be unstressed, following a stressed syllable.	VS: eː{-} > a / @{+} _
+B.1.9	h > Cα / _ #Cα; h > ∅	The first is an assimilation rule across word boundaries, which is treated as out-of-scope. The second change happens "before a word-internal consonant" (h > ∅ / C @), "before consonant clusters" (h > ∅ / _ C C), and "word-finally after stressed syllables" (unrepresentable since stress requires VS-type but /h/ is not a vowel).	basic: h > ∅ / _ [-syllabic] @; basic: h > ∅ / _ [-syllabic] [-syllabic]
+B.1.10	*ai > /ɛ/; *au > /ɔ/	/ai/ further changes into /a/ in word-final positions.	basic: ai > a / _ #; basic: ai > ɛ; basic: au > ɔ
+B.1.11	*z > s		basic: z > s
+B.1.12	*i > ∅ / _ *jV; *a > ∅ / _z#	This happens before B.1.11.	basic: i > ∅ / _ j [+syllabic]; basic: a > ∅ / _ z #
+B.1.13	*-(i)ji- > *-ī	For /-j-i-/, we can use CL-type rule. For /-i-j-i/, we can syncopate /j/ and then use another CL-type rule to get a long /iː/. This is safe to do since there is no inherited /-i-i/.	basic: j > ∅ / @ i _ i @; CLR: i > iː / _ i; CLR: j > iː / @ _ i @
+B.1.14	*-mz > -m	Occurs word-final.	basic: z > ∅ / @ m _ #
+B.1.15	r/n > l	It targets non-adjacent consonants.	UR-NAC
+B.1.16	Thurneysen's Law	It targets non-adjacent consonants.	UR-NAC
+B.1.17	ē, ō > /ɛ̄, ɔ̄/ / _ V		basic: eː > ɛː / _ [+syllabic]; basic: oː > ɔː / _ [+syllabic]
+B.1.18	*-jj-, *-ww- > -ddj-/-ggj-, -ggw		UR-E
+B.1.19	*-z > ∅ / V r/s _	The description includes a third rule: /z/ became assimilated to /r/ when immediately preceding.	basic: z > ∅ / [+syllabic] r _ #; basic: z > ∅ / [+syllabic] s _ #; CLR: z > r / _ rː
+B.1.20	*fl- > þl	Only present in some instances.	IRG
+B.1.21	*d (/ð/) > /d/ / r _		basic: ð > d / r _
+B.1.22	*þ > t / _ s	This applies to second person dual endings.	basic: θ > t / _ s #
+C.1.1	*u > *u, *o	The exact trigger condition of this change seems to be complicated, and the description suggests that it might not be purely phonological since "almost all a-stems feature lowering, but no root nouns feature it".	NP
+C.1.2	*a, *ą > ∅ / _ (*-z) #		basic: a > ∅ / _ z #; basic: a > ∅ / _ #; basic: ã > ∅ / _ z #; basic: ã > ∅ / _ #
+C.1.3	*-u > ∅ / CC _#		basic: u > ∅ / [-syllabic] [-syllabic] _ #
+C.1.4	*zw, *dw > *ww	/zw and /ðw/ should be intervocalic.	CLR: z > wː / [+syllabic] _ w [+syllabic]; CLR: ð > wː / [+syllabic] _ w [+syllabic]
+C.1.5	*V[ð]V > *V[d]V		basic: ð > d / [+syllabic] _ [+syllabic]
+C.1.6	*Vwu- > *Vu	V should be stressed, and /u/ should be unstressed.	basic: w > ∅ / [+syllabic]{+} _ u{-}
+C.1.7	*-z > ∅	/z/ should be word-final and unstressed.	basic: z > ∅ / @ _ #
+C.1.8	*Cj > *CʲCʲ	/z-j/ and /r-j/ do not change. We still use C instead of Cʲ for the replaced sound for two reasons: 1) Our IPA transcriber doesn't make the distinction between C and Cʲ; 2) The CL-type rules do not support palatalization.	CLL: j > [+long] / [-syllabic, !z, !r] _
+C.1.9	*C(l/r) > *CC(l/r)	Only *p, *t, *k, and *h are affected. The disyllabic requirement is ignored.	basic: p > pː / _ l; basic: p > pː / _ r; basic: t > tː / _ l; basic: t > tː / _ r; basic: k > kː / _ l; basic: k > kː / _ r; basic: x > xː / _ l; basic: x > xː / _ r
+C.1.10	*Ṽ# > *V		basic: [+syllabic, +nasal] > [-nasal] / _ #
+C.1.11	*-i, *-u > ∅	The trigger condition "in third and later syllables if preceded by anything other than a single nonsyllabic which was in turn preceded by a short high vowel" is too complicated for our rule templates to represent. Reversion strategy also doesn't help since the reversion would be an epenthesis rule, which we currently do not support.	UR-O
+C.1.12	*-ō(r) > *-ā(r)#; *-ô(r) > *-ō(r)#	In other unstressed syllables, /oːː/ merged with /oː/. Since word-final (or before a word-final /r/) /oːː/ is also unstressed, then every /oːː/ becomes /oː/.	basic: oː > aː / @ _ #; basic: oː > aː / @ _ r #; basic: oːː{-} > oː
+C.1.13	*-V̄r# > *Vr	V should be unstressed.	basic: [+long, +syllabic]{-} > [-long] / @ _ r #
+C.1.14	*ō > *ū / _n#		basic: oː > uː / _ n #
+C.1.15	*C(C)V > *C(C)V̄	It affects monosyllabic words.	MS
+C.1.16	*-jj-, *-ww- > *-ij-, *-uw-		UR-E
+C.1.17	*/x/ > *[h] / #_	We treat this as irregular/out-of-scope for several reasons: 1) The description seems to be uncertain; 2) The treatment of the grapheme <h> is inconsistent for different IPA transcribers; 3) This doesn't seem to affect any of the following rules.	IRG
+C.1.18	*z, *r > *r		basic: z > r
+C.1.19	*-izd- > *-īd		CLL: z > iː / @ i _ d
+C.1.20	*īn > *-ī	/n/ is word-final and /iː/ is unstressed.	basic: n > ∅ / @ iː{-} _ #
+D.1.1.1	[+nasal] > ∅	The preceding vowel undergoes compensatory lengthening and nasalization. Since CL-type only supports lengthening, nasalization is ignored.	CLL: [+nasal, -syllabic] > [+long] / [+syllabic] _ [+fricative]
+D.1.1.2	*e > *i / _ m		basic: e > i / m
+D.1.1.3	*a, *o > [+front]	We treat this as out-of-scope since this seems to be an umbrella rule that has different realizations for the daughter languages.	MISC
+D.1.1.4	*-lþ- > *-ld-		basic: θ > ð / @ l _ @
+D.1.1.5	*sl > *ls		UR-M
+D.1.1.6	*ā, *ē > *ē	We treat this as out-of-scope since this is considered as a morphological innovation that results in syncretism.	NP
+D.1.1.7	*h > ∅ / _CC	"This innovation was not exactly regular".	IRG
+D.1.1.8	*-z > ∅	It affects monosyllabic words.	MS
+D.1.1.9	*VfV, *VbV > *VbV		basic: f > ꞵ / [+syllabic] _ [+syllabic]
+D.2.1.1	*a > [+front]	This is similar to D.1.1.3, the details of which depend on the specific language.	MISC
+D.2.1.2	*ō > *ā / [-stress]		basic: oː{-} > aː
+E.1.0		We introduce rules for merging several short nasal vowels with their oral counterparts for this period, for two reasons: 1) According to Wikipedia [https://en.wikipedia.org/wiki/Proto-Norse_language#Vowels], /ã/, /ĩ/, and /ũ/, which occur word-finally, might have merged with their oral counterparts; 2) The Old Norse scripts that our dataset is written in do not distinguish between nasal vowels and oral vowels. Adding these rules empirically increases the coverage of edit distance significantly.
+E.1.1	*-ô, *-ō > -ō		basic: oːː > oː / @ _
+E.1.2	*ār > er > ir / [-stress]	We ignore the intermediate steps in the study.	basic: aː{-} > i / _ r
+E.1.3	*eu, *iu > i > e	/eu/ and /iu/ should be unstressed.	basic: eu{-} > e; basic: iu{-} > e
+E.1.4	*ai > ei		basic: ai > ei
+E.1.5	ǫ > u; a > e	Both vowels should be unstressed. However, the second change a > e is ignored due to two reasons: 1) Removing it will significantly increase the coverage of edit distance; 2) The original reference given in the thesis (Noreen 1903:107) didn't mention this change.	basic: ɔ{-} > u
+E.1.6	*ai > á / _ r/h	This happens before E.1.4.	basic: ai > aː / _ r; basic: ai > aː / _ x
+E.1.7	e > i	/e/ should be unstressed.	basic: e{-} > i
+E.1.8	*eu, *iu > iu		basic: eu > iu
+E.1.9	V > ∅ / _(C)#	V should be short, unstressed, and unnasalized.	basic: [-long, -nasal, +syllabic]{-} > ∅ / _ [-syllabic] #; basic: [-long, -nasal, +syllabic]{-} > ∅ / _ #
+E.1.10	i-umlaut	Triggered by /i/. The exact details are not clear from the description, so I used the information from Wikipedia [https://en.wikipedia.org/wiki/Old_Norse#Umlaut]. Note that /j/ can also trigger i-umlaut, but VS-type rules do not allowed it, and therefore it is unrepresentable.
+E.1.11	V̄ > V / [-stress]	Also includes shortening of diphthongs, ai > i and au > o.	basic: [+long, +syllabic]{-} > [-long]; basic: ai{-} > i; basic: au{-} > o
+E.1.12	R-umlaut	The exact details are not clear from the description, so I used the information from Wikipedia [https://en.wikipedia.org/wiki/Old_Norse#Umlaut].
+E.1.13	u-umlaut	Triggered by unstressed /u/ or /o/. The exact details are not clear from the description, so I used the information from Wikipedia [https://en.wikipedia.org/wiki/Old_Norse#Umlaut]. Note that /w/ can also trigger u-umlaut, but VS-type rules do not allow it, and therefore it is unrepresentable.
+E.1.14	*e > *ea > ja; *e > *eu > jo	Breaking of *e didn't happen if it follows sonorants or /v/. This was changed to /j-a/ if it was followed /a/ and /j-o/ if it was followed by /u/. Use the reversion strategy.	VS: e > ia / _ a; basic: ia > e / [+sonorant] _; basic: ia > e / v _; VS: e > io / _ u; basic: io > e / [+sonorant] _; basic: io > e / v _; OGF: ia > a; OGF: io > o
+E.1.15	*au > ó	/au/ should precede /x/.	basic: au > oː / _ x
+E.1.16	iu > jú / f, g, k, p	Elsewhere it became /j-oː/.	basic: iu > iuː; OGF: iuː > uː / _ f; OGF: iuː > uː / _ g; OGF: iuː > uː / _ k; OGF: iuː > uː / _ p; basic: iuː > ioː; OGF: ioː > oː
+E.1.17	V > V̄	Compensatory lengthening after loss of the following /u/ or /w/.	CLL: u > [+long] / [+syllabic, -long] _; CLL: w > [+long] / [+syllabic, -long] _
+E.1.18	V > V̄ / _CC	The consonant cluster should be either /l/ + C, /r-x/ or /x-t/.	basic: [+syllabic, -long] > [+long] / _ l [-syllabic]; basic: [+syllabic, -long] > [+long] / _ r x; basic: [+syllabic, -long] > [+long] / _ x t
+E.1.19	V̄ > V / _CC	This should happen before E.1.18. The diphthong /ei/ is affected: ei > e / _ C C.	basic: [+syllabic, +long] > [-long] / _ [-syllabic] [-syllabic]; basic: ei > e / _ [-syllabic] [-syllabic]
+E.1.20	*ht > tt		CLR: x > tː / _ t
+E.1.21	*j > ∅ / # _		basic: j > ∅ / # _
+E.1.22	w > ∅ / # _	Occurs either before rounded vowels (with an optional /r/ in between) or /l/, or after rounded vowels (with an optional consonant in between).	basic: w > ∅ / # _ [+syllabic, +round]; basic: w > ∅ / # _ r [+syllabic, +round]; basic: w > ∅ / # _ l; basic: w > ∅ / [+syllabic, +round] _; basic: w > ∅ / [+syllabic, +round] [-syllabic] _
+E.1.23	þ > ∅ / _ l		basic: θ > ∅ / _ l
+E.1.24	*z, *r > *r		basic: z > r
+E.1.25	*kj, *gj > kkj, ggj		basic: k > kː / _ j; basic: g > gː / _ j
+E.1.26	bera	We treat this as out-of-scope since it seems to reverse a change that happened in the development of Proto-Germanic.	MISC
+E.1.27	*i > *e	Occurs before /x/ or a nasal, and before ʀ.	basic: i > e / _ x; basic: i > e / _ [+nasal, -syllabic]; basic: i > e / _ r
+E.1.28a	á, ǫ > ǫ	Both merged into the orthographic form <á>, even though phonetically it is closer to <ǫ>. Since the IPA transcriber looks only at the orthography to infer the phonetic value, we will merge /aː/ and /ɔ/ into /aː/ instead.
+E.1.28b	*d > ð / *r _		basic: d > ð / r _
+E.1.29	*zd, *zn > dd, nn		CLR: z > dː / _ d; CLR: z > nː / _ n
+E.1.30	mn > fn	<f> is /v/.	basic: m > v / _ n
+E.1.31	sá	It affects only monosyllabic words.	MS
+E.1.32	-r > C / [+alveolar] _	According to Noreen (1923) § 277, /t/ and /d/ are excluded.	CLL: r > [+long] / [+alveolar, !t, !d] _ #
+E.1.33	*w > v		basic: w > v
+E.1.34	ðt > tt		CLR: ð > tː / _ t
+E.1.35	∅ > t		UR-E
+E.1.36	berið	Treated as out-of-scope since it is related to E.1.26.	MISC
+E.1.37	*ī	Similar to B.1.13.	basic: j > ∅ / @ i _ i @; CLR: i > iː / _ i; CLR: j > iː / @ _ i @
+E.1.38	*hnut > hnot	Treated as out-of-scope since it affects root nouns, which suggests it might not be purely phonological.	NP
+E.1.39		We add this rule for two reasons: 1) Through empirical experimentation, apocope of /n/ significantly increases the coverage of edit distance; 2) This might correspond to the rule mentioned in Noreen (1923) § 299, #5.	basic: n > ∅ / _ #
+G.1.1	*[awʲwʲ] > *[auj]		UR-E
+G.1.2	*w > ∅ / _ i	Not word-initial, and /i/ should be unstressed.	basic: w > ∅ / @ _ i{-}
+G.1.3	*a > *æ	/a/ must be stressed.	basic: a{+} > æ
+G.1.4	*ai > ā		basic: ai > aː
+G.1.5	ā > o / [-stress]		basic: ai{-} > o
+G.1.6	*au > ēa		basic: au > æːa
+G.1.7	[+front] > V₁V₂	Occurs before /x/, or RC (sonorant + consonant except for /j/), /e/ and /i/ breaking before /w/ and /l-w/ also.	basic: æ > æa / _ x; basic: e > eo / _ x; basic: i > iu / _ x; basic: iː > iːu / _ x; basic: æ > æa / _ [+sonorant] [-syllabic, !j]; basic: e > eo / _ [+sonorant] [-syllabic, !j]; basic: i > iu / _ [+sonorant] [-syllabic, !j]; basic: iː > iːo / _ [+sonorant] [-syllabic, !j]; basic: e > eo / _ w; basic: i > iu / _ w; basic: e > eo / _ l w; basic: i > iu / _ l w
+G.1.8	*hs > x	Grapheme <x> is /ks/.	basic: x > k / _ s
+G.1.9	*k, *g > [+palatal]	We used /d͡ʒ/ instead of /dd͡ʒ/ for the affricate since it is what the transcriber produces, and it is easier to write down using our template.	basic: k > t͡ʃ / i _; basic: k > t͡ʃ / iː _; basic: k > t͡ʃ / _ [+syllabic, +front]; basic: k > t͡ʃ / _ æa; basic: g > j / [+syllabic, +front] _; basic: g > j / æa _; basic: g > j / _ [+syllabic, +front]; basic: g > j / _ æa; basic: gː > d͡ʒ / [+syllabic, +front] _; basic: gː > d͡ʒ / æa _; basic: gː > d͡ʒ / _ [+syllabic, +front]; basic: gː > d͡ʒ / _ æa
+G.1.10	*-kw- > -k-	Not word-initial.	basic: w > ∅ / @ k _ @
+G.1.11	i-umlaut	"Back vowels in stressed position became fronted following a high vowel or palatalized geminate. In addition, *æ became raised to e in these environments." Since /z-j/ and /r-j/ did not  become geminated (see C.1.8), we need to exclude those. We consulted Ringe and Taylor (2014), section 6.6 to get the major changes.	VS: uː{+} > yː / _ [+high, +syllabic]; VS: u{+} > y / _ [+high, +syllabic]; VS: oː{+} > øː / _ [+high, +syllabic]; VS: o{+} > ø / _ [+high, +syllabic]; VS: æ{+} > e / _ [+high, +syllabic]; basic: uː{+} > y / _ [-syllabic, +long, !jː, !zː]; basic: u{+} > y / _ [-syllabic, +long, !jː, !zː]; basic: oː{+} > øː / _ [-syllabic, +long, !jː, !zː]; basic: o{+} > ø / _ [-syllabic, +long, !jː, !zː]; basic: æ{+} > e / _ [-syllabic, +long, !jː, !zː]
+G.1.12	/f, þ, s/ > [v, ð, z] / [+stress]σ _	Unrepresentable since we need to use VS-type, but the affected sounds are all consonants.	UR-NAC
+G.1.13	V > ∅ / C_C	According to Ringe and Taylor (2014) 6.7.3, V must be /æ/, /e/, /i/, and /u/ and be unstressed after a stressed vowel. /i/ and /u/ additionally require that the previous syllable be heavy, which we ignore in this study.	basic: æ{-} > ∅ / [+syllabic]{+} [-syllabic] _ [-syllabic]; basic: e{-} > ∅ / [+syllabic]{+} [-syllabic] _ [-syllabic]; basic: i{-} > ∅ / [+syllabic]{+} [-syllabic] _ [-syllabic]; basic: u{-} >  ∅ / [+syllabic]{+} [-syllabic] _ [-syllabic]
+G.1.14	*i, *u > ∅ / _#	Word-final and "after heavy syllables and after unstressed syllables preceded by a stressed light syllable". Treated as unrepresentable, since word-final positions require # in the normal sequence, while the syllable requirement needs the vowel sequence.	UR-O
+G.1.15	*þs > *ss		CLR: θ > sː / _ s
+G.1.16	*b > f / _ #		basic: ꞵ > f / _ #
+G.1.17	*h > ∅		basic: x > ∅ / [+voice] _ [+voice]
+G.1.18	*æ > a / _ C₁ [+back]	/æ/ should be stressed.	VS: æ{+} > a / _ [+back, +syllabic]
+G.1.19	i > io; e > eo; æ > ea / _ C [+back]	Treated as VS-type rules since they are referred to as "back umlaut".	VS: i > iu / _ [-syllabic] [+syllabic, +back]; VS: e >eo / _ [-syllabic] [+syllabic, +back]; VS: æ > æa / _ [-syllabic] [+syllabic, +back]
+G.1.20	CR# > CVR#		UR-E
+G.1.21	æ, i > e	Must be unstressed.	basic: æ{-} > e; basic: i{-} > e
+G.1.22	*-azd- > *-ezd-	We treat this as IRG since the footnote suggests "this is a complicated sound change with many difficulties".	IRG
+G.1.23	*C(l/r) > *CC(l/r)	This has already been covered by C.1.9.	DUP
+G.1.24	*i > ∅ / CV.C _ l	The farthest C is ignored due to template constraints. The syllable must be light; therefore, V must be short.	basic: i > ∅ / [+syllabic, -long] [-syllabic] _ l
+G.1.25	V̄ > V / _CC(C)	Only the geminate situation is kept since three consonants are out-of-scope for this study.	basic: [+syllabic, +long] > [-long] / _ [-syllabic, +long]
+G.1.26	a = u	Unstressed /a/ and /u/ became [ɘ]. This is treated as out-of-scope, since the IPA transcriber doesn't have the allophone [ɘ].	MISC
+G.1.27	-sr- > -ss		CLL: r > sː / @ s _ @
+G.1.28	io, īo > eo, ēo		basic: iu > eo; basic: iːu > eːo
